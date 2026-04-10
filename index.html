@@ -7149,8 +7149,7 @@ function addAdvanceRow(){
   const st = editId ? D.staff.find(s=>s.id===editId) : null;
   showDialog({
     icon:'💴', title:'前払い追加',
-    msg:'日付・金額・理由を入力してください
-（相殺は月末締め処理で自動実行されます）',
+    msg:'日付・金額・理由を入力してください\n（相殺は月末締め処理で自動実行されます）',
     inputs:[
       {id:'adv-date', label:'日付', type:'date', value:new Date().toISOString().slice(0,10)},
       {id:'adv-amount', label:'金額（円）', type:'number', placeholder:'10000'},
