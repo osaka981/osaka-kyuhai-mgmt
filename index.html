@@ -145,7 +145,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 .mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .mbg.on{display:flex;}
 .modal{background:var(--sur);border:1px solid var(--brd2);border-radius:10px;padding:22px;width:700px;max-width:97vw;max-height:94vh;overflow-y:auto;animation:mIn .18s ease;}
-.modal-w{width:900px;}
+.modal-w{width:920px;}
 .modal-n{width:480px;}
 @keyframes mIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 .mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
@@ -154,7 +154,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 .mx:hover{background:var(--sur2);}
 .mft{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--brd);}
 .sep{border:none;border-top:1px solid var(--brd);margin:14px 0;}
-.modal label{font-size:12px;}
+.modal .fg label{font-size:12px;}
 .modal .fi{font-size:13px;padding:7px 10px;}
 .modal select.fi{font-size:13px;}
 .modal .btn-sm{font-size:12px;padding:5px 12px;}
@@ -353,9 +353,6 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
   .print-page table thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .print-page table tfoot tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .btn-edit-row{display:none!important;}
-  /* 請求書印刷 */
-  .rd-paper table thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-  .rd-paper table tfoot tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 }
 
 
@@ -877,7 +874,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fla gap6 mb10">
         <button id="bl-tab-sales" class="btn b-blu btn-sm" onclick="switchBillingTab('sales')">💰 売上明細（集荷）</button>
         <button id="bl-tab-pay" class="btn b-gh btn-sm" onclick="switchBillingTab('pay')">💸 支払明細（従事員）</button>
-        <button id="bl-tab-invoice" class="btn b-gh btn-sm" onclick="switchBillingTab('invoice')">📄 請求書発行</button>
       </div>
 
       <!-- 売上明細 -->
@@ -979,66 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     </div>
 
-    <!-- 請求書発行タブ -->
-    <div id="bl-view-invoice" style="display:none;">
-
-      <!-- 数量調整確認カード -->
-      <div class="card mb12" id="bl-qty-check-card" style="display:none;">
-        <div class="ch">
-          <div class="ct"><div class="cbar" style="background:var(--amb2);"></div>⚠️ 数量調整確認</div>
-          <button class="btn b-gh btn-sm" onclick="$('bl-qty-check-card').style.display='none'">✕ 閉じる</button>
-        </div>
-        <div style="font-size:11px;color:var(--txt2);margin-bottom:10px;">顧客数量と委託会社・個人の数量を照合します。顧客数量 ＜ 委託会社数量の場合は要修正です。</div>
-        <div class="tw">
-          <table id="tbl-qty-check">
-            <thead><tr>
-              <th style="text-align:left">従事員 / 会社</th>
-              <th style="text-align:left">区分</th>
-              <th class="tr">委託数量</th>
-              <th class="tr">顧客数量</th>
-              <th class="tr">差異</th>
-              <th style="text-align:center">判定</th>
-              <th style="text-align:center">修正後数量</th>
-            </tr></thead>
-            <tbody id="tb-qty-check"></tbody>
-          </table>
-        </div>
-        <div style="margin-top:12px;display:flex;gap:8px;">
-          <button class="btn b-red btn-sm" onclick="applyQtyAdjust()">✅ 修正を適用して確定</button>
-          <button class="btn b-gh btn-sm" onclick="$('bl-qty-check-card').style.display='none'">キャンセル</button>
-        </div>
-      </div>
-
-      <!-- 発行対象選択 -->
-      <div class="card mb12">
-        <div class="ch"><div class="ct"><div class="cbar"></div>発行設定</div></div>
-        <div class="fla gap8" style="flex-wrap:wrap;align-items:flex-end;">
-          <div class="fg" style="min-width:130px;">
-            <label>対象月</label>
-            <input type="month" id="inv-mon" class="fi" onchange="renderInvoiceList()">
-          </div>
-          <div class="fg" style="min-width:160px;">
-            <label>発行種別</label>
-            <select id="inv-type" class="fi" onchange="renderInvoiceList()">
-              <option value="all">すべて</option>
-              <option value="customer">顧客向け請求書</option>
-              <option value="company">委託会社向け（支払明細＋請求書代行）</option>
-              <option value="individual">個人事業主向け（支払明細＋請求書代行）</option>
-            </select>
-          </div>
-          <button class="btn b-amb btn-sm" onclick="showQtyCheck()">⚖️ 数量調整確認</button>
-          <button class="btn b-grn btn-sm" onclick="renderInvoiceList()">🔄 一覧更新</button>
-        </div>
-      </div>
-
-      <!-- 発行一覧 -->
-      <div class="card">
-        <div class="ch"><div class="ct"><div class="cbar"></div>発行一覧</div></div>
-        <div id="inv-list" style="display:flex;flex-direction:column;gap:8px;padding:4px 0;"></div>
-      </div>
-    </div>
-
-    </div><!-- /s-billing -->
+    <!-- 郵便局照合 -->
     <div id="s-cmp" class="sec">
       <div class="card mb12">
         <div class="ch">
@@ -1572,86 +1509,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div style="font-size:10px;color:var(--txt2);">請求・精算 › システム設定</div></div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
-      <!-- 自社情報・請求書設定 -->
-      <div class="card mb12" style="max-width:560px;">
-        <div class="ct mb12"><div class="cbar"></div>🏢 自社情報・請求書設定</div>
-        <div class="f2 mb8">
-          <div class="fg">
-            <label>会社名</label>
-            <input type="text" id="cfg-company-name" class="fi" placeholder="大阪急配株式会社">
-          </div>
-          <div class="fg">
-            <label>代表者名</label>
-            <input type="text" id="cfg-company-rep" class="fi" placeholder="代表取締役　川村○○">
-          </div>
-        </div>
-        <div class="fg mb8">
-          <label>郵便番号・住所</label>
-          <input type="text" id="cfg-company-addr" class="fi" placeholder="〒598-8031　大阪府泉佐野市鶴原3丁目10番1号">
-        </div>
-        <div class="f2 mb8">
-          <div class="fg">
-            <label>電話番号</label>
-            <input type="text" id="cfg-company-tel" class="fi" placeholder="072-464-5678">
-          </div>
-          <div class="fg">
-            <label>FAX</label>
-            <input type="text" id="cfg-company-fax" class="fi" placeholder="072-464-xxxx">
-          </div>
-        </div>
-        <div class="fg mb8">
-          <label>メールアドレス</label>
-          <input type="text" id="cfg-company-email" class="fi" placeholder="info@osaka-kyuhai.co.jp">
-        </div>
-        <div class="ct mb8 mt12"><div class="cbar" style="background:var(--grn);"></div>💳 振込先情報</div>
-        <div class="f2 mb8">
-          <div class="fg">
-            <label>銀行名</label>
-            <input type="text" id="cfg-bank-name" class="fi" placeholder="○○銀行　○○支店">
-          </div>
-          <div class="fg">
-            <label>口座種別・番号</label>
-            <input type="text" id="cfg-bank-account" class="fi" placeholder="普通　1234567">
-          </div>
-        </div>
-        <div class="f2 mb8">
-          <div class="fg">
-            <label>口座名義（カナ）</label>
-            <input type="text" id="cfg-bank-holder" class="fi" placeholder="オオサカキュウハイ（カ">
-          </div>
-          <div class="fg">
-            <label>振込期限（翌月）</label>
-            <select id="cfg-payment-due" class="fi">
-              <option value="end">翌月末日</option>
-              <option value="20">翌月20日</option>
-              <option value="15">翌月15日</option>
-              <option value="10">翌月10日</option>
-            </select>
-          </div>
-        </div>
-        <div class="ct mb8 mt12"><div class="cbar" style="background:var(--amb2);"></div>🖋 電子印鑑設定</div>
-        <div class="f2 mb8">
-          <div class="fg">
-            <label>印鑑1行目</label>
-            <input type="text" id="cfg-stamp-line1" class="fi" placeholder="大阪急配" maxlength="6">
-          </div>
-          <div class="fg">
-            <label>印鑑2行目</label>
-            <input type="text" id="cfg-stamp-line2" class="fi" placeholder="株式会社" maxlength="6">
-          </div>
-        </div>
-        <div class="fg mb12">
-          <label>消費税設定</label>
-          <select id="cfg-tax-rate" class="fi" style="width:160px;">
-            <option value="10">10%（標準税率）</option>
-            <option value="8">8%（軽減税率）</option>
-            <option value="0">0%（非課税）</option>
-          </select>
-        </div>
-        <button class="btn b-grn btn-sm" onclick="saveCompanyConfig()">💾 保存</button>
-      </div>
-
-      <!-- PIN変更 -->
       <div class="card" style="max-width:400px;">
         <div class="ct mb12"><div class="cbar"></div>管理者PIN変更</div>
         <div class="f2 mb8">
@@ -1691,7 +1548,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 宅配日報入力（運坊.NET形式） -->
 <div id="m-del" class="mbg">
-<div class="modal" style="width:900px;max-width:98vw;">
+<div class="modal" style="width:860px;max-width:98vw;">
   <div class="mhd"><div class="mtt">📋 宅配日報入力</div><button class="mx" onclick="closeM('m-del')">×</button></div>
 
   <!-- 基本情報 -->
@@ -2150,24 +2007,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button class="mx" onclick="closeM('m-staff')">×</button>
   </div>
 
-  <!-- タブ（6タブ） -->
+  <!-- タブ -->
   <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;">
     <button type="button" id="ptab-info" onclick="switchStTab('info')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
     <button type="button" id="ptab-del" onclick="switchStTab('del')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">🚛 宅配単価</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">🚛 宅配単価</button>
     <button type="button" id="ptab-col" onclick="switchStTab('col')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📦 集荷単価</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📦 集荷単価</button>
     <button type="button" id="ptab-other" onclick="switchStTab('other')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📋 その他・立替</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📋 その他</button>
     <button type="button" id="ptab-offset" onclick="switchStTab('offset')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">⚖️ 控除・手当</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">⚖️ 控除・手当</button>
     <button type="button" id="ptab-advance" onclick="switchStTab('advance')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">💴 前払い管理</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">💴 前払い</button>
     <button type="button" id="ptab-confirm" onclick="switchStTab('confirm')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:700;">📋 登録確認</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:700;">📋 確認</button>
     <button type="button" id="ptab-history" onclick="switchStTab('history')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📅 給与履歴</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📅 履歴</button>
   </div>
 
   <div style="overflow-y:auto;flex:1;padding:14px 16px;">
@@ -2179,9 +2036,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg">
       <label>区分</label>
       <select id="st-kbn" class="fi" onchange="onStKbnChange()">
-        <option>社員</option>
-        <option selected>個人事業主</option>
-        <option>日雇い</option>
+        <option value="社員・役員">社員・役員</option>
+        <option value="パート">パート（事務）</option>
+        <option value="個人事業主（歩合）" selected>個人事業主（歩合）</option>
+        <option value="個人事業主（時間単価）">個人事業主（時間単価）</option>
+        <option value="個人事業主（日額）">個人事業主（日額）</option>
+        <option value="委託会社所属">委託会社所属</option>
+        <option value="スポット">スポット（単発）</option>
       </select>
     </div>
     <div class="fg">
@@ -2190,8 +2051,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
     <div class="fg">
       <label>社員番号
-        <span style="font-size:13px;color:var(--txt2);margin-left:4px;">自動 or 手入力</span>
-        <label style="font-size:13px;color:var(--amb2);margin-left:6px;cursor:pointer;">
+        <span style="font-size:8.5px;color:var(--txt2);margin-left:4px;">自動 or 手入力</span>
+        <label style="font-size:8.5px;color:var(--amb2);margin-left:6px;cursor:pointer;">
           <input type="checkbox" id="st-empno-manual" onchange="onEmpNoManual()" style="margin-right:2px;">手入力
         </label>
       </label>
@@ -2227,7 +2088,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div style="grid-column:span 2;margin-top:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:5px 0;" onclick="toggleCompanyPrices(this)">
           <div class="xs muted fw7">📋 単価条件詳細（集荷ルートタブで詳細設定済みの場合は不要）</div>
-          <span class="cp-toggle-arrow" style="font-size:13px;color:var(--txt2);transition:transform .2s;">▶</span>
+          <span class="cp-toggle-arrow" style="font-size:10px;color:var(--txt2);transition:transform .2s;">▶</span>
         </div>
         <div class="cp-detail" style="display:none;">
           <div id="st-company-prices" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
@@ -2264,7 +2125,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg" style="grid-column:span 2">
       <label>免許証写真（表面）</label>
       <div style="display:flex;align-items:center;gap:8px;">
-        <input type="file" id="st-license-img" accept="image/*" onchange="onLicenseImg(this)" style="font-size:13px;">
+        <input type="file" id="st-license-img" accept="image/*" onchange="onLicenseImg(this)" style="font-size:11px;">
         <div id="st-license-preview" style="display:none;">
           <img id="st-license-thumb" style="height:60px;border-radius:4px;border:1px solid var(--brd);">
         </div>
@@ -2277,40 +2138,40 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ インボイス・振込口座（個人事業主・外部委託）</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
     <div class="fg">
-      <label style="font-size:13px;">インボイス登録番号</label>
+      <label style="font-size:11px;">インボイス登録番号</label>
       <input type="text" id="st-invoice" class="fi" style="font-family:monospace;" placeholder="T1234567890123">
     </div>
     <div class="fg">
-      <label style="font-size:13px;">屋号（請求書表記）</label>
+      <label style="font-size:11px;">屋号（請求書表記）</label>
       <input type="text" id="st-biz-name" class="fi" placeholder="例：山田配送">
     </div>
   </div>
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 14px;margin-bottom:10px;">
-    <div style="font-size:13px;font-weight:700;color:var(--grn2);margin-bottom:8px;">🏦 振込先口座</div>
+    <div style="font-size:11px;font-weight:700;color:var(--grn2);margin-bottom:8px;">🏦 振込先口座</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
       <div class="fg" style="margin:0;">
-        <label style="font-size:13px;">銀行名</label>
-        <input type="text" id="st-bank-name" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="三井住友銀行">
+        <label style="font-size:10px;">銀行名</label>
+        <input type="text" id="st-bank-name" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="三井住友銀行">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:13px;">支店名</label>
-        <input type="text" id="st-bank-branch" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="梅田支店">
+        <label style="font-size:10px;">支店名</label>
+        <input type="text" id="st-bank-branch" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="梅田支店">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:13px;">口座種別</label>
-        <select id="st-bank-type" class="fi" style="font-size:13px;padding:5px 8px;">
+        <label style="font-size:10px;">口座種別</label>
+        <select id="st-bank-type" class="fi" style="font-size:12px;padding:5px 8px;">
           <option>普通</option><option>当座</option>
         </select>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div class="fg" style="margin:0;">
-        <label style="font-size:13px;">口座番号</label>
-        <input type="text" id="st-bank-no" class="fi" style="font-size:13px;padding:5px 8px;font-family:monospace;" placeholder="1234567">
+        <label style="font-size:10px;">口座番号</label>
+        <input type="text" id="st-bank-no" class="fi" style="font-size:12px;padding:5px 8px;font-family:monospace;" placeholder="1234567">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:13px;">口座名義（カナ）</label>
-        <input type="text" id="st-bank-holder" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="ヤマダ タロウ">
+        <label style="font-size:10px;">口座名義（カナ）</label>
+        <input type="text" id="st-bank-holder" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="ヤマダ タロウ">
       </div>
     </div>
   </div>
@@ -2324,11 +2185,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg">
       <label>給与形態</label>
       <select id="st-ky" class="fi" onchange="onKyuChange()">
-        <option>月給</option>
-        <option>保証</option>
-        <option>時給</option>
-        <option selected>個数制（歩合）</option>
-        <option>日給</option>
+        <optgroup label="── 雇用契約 ──">
+          <option value="月給">月給（社員・役員）</option>
+          <option value="時間給">時間給（パート）</option>
+        </optgroup>
+        <optgroup label="── 業務委託 ──">
+          <option value="個数制（歩合）" selected>業務委託料（歩合）</option>
+          <option value="時間単価">業務委託料（時間単価）</option>
+          <option value="日額">業務委託料（日額）</option>
+          <option value="保証">業務委託料（保証あり）</option>
+        </optgroup>
       </select>
     </div>
     <div class="fg" id="st-tk-wrap">
@@ -2338,28 +2204,28 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <!-- 宅配・集荷単価を給与に加算するか -->
   <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;">
-    <span style="font-size:13px;color:var(--txt2);font-weight:700;">単価を給与に加算：</span>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
+    <span style="font-size:10px;color:var(--txt2);font-weight:700;">単価を給与に加算：</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
       <input type="checkbox" id="st-add-del" style="width:13px;height:13px;">
       <span style="color:var(--blu2);">🚛 宅配単価を加算</span>
     </label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
       <input type="checkbox" id="st-add-col" style="width:13px;height:13px;">
       <span style="color:var(--tel2);">📦 集荷単価を加算</span>
     </label>
-    <span id="st-pay-hint" style="margin-left:auto;font-size:13px;color:var(--amb2);"></span>
+    <span id="st-pay-hint" style="margin-left:auto;font-size:9.5px;color:var(--amb2);"></span>
   </div>
 
   <!-- 単価タブ -->
   <!-- 単価 税込・税別切り替え -->
   <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:6px;">
-    <span style="font-size:13px;color:var(--txt2);">単価区分:</span>
+    <span style="font-size:9px;color:var(--txt2);">単価区分:</span>
     <button type="button" id="st-tax-btn-ex" onclick="setStTax('ex')"
-      style="padding:2px 9px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;transition:all .12s;">税別</button>
+      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;transition:all .12s;">税別</button>
     <button type="button" id="st-tax-btn-in" onclick="setStTax('in')"
-      style="padding:2px 9px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);transition:all .12s;">税込</button>
+      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);transition:all .12s;">税込</button>
     <input type="hidden" id="st-tax-type" value="ex">
-    <span id="st-tax-hint" style="font-size:13px;color:var(--amb2);margin-left:3px;">税抜で入力</span>
+    <span id="st-tax-hint" style="font-size:9px;color:var(--amb2);margin-left:3px;">税抜で入力</span>
   </div>
 
 
@@ -2497,17 +2363,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div>
         <div style="font-size:14px;font-weight:700;color:var(--amb2);">💴 前払い（前渡し）管理</div>
-        <div style="font-size:11px;color:var(--txt2);margin-top:3px;">前払いは月末の業務委託料から自動相殺されます。残高は翌月に繰り越されます。</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:3px;">月末の業務委託料から自動相殿されます。残高は翁月に繰り越されます。</div>
       </div>
       <button type="button" class="btn b-amb btn-sm" onclick="addAdvanceRow()">＋ 前払い追加</button>
     </div>
-    <!-- 残高表示 -->
-    <div id="advance-balance-card" style="background:var(--sur);border:1px solid var(--brd2);border-radius:6px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:16px;">
+    <div style="background:var(--sur);border:1px solid var(--brd2);border-radius:6px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:16px;">
       <div style="font-size:12px;color:var(--txt2);">前払い残高</div>
       <div id="advance-balance-amount" style="font-size:22px;font-weight:700;color:var(--amb2);font-family:monospace;">¥0</div>
-      <div style="font-size:11px;color:var(--txt2);margin-left:auto;">※月末締め処理時に自動相殺</div>
+      <div style="font-size:11px;color:var(--txt2);margin-left:auto;">※月末締め処理時に自動相殿</div>
     </div>
-    <!-- 前払い一覧 -->
     <div id="advance-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
     <div id="advance-empty" style="text-align:center;padding:20px;color:var(--txt2);font-size:12px;">前払い記録はありません</div>
   </div>
@@ -6174,31 +6038,28 @@ let _blTab = 'sales';
 
 function switchBillingTab(tab){
   _blTab = tab;
-  $('bl-view-sales').style.display   = tab==='sales'   ? '' : 'none';
-  $('bl-view-pay').style.display     = tab==='pay'     ? '' : 'none';
-  $('bl-view-invoice').style.display = tab==='invoice' ? '' : 'none';
-  $('bl-tab-sales').className   = 'btn btn-sm ' + (tab==='sales'   ? 'b-blu' : 'b-gh');
-  $('bl-tab-pay').className     = 'btn btn-sm ' + (tab==='pay'     ? 'b-blu' : 'b-gh');
-  $('bl-tab-invoice').className = 'btn btn-sm ' + (tab==='invoice' ? 'b-grn' : 'b-gh');
+  $('bl-view-sales').style.display = tab==='sales' ? '' : 'none';
+  $('bl-view-pay').style.display   = tab==='pay'   ? '' : 'none';
+  $('bl-tab-sales').className = 'btn btn-sm ' + (tab==='sales' ? 'b-blu' : 'b-gh');
+  $('bl-tab-pay').className   = 'btn btn-sm ' + (tab==='pay'   ? 'b-blu' : 'b-gh');
   renderBilling();
 }
 
 function renderBilling(){
   const mon = $('bl-mon')?.value || '';
   if(!mon){
+    // 今月をデフォルトに
     const d = new Date();
     const def = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if($('bl-mon')) $('bl-mon').value = def;
-    if($('inv-mon')) $('inv-mon').value = def;
   }
   const monStr = ($('bl-mon')?.value || '').replace('-','/');
   const monLabel = monStr ? monStr.replace('/','-').replace('-','年') + '月' : '全期間';
   if($('bl-sales-period')) $('bl-sales-period').textContent = monLabel;
   if($('bl-pay-period'))   $('bl-pay-period').textContent   = monLabel;
 
-  if(_blTab === 'sales')   renderBillingSales(monStr);
-  else if(_blTab === 'pay') renderBillingPay(monStr);
-  else if(_blTab === 'invoice') renderInvoiceList();
+  if(_blTab === 'sales') renderBillingSales(monStr);
+  else                   renderBillingPay(monStr);
 }
 
 // ── 売上明細（集荷） ──
@@ -6491,604 +6352,6 @@ function expBillingCSV(){
   }
 }
 
-// ══════════════════════════════════════════
-// 請求書発行タブ
-// ══════════════════════════════════════════
-
-// 電子印鑑SVG生成（赤丸二重円・明朝体）
-function stampSVG(name1, name2, size=64){
-  const cfg = getCompanyConfig();
-  // 引数が省略されたら設定値を使用
-  name1 = name1 || cfg.stampLine1 || '大阪急配';
-  name2 = name2 || cfg.stampLine2 || '株式会社';
-  const r=size/2, r2=r*0.85, fontSize=size*0.16;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="${r}" cy="${r}" r="${r-1}" fill="none" stroke="#c0392b" stroke-width="${size*0.04}"/>
-    <circle cx="${r}" cy="${r}" r="${r2-1}" fill="none" stroke="#c0392b" stroke-width="${size*0.025}"/>
-    <text x="${r}" y="${r-fontSize*0.3}" text-anchor="middle" dominant-baseline="middle"
-      font-family="'游明朝','Yu Mincho','Hiragino Mincho Pro','MS Mincho',serif"
-      font-size="${fontSize}px" fill="#c0392b" font-weight="bold">${name1}</text>
-    <text x="${r}" y="${r+fontSize*1.1}" text-anchor="middle" dominant-baseline="middle"
-      font-family="'游明朝','Yu Mincho','Hiragino Mincho Pro','MS Mincho',serif"
-      font-size="${fontSize}px" fill="#c0392b" font-weight="bold">${name2}</text>
-  </svg>`;
-}
-
-// 請求書用の設定値を取得するヘルパー
-function getInvoiceConfig(){
-  const cfg = getCompanyConfig();
-  const due = cfg.paymentDue || 'end';
-  return {
-    companyName: cfg.name        || '大阪急配株式会社',
-    rep:         cfg.rep         || '',
-    addr:        cfg.addr        || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号',
-    tel:         cfg.tel         || '072-464-5678',
-    bankLine:    cfg.bankName && cfg.bankAccount && cfg.bankHolder
-                   ? `${cfg.bankName}　${cfg.bankAccount}　${cfg.bankHolder}`
-                   : '○○銀行　○○支店　普通　1234567　オオサカキュウハイ（カ',
-    taxRate:     cfg.taxRate ?? 10,
-    paymentDueLabel: (monStr) => {
-      const y = parseInt(monStr.slice(0,4)), m = parseInt(monStr.slice(5,7));
-      const nextM = m === 12 ? 1 : m+1;
-      const nextY = m === 12 ? y+1 : y;
-      if(due==='end')  return `${nextY}年${nextM}月末日`;
-      if(due==='20')   return `${nextY}年${nextM}月20日`;
-      if(due==='15')   return `${nextY}年${nextM}月15日`;
-      if(due==='10')   return `${nextY}年${nextM}月10日`;
-      return `${nextY}年${nextM}月末日`;
-    },
-  };
-}
-
-// 請求書一覧レンダリング
-function renderInvoiceList(){
-  const mon = $('inv-mon')?.value || $('bl-mon')?.value || '';
-  if(!mon){ const d=new Date(); const def=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if($('inv-mon'))$('inv-mon').value=def; }
-  const monStr = ($('inv-mon')?.value||'').replace('-','/');
-  const type = $('inv-type')?.value || 'all';
-  const el = $('inv-list'); if(!el) return;
-
-  const monLabel = monStr.replace('/','-').replace('-','年')+'月';
-  let html = '';
-
-  // ① 顧客向け請求書
-  if(type==='all'||type==='customer'){
-    const byCustomer={};
-    D.pickup.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
-      const cu=D.customers.find(c=>c.id===r.customerId);
-      const key=r.customerName||'不明';
-      if(!byCustomer[key]) byCustomer[key]={name:key,cu,qty:0,amount:0};
-      Object.entries(r.items||{}).forEach(([item,qty])=>{
-        const price=getCustPrice(cu,item);
-        byCustomer[key].qty+=qty; byCustomer[key].amount+=price*qty;
-      });
-    });
-    const custs=Object.values(byCustomer);
-    if(custs.length){
-      html+=`<div style="font-size:11px;font-weight:700;color:var(--txt2);padding:4px 0;letter-spacing:.5px;">🏢 顧客向け請求書</div>`;
-      custs.forEach(m=>{
-        html+=`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:120px;">
-            <div style="font-weight:700;font-size:13px;">${m.name}</div>
-            <div style="font-size:10px;color:var(--txt2);">${monLabel}　${fmt(m.qty)}個　¥${fmt(m.amount)}</div>
-          </div>
-          <button class="btn b-grn btn-sm" onclick="printCustomerInvoice(${JSON.stringify(m.name)},${JSON.stringify(monStr)})">📄 請求書印刷</button>
-        </div>`;
-      });
-    }
-  }
-
-  // ② 委託会社向け
-  if(type==='all'||type==='company'){
-    const byCo={};
-    D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
-      const st=D.staff.find(s=>s.name===r.staff);
-      if(st?.kubun!=='会社委託') return;
-      // 所属委託会社を特定
-      const co=D.companies?.find(c=>c.drivers?.includes(st.id)||c.name===st.companyName)||null;
-      const coName=co?.name||st.companyName||'不明会社';
-      if(!byCo[coName]) byCo[coName]={name:coName,co,drivers:{},kanryo:0,amount:0};
-      const tanka=st?.tanka||0;
-      const k=r.kanryo||0,t=r.tenso||0;
-      const sub=(k+t)*tanka+(r.yokonori||0)*3000+(r.tokubetsu||0)*3000;
-      byCo[coName].kanryo+=k; byCo[coName].amount+=sub;
-      if(!byCo[coName].drivers[r.staff]) byCo[coName].drivers[r.staff]={name:r.staff,st,kanryo:0,tenso:0,amount:0};
-      byCo[coName].drivers[r.staff].kanryo+=k; byCo[coName].drivers[r.staff].tenso+=t; byCo[coName].drivers[r.staff].amount+=sub;
-    });
-    const cos=Object.values(byCo);
-    if(cos.length){
-      html+=`<div style="font-size:11px;font-weight:700;color:var(--txt2);padding:8px 0 4px;letter-spacing:.5px;">🏭 委託会社向け</div>`;
-      cos.forEach(m=>{
-        html+=`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:120px;">
-            <div style="font-weight:700;font-size:13px;">${m.name}</div>
-            <div style="font-size:10px;color:var(--txt2);">${monLabel}　完了${fmt(m.kanryo)}個　¥${fmt(m.amount)}</div>
-          </div>
-          <button class="btn b-blu btn-sm" onclick="printCompanyPayslip(${JSON.stringify(m.name)},${JSON.stringify(monStr)})">💸 支払明細</button>
-          <button class="btn b-grn btn-sm" onclick="printCompanyInvoiceProxy(${JSON.stringify(m.name)},${JSON.stringify(monStr)})">📄 請求書代行</button>
-        </div>`;
-      });
-    }
-  }
-
-  // ③ 個人事業主向け
-  if(type==='all'||type==='individual'){
-    const indiv=[];
-    const monRow=D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr));
-    const byStaff={};
-    monRow.forEach(r=>{
-      const st=D.staff.find(s=>s.name===r.staff);
-      if(st?.kubun!=='個人事業主') return;
-      if(!byStaff[r.staff]) byStaff[r.staff]={name:r.staff,st,kanryo:0,tenso:0,amount:0};
-      const tanka=st?.tanka||0;
-      const k=r.kanryo||0,t=r.tenso||0;
-      byStaff[r.staff].kanryo+=k; byStaff[r.staff].tenso+=t;
-      byStaff[r.staff].amount+=(k+t)*tanka+(r.yokonori||0)*3000+(r.tokubetsu||0)*3000;
-    });
-    const indivList=Object.values(byStaff);
-    if(indivList.length){
-      html+=`<div style="font-size:11px;font-weight:700;color:var(--txt2);padding:8px 0 4px;letter-spacing:.5px;">👤 個人事業主向け</div>`;
-      indivList.forEach(m=>{
-        html+=`<div class="card" style="padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:120px;">
-            <div style="font-weight:700;font-size:13px;">${m.name}</div>
-            <div style="font-size:10px;color:var(--txt2);">${monLabel}　完了${fmt(m.kanryo)}個　¥${fmt(m.amount)}</div>
-          </div>
-          <button class="btn b-blu btn-sm" onclick="printIndividualPayslip(${JSON.stringify(m.name)},${JSON.stringify(monStr)})">💸 支払明細</button>
-          <button class="btn b-grn btn-sm" onclick="printIndividualInvoiceProxy(${JSON.stringify(m.name)},${JSON.stringify(monStr)})">📄 請求書代行</button>
-        </div>`;
-      });
-    }
-  }
-
-  el.innerHTML = html || '<div style="padding:20px;text-align:center;color:var(--txt2);">対象データがありません</div>';
-}
-
-// ══ 数量調整確認 ══
-function showQtyCheck(){
-  const monStr = ($('inv-mon')?.value||$('bl-mon')?.value||'').replace('-','/');
-  const tbody = $('tb-qty-check'); if(!tbody) return;
-
-  // 宅配日報から委託会社・個人事業主の数量を集計
-  const byStaff={};
-  D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
-    const st=D.staff.find(s=>s.name===r.staff);
-    if(!st||st.kubun==='社員') return;
-    if(!byStaff[r.staff]) byStaff[r.staff]={name:r.staff,kubun:st.kubun,kanryo:0,tanka:st.tanka||0};
-    byStaff[r.staff].kanryo+=(r.kanryo||0)+(r.tenso||0);
-  });
-
-  // 顧客（売上）側の総数量
-  const custTotal=D.pickup.filter(r=>!monStr||(r.date||'').startsWith(monStr))
-    .reduce((s,r)=>s+Object.values(r.items||{}).reduce((a,v)=>a+v,0),0);
-
-  const rows=Object.values(byStaff);
-  if(!rows.length){ showAlert({icon:'ℹ️',title:'データなし',msg:'対象月の委託・個人データがありません'}); return; }
-
-  tbody.innerHTML=rows.map(m=>{
-    const diff=custTotal-m.kanryo;
-    const needFix=m.kanryo>custTotal;
-    const adjQty=needFix?custTotal:m.kanryo;
-    return `<tr>
-      <td class="fw7">${m.name}</td>
-      <td><span class="bdg ${m.kubun==='個人事業主'?'by':'bb'}">${m.kubun}</span></td>
-      <td class="tr mono">${fmt(m.kanryo)}</td>
-      <td class="tr mono">${fmt(custTotal)}</td>
-      <td class="tr mono ${needFix?'':''}${needFix?'style="color:var(--red2)"':''}" ${needFix?'style="color:var(--red2);font-weight:700;"':''}>${needFix?'-'+fmt(m.kanryo-custTotal):'+'+fmt(diff)}</td>
-      <td style="text-align:center">${needFix?'<span style="color:var(--red2);font-weight:700;">⚠️ 要修正</span>':'<span style="color:var(--grn);font-weight:700;">✅ OK</span>'}</td>
-      <td class="tr mono fw7" ${needFix?'style="color:var(--red2);"':''}>${fmt(adjQty)}<input type="hidden" class="adj-qty" data-staff="${m.name}" value="${adjQty}"></td>
-    </tr>`;
-  }).join('');
-
-  $('bl-qty-check-card').style.display='';
-  $('bl-qty-check-card').scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-
-// 数量調整適用（委託・個人の日報数量を顧客数量で上限設定）
-function applyQtyAdjust(){
-  const monStr = ($('inv-mon')?.value||$('bl-mon')?.value||'').replace('-','/');
-  const adjInputs=document.querySelectorAll('.adj-qty');
-  let count=0;
-  adjInputs.forEach(inp=>{
-    const staffName=inp.dataset.staff;
-    const adjQty=parseInt(inp.value)||0;
-    // 該当月の日報を合計が adjQty になるよう最終日レコードを調整
-    const staffRows=D.delivery.filter(r=>r.staff===staffName&&(!monStr||(r.date||'').startsWith(monStr)));
-    const currentTotal=staffRows.reduce((s,r)=>s+(r.kanryo||0)+(r.tenso||0),0);
-    if(currentTotal>adjQty && staffRows.length>0){
-      // 最終レコードのkanryo/tensoを差し引き調整
-      const last=staffRows[staffRows.length-1];
-      const idx=D.delivery.findIndex(r=>r.id===last.id);
-      if(idx>=0){
-        const excess=currentTotal-adjQty;
-        const newKanryo=Math.max(0,(last.kanryo||0)-excess);
-        D.delivery[idx]={...D.delivery[idx],kanryo:newKanryo};
-        count++;
-      }
-    }
-  });
-  if(count>0){
-    lsSet(LS_KEYS.YP, D.delivery);
-    if(typeof fbSet==='function') fbSet('yp_logs', D.delivery);
-    _showSaveToast(`${count}件の数量を調整しました`);
-  }
-  $('bl-qty-check-card').style.display='none';
-  renderInvoiceList();
-}
-
-// ══ 印刷モーダル共通 ══
-function _openPrintModal(title, bodyHtml){
-  const modal=document.getElementById('m-report-detail');
-  if(!modal) return;
-  const titleEl=document.getElementById('rpt-detail-title');
-  const bodyEl=document.getElementById('rpt-detail-body');
-  const kpiEl=document.getElementById('rpt-detail-kpi');
-  if(titleEl) titleEl.textContent=title;
-  if(kpiEl) kpiEl.innerHTML='';
-  if(bodyEl) bodyEl.innerHTML=bodyHtml;
-  modal.style.display='flex'; modal.style.opacity='1'; modal.style.visibility='visible';
-}
-function closeReportDetail(){
-  const modal=document.getElementById('m-report-detail');
-  if(modal){modal.style.display='none';}
-}
-
-// ══ ① 顧客向け請求書 ══
-function printCustomerInvoice(custName, monStr){
-  const cfg = getInvoiceConfig();
-  const cu=D.customers.find(c=>c.name===custName);
-  const rows=D.pickup.filter(r=>r.customerName===custName&&(!monStr||(r.date||'').startsWith(monStr)));
-  const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const invoiceNo=`INV-${Date.now().toString().slice(-6)}`;
-
-  const byItem={};
-  rows.forEach(r=>Object.entries(r.items||{}).forEach(([item,qty])=>{
-    const price=getCustPrice(cu,item);
-    if(!byItem[item]) byItem[item]={item,qty:0,price,amount:0};
-    byItem[item].qty+=qty; byItem[item].amount+=price*qty;
-  }));
-  const itemList=Object.values(byItem);
-  const subtotal=itemList.reduce((s,m)=>s+m.amount,0);
-  const tax=Math.floor(subtotal*cfg.taxRate/100);
-  const total=subtotal+tax;
-  const stamp=stampSVG(null,null,80);
-
-  const html=`
-  <div class="rd-paper" style="max-width:800px;">
-    <div style="padding:28px 36px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
-        <div>
-          <div style="font-size:28px;font-weight:900;color:#1e293b;letter-spacing:2px;">請 求 書</div>
-          <div style="font-size:11px;color:#64748b;margin-top:4px;">No. ${invoiceNo}</div>
-          <div style="font-size:11px;color:#64748b;">発行日：${today}</div>
-        </div>
-        <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">${cfg.addr}<br>TEL：${cfg.tel}</div>
-          <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:24px;">
-        <div style="font-size:18px;font-weight:700;border-bottom:2px solid #1e293b;padding-bottom:6px;margin-bottom:8px;">${custName}　御中</div>
-        <div style="font-size:13px;color:#374151;">${monLabel}　集荷業務委託費　ご請求申し上げます。</div>
-      </div>
-      <div style="background:#f0f9ff;border:2px solid #0284c7;border-radius:8px;padding:16px 24px;margin-bottom:24px;display:flex;align-items:center;gap:20px;">
-        <div style="font-size:13px;color:#0369a1;font-weight:700;">ご請求金額（税込）</div>
-        <div style="font-size:30px;font-weight:900;color:#0369a1;font-family:monospace;">¥${fmt(total)}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;">
-        <thead><tr style="background:#1e293b;color:#fff;">
-          <th style="padding:8px 12px;text-align:left;">品目</th>
-          <th style="padding:8px 12px;text-align:right;">数量</th>
-          <th style="padding:8px 12px;text-align:right;">単価</th>
-          <th style="padding:8px 12px;text-align:right;">金額</th>
-        </tr></thead>
-        <tbody>
-          ${itemList.map(m=>`<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:8px 12px;">${m.item}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${fmt(m.qty)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥${fmt(m.price)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(m.amount)}</td>
-          </tr>`).join('')}
-        </tbody>
-        <tfoot>
-          <tr style="border-top:2px solid #1e293b;">
-            <td colspan="3" style="padding:8px 12px;text-align:right;font-weight:700;">小計</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(subtotal)}</td>
-          </tr>
-          <tr>
-            <td colspan="3" style="padding:8px 12px;text-align:right;">消費税（${cfg.taxRate}%）</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥${fmt(tax)}</td>
-          </tr>
-          <tr style="background:#f0f9ff;">
-            <td colspan="3" style="padding:10px 12px;text-align:right;font-weight:900;font-size:14px;">合計（税込）</td>
-            <td style="padding:10px 12px;text-align:right;font-family:monospace;font-weight:900;font-size:16px;color:#0284c7;">¥${fmt(total)}</td>
-          </tr>
-        </tfoot>
-      </table>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;font-size:11px;color:#374151;">
-        <div style="font-weight:700;margin-bottom:4px;">【お振込先】</div>
-        <div>${cfg.bankLine}</div>
-        <div style="margin-top:4px;color:#64748b;">※お振込手数料はご負担ください。振込期限：${cfg.paymentDueLabel(monStr)}</div>
-      </div>
-    </div>
-  </div>`;
-  _openPrintModal('請求書 - '+custName, html);
-}
-
-// ══ ② 委託会社向け支払明細 ══
-function printCompanyPayslip(coName, monStr){
-  const cfg = getInvoiceConfig();
-  const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const stamp=stampSVG(null,null,70);
-
-  const byDriver={};
-  D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
-    const st=D.staff.find(s=>s.name===r.staff);
-    if(!st||(st.kubun!=='会社委託')) return;
-    const co=D.companies?.find(c=>c.drivers?.includes(st.id)||c.name===coName);
-    if(co?.name!==coName && st.companyName!==coName) return;
-    if(!byDriver[r.staff]) byDriver[r.staff]={name:r.staff,st,kanryo:0,tenso:0,amount:0};
-    const tanka=st.tanka||0, k=r.kanryo||0, t=r.tenso||0;
-    byDriver[r.staff].kanryo+=k; byDriver[r.staff].tenso+=t;
-    byDriver[r.staff].amount+=(k+t)*tanka+(r.yokonori||0)*3000+(r.tokubetsu||0)*3000;
-  });
-  const driverList=Object.values(byDriver);
-  const total=driverList.reduce((s,m)=>s+m.amount,0);
-  const co=D.companies?.find(c=>c.name===coName);
-  const invoiceNo=co?.invoiceNo||'';
-
-  const html=`
-  <div class="rd-paper" style="max-width:800px;">
-    <div style="padding:28px 36px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
-        <div>
-          <div style="font-size:26px;font-weight:900;color:#1e293b;letter-spacing:2px;">支 払 明 細 書</div>
-          <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
-        </div>
-        <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：${cfg.tel}</div>
-          <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;">${coName}　御中</div>
-        ${invoiceNo?`<div style="font-size:10px;color:#64748b;margin-top:2px;">登録番号：${invoiceNo}</div>`:''}
-      </div>
-      <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-        <div style="font-size:12px;color:#15803d;font-weight:700;">支払金額合計</div>
-        <div style="font-size:26px;font-weight:900;color:#15803d;font-family:monospace;">¥${fmt(total)}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr style="background:#1e293b;color:#fff;">
-          <th style="padding:8px 12px;text-align:left;">ドライバー</th>
-          <th style="padding:8px 12px;text-align:right;">完了</th>
-          <th style="padding:8px 12px;text-align:right;">転送</th>
-          <th style="padding:8px 12px;text-align:right;">単価</th>
-          <th style="padding:8px 12px;text-align:right;">支払金額</th>
-        </tr></thead>
-        <tbody>
-          ${driverList.map(m=>`<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:8px 12px;font-weight:700;">${m.name}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${fmt(m.kanryo)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${fmt(m.tenso)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥${fmt(m.st?.tanka||0)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;color:#15803d;">¥${fmt(m.amount)}</td>
-          </tr>`).join('')}
-        </tbody>
-        <tfoot><tr style="background:#f0fdf4;border-top:2px solid #1e293b;">
-          <td colspan="4" style="padding:10px 12px;text-align:right;font-weight:900;">合計</td>
-          <td style="padding:10px 12px;text-align:right;font-family:monospace;font-weight:900;font-size:14px;color:#15803d;">¥${fmt(total)}</td>
-        </tr></tfoot>
-      </table>
-    </div>
-  </div>`;
-  _openPrintModal('支払明細書 - '+coName, html);
-}
-
-// ══ ③ 委託会社向け請求書発行代行 ══
-function printCompanyInvoiceProxy(coName, monStr){
-  const cfg = getInvoiceConfig();
-  const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const co=D.companies?.find(c=>c.name===coName);
-  const invoiceNo=co?.invoiceNo||'';
-  const invoiceName=co?.invoiceName||coName;
-  const stamp=stampSVG(coName.slice(0,4), coName.slice(4,8)||'　', 70);
-
-  const total=Object.values((() => {
-    const m={}; D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
-      const st=D.staff.find(s=>s.name===r.staff);
-      if(!st||(st.kubun!=='会社委託')) return;
-      if(co?.name!==coName && st.companyName!==coName) return;
-      if(!m[r.staff]) m[r.staff]={amount:0,st};
-      const tanka=st.tanka||0,k=r.kanryo||0,t=r.tenso||0;
-      m[r.staff].amount+=(k+t)*tanka+(r.yokonori||0)*3000+(r.tokubetsu||0)*3000;
-    }); return m;
-  })()).reduce((s,m)=>s+m.amount,0);
-  const proxyStamp=stampSVG('大阪急配','株式会社',60);
-
-  const html=`
-  <div class="rd-paper" style="max-width:800px;">
-    <div style="padding:28px 36px;">
-      <div style="background:#fef9c3;border:1px solid #ca8a04;border-radius:6px;padding:6px 12px;font-size:10px;color:#854d0e;margin-bottom:16px;">
-        ⚠️ 本書は${cfg.companyName}が${coName}の依頼により発行代行した請求書です
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
-        <div>
-          <div style="font-size:26px;font-weight:900;color:#1e293b;letter-spacing:2px;">請 求 書</div>
-          <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
-          ${invoiceNo?`<div style="font-size:10px;color:#64748b;">登録番号：${invoiceNo}</div>`:''}
-        </div>
-        <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">${invoiceName}</div>
-          <div style="font-size:10px;color:#64748b;">（発行代行：${cfg.companyName}）</div>
-          <div style="position:absolute;top:-8px;right:-12px;opacity:0.85;">${stamp}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;">${cfg.companyName}　御中</div>
-      </div>
-      <div style="background:#f0f9ff;border:2px solid #0284c7;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-        <div style="font-size:12px;color:#0369a1;font-weight:700;">ご請求金額</div>
-        <div style="font-size:26px;font-weight:900;color:#0369a1;font-family:monospace;">¥${fmt(total)}</div>
-      </div>
-      <div style="font-size:12px;color:#374151;line-height:2;">
-        <div>${monLabel}　配送業務委託費　上記の通りご請求申し上げます。</div>
-      </div>
-      <div style="margin-top:24px;text-align:right;font-size:10px;color:#94a3b8;">
-        代行発行者：${cfg.companyName}　${proxyStamp.replace('<svg',`<svg style="vertical-align:middle;"`)}
-      </div>
-    </div>
-  </div>`;
-  _openPrintModal('請求書発行代行 - '+coName, html);
-}
-
-// ══ ④ 個人事業主向け支払明細 ══
-function printIndividualPayslip(staffName, monStr){
-  const cfg = getInvoiceConfig();
-  const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const st=D.staff.find(s=>s.name===staffName);
-  const stamp=stampSVG('大阪急配','株式会社',70);
-
-  const rows=D.delivery.filter(r=>r.staff===staffName&&(!monStr||(r.date||'').startsWith(monStr)));
-  const tanka=st?.tanka||0;
-  let kanryo=0,tenso=0,yoko=0,toku=0;
-  rows.forEach(r=>{kanryo+=r.kanryo||0;tenso+=r.tenso||0;yoko+=r.yokonori||0;toku+=r.tokubetsu||0;});
-  const base=(kanryo+tenso)*tanka;
-  const extra=yoko*3000+toku*3000;
-  const total=base+extra;
-  const invoiceNo=st?.invoiceNo||'';
-  const bizName=st?.bizName||staffName;
-
-  const html=`
-  <div class="rd-paper" style="max-width:800px;">
-    <div style="padding:28px 36px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
-        <div>
-          <div style="font-size:26px;font-weight:900;color:#1e293b;letter-spacing:2px;">支 払 明 細 書</div>
-          <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
-        </div>
-        <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：${cfg.tel}</div>
-          <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;">${staffName}　様</div>
-        ${invoiceNo?`<div style="font-size:10px;color:#64748b;">登録番号：${invoiceNo}</div>`:''}
-        ${bizName!==staffName?`<div style="font-size:10px;color:#64748b;">屋号：${bizName}</div>`:''}
-      </div>
-      <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-        <div style="font-size:12px;color:#15803d;font-weight:700;">お支払金額</div>
-        <div style="font-size:26px;font-weight:900;color:#15803d;font-family:monospace;">¥${fmt(total)}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;">
-        <thead><tr style="background:#1e293b;color:#fff;">
-          <th style="padding:8px 12px;text-align:left;">項目</th>
-          <th style="padding:8px 12px;text-align:right;">数量</th>
-          <th style="padding:8px 12px;text-align:right;">単価</th>
-          <th style="padding:8px 12px;text-align:right;">金額</th>
-        </tr></thead>
-        <tbody>
-          <tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:8px 12px;">配送完了（完了＋転送）</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${fmt(kanryo+tenso)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥${fmt(tanka)}</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(base)}</td>
-          </tr>
-          ${yoko>0?`<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:8px 12px;">横乗り手当</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${yoko}回</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥3,000</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(yoko*3000)}</td>
-          </tr>`:''}
-          ${toku>0?`<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:8px 12px;">特別手当</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">${toku}回</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥3,000</td>
-            <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(toku*3000)}</td>
-          </tr>`:''}
-        </tbody>
-        <tfoot><tr style="background:#f0fdf4;border-top:2px solid #1e293b;">
-          <td colspan="3" style="padding:10px 12px;text-align:right;font-weight:900;">合計</td>
-          <td style="padding:10px 12px;text-align:right;font-family:monospace;font-weight:900;font-size:14px;color:#15803d;">¥${fmt(total)}</td>
-        </tr></tfoot>
-      </table>
-      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:11px;color:#374151;">
-        振込予定日：${cfg.paymentDueLabel(monStr)}
-      </div>
-    </div>
-  </div>`;
-  _openPrintModal('支払明細書 - '+staffName, html);
-}
-
-// ══ ⑤ 個人事業主向け請求書発行代行 ══
-function printIndividualInvoiceProxy(staffName, monStr){
-  const cfg = getInvoiceConfig();
-  const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const st=D.staff.find(s=>s.name===staffName);
-  const invoiceNo=st?.invoiceNo||'';
-  const bizName=st?.bizName||staffName;
-  const tanka=st?.tanka||0;
-  let kanryo=0,tenso=0,yoko=0,toku=0;
-  D.delivery.filter(r=>r.staff===staffName&&(!monStr||(r.date||'').startsWith(monStr))).forEach(r=>{
-    kanryo+=r.kanryo||0;tenso+=r.tenso||0;yoko+=r.yokonori||0;toku+=r.tokubetsu||0;
-  });
-  const base=(kanryo+tenso)*tanka;
-  const extra=yoko*3000+toku*3000;
-  const total=base+extra;
-  // 個人事業主の印鑑（名前で生成）
-  const nameParts=staffName.replace(/　/,'').split(' ').join('');
-  const stamp=stampSVG(nameParts.slice(0,2),nameParts.slice(2,4)||'　',70);
-  const proxyStamp=stampSVG('大阪急配','株式会社',55);
-
-  const html=`
-  <div class="rd-paper" style="max-width:800px;">
-    <div style="padding:28px 36px;">
-      <div style="background:#fef9c3;border:1px solid #ca8a04;border-radius:6px;padding:6px 12px;font-size:10px;color:#854d0e;margin-bottom:16px;">
-        ⚠️ 本書は${cfg.companyName}が${staffName}様の依頼により発行代行した請求書です
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
-        <div>
-          <div style="font-size:26px;font-weight:900;color:#1e293b;letter-spacing:2px;">請 求 書</div>
-          <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
-          ${invoiceNo?`<div style="font-size:10px;color:#64748b;">登録番号：${invoiceNo}</div>`:''}
-        </div>
-        <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">${bizName}</div>
-          <div style="font-size:12px;color:#374151;">${staffName}</div>
-          <div style="font-size:10px;color:#64748b;">（発行代行：大阪急配株式会社）</div>
-          <div style="position:absolute;top:-8px;right:-12px;opacity:0.85;">${stamp}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;">大阪急配株式会社　御中</div>
-      </div>
-      <div style="background:#f0f9ff;border:2px solid #0284c7;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
-        <div style="font-size:12px;color:#0369a1;font-weight:700;">ご請求金額</div>
-        <div style="font-size:26px;font-weight:900;color:#0369a1;font-family:monospace;">¥${fmt(total)}</div>
-      </div>
-      <div style="font-size:12px;color:#374151;line-height:2;">
-        <div>${monLabel}　配送業務委託費　上記の通りご請求申し上げます。</div>
-        <div>完了＋転送：${fmt(kanryo+tenso)}個　単価：¥${fmt(tanka)}　計：¥${fmt(base)}</div>
-      </div>
-      <div style="margin-top:24px;text-align:right;font-size:10px;color:#94a3b8;">
-        代行発行者：大阪急配株式会社　${proxyStamp.replace('<svg',`<svg style="vertical-align:middle;"`)}
-      </div>
-    </div>
-  </div>`;
-  _openPrintModal('請求書発行代行 - '+staffName, html);
-}
-
-
-
 // ── 単価タブ切替 ──
 
 // 従業員台帳 タブ切り替え（上段タブ形式）
@@ -7100,7 +6363,7 @@ function switchStTab(t){
       const active=id===t;
       btn.style.background=active?'#5c6bc0':'transparent';
       btn.style.color=active?'#fff':'var(--txt2)';
-      btn.style.fontWeight=active?'700':'600';
+      btn.style.fontWeight='700';
     }
     if(id==='info'){
       const p=$('stpanel-info');
@@ -7115,80 +6378,75 @@ function switchStTab(t){
   if(t==='advance') renderAdvanceTab();
 }
 
-// ══ 前払い管理タブ ══
+// ══ 前払い管理 ══
 function renderAdvanceTab(){
-  const editId = $('m-staff')?._editId;
-  const st = D.staff.find(s=>s.id===editId);
-  const advances = st?.advances || [];
-  const balance = advances.filter(a=>!a.settled).reduce((s,a)=>s+a.amount,0);
-  const balEl = $('advance-balance-amount');
-  if(balEl) balEl.textContent = '¥'+fmt(balance);
-  balEl && (balEl.style.color = balance>0 ? 'var(--amb2)' : 'var(--grn)');
-  const rowsEl = $('advance-rows');
-  const emptyEl = $('advance-empty');
-  if(!rowsEl) return;
-  if(!advances.length){
-    rowsEl.innerHTML=''; if(emptyEl)emptyEl.style.display='';
-    return;
-  }
-  if(emptyEl) emptyEl.style.display='none';
-  rowsEl.innerHTML = advances.map((a,i)=>`
-    <div style="background:var(--sur);border:1px solid var(--brd${a.settled?'':'2'});border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;opacity:${a.settled?'0.6':'1'};">
-      <div style="font-size:12px;color:var(--txt2);min-width:80px;">${a.date||'−'}</div>
-      <div style="font-size:14px;font-weight:700;font-family:monospace;color:${a.settled?'var(--txt2)':'var(--amb2)'};">¥${fmt(a.amount)}</div>
-      <div style="font-size:12px;color:var(--txt2);flex:1;">${a.reason||''}</div>
-      <div style="font-size:11px;">${a.settled?'<span style="color:var(--grn);font-weight:700;">✅ 相殺済</span>':'<span style="color:var(--amb2);font-weight:700;">⏳ 未相殺</span>'}</div>
-      ${!a.settled?`<button class="btn b-gh btn-sm" onclick="settleAdvance(${i})" style="font-size:11px;">手動相殺</button>`:''}
-      <button class="btn b-red btn-sm" onclick="deleteAdvance(${i})" style="font-size:11px;">削除</button>
-    </div>
-  `).join('');
+  const editId=$('m-staff')?._editId;
+  const st=D.staff.find(s=>s.id===editId);
+  const advances=st?.advances||[];
+  const balance=advances.filter(a=>!a.settled).reduce((s,a)=>s+a.amount,0);
+  const balEl=$('advance-balance-amount');
+  if(balEl){balEl.textContent='¥'+fmt(balance);balEl.style.color=balance>0?'var(--amb2)':'var(--grn)';}
+  const rowsEl=$('advance-rows');
+  const emptyEl=$('advance-empty');
+  if(!rowsEl)return;
+  if(!advances.length){rowsEl.innerHTML='';if(emptyEl)emptyEl.style.display='';return;}
+  if(emptyEl)emptyEl.style.display='none';
+  rowsEl.innerHTML=advances.map((a,i)=>{
+    const settled=a.settled;
+    return '<div style="background:var(--sur);border:1px solid var(--brd'+(settled?'':'2')+');border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;opacity:'+(settled?'0.6':'1')+';">'
+      +'<div style="font-size:12px;color:var(--txt2);min-width:80px;">'+(a.date||'−')+'</div>'
+      +'<div style="font-size:15px;font-weight:700;font-family:monospace;color:'+(settled?'var(--txt2)':'var(--amb2)')+';">¥'+fmt(a.amount)+'</div>'
+      +'<div style="font-size:12px;color:var(--txt2);flex:1;">'+(a.reason||'')+'</div>'
+      +'<div style="font-size:11px;">'+(settled?'<span style="color:var(--grn);font-weight:700;">✅ 相殿済</span>':'<span style="color:var(--amb2);font-weight:700;">⏳ 未相殿</span>')+'</div>'
+      +(!settled?'<button class="btn b-grn btn-sm" onclick="settleAdvance('+i+')" style="font-size:11px;">手動相殿</button>':'')
+      +'<button class="btn b-red btn-sm" onclick="deleteAdvance('+i+')" style="font-size:11px;">削除</button>'
+      +'</div>';
+  }).join('');
 }
 
 function addAdvanceRow(){
-  const editId = $('m-staff')?._editId;
-  const st = editId ? D.staff.find(s=>s.id===editId) : null;
-  showDialog({
-    icon:'💴', title:'前払い追加',
-    msg:'日付・金額・理由を入力してください\n（相殺は月末締め処理で自動実行されます）',
-    inputs:[
-      {id:'adv-date', label:'日付', type:'date', value:new Date().toISOString().slice(0,10)},
-      {id:'adv-amount', label:'金額（円）', type:'number', placeholder:'10000'},
-      {id:'adv-reason', label:'理由・メモ', type:'text', placeholder:'生活費前払いなど'},
-    ],
-    okText:'追加', cancelText:'キャンセル'
-  }).then(ok=>{
-    if(!ok) return;
-    const date = document.getElementById('adv-date')?.value || '';
-    const amount = parseInt(document.getElementById('adv-amount')?.value)||0;
-    const reason = document.getElementById('adv-reason')?.value||'';
+  const dateVal=new Date().toISOString().slice(0,10);
+  const html='<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px;">'
+    +'<div class="fg"><label>日付</label><input type="date" id="adv-date" class="fi" value="'+dateVal+'"></div>'
+    +'<div class="fg"><label>金額（円）</label><input type="number" id="adv-amount" class="fi" placeholder="10000"></div>'
+    +'<div class="fg"><label>理由・メモ</label><input type="text" id="adv-reason" class="fi" placeholder="生活費前払いなど"></div>'
+    +'</div>';
+  showDialog({icon:'💴',title:'前払い追加',msg:'日付・金額・理由を入力してください（月末締め処理で自動相殿）',bodyHtml:html,okText:'追加',cancelText:'キャンセル'}).then(ok=>{
+    if(!ok)return;
+    const date=document.getElementById('adv-date')?.value||'';
+    const amount=parseInt(document.getElementById('adv-amount')?.value)||0;
+    const reason=document.getElementById('adv-reason')?.value||'';
     if(!amount){showAlert({icon:'⚠️',title:'エラー',msg:'金額を入力してください'});return;}
-    // スタッフデータに追加（編集中の場合はメモリ上に追加、保存時にD.staffに反映）
-    if(!window._advanceBuffer) window._advanceBuffer=[];
-    window._advanceBuffer.push({date,amount,reason,settled:false,addedAt:new Date().toISOString()});
+    const editId=$('m-staff')?._editId;
+    const st=D.staff.find(s=>s.id===editId);
+    if(!st){showAlert({icon:'⚠️',title:'エラー',msg:'先に従業員を保存してください'});return;}
+    if(!st.advances)st.advances=[];
+    st.advances.push({date,amount,reason,settled:false,addedAt:new Date().toISOString()});
+    lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
     renderAdvanceTab();
-    _showSaveToast('前払いを追加しました（保存ボタンで確定）');
+    _showSaveToast('前払いを登録しました');
   });
 }
 
 function settleAdvance(idx){
-  const editId = $('m-staff')?._editId;
-  const st = D.staff.find(s=>s.id===editId);
-  if(!st?.advances) return;
-  st.advances[idx].settled = true;
-  st.advances[idx].settledAt = new Date().toISOString();
-  lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff);
+  const editId=$('m-staff')?._editId;
+  const st=D.staff.find(s=>s.id===editId);
+  if(!st?.advances)return;
+  st.advances[idx].settled=true;
+  st.advances[idx].settledAt=new Date().toISOString();
+  lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
   renderAdvanceTab();
-  _showSaveToast('相殺済みにしました');
+  _showSaveToast('相殿済みにしました');
 }
 
 function deleteAdvance(idx){
-  const editId = $('m-staff')?._editId;
-  const st = D.staff.find(s=>s.id===editId);
-  if(!st?.advances) return;
+  const editId=$('m-staff')?._editId;
+  const st=D.staff.find(s=>s.id===editId);
+  if(!st?.advances)return;
   showDialog({icon:'🗑',title:'前払い削除',msg:'この前払い記録を削除しますか？',okText:'削除',cancelText:'キャンセル'}).then(ok=>{
-    if(!ok) return;
+    if(!ok)return;
     st.advances.splice(idx,1);
-    lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff);
+    lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
     renderAdvanceTab();
   });
 }
@@ -7573,24 +6831,8 @@ function saveStaff(continueAdd=false){
     penalties:penaltyRows,
     note:$('st-note')?.value||'',
     company:companyName,
-    advances: window._advanceBuffer || [],
   };
-  // 前払いバッファをリセット
-  window._advanceBuffer = [];
-  // 編集モード：既存レコードの前払い履歴を引き継ぐ
-  const editingStaffId = $('m-staff')?._editId;
-  if(editingStaffId){
-    const existing = D.staff.find(s=>s.id===editingStaffId);
-    if(existing?.advances?.length){
-      newDrv.advances = [...(existing.advances||[]), ...newDrv.advances];
-    }
-    const idx = D.staff.findIndex(s=>s.id===editingStaffId);
-    if(idx>=0){ newDrv.id=editingStaffId; D.staff[idx]=newDrv; }
-    else D.staff.push(newDrv);
-    const mStaff=document.getElementById('m-staff'); if(mStaff)mStaff._editId=null;
-  } else {
-    D.staff.push(newDrv);
-  }
+  D.staff.push(newDrv);
 
   // Firebaseのnikki_driversにも追加
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
@@ -10410,55 +9652,6 @@ function changeTSPin(){
   alert('トップシークレットPINを変更しました');
 }
 
-// ── 自社情報・請求書設定 ──
-const CFG_KEY = 'kyuhai_company_config';
-
-function getCompanyConfig(){
-  try {
-    const v = localStorage.getItem(CFG_KEY);
-    return v ? JSON.parse(v) : {};
-  } catch { return {}; }
-}
-
-function saveCompanyConfig(){
-  const cfg = {
-    name:        $('cfg-company-name')?.value.trim()  || '大阪急配株式会社',
-    rep:         $('cfg-company-rep')?.value.trim()   || '',
-    addr:        $('cfg-company-addr')?.value.trim()  || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号',
-    tel:         $('cfg-company-tel')?.value.trim()   || '072-464-5678',
-    fax:         $('cfg-company-fax')?.value.trim()   || '',
-    email:       $('cfg-company-email')?.value.trim() || '',
-    bankName:    $('cfg-bank-name')?.value.trim()     || '',
-    bankAccount: $('cfg-bank-account')?.value.trim()  || '',
-    bankHolder:  $('cfg-bank-holder')?.value.trim()   || '',
-    paymentDue:  $('cfg-payment-due')?.value          || 'end',
-    stampLine1:  $('cfg-stamp-line1')?.value.trim()   || '大阪急配',
-    stampLine2:  $('cfg-stamp-line2')?.value.trim()   || '株式会社',
-    taxRate:     parseInt($('cfg-tax-rate')?.value)   || 10,
-  };
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-  _showSaveToast('自社情報・請求書設定を保存しました');
-}
-
-function loadCompanyConfigToForm(){
-  const cfg = getCompanyConfig();
-  if($('cfg-company-name'))  $('cfg-company-name').value  = cfg.name        || '大阪急配株式会社';
-  if($('cfg-company-rep'))   $('cfg-company-rep').value   = cfg.rep         || '';
-  if($('cfg-company-addr'))  $('cfg-company-addr').value  = cfg.addr        || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号';
-  if($('cfg-company-tel'))   $('cfg-company-tel').value   = cfg.tel         || '072-464-5678';
-  if($('cfg-company-fax'))   $('cfg-company-fax').value   = cfg.fax         || '';
-  if($('cfg-company-email')) $('cfg-company-email').value = cfg.email       || '';
-  if($('cfg-bank-name'))     $('cfg-bank-name').value     = cfg.bankName    || '';
-  if($('cfg-bank-account'))  $('cfg-bank-account').value  = cfg.bankAccount || '';
-  if($('cfg-bank-holder'))   $('cfg-bank-holder').value   = cfg.bankHolder  || '';
-  if($('cfg-payment-due'))   $('cfg-payment-due').value   = cfg.paymentDue  || 'end';
-  if($('cfg-stamp-line1'))   $('cfg-stamp-line1').value   = cfg.stampLine1  || '大阪急配';
-  if($('cfg-stamp-line2'))   $('cfg-stamp-line2').value   = cfg.stampLine2  || '株式会社';
-  if($('cfg-tax-rate'))      $('cfg-tax-rate').value      = String(cfg.taxRate ?? 10);
-}
-
-
-
 // ── 営業所モーダル：事業種別変更 ──
 function onOfTypeChange(){
   const isDel=$('of-type-del')?.checked;
@@ -10577,13 +9770,12 @@ function nav(el){
   $('s-'+s)?.classList.add('on');
   el.classList.add('on');
   $('pg-title').textContent=PT[s]||s;
-  if(s==='pu-inv')      renderPUInv();
-  if(s==='pu-sum')      renderSum();
-  if(s==='salary')      renderSalary();
-  if(s==='company')     renderCompanyPage();
+  if(s==='pu-inv')    renderPUInv();
+  if(s==='pu-sum')    renderSum();
+  if(s==='salary')    renderSalary();
+  if(s==='company')   renderCompanyPage();
   if(s==='pay-history') initPayHistPage();
-  if(s==='staff')       renderStaff();
-  if(s==='ts-settings') loadCompanyConfigToForm();
+  if(s==='staff')     renderStaff();
 }
 
 
@@ -11099,31 +10291,31 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
   <div class="mhd"><div class="mtt" id="m-company-title">🏭 委託会社登録</div><button class="mx" onclick="closeM('m-company')">×</button></div>
 
   <!-- タブ（くっきりタブ） -->
-  <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg2,#e8eaf0);border-bottom:3px solid var(--tel2);">
+  <div style="display:flex;gap:2px;padding:0;flex-shrink:0;background:var(--bg2,#e8eaf0);border-bottom:3px solid var(--tel2);">
     <button type="button" class="co-tab" data-tab="info" onclick="switchCoModalTab('info')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;">
-      <div style="font-size:13px;font-weight:700;">🏭 基本情報</div>
-      <div style="font-size:10px;opacity:.8;margin-top:2px;">会社名・TEL・住所</div>
+      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;">
+      <div style="font-size:12px;font-weight:700;">🏭 基本情報</div>
+      <div style="font-size:9px;opacity:.8;margin-top:1px;">会社名・TEL・住所</div>
     </button>
     <button type="button" class="co-tab" data-tab="price" onclick="switchCoModalTab('price')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:13px;font-weight:700;">💴 営業所・単価</div>
-      <div style="font-size:10px;margin-top:2px;">担当営業所・宅配/集荷/ルート</div>
+      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:12px;font-weight:700;">💴 営業所・単価</div>
+      <div style="font-size:9px;margin-top:1px;">担当営業所・宅配/集荷/ルート</div>
     </button>
     <button type="button" class="co-tab" data-tab="pay" onclick="switchCoModalTab('pay')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:13px;font-weight:700;">💳 支払い・経費</div>
-      <div style="font-size:10px;margin-top:2px;">振込先・ガソリン・庸車</div>
+      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:12px;font-weight:700;">💳 支払い・経費</div>
+      <div style="font-size:9px;margin-top:1px;">振込先・ガソリン・庸車</div>
     </button>
     <button type="button" class="co-tab" data-tab="charge" onclick="switchCoModalTab('charge')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:13px;font-weight:700;">⚠️ 違約金・修理</div>
-      <div style="font-size:10px;margin-top:2px;">事前登録＋メモ</div>
+      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:12px;font-weight:700;">⚠️ 違約金・修理</div>
+      <div style="font-size:9px;margin-top:1px;">事前登録＋メモ</div>
     </button>
     <button type="button" class="co-tab" data-tab="other" onclick="switchCoModalTab('other')"
-      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:13px;font-weight:700;">📋 その他・立替</div>
-      <div style="font-size:10px;margin-top:2px;">立替代・手当</div>
+      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:12px;font-weight:700;">📋 その他・立替</div>
+      <div style="font-size:9px;margin-top:1px;">立替代・手当</div>
     </button>
   </div>
 
