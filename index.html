@@ -1568,6 +1568,86 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div style="font-size:10px;color:var(--txt2);">請求・精算 › システム設定</div></div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
+      <!-- 自社情報・請求書設定 -->
+      <div class="card mb12" style="max-width:560px;">
+        <div class="ct mb12"><div class="cbar"></div>🏢 自社情報・請求書設定</div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>会社名</label>
+            <input type="text" id="cfg-company-name" class="fi" placeholder="大阪急配株式会社">
+          </div>
+          <div class="fg">
+            <label>代表者名</label>
+            <input type="text" id="cfg-company-rep" class="fi" placeholder="代表取締役　川村○○">
+          </div>
+        </div>
+        <div class="fg mb8">
+          <label>郵便番号・住所</label>
+          <input type="text" id="cfg-company-addr" class="fi" placeholder="〒598-8031　大阪府泉佐野市鶴原3丁目10番1号">
+        </div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>電話番号</label>
+            <input type="text" id="cfg-company-tel" class="fi" placeholder="072-464-5678">
+          </div>
+          <div class="fg">
+            <label>FAX</label>
+            <input type="text" id="cfg-company-fax" class="fi" placeholder="072-464-xxxx">
+          </div>
+        </div>
+        <div class="fg mb8">
+          <label>メールアドレス</label>
+          <input type="text" id="cfg-company-email" class="fi" placeholder="info@osaka-kyuhai.co.jp">
+        </div>
+        <div class="ct mb8 mt12"><div class="cbar" style="background:var(--grn);"></div>💳 振込先情報</div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>銀行名</label>
+            <input type="text" id="cfg-bank-name" class="fi" placeholder="○○銀行　○○支店">
+          </div>
+          <div class="fg">
+            <label>口座種別・番号</label>
+            <input type="text" id="cfg-bank-account" class="fi" placeholder="普通　1234567">
+          </div>
+        </div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>口座名義（カナ）</label>
+            <input type="text" id="cfg-bank-holder" class="fi" placeholder="オオサカキュウハイ（カ">
+          </div>
+          <div class="fg">
+            <label>振込期限（翌月）</label>
+            <select id="cfg-payment-due" class="fi">
+              <option value="end">翌月末日</option>
+              <option value="20">翌月20日</option>
+              <option value="15">翌月15日</option>
+              <option value="10">翌月10日</option>
+            </select>
+          </div>
+        </div>
+        <div class="ct mb8 mt12"><div class="cbar" style="background:var(--amb2);"></div>🖋 電子印鑑設定</div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>印鑑1行目</label>
+            <input type="text" id="cfg-stamp-line1" class="fi" placeholder="大阪急配" maxlength="6">
+          </div>
+          <div class="fg">
+            <label>印鑑2行目</label>
+            <input type="text" id="cfg-stamp-line2" class="fi" placeholder="株式会社" maxlength="6">
+          </div>
+        </div>
+        <div class="fg mb12">
+          <label>消費税設定</label>
+          <select id="cfg-tax-rate" class="fi" style="width:160px;">
+            <option value="10">10%（標準税率）</option>
+            <option value="8">8%（軽減税率）</option>
+            <option value="0">0%（非課税）</option>
+          </select>
+        </div>
+        <button class="btn b-grn btn-sm" onclick="saveCompanyConfig()">💾 保存</button>
+      </div>
+
+      <!-- PIN変更 -->
       <div class="card" style="max-width:400px;">
         <div class="ct mb12"><div class="cbar"></div>管理者PIN変更</div>
         <div class="f2 mb8">
@@ -6390,7 +6470,11 @@ function expBillingCSV(){
 // ══════════════════════════════════════════
 
 // 電子印鑑SVG生成（赤丸二重円・明朝体）
-function stampSVG(name1='大阪急配', name2='株式会社', size=64){
+function stampSVG(name1, name2, size=64){
+  const cfg = getCompanyConfig();
+  // 引数が省略されたら設定値を使用
+  name1 = name1 || cfg.stampLine1 || '大阪急配';
+  name2 = name2 || cfg.stampLine2 || '株式会社';
   const r=size/2, r2=r*0.85, fontSize=size*0.16;
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     <circle cx="${r}" cy="${r}" r="${r-1}" fill="none" stroke="#c0392b" stroke-width="${size*0.04}"/>
@@ -6402,6 +6486,32 @@ function stampSVG(name1='大阪急配', name2='株式会社', size=64){
       font-family="'游明朝','Yu Mincho','Hiragino Mincho Pro','MS Mincho',serif"
       font-size="${fontSize}px" fill="#c0392b" font-weight="bold">${name2}</text>
   </svg>`;
+}
+
+// 請求書用の設定値を取得するヘルパー
+function getInvoiceConfig(){
+  const cfg = getCompanyConfig();
+  const due = cfg.paymentDue || 'end';
+  return {
+    companyName: cfg.name        || '大阪急配株式会社',
+    rep:         cfg.rep         || '',
+    addr:        cfg.addr        || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号',
+    tel:         cfg.tel         || '072-464-5678',
+    bankLine:    cfg.bankName && cfg.bankAccount && cfg.bankHolder
+                   ? `${cfg.bankName}　${cfg.bankAccount}　${cfg.bankHolder}`
+                   : '○○銀行　○○支店　普通　1234567　オオサカキュウハイ（カ',
+    taxRate:     cfg.taxRate ?? 10,
+    paymentDueLabel: (monStr) => {
+      const y = parseInt(monStr.slice(0,4)), m = parseInt(monStr.slice(5,7));
+      const nextM = m === 12 ? 1 : m+1;
+      const nextY = m === 12 ? y+1 : y;
+      if(due==='end')  return `${nextY}年${nextM}月末日`;
+      if(due==='20')   return `${nextY}年${nextM}月20日`;
+      if(due==='15')   return `${nextY}年${nextM}月15日`;
+      if(due==='10')   return `${nextY}年${nextM}月10日`;
+      return `${nextY}年${nextM}月末日`;
+    },
+  };
 }
 
 // 請求書一覧レンダリング
@@ -6599,13 +6709,13 @@ function closeReportDetail(){
 
 // ══ ① 顧客向け請求書 ══
 function printCustomerInvoice(custName, monStr){
+  const cfg = getInvoiceConfig();
   const cu=D.customers.find(c=>c.name===custName);
   const rows=D.pickup.filter(r=>r.customerName===custName&&(!monStr||(r.date||'').startsWith(monStr)));
   const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const invoiceNo=`INV-${Date.now().toString().slice(-6)}`;
 
-  // 品目別集計
   const byItem={};
   rows.forEach(r=>Object.entries(r.items||{}).forEach(([item,qty])=>{
     const price=getCustPrice(cu,item);
@@ -6614,15 +6724,13 @@ function printCustomerInvoice(custName, monStr){
   }));
   const itemList=Object.values(byItem);
   const subtotal=itemList.reduce((s,m)=>s+m.amount,0);
-  const tax=Math.floor(subtotal*0.1);
+  const tax=Math.floor(subtotal*cfg.taxRate/100);
   const total=subtotal+tax;
-
-  const stamp=stampSVG('大阪急配','株式会社',80);
+  const stamp=stampSVG(null,null,80);
 
   const html=`
   <div class="rd-paper" style="max-width:800px;">
     <div style="padding:28px 36px;">
-      <!-- ヘッダー -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
         <div>
           <div style="font-size:28px;font-weight:900;color:#1e293b;letter-spacing:2px;">請 求 書</div>
@@ -6630,31 +6738,26 @@ function printCustomerInvoice(custName, monStr){
           <div style="font-size:11px;color:#64748b;">発行日：${today}</div>
         </div>
         <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">大阪急配株式会社</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">〒598-8031<br>大阪府泉佐野市鶴原3丁目10番1号<br>TEL：072-464-5678</div>
+          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
+          <div style="font-size:10px;color:#64748b;line-height:1.8;">${cfg.addr}<br>TEL：${cfg.tel}</div>
           <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
         </div>
       </div>
-      <!-- 請求先 -->
       <div style="margin-bottom:24px;">
         <div style="font-size:18px;font-weight:700;border-bottom:2px solid #1e293b;padding-bottom:6px;margin-bottom:8px;">${custName}　御中</div>
         <div style="font-size:13px;color:#374151;">${monLabel}　集荷業務委託費　ご請求申し上げます。</div>
       </div>
-      <!-- 合計金額 -->
       <div style="background:#f0f9ff;border:2px solid #0284c7;border-radius:8px;padding:16px 24px;margin-bottom:24px;display:flex;align-items:center;gap:20px;">
         <div style="font-size:13px;color:#0369a1;font-weight:700;">ご請求金額（税込）</div>
         <div style="font-size:30px;font-weight:900;color:#0369a1;font-family:monospace;">¥${fmt(total)}</div>
       </div>
-      <!-- 明細 -->
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:20px;">
-        <thead>
-          <tr style="background:#1e293b;color:#fff;">
-            <th style="padding:8px 12px;text-align:left;">品目</th>
-            <th style="padding:8px 12px;text-align:right;">数量</th>
-            <th style="padding:8px 12px;text-align:right;">単価</th>
-            <th style="padding:8px 12px;text-align:right;">金額</th>
-          </tr>
-        </thead>
+        <thead><tr style="background:#1e293b;color:#fff;">
+          <th style="padding:8px 12px;text-align:left;">品目</th>
+          <th style="padding:8px 12px;text-align:right;">数量</th>
+          <th style="padding:8px 12px;text-align:right;">単価</th>
+          <th style="padding:8px 12px;text-align:right;">金額</th>
+        </tr></thead>
         <tbody>
           ${itemList.map(m=>`<tr style="border-bottom:1px solid #f1f5f9;">
             <td style="padding:8px 12px;">${m.item}</td>
@@ -6669,7 +6772,7 @@ function printCustomerInvoice(custName, monStr){
             <td style="padding:8px 12px;text-align:right;font-family:monospace;font-weight:700;">¥${fmt(subtotal)}</td>
           </tr>
           <tr>
-            <td colspan="3" style="padding:8px 12px;text-align:right;">消費税（10%）</td>
+            <td colspan="3" style="padding:8px 12px;text-align:right;">消費税（${cfg.taxRate}%）</td>
             <td style="padding:8px 12px;text-align:right;font-family:monospace;">¥${fmt(tax)}</td>
           </tr>
           <tr style="background:#f0f9ff;">
@@ -6678,11 +6781,10 @@ function printCustomerInvoice(custName, monStr){
           </tr>
         </tfoot>
       </table>
-      <!-- 振込先 -->
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;font-size:11px;color:#374151;">
         <div style="font-weight:700;margin-bottom:4px;">【お振込先】</div>
-        <div>○○銀行　○○支店　普通　1234567　オオサカキュウハイ（カ</div>
-        <div style="margin-top:4px;color:#64748b;">※お振込手数料はご負担ください。振込期限：${monStr.slice(0,4)}年${parseInt(monStr.slice(5,7))+1}月末日</div>
+        <div>${cfg.bankLine}</div>
+        <div style="margin-top:4px;color:#64748b;">※お振込手数料はご負担ください。振込期限：${cfg.paymentDueLabel(monStr)}</div>
       </div>
     </div>
   </div>`;
@@ -6691,9 +6793,10 @@ function printCustomerInvoice(custName, monStr){
 
 // ══ ② 委託会社向け支払明細 ══
 function printCompanyPayslip(coName, monStr){
+  const cfg = getInvoiceConfig();
   const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
-  const stamp=stampSVG('大阪急配','株式会社',70);
+  const stamp=stampSVG(null,null,70);
 
   const byDriver={};
   D.delivery.filter(r=>!monStr||(r.date||'').startsWith(monStr)).forEach(r=>{
@@ -6720,8 +6823,8 @@ function printCompanyPayslip(coName, monStr){
           <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
         </div>
         <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">大阪急配株式会社</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：072-464-5678</div>
+          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
+          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：${cfg.tel}</div>
           <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
         </div>
       </div>
@@ -6762,6 +6865,7 @@ function printCompanyPayslip(coName, monStr){
 
 // ══ ③ 委託会社向け請求書発行代行 ══
 function printCompanyInvoiceProxy(coName, monStr){
+  const cfg = getInvoiceConfig();
   const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const co=D.companies?.find(c=>c.name===coName);
@@ -6785,7 +6889,7 @@ function printCompanyInvoiceProxy(coName, monStr){
   <div class="rd-paper" style="max-width:800px;">
     <div style="padding:28px 36px;">
       <div style="background:#fef9c3;border:1px solid #ca8a04;border-radius:6px;padding:6px 12px;font-size:10px;color:#854d0e;margin-bottom:16px;">
-        ⚠️ 本書は大阪急配株式会社が${coName}の依頼により発行代行した請求書です
+        ⚠️ 本書は${cfg.companyName}が${coName}の依頼により発行代行した請求書です
       </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
         <div>
@@ -6795,12 +6899,12 @@ function printCompanyInvoiceProxy(coName, monStr){
         </div>
         <div style="text-align:right;position:relative;">
           <div style="font-size:14px;font-weight:700;">${invoiceName}</div>
-          <div style="font-size:10px;color:#64748b;">（発行代行：大阪急配株式会社）</div>
+          <div style="font-size:10px;color:#64748b;">（発行代行：${cfg.companyName}）</div>
           <div style="position:absolute;top:-8px;right:-12px;opacity:0.85;">${stamp}</div>
         </div>
       </div>
       <div style="margin-bottom:20px;">
-        <div style="font-size:16px;font-weight:700;">大阪急配株式会社　御中</div>
+        <div style="font-size:16px;font-weight:700;">${cfg.companyName}　御中</div>
       </div>
       <div style="background:#f0f9ff;border:2px solid #0284c7;border-radius:8px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;">
         <div style="font-size:12px;color:#0369a1;font-weight:700;">ご請求金額</div>
@@ -6810,7 +6914,7 @@ function printCompanyInvoiceProxy(coName, monStr){
         <div>${monLabel}　配送業務委託費　上記の通りご請求申し上げます。</div>
       </div>
       <div style="margin-top:24px;text-align:right;font-size:10px;color:#94a3b8;">
-        代行発行者：大阪急配株式会社　${proxyStamp.replace('<svg',`<svg style="vertical-align:middle;"`)}
+        代行発行者：${cfg.companyName}　${proxyStamp.replace('<svg',`<svg style="vertical-align:middle;"`)}
       </div>
     </div>
   </div>`;
@@ -6819,6 +6923,7 @@ function printCompanyInvoiceProxy(coName, monStr){
 
 // ══ ④ 個人事業主向け支払明細 ══
 function printIndividualPayslip(staffName, monStr){
+  const cfg = getInvoiceConfig();
   const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const st=D.staff.find(s=>s.name===staffName);
@@ -6843,8 +6948,8 @@ function printIndividualPayslip(staffName, monStr){
           <div style="font-size:11px;color:#64748b;margin-top:4px;">発行日：${today}　対象：${monLabel}</div>
         </div>
         <div style="text-align:right;position:relative;">
-          <div style="font-size:14px;font-weight:700;">大阪急配株式会社</div>
-          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：072-464-5678</div>
+          <div style="font-size:14px;font-weight:700;">${cfg.companyName}</div>
+          <div style="font-size:10px;color:#64748b;line-height:1.8;">TEL：${cfg.tel}</div>
           <div style="position:absolute;top:-8px;right:-12px;opacity:0.92;">${stamp}</div>
         </div>
       </div>
@@ -6890,7 +6995,7 @@ function printIndividualPayslip(staffName, monStr){
         </tr></tfoot>
       </table>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:11px;color:#374151;">
-        振込予定日：${monStr.slice(0,4)}年${parseInt(monStr.slice(5,7))+1}月末日
+        振込予定日：${cfg.paymentDueLabel(monStr)}
       </div>
     </div>
   </div>`;
@@ -6899,6 +7004,7 @@ function printIndividualPayslip(staffName, monStr){
 
 // ══ ⑤ 個人事業主向け請求書発行代行 ══
 function printIndividualInvoiceProxy(staffName, monStr){
+  const cfg = getInvoiceConfig();
   const monLabel=monStr.replace('/','-').replace('-','年')+'月分';
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const st=D.staff.find(s=>s.name===staffName);
@@ -6921,7 +7027,7 @@ function printIndividualInvoiceProxy(staffName, monStr){
   <div class="rd-paper" style="max-width:800px;">
     <div style="padding:28px 36px;">
       <div style="background:#fef9c3;border:1px solid #ca8a04;border-radius:6px;padding:6px 12px;font-size:10px;color:#854d0e;margin-bottom:16px;">
-        ⚠️ 本書は大阪急配株式会社が${staffName}様の依頼により発行代行した請求書です
+        ⚠️ 本書は${cfg.companyName}が${staffName}様の依頼により発行代行した請求書です
       </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #1e293b;padding-bottom:16px;">
         <div>
@@ -10184,6 +10290,55 @@ function changeTSPin(){
   alert('トップシークレットPINを変更しました');
 }
 
+// ── 自社情報・請求書設定 ──
+const CFG_KEY = 'kyuhai_company_config';
+
+function getCompanyConfig(){
+  try {
+    const v = localStorage.getItem(CFG_KEY);
+    return v ? JSON.parse(v) : {};
+  } catch { return {}; }
+}
+
+function saveCompanyConfig(){
+  const cfg = {
+    name:        $('cfg-company-name')?.value.trim()  || '大阪急配株式会社',
+    rep:         $('cfg-company-rep')?.value.trim()   || '',
+    addr:        $('cfg-company-addr')?.value.trim()  || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号',
+    tel:         $('cfg-company-tel')?.value.trim()   || '072-464-5678',
+    fax:         $('cfg-company-fax')?.value.trim()   || '',
+    email:       $('cfg-company-email')?.value.trim() || '',
+    bankName:    $('cfg-bank-name')?.value.trim()     || '',
+    bankAccount: $('cfg-bank-account')?.value.trim()  || '',
+    bankHolder:  $('cfg-bank-holder')?.value.trim()   || '',
+    paymentDue:  $('cfg-payment-due')?.value          || 'end',
+    stampLine1:  $('cfg-stamp-line1')?.value.trim()   || '大阪急配',
+    stampLine2:  $('cfg-stamp-line2')?.value.trim()   || '株式会社',
+    taxRate:     parseInt($('cfg-tax-rate')?.value)   || 10,
+  };
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  _showSaveToast('自社情報・請求書設定を保存しました');
+}
+
+function loadCompanyConfigToForm(){
+  const cfg = getCompanyConfig();
+  if($('cfg-company-name'))  $('cfg-company-name').value  = cfg.name        || '大阪急配株式会社';
+  if($('cfg-company-rep'))   $('cfg-company-rep').value   = cfg.rep         || '';
+  if($('cfg-company-addr'))  $('cfg-company-addr').value  = cfg.addr        || '〒598-8031　大阪府泉佐野市鶴原3丁目10番1号';
+  if($('cfg-company-tel'))   $('cfg-company-tel').value   = cfg.tel         || '072-464-5678';
+  if($('cfg-company-fax'))   $('cfg-company-fax').value   = cfg.fax         || '';
+  if($('cfg-company-email')) $('cfg-company-email').value = cfg.email       || '';
+  if($('cfg-bank-name'))     $('cfg-bank-name').value     = cfg.bankName    || '';
+  if($('cfg-bank-account'))  $('cfg-bank-account').value  = cfg.bankAccount || '';
+  if($('cfg-bank-holder'))   $('cfg-bank-holder').value   = cfg.bankHolder  || '';
+  if($('cfg-payment-due'))   $('cfg-payment-due').value   = cfg.paymentDue  || 'end';
+  if($('cfg-stamp-line1'))   $('cfg-stamp-line1').value   = cfg.stampLine1  || '大阪急配';
+  if($('cfg-stamp-line2'))   $('cfg-stamp-line2').value   = cfg.stampLine2  || '株式会社';
+  if($('cfg-tax-rate'))      $('cfg-tax-rate').value      = String(cfg.taxRate ?? 10);
+}
+
+
+
 // ── 営業所モーダル：事業種別変更 ──
 function onOfTypeChange(){
   const isDel=$('of-type-del')?.checked;
@@ -10302,12 +10457,13 @@ function nav(el){
   $('s-'+s)?.classList.add('on');
   el.classList.add('on');
   $('pg-title').textContent=PT[s]||s;
-  if(s==='pu-inv')    renderPUInv();
-  if(s==='pu-sum')    renderSum();
-  if(s==='salary')    renderSalary();
-  if(s==='company')   renderCompanyPage();
+  if(s==='pu-inv')      renderPUInv();
+  if(s==='pu-sum')      renderSum();
+  if(s==='salary')      renderSalary();
+  if(s==='company')     renderCompanyPage();
   if(s==='pay-history') initPayHistPage();
-  if(s==='staff')     renderStaff();
+  if(s==='staff')       renderStaff();
+  if(s==='ts-settings') loadCompanyConfigToForm();
 }
 
 
