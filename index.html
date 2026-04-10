@@ -144,16 +144,20 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 /* MODAL */
 .mbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
 .mbg.on{display:flex;}
-.modal{background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:18px;width:600px;max-width:96vw;max-height:92vh;overflow-y:auto;animation:mIn .18s ease;}
-.modal-w{width:800px;}
-.modal-n{width:420px;}
+.modal{background:var(--sur);border:1px solid var(--brd2);border-radius:10px;padding:22px;width:700px;max-width:97vw;max-height:94vh;overflow-y:auto;animation:mIn .18s ease;}
+.modal-w{width:900px;}
+.modal-n{width:480px;}
 @keyframes mIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
-.mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.mtt{font-size:13.5px;font-weight:700;}
-.mx{background:none;border:none;color:var(--txt2);font-size:17px;cursor:pointer;line-height:1;padding:2px 5px;border-radius:3px;}
+.mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.mtt{font-size:15px;font-weight:700;}
+.mx{background:none;border:none;color:var(--txt2);font-size:20px;cursor:pointer;line-height:1;padding:3px 7px;border-radius:4px;}
 .mx:hover{background:var(--sur2);}
-.mft{display:flex;gap:6px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid var(--brd);}
-.sep{border:none;border-top:1px solid var(--brd);margin:11px 0;}
+.mft{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid var(--brd);}
+.sep{border:none;border-top:1px solid var(--brd);margin:14px 0;}
+.modal label{font-size:12px;}
+.modal .fi{font-size:13px;padding:7px 10px;}
+.modal select.fi{font-size:13px;}
+.modal .btn-sm{font-size:12px;padding:5px 12px;}
 
 /* ITEM COLORS */
 .c60{color:var(--y60);}.c80{color:var(--y80);}.c100{color:var(--y100);}
@@ -1687,7 +1691,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 宅配日報入力（運坊.NET形式） -->
 <div id="m-del" class="mbg">
-<div class="modal" style="width:860px;max-width:98vw;">
+<div class="modal" style="width:900px;max-width:98vw;">
   <div class="mhd"><div class="mtt">📋 宅配日報入力</div><button class="mx" onclick="closeM('m-del')">×</button></div>
 
   <!-- 基本情報 -->
@@ -2140,28 +2144,30 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 従業員台帳登録モーダル -->
 <div id="m-staff" class="mbg">
-<div class="modal" style="width:960px;max-width:99vw;height:90vh;max-height:95vh;display:flex;flex-direction:column;position:relative;">
+<div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
   <div class="mhd">
     <div class="mtt">👤 従業員台帳</div>
     <button class="mx" onclick="closeM('m-staff')">×</button>
   </div>
 
   <!-- タブ（6タブ） -->
-  <div style="display:flex;gap:2px;padding:6px 6px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;">
+  <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;">
     <button type="button" id="ptab-info" onclick="switchStTab('info')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
     <button type="button" id="ptab-del" onclick="switchStTab('del')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:var(--txt2);">🚛 宅配単価</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">🚛 宅配単価</button>
     <button type="button" id="ptab-col" onclick="switchStTab('col')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:var(--txt2);">📦 集荷単価</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📦 集荷単価</button>
     <button type="button" id="ptab-other" onclick="switchStTab('other')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:var(--txt2);">📋 その他・立替</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📋 その他・立替</button>
     <button type="button" id="ptab-offset" onclick="switchStTab('offset')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:var(--txt2);">⚖️ 相殺・手当</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">⚖️ 控除・手当</button>
+    <button type="button" id="ptab-advance" onclick="switchStTab('advance')"
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">💴 前払い管理</button>
     <button type="button" id="ptab-confirm" onclick="switchStTab('confirm')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:12px;font-weight:600;">📋 登録確認</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:700;">📋 登録確認</button>
     <button type="button" id="ptab-history" onclick="switchStTab('history')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:var(--txt2);">📅 給与履歴</button>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📅 給与履歴</button>
   </div>
 
   <div style="overflow-y:auto;flex:1;padding:14px 16px;">
@@ -2184,8 +2190,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
     <div class="fg">
       <label>社員番号
-        <span style="font-size:8.5px;color:var(--txt2);margin-left:4px;">自動 or 手入力</span>
-        <label style="font-size:8.5px;color:var(--amb2);margin-left:6px;cursor:pointer;">
+        <span style="font-size:13px;color:var(--txt2);margin-left:4px;">自動 or 手入力</span>
+        <label style="font-size:13px;color:var(--amb2);margin-left:6px;cursor:pointer;">
           <input type="checkbox" id="st-empno-manual" onchange="onEmpNoManual()" style="margin-right:2px;">手入力
         </label>
       </label>
@@ -2221,7 +2227,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div style="grid-column:span 2;margin-top:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:5px 0;" onclick="toggleCompanyPrices(this)">
           <div class="xs muted fw7">📋 単価条件詳細（集荷ルートタブで詳細設定済みの場合は不要）</div>
-          <span class="cp-toggle-arrow" style="font-size:10px;color:var(--txt2);transition:transform .2s;">▶</span>
+          <span class="cp-toggle-arrow" style="font-size:13px;color:var(--txt2);transition:transform .2s;">▶</span>
         </div>
         <div class="cp-detail" style="display:none;">
           <div id="st-company-prices" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
@@ -2258,7 +2264,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg" style="grid-column:span 2">
       <label>免許証写真（表面）</label>
       <div style="display:flex;align-items:center;gap:8px;">
-        <input type="file" id="st-license-img" accept="image/*" onchange="onLicenseImg(this)" style="font-size:11px;">
+        <input type="file" id="st-license-img" accept="image/*" onchange="onLicenseImg(this)" style="font-size:13px;">
         <div id="st-license-preview" style="display:none;">
           <img id="st-license-thumb" style="height:60px;border-radius:4px;border:1px solid var(--brd);">
         </div>
@@ -2271,40 +2277,40 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ インボイス・振込口座（個人事業主・外部委託）</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
     <div class="fg">
-      <label style="font-size:11px;">インボイス登録番号</label>
+      <label style="font-size:13px;">インボイス登録番号</label>
       <input type="text" id="st-invoice" class="fi" style="font-family:monospace;" placeholder="T1234567890123">
     </div>
     <div class="fg">
-      <label style="font-size:11px;">屋号（請求書表記）</label>
+      <label style="font-size:13px;">屋号（請求書表記）</label>
       <input type="text" id="st-biz-name" class="fi" placeholder="例：山田配送">
     </div>
   </div>
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 14px;margin-bottom:10px;">
-    <div style="font-size:11px;font-weight:700;color:var(--grn2);margin-bottom:8px;">🏦 振込先口座</div>
+    <div style="font-size:13px;font-weight:700;color:var(--grn2);margin-bottom:8px;">🏦 振込先口座</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
       <div class="fg" style="margin:0;">
-        <label style="font-size:10px;">銀行名</label>
-        <input type="text" id="st-bank-name" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="三井住友銀行">
+        <label style="font-size:13px;">銀行名</label>
+        <input type="text" id="st-bank-name" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="三井住友銀行">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:10px;">支店名</label>
-        <input type="text" id="st-bank-branch" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="梅田支店">
+        <label style="font-size:13px;">支店名</label>
+        <input type="text" id="st-bank-branch" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="梅田支店">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:10px;">口座種別</label>
-        <select id="st-bank-type" class="fi" style="font-size:12px;padding:5px 8px;">
+        <label style="font-size:13px;">口座種別</label>
+        <select id="st-bank-type" class="fi" style="font-size:13px;padding:5px 8px;">
           <option>普通</option><option>当座</option>
         </select>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div class="fg" style="margin:0;">
-        <label style="font-size:10px;">口座番号</label>
-        <input type="text" id="st-bank-no" class="fi" style="font-size:12px;padding:5px 8px;font-family:monospace;" placeholder="1234567">
+        <label style="font-size:13px;">口座番号</label>
+        <input type="text" id="st-bank-no" class="fi" style="font-size:13px;padding:5px 8px;font-family:monospace;" placeholder="1234567">
       </div>
       <div class="fg" style="margin:0;">
-        <label style="font-size:10px;">口座名義（カナ）</label>
-        <input type="text" id="st-bank-holder" class="fi" style="font-size:12px;padding:5px 8px;" placeholder="ヤマダ タロウ">
+        <label style="font-size:13px;">口座名義（カナ）</label>
+        <input type="text" id="st-bank-holder" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="ヤマダ タロウ">
       </div>
     </div>
   </div>
@@ -2332,28 +2338,28 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <!-- 宅配・集荷単価を給与に加算するか -->
   <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;">
-    <span style="font-size:10px;color:var(--txt2);font-weight:700;">単価を給与に加算：</span>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
+    <span style="font-size:13px;color:var(--txt2);font-weight:700;">単価を給与に加算：</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
       <input type="checkbox" id="st-add-del" style="width:13px;height:13px;">
       <span style="color:var(--blu2);">🚛 宅配単価を加算</span>
     </label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;">
       <input type="checkbox" id="st-add-col" style="width:13px;height:13px;">
       <span style="color:var(--tel2);">📦 集荷単価を加算</span>
     </label>
-    <span id="st-pay-hint" style="margin-left:auto;font-size:9.5px;color:var(--amb2);"></span>
+    <span id="st-pay-hint" style="margin-left:auto;font-size:13px;color:var(--amb2);"></span>
   </div>
 
   <!-- 単価タブ -->
   <!-- 単価 税込・税別切り替え -->
   <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:6px;">
-    <span style="font-size:9px;color:var(--txt2);">単価区分:</span>
+    <span style="font-size:13px;color:var(--txt2);">単価区分:</span>
     <button type="button" id="st-tax-btn-ex" onclick="setStTax('ex')"
-      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;transition:all .12s;">税別</button>
+      style="padding:2px 9px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;transition:all .12s;">税別</button>
     <button type="button" id="st-tax-btn-in" onclick="setStTax('in')"
-      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);transition:all .12s;">税込</button>
+      style="padding:2px 9px;border-radius:3px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);transition:all .12s;">税込</button>
     <input type="hidden" id="st-tax-type" value="ex">
-    <span id="st-tax-hint" style="font-size:9px;color:var(--amb2);margin-left:3px;">税抜で入力</span>
+    <span id="st-tax-hint" style="font-size:13px;color:var(--amb2);margin-left:3px;">税抜で入力</span>
   </div>
 
 
@@ -2484,6 +2490,26 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <button type="button" class="btn b-grn btn-sm" onclick="openRouteModal()">⚙️ 設定</button>
     </div>
     <div id="st-route-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+
+  <!-- 💴 前払い管理タブ -->
+  <div id="ptab-content-advance" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:var(--amb2);">💴 前払い（前渡し）管理</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:3px;">前払いは月末の業務委託料から自動相殺されます。残高は翌月に繰り越されます。</div>
+      </div>
+      <button type="button" class="btn b-amb btn-sm" onclick="addAdvanceRow()">＋ 前払い追加</button>
+    </div>
+    <!-- 残高表示 -->
+    <div id="advance-balance-card" style="background:var(--sur);border:1px solid var(--brd2);border-radius:6px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:16px;">
+      <div style="font-size:12px;color:var(--txt2);">前払い残高</div>
+      <div id="advance-balance-amount" style="font-size:22px;font-weight:700;color:var(--amb2);font-family:monospace;">¥0</div>
+      <div style="font-size:11px;color:var(--txt2);margin-left:auto;">※月末締め処理時に自動相殺</div>
+    </div>
+    <!-- 前払い一覧 -->
+    <div id="advance-rows" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div id="advance-empty" style="text-align:center;padding:20px;color:var(--txt2);font-size:12px;">前払い記録はありません</div>
   </div>
 
   <!-- 📅 給与履歴タブ -->
@@ -7067,8 +7093,7 @@ function printIndividualInvoiceProxy(staffName, monStr){
 
 // 従業員台帳 タブ切り替え（上段タブ形式）
 function switchStTab(t){
-  // info パネルは stpanel-info、それ以外は ptab-content-xxx
-  const allTabs=['info','del','col','other','offset','route','history'];
+  const allTabs=['info','del','col','other','offset','advance','confirm','route','history'];
   allTabs.forEach(id=>{
     const btn=$('ptab-'+id);
     if(btn){
@@ -7085,8 +7110,88 @@ function switchStTab(t){
       if(p) p.style.display=id===t?'':'none';
     }
   });
-  if(t==='route') renderRouteList();
+  if(t==='route')   renderRouteList();
   if(t==='confirm') buildStConfirm();
+  if(t==='advance') renderAdvanceTab();
+}
+
+// ══ 前払い管理タブ ══
+function renderAdvanceTab(){
+  const editId = $('m-staff')?._editId;
+  const st = D.staff.find(s=>s.id===editId);
+  const advances = st?.advances || [];
+  const balance = advances.filter(a=>!a.settled).reduce((s,a)=>s+a.amount,0);
+  const balEl = $('advance-balance-amount');
+  if(balEl) balEl.textContent = '¥'+fmt(balance);
+  balEl && (balEl.style.color = balance>0 ? 'var(--amb2)' : 'var(--grn)');
+  const rowsEl = $('advance-rows');
+  const emptyEl = $('advance-empty');
+  if(!rowsEl) return;
+  if(!advances.length){
+    rowsEl.innerHTML=''; if(emptyEl)emptyEl.style.display='';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+  rowsEl.innerHTML = advances.map((a,i)=>`
+    <div style="background:var(--sur);border:1px solid var(--brd${a.settled?'':'2'});border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;opacity:${a.settled?'0.6':'1'};">
+      <div style="font-size:12px;color:var(--txt2);min-width:80px;">${a.date||'−'}</div>
+      <div style="font-size:14px;font-weight:700;font-family:monospace;color:${a.settled?'var(--txt2)':'var(--amb2)'};">¥${fmt(a.amount)}</div>
+      <div style="font-size:12px;color:var(--txt2);flex:1;">${a.reason||''}</div>
+      <div style="font-size:11px;">${a.settled?'<span style="color:var(--grn);font-weight:700;">✅ 相殺済</span>':'<span style="color:var(--amb2);font-weight:700;">⏳ 未相殺</span>'}</div>
+      ${!a.settled?`<button class="btn b-gh btn-sm" onclick="settleAdvance(${i})" style="font-size:11px;">手動相殺</button>`:''}
+      <button class="btn b-red btn-sm" onclick="deleteAdvance(${i})" style="font-size:11px;">削除</button>
+    </div>
+  `).join('');
+}
+
+function addAdvanceRow(){
+  const editId = $('m-staff')?._editId;
+  const st = editId ? D.staff.find(s=>s.id===editId) : null;
+  showDialog({
+    icon:'💴', title:'前払い追加',
+    msg:'日付・金額・理由を入力してください
+（相殺は月末締め処理で自動実行されます）',
+    inputs:[
+      {id:'adv-date', label:'日付', type:'date', value:new Date().toISOString().slice(0,10)},
+      {id:'adv-amount', label:'金額（円）', type:'number', placeholder:'10000'},
+      {id:'adv-reason', label:'理由・メモ', type:'text', placeholder:'生活費前払いなど'},
+    ],
+    okText:'追加', cancelText:'キャンセル'
+  }).then(ok=>{
+    if(!ok) return;
+    const date = document.getElementById('adv-date')?.value || '';
+    const amount = parseInt(document.getElementById('adv-amount')?.value)||0;
+    const reason = document.getElementById('adv-reason')?.value||'';
+    if(!amount){showAlert({icon:'⚠️',title:'エラー',msg:'金額を入力してください'});return;}
+    // スタッフデータに追加（編集中の場合はメモリ上に追加、保存時にD.staffに反映）
+    if(!window._advanceBuffer) window._advanceBuffer=[];
+    window._advanceBuffer.push({date,amount,reason,settled:false,addedAt:new Date().toISOString()});
+    renderAdvanceTab();
+    _showSaveToast('前払いを追加しました（保存ボタンで確定）');
+  });
+}
+
+function settleAdvance(idx){
+  const editId = $('m-staff')?._editId;
+  const st = D.staff.find(s=>s.id===editId);
+  if(!st?.advances) return;
+  st.advances[idx].settled = true;
+  st.advances[idx].settledAt = new Date().toISOString();
+  lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff);
+  renderAdvanceTab();
+  _showSaveToast('相殺済みにしました');
+}
+
+function deleteAdvance(idx){
+  const editId = $('m-staff')?._editId;
+  const st = D.staff.find(s=>s.id===editId);
+  if(!st?.advances) return;
+  showDialog({icon:'🗑',title:'前払い削除',msg:'この前払い記録を削除しますか？',okText:'削除',cancelText:'キャンセル'}).then(ok=>{
+    if(!ok) return;
+    st.advances.splice(idx,1);
+    lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff);
+    renderAdvanceTab();
+  });
 }
 function switchPriceTab(t){
   ['del','col','other','offset','route','history'].forEach(id=>{
@@ -7469,8 +7574,24 @@ function saveStaff(continueAdd=false){
     penalties:penaltyRows,
     note:$('st-note')?.value||'',
     company:companyName,
+    advances: window._advanceBuffer || [],
   };
-  D.staff.push(newDrv);
+  // 前払いバッファをリセット
+  window._advanceBuffer = [];
+  // 編集モード：既存レコードの前払い履歴を引き継ぐ
+  const editingStaffId = $('m-staff')?._editId;
+  if(editingStaffId){
+    const existing = D.staff.find(s=>s.id===editingStaffId);
+    if(existing?.advances?.length){
+      newDrv.advances = [...(existing.advances||[]), ...newDrv.advances];
+    }
+    const idx = D.staff.findIndex(s=>s.id===editingStaffId);
+    if(idx>=0){ newDrv.id=editingStaffId; D.staff[idx]=newDrv; }
+    else D.staff.push(newDrv);
+    const mStaff=document.getElementById('m-staff'); if(mStaff)mStaff._editId=null;
+  } else {
+    D.staff.push(newDrv);
+  }
 
   // Firebaseのnikki_driversにも追加
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
@@ -10975,35 +11096,35 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
 
 <!-- 委託会社登録・編集モーダル -->
 <div id="m-company" class="mbg">
-<div class="modal" style="width:960px;max-width:99vw;height:90vh;max-height:95vh;display:flex;flex-direction:column;position:relative;">
+<div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
   <div class="mhd"><div class="mtt" id="m-company-title">🏭 委託会社登録</div><button class="mx" onclick="closeM('m-company')">×</button></div>
 
   <!-- タブ（くっきりタブ） -->
-  <div style="display:flex;gap:2px;padding:0;flex-shrink:0;background:var(--bg2,#e8eaf0);border-bottom:3px solid var(--tel2);">
+  <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg2,#e8eaf0);border-bottom:3px solid var(--tel2);">
     <button type="button" class="co-tab" data-tab="info" onclick="switchCoModalTab('info')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">🏭 基本情報</div>
-      <div style="font-size:9px;opacity:.8;margin-top:1px;">会社名・TEL・住所</div>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;">
+      <div style="font-size:13px;font-weight:700;">🏭 基本情報</div>
+      <div style="font-size:10px;opacity:.8;margin-top:2px;">会社名・TEL・住所</div>
     </button>
     <button type="button" class="co-tab" data-tab="price" onclick="switchCoModalTab('price')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">💴 営業所・単価</div>
-      <div style="font-size:9px;margin-top:1px;">担当営業所・宅配/集荷/ルート</div>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:13px;font-weight:700;">💴 営業所・単価</div>
+      <div style="font-size:10px;margin-top:2px;">担当営業所・宅配/集荷/ルート</div>
     </button>
     <button type="button" class="co-tab" data-tab="pay" onclick="switchCoModalTab('pay')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">💳 支払い・経費</div>
-      <div style="font-size:9px;margin-top:1px;">振込先・ガソリン・庸車</div>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:13px;font-weight:700;">💳 支払い・経費</div>
+      <div style="font-size:10px;margin-top:2px;">振込先・ガソリン・庸車</div>
     </button>
     <button type="button" class="co-tab" data-tab="charge" onclick="switchCoModalTab('charge')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">⚠️ 違約金・修理</div>
-      <div style="font-size:9px;margin-top:1px;">事前登録＋メモ</div>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:13px;font-weight:700;">⚠️ 違約金・修理</div>
+      <div style="font-size:10px;margin-top:2px;">事前登録＋メモ</div>
     </button>
     <button type="button" class="co-tab" data-tab="other" onclick="switchCoModalTab('other')"
-      style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">📋 その他・立替</div>
-      <div style="font-size:9px;margin-top:1px;">立替代・手当</div>
+      style="flex:1;padding:13px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
+      <div style="font-size:13px;font-weight:700;">📋 その他・立替</div>
+      <div style="font-size:10px;margin-top:2px;">立替代・手当</div>
     </button>
   </div>
 
