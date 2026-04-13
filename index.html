@@ -1018,6 +1018,50 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
 
+    <!-- CSV重複確認モーダル -->
+    <div id="m-csv-dup" class="mbg">
+    <div class="modal" style="width:700px;max-width:97vw;">
+      <div class="mhd">
+        <div class="mtt">📂 CSVインポート確認</div>
+        <button class="mx" onclick="closeM('m-csv-dup')">×</button>
+      </div>
+      <!-- サマリー -->
+      <div id="csv-dup-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;"></div>
+      <!-- 重複一覧 -->
+      <div id="csv-dup-list-wrap" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--ink);">重複データの確認</div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="csvDupSelectAll('skip')" class="btn b-gh btn-sm">すべてスキップ</button>
+            <button onclick="csvDupSelectAll('overwrite')" class="btn b-amb btn-sm">すべて上書き</button>
+            <button onclick="csvDupSelectAll('auto')" class="btn b-blu btn-sm">差異のみ上書き</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;max-height:340px;overflow-y:auto;border:1px solid var(--brd2);border-radius:7px;">
+          <table class="tbl" style="font-size:11px;">
+            <thead>
+              <tr>
+                <th>日付</th><th>担当者</th><th>営業所</th>
+                <th class="tr">持出<br>既存→CSV</th>
+                <th class="tr">完了<br>既存→CSV</th>
+                <th class="tr">夜間<br>既存→CSV</th>
+                <th class="tr">差異</th>
+                <th style="min-width:110px;">対応</th>
+              </tr>
+            </thead>
+            <tbody id="csv-dup-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 操作ボタン -->
+      <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end;">
+        <button onclick="closeM('m-csv-dup')" class="btn b-gh">キャンセル</button>
+        <button onclick="executeCsvImport()" class="btn b-grn" style="font-weight:700;">✅ インポート実行</button>
+      </div>
+    </div>
+    </div>
+
+
     <!-- 照合修正モーダル -->
     <div id="m-cmp-fix" class="mbg">
     <div class="modal modal-n">
@@ -9125,44 +9169,201 @@ function hdrop(e,t){e.preventDefault();$(t==='d'?'dp-d':'dp-p').classList.remove
 function dov(e,id){e.preventDefault();$(id).classList.add('drag');}
 function dlv(id){$(id).classList.remove('drag');}
 
+// CSV重複確認用一時データ
+let _csvPendingNew = [];    // 新規データ（重複なし）
+let _csvPendingDup = [];    // 重複データ（確認待ち）
+let _csvPendingFn  = '';    // ファイル名
+let _csvDupActions = {};    // {index: 'skip' or 'overwrite'}
+
 function importCSV(txt,fn){
   const el=$('res-d');
   const {headers,rows}=parseCSV(txt);
   const isPU=headers.some(h=>['品目','品目名','顧客名'].includes(h));
   if(isPU){importPUCSV(rows,fn);return;}
-  let added=0,skip=0,warns=[];
+
+  _csvPendingNew=[];_csvPendingDup=[];_csvPendingFn=fn;_csvDupActions={};
+  const warns=[];
+
   rows.forEach((row,idx)=>{
     const m={};Object.entries(row).forEach(([c,v])=>{const k=COL_DEL[c];if(k)m[k]=v;});
-    if(!m.date||!m.staff){skip++;return;}
+    if(!m.date||!m.staff) return;
     const date=m.date.replace(/-/g,'/').trim();
-    if(D.delivery.some(r=>r.date===date&&r.staff===m.staff)){warns.push(`${m.staff} ${date} 重複`);skip++;return;}
     const md=parseInt(m.mochidashi)||0,kn=parseInt(m.kanryo)||0,yk=parseInt(m.yakan)||0;
     const tn=parseInt(m.tenso)||0,mo=parseInt(m.mochimodoiri)||0,yo=parseInt(m['翌日廻し'])||0;
     const sum=kn+tn+mo+yo;
     if(md>0&&sum!==md)warns.push(`行${idx+2} ${m.staff}：持出(${md})≠合計(${sum})`);
     if(yk>kn)warns.push(`行${idx+2} ${m.staff}：夜間(${yk})>完了(${kn})`);
     const off=m.office||'未設定';
-    if(!D.offices.find(o=>o.name===off))D.offices.push({id:Date.now(),name:off,addr:'CSV取込',tel:'−',head:'−'});
-    D.delivery.push({id:Date.now()+Math.random(),date,office:off,staff:m.staff,kubun:m.kubun||'個人事業主',mochidashi:md,kanryo:kn,yakan:yk,tenso:tn,mochimodoiri:mo,'翌日廻し':yo,shukka:parseInt(m.shukka)||0,note:m.note||'',postData:null,status:'未照合',_fromCSV:true});
-    added++;
+    const newRec={id:Date.now()+Math.random(),date,office:off,staff:m.staff,kubun:m.kubun||'個人事業主',
+      mochidashi:md,kanryo:kn,yakan:yk,tenso:tn,mochimodoiri:mo,'翌日廻し':yo,
+      shukka:parseInt(m.shukka)||0,note:m.note||'',postData:null,status:'未照合',_fromCSV:true};
+
+    // 重複チェック
+    const existing=D.delivery.find(r=>r.date===date&&r.staff===m.staff);
+    if(existing){
+      // 差異チェック
+      const hasDiff = existing.mochidashi!==md || existing.kanryo!==kn ||
+                      existing.yakan!==yk || existing.tenso!==tn;
+      _csvPendingDup.push({existing, newRec, hasDiff,
+        defaultAction: hasDiff?'overwrite':'skip'}); // 差異あり→上書き推奨・なし→スキップ推奨
+    } else {
+      _csvPendingNew.push(newRec);
+    }
   });
-  // FirebaseのYP_LOGSにも反映
+
+  // 重複がなければそのまま実行
+  if(_csvPendingDup.length===0){
+    _executeCsvNewOnly(warns);
+    return;
+  }
+
+  // 重複確認画面を表示
+  showCsvDupModal(warns);
+}
+
+function showCsvDupModal(warns){
+  // サマリー
+  const sum=$('csv-dup-summary');
+  if(sum) sum.innerHTML=[
+    {l:'新規データ',v:_csvPendingNew.length,c:'var(--grn2)',icon:'✅'},
+    {l:'重複データ',v:_csvPendingDup.length,c:'var(--amb2)',icon:'⚠️'},
+    {l:'差異あり',v:_csvPendingDup.filter(d=>d.hasDiff).length,c:'var(--red2)',icon:'🔄'},
+  ].map(k=>`<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
+    <div style="font-size:18px;">${k.icon}</div>
+    <div style="font-size:20px;font-weight:700;color:${k.c};">${k.v}件</div>
+    <div style="font-size:10px;color:var(--txt2);">${k.l}</div>
+  </div>`).join('');
+
+  // 重複一覧
+  const wrap=$('csv-dup-list-wrap');
+  if(wrap) wrap.style.display=_csvPendingDup.length?'block':'none';
+
+  // デフォルトアクション設定
+  _csvPendingDup.forEach((d,i)=>{ _csvDupActions[i]=d.defaultAction; });
+
+  renderCsvDupTable();
+  openM('m-csv-dup');
+}
+
+function renderCsvDupTable(){
+  const tbody=$('csv-dup-tbody');
+  if(!tbody) return;
+  tbody.innerHTML=_csvPendingDup.map((d,i)=>{
+    const ex=d.existing, nw=d.newRec;
+    const act=_csvDupActions[i]||d.defaultAction;
+    const diffBadge=d.hasDiff
+      ?'<span style="color:var(--red2);font-weight:700;">差異あり</span>'
+      :'<span style="color:var(--grn2);">同一</span>';
+    const mDiff=ex.mochidashi!==nw.mochidashi?`<span style="color:var(--red2)">${nw.mochidashi}</span>`:nw.mochidashi;
+    const kDiff=ex.kanryo!==nw.kanryo?`<span style="color:var(--red2)">${nw.kanryo}</span>`:nw.kanryo;
+    const yDiff=ex.yakan!==nw.yakan?`<span style="color:var(--red2)">${nw.yakan}</span>`:nw.yakan;
+    return `<tr style="background:${act==='skip'?'':'rgba(154,122,58,.05)'}">
+      <td class="mono" style="font-size:10px;">${ex.date}</td>
+      <td style="font-weight:700;">${ex.staff}</td>
+      <td style="font-size:10px;color:var(--txt2);">${ex.office}</td>
+      <td class="tr" style="font-size:10px;">${ex.mochidashi}→${mDiff}</td>
+      <td class="tr" style="font-size:10px;">${ex.kanryo}→${kDiff}</td>
+      <td class="tr" style="font-size:10px;">${ex.yakan}→${yDiff}</td>
+      <td class="tr">${diffBadge}</td>
+      <td>
+        <select onchange="setCsvDupAction(${i},this.value)"
+          style="font-size:10px;padding:3px 6px;border:1px solid var(--brd2);border-radius:5px;background:${act==='overwrite'?'rgba(154,122,58,.1)':'var(--bg3)'}">
+          <option value="skip" ${act==='skip'?'selected':''}>スキップ</option>
+          <option value="overwrite" ${act==='overwrite'?'selected':''}>上書き</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function setCsvDupAction(i, val){
+  _csvDupActions[i]=val;
+  renderCsvDupTable();
+}
+
+function csvDupSelectAll(mode){
+  _csvPendingDup.forEach((_,i)=>{
+    if(mode==='auto') _csvDupActions[i]=_csvPendingDup[i].hasDiff?'overwrite':'skip';
+    else _csvDupActions[i]=mode;
+  });
+  renderCsvDupTable();
+}
+
+function executeCsvImport(){
+  let added=0,skip=0,overwrite=0,warns=[];
+
+  // 新規データをそのまま追加
+  _csvPendingNew.forEach(r=>{
+    const off=r.office;
+    if(!D.offices.find(o=>o.name===off))D.offices.push({id:Date.now(),name:off,addr:'CSV取込',tel:'−',head:'−'});
+    D.delivery.push(r); added++;
+  });
+
+  // 重複データを確認後に処理
+  _csvPendingDup.forEach((d,i)=>{
+    const act=_csvDupActions[i]||'skip';
+    if(act==='overwrite'){
+      // 既存レコードを上書き
+      const idx=D.delivery.findIndex(r=>r.id===d.existing.id);
+      if(idx>=0){
+        D.delivery[idx]={...D.delivery[idx],...d.newRec,id:d.existing.id};
+        overwrite++; added++;
+      }
+    } else {
+      skip++;
+    }
+  });
+
+  // Firebase同期
   if(added>0){
     const ypLogs=lsGet(LS_KEYS.YP,[])||[];
-    const newDel=D.delivery.filter(r=>r._fromCSV);
-    newDel.forEach(r=>{
+    D.delivery.filter(r=>r._fromCSV).forEach(r=>{
       if(!ypLogs.find(x=>String(x.id)===String(r.id))){
-        ypLogs.push({id:r.id,type:'yuupack',driver:{name:r.staff,office:r.office,officeType:'delivery'},date:r.date,form:{mochidashi:r.mochidashi,kanryo:r.kanryo,yakan:r.yakan,tenso:r.tenso,mochimodoiri:r.mochimodoiri,'翌日廻し':r['翌日廻し'],shukka:r.shukka,notes:r.note},submittedAt:new Date().toISOString()});
+        ypLogs.push({id:r.id,type:'yuupack',driver:{name:r.staff,office:r.office,officeType:'delivery'},
+          date:r.date,form:{mochidashi:r.mochidashi,kanryo:r.kanryo,yakan:r.yakan,tenso:r.tenso,
+          mochimodoiri:r.mochimodoiri,'翌日廻し':r['翌日廻し'],shukka:r.shukka,notes:r.note},
+          submittedAt:new Date().toISOString()});
+      }
+    });
+    fbSet('yp_logs',ypLogs);
+  }
+
+  closeM('m-csv-dup');
+  renderAll();
+
+  const el=$('res-d');
+  let h='';
+  if(added>0) h+=`<div class="al al-ok"><span>✅</span><span><strong>${_csvPendingFn}</strong> から <strong>${_csvPendingNew.length}件追加・${overwrite}件上書き</strong> 完了${fbOnline?' / Firebase同期済':''}</span></div>`;
+  if(skip>0) h+=`<div class="al al-w"><span>⚠️</span><span>重複 ${skip}件スキップ</span></div>`;
+  if(warns.length) h+=`<div class="al al-w"><span>⚠️</span><div>${warns.slice(0,3).map(w=>`<div class="xs">・${w}</div>`).join('')}</div></div>`;
+  if(el) el.innerHTML=h||`<div class="al al-e"><span>❌</span><span>インポートするデータがありません</span></div>`;
+}
+
+function _executeCsvNewOnly(warns){
+  let added=0;
+  _csvPendingNew.forEach(r=>{
+    const off=r.office;
+    if(!D.offices.find(o=>o.name===off))D.offices.push({id:Date.now(),name:off,addr:'CSV取込',tel:'−',head:'−'});
+    D.delivery.push(r); added++;
+  });
+  if(added>0){
+    const ypLogs=lsGet(LS_KEYS.YP,[])||[];
+    D.delivery.filter(r=>r._fromCSV).forEach(r=>{
+      if(!ypLogs.find(x=>String(x.id)===String(r.id))){
+        ypLogs.push({id:r.id,type:'yuupack',driver:{name:r.staff,office:r.office,officeType:'delivery'},
+          date:r.date,form:{mochidashi:r.mochidashi,kanryo:r.kanryo,yakan:r.yakan,tenso:r.tenso,
+          mochimodoiri:r.mochimodoiri,'翌日廻し':r['翌日廻し'],shukka:r.shukka,notes:r.note},
+          submittedAt:new Date().toISOString()});
       }
     });
     fbSet('yp_logs',ypLogs);
   }
   renderAll();
-  let h=added?`<div class="al al-ok"><span>✅</span><span><strong>${fn}</strong> から <strong>${added}件</strong> インポート完了${fbOnline?' / Firebaseに同期済':'（オフライン）'}</span></div>`:'';
-  if(skip)h+=`<div class="al al-w"><span>⚠️</span><span>${skip}件スキップ（重複または必須項目不足）</span></div>`;
-  if(warns.length)h+=`<div class="al al-w"><span>⚠️</span><div><strong>検証警告 ${warns.length}件</strong>${warns.slice(0,5).map(w=>`<div class="xs mt8">・${w}</div>`).join('')}${warns.length>5?`<div class="xs">他 ${warns.length-5}件</div>`:''}</div></div>`;
-  if(!added&&!skip)h=`<div class="al al-e"><span>❌</span><span>インポート可能なデータがありません。フォーマットを確認してください。</span></div>`;
-  el.innerHTML=h;
+  const el=$('res-d');
+  let h=added?`<div class="al al-ok"><span>✅</span><span><strong>${_csvPendingFn}</strong> から <strong>${added}件</strong> インポート完了${fbOnline?' / Firebase同期済':''}</span></div>`:
+    `<div class="al al-e"><span>❌</span><span>インポート可能なデータがありません</span></div>`;
+  if(warns.length) h+=`<div class="al al-w"><span>⚠️</span><div><strong>検証警告 ${warns.length}件</strong>${warns.slice(0,5).map(w=>`<div class="xs mt8">・${w}</div>`).join('')}${warns.length>5?`<div class="xs">他 ${warns.length-5}件</div>`:''}</div></div>`;
+  if(el) el.innerHTML=h;
 }
 
 function importPUCSV(rows,fn){
