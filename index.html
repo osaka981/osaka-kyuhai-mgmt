@@ -23,6 +23,49 @@
   --pk1:#ff9e4a;--pk2:#ffb86a;
   --cp:#80d040;--ke:#e0b040;--te:#e05070;--ch:#a050e0;
 }
+
+/* ── ライトモード（通常モード） ── */
+[data-theme="light"]{
+  --bg:#f0f2f5;--bg2:#ffffff;--bg3:#f8f9fb;
+  --sur:#ffffff;--sur2:#f1f5f9;--sur3:#e2e8f0;
+  --txt:#1e293b;--txt2:#475569;--txt3:#94a3b8;
+  --brd:#e2e8f0;--brd2:#cbd5e1;
+  --red:#dc2626;--red2:#ef4444;--red3:rgba(220,38,38,.1);
+  --grn:#15803d;--grn2:#16a34a;--grn3:rgba(21,128,61,.1);
+  --blu:#1d4ed8;--blu2:#2563eb;--blu3:rgba(29,78,216,.1);
+  --amb:#b45309;--amb2:#d97706;--amb3:rgba(180,83,9,.1);
+  --tel:#0f766e;--tel2:#0d9488;--tel3:rgba(15,118,110,.1);
+  --pur:#7c3aed;--pur2:#8b5cf6;
+  --acc:#dc2626;
+  --y60:#2563eb;--y80:#3b82f6;--y100:#60a5fa;
+  --y120:#7dd3fc;--y140:#93c5fd;--y160:#bfdbfe;
+  --pk1:#ea580c;--pk2:#fb923c;
+  --cp:#65a30d;--ke:#ca8a04;--te:#e11d48;--ch:#7c3aed;
+  --card:#ffffff;--inp:#f8f9fb;--mid:#475569;
+  --slate:#1e40af;--sage:#166534;--clay:#92400e;
+  --stone:#475569;--ok:#15803d;--amber:#b45309;
+  --light:#94a3b8;--sh:0 1px 3px rgba(0,0,0,.1);
+  --div:#e2e8f0;--ink:#1e293b;
+}
+
+[data-theme="light"] body{background:var(--bg);color:var(--txt);}
+[data-theme="light"] .card{background:var(--sur);border-color:var(--brd);}
+[data-theme="light"] .tbl thead tr{background:#1e293b;}
+[data-theme="light"] .tbl tbody tr:nth-child(even){background:#f8f9fb;}
+[data-theme="light"] .tbl tbody td{border-color:var(--brd);}
+[data-theme="light"] #sb{background:#1e293b;}
+[data-theme="light"] .ni{color:rgba(255,255,255,.6);}
+[data-theme="light"] .ni:hover{background:rgba(255,255,255,.08);color:#fff;}
+[data-theme="light"] .ni.on{color:#fff;}
+[data-theme="light"] .tb{background:#ffffff;border-color:var(--brd);}
+[data-theme="light"] .modal,[data-theme="light"] .card{box-shadow:0 2px 8px rgba(0,0,0,.08);}
+[data-theme="light"] .fi{background:#fff;border-color:var(--brd2);color:var(--txt);}
+[data-theme="light"] .sel{background:#fff;border-color:var(--brd2);color:var(--txt);}
+[data-theme="light"] .fi:focus,[data-theme="light"] .sel:focus{border-color:var(--blu2);}
+[data-theme="light"] .kpi{background:#fff;border:1px solid var(--brd);}
+[data-theme="light"] #m-report-detail{background:#f0f2f5;}
+[data-theme="light"] .rpt-body{background:#f0f2f5;}
+
 *{margin:0;padding:0;box-sizing:border-box;}
 html{font-size:14px;}
 body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt);display:flex;min-height:100vh;}
@@ -561,6 +604,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="tb">
     <div class="tb-t" id="pg-title">ダッシュボード</div>
     <div class="tb-r">
+      <button id="theme-toggle-btn" onclick="toggleTheme()" title="テーマ切替"
+        style="background:none;border:1px solid var(--brd2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--txt2);transition:all .15s;">
+        🌙
+      </button>
       <span id="fb-status-badge" style="display:none;align-items:center;gap:4px;font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);"></span>
       <span class="tb-dt" id="today-s"></span>
       <button onclick="manualSync()" id="sync-btn" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">更新</button>
@@ -2875,6 +2922,29 @@ function showFbStatus(ok) {
 }
 
 // 初期化
+// ══ テーマ切り替え（ナイトモード / 通常モード） ══
+function initTheme(){
+  const saved=localStorage.getItem('nikki_theme')||'dark';
+  applyTheme(saved);
+}
+function applyTheme(mode){
+  const html=document.documentElement;
+  const btn=document.getElementById('theme-toggle-btn');
+  if(mode==='light'){
+    html.setAttribute('data-theme','light');
+    if(btn){ btn.textContent='☀️'; btn.title='ナイトモードに切り替え'; }
+  } else {
+    html.removeAttribute('data-theme');
+    if(btn){ btn.textContent='🌙'; btn.title='通常モードに切り替え'; }
+  }
+  localStorage.setItem('nikki_theme',mode);
+}
+function toggleTheme(){
+  const current=localStorage.getItem('nikki_theme')||'dark';
+  applyTheme(current==='dark'?'light':'dark');
+}
+
+
 async function initFirebase() {
   try {
     const { initializeApp, getDatabase } = window._fbImports || {};
@@ -2895,6 +2965,7 @@ async function initFirebase() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme(); // テーマ初期化（最初に呼ぶ）
   // バージョンチェック（localStorage使用可能な場合のみ）
   try {
     const _vt = 'kyuhai_v3_up_registered_v1';
@@ -3619,25 +3690,21 @@ function openCustDetail(custId){
   if(!cu){ alert('顧客データが見つかりません'); return; }
 
   const cp=cu.colPrices||cu.prices||{};
-  const pv=(v,lbl)=>v?`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
-    <span style="color:var(--txt2);font-size:11px;">${lbl}</span>
-    <span style="font-family:var(--mono);font-weight:700;">¥${fmt(v)}</span>
-  </div>`:'';
+  const priceMap={'p60':'ゆうパック 60サイズ','p80':'ゆうパック 80サイズ','p100':'ゆうパック 100サイズ',
+    'p120':'ゆうパック 120サイズ','p140':'ゆうパック 140サイズ','p160':'ゆうパック 160サイズ',
+    'pk1':'ゆうパケット 通常','pk2':'ゆうパケット 7cm〜','cp':'クリックポスト','ke':'ケース','te':'定形外(ゆうメール)'};
+  const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120',
+    'ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
+    'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
 
-  // ── 実績集計 ──
   const puRows=D.pickup.filter(r=>r.customerId===custId||r.customerName===cu.name);
 
   // 年別集計
   const yearMap={};
   puRows.forEach(r=>{
-    const y=(r.date||'').slice(0,4);
-    if(!y) return;
+    const y=(r.date||'').slice(0,4); if(!y) return;
     if(!yearMap[y]) yearMap[y]={year:y,qty:0,amt:0,days:new Set()};
-    IK.forEach(k=>{
-      const qty=iq(r,k);
-      yearMap[y].qty+=qty;
-      yearMap[y].amt+=qty*(cp[k.replace(/[^a-z0-9]/gi,'').replace('ゆうパック','p').replace('ゆうパケット','pk')] || 0);
-    });
+    IK.forEach(k=>{const qty=iq(r,k);yearMap[y].qty+=qty;yearMap[y].amt+=qty*(cp[pkMap[k]]||0);});
     yearMap[y].days.add(r.date);
   });
   const yearList=Object.values(yearMap).sort((a,b)=>b.year.localeCompare(a.year));
@@ -3646,203 +3713,180 @@ function openCustDetail(custId){
   const thisYear=new Date().getFullYear().toString();
   const monMap={};
   puRows.filter(r=>(r.date||'').startsWith(thisYear)).forEach(r=>{
-    const ym=(r.date||'').slice(0,7);
-    if(!ym) return;
+    const ym=(r.date||'').slice(0,7); if(!ym) return;
     if(!monMap[ym]) monMap[ym]={ym,qty:0,amt:0,days:new Set()};
-    let rowAmt=0;
-    IK.forEach(k=>{
-      const qty=iq(r,k);
-      monMap[ym].qty+=qty;
-      const priceKey={
-        'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100',
-        'ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160',
-        'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
-        'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te',
-      }[k]||'';
-      rowAmt+=qty*(cp[priceKey]||0);
-    });
-    monMap[ym].amt+=rowAmt;
+    IK.forEach(k=>{const qty=iq(r,k);monMap[ym].qty+=qty;monMap[ym].amt+=qty*(cp[pkMap[k]]||0);});
     monMap[ym].days.add(r.date);
   });
   const monList=Object.values(monMap).sort((a,b)=>b.ym.localeCompare(a.ym));
 
-  // 日別実績（直近30件）
-  const dayRows=[...puRows]
-    .sort((a,b)=>(b.date||'').localeCompare(a.date||''))
-    .slice(0,50);
+  // 日別実績
+  const dayRows=[...puRows].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,50);
 
-  // ── KPI ──
+  // KPI集計
   const totalQty=puRows.reduce((s,r)=>s+IK.reduce((q,k)=>q+iq(r,k),0),0);
-  const totalAmt=puRows.reduce((s,r)=>{
-    let a=0;
-    IK.forEach(k=>{
-      const pk={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100',
-        'ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160',
-        'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
-        'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'}[k]||'';
-      a+=iq(r,k)*(cp[pk]||0);
-    });
-    return s+a;
-  },0);
+  const totalAmt=puRows.reduce((s,r)=>{let a=0;IK.forEach(k=>{a+=iq(r,k)*(cp[pkMap[k]]||0);});return s+a;},0);
   const totalDays=new Set(puRows.map(r=>r.date)).size;
 
+  // ── KPIバー（CSS変数ベース） ──
   const kpiHtml=`
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
-      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
-        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計集荷数</div>
-        <div style="font-size:20px;font-weight:900;color:var(--sage);">${fmt(totalQty)}<span style="font-size:11px;">個</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 16px;background:var(--sur);border-bottom:1px solid var(--brd);">
+      <div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:900;color:var(--grn2);font-family:'DM Mono',monospace;">${fmt(totalQty)}<span style="font-size:12px;font-weight:400;"> 個</span></div>
+        <div style="font-size:9px;color:var(--txt2);margin-top:3px;letter-spacing:.3px;">累計集荷数</div>
       </div>
-      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
-        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計売上</div>
-        <div style="font-size:20px;font-weight:900;color:var(--tel2);">¥${fmt(totalAmt)}</div>
+      <div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:900;color:var(--tel2);font-family:'DM Mono',monospace;">¥${fmt(totalAmt)}</div>
+        <div style="font-size:9px;color:var(--txt2);margin-top:3px;letter-spacing:.3px;">累計売上</div>
       </div>
-      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
-        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計稼働日数</div>
-        <div style="font-size:20px;font-weight:900;color:var(--blu2);">${totalDays}<span style="font-size:11px;">日</span></div>
+      <div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:22px;font-weight:900;color:var(--blu2);font-family:'DM Mono',monospace;">${totalDays}<span style="font-size:12px;font-weight:400;"> 日</span></div>
+        <div style="font-size:9px;color:var(--txt2);margin-top:3px;letter-spacing:.3px;">累計稼働日数</div>
       </div>
-      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
-        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">契約開始</div>
-        <div style="font-size:13px;font-weight:700;color:var(--mid);">${cu.start||'−'}</div>
+      <div style="background:var(--sur2);border:1px solid var(--brd);border-radius:8px;padding:12px;text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:var(--amb2);">${cu.start||'未設定'}</div>
+        <div style="font-size:9px;color:var(--txt2);margin-top:3px;letter-spacing:.3px;">契約開始日</div>
       </div>
     </div>`;
 
+  // ── テーブルスタイル（CSS変数ベース） ──
+  const tblStyle='width:100%;border-collapse:collapse;font-size:12px;';
+  const thStyle='background:var(--sur3);color:var(--txt);padding:8px 10px;font-size:10.5px;font-weight:700;border-bottom:1px solid var(--brd2);';
+  const thRStyle='background:var(--sur3);color:var(--txt);padding:8px 10px;font-size:10.5px;font-weight:700;border-bottom:1px solid var(--brd2);text-align:right;';
+  const tdStyle='padding:7px 10px;color:var(--txt);border-bottom:1px solid var(--brd);font-size:12px;';
+  const tdRStyle='padding:7px 10px;color:var(--txt);border-bottom:1px solid var(--brd);font-size:12px;text-align:right;font-family:"DM Mono",monospace;';
+  const secStyle='font-size:10.5px;font-weight:700;color:var(--txt2);letter-spacing:.5px;border-left:3px solid var(--blu2);padding-left:8px;margin:0 0 10px;';
+  const cardStyle='background:var(--sur);border:1px solid var(--brd);border-radius:8px;padding:14px;margin-bottom:10px;';
+  const infoRowStyle='display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--brd);';
+
+  // 契約単価
+  const priceRows=Object.entries(priceMap).filter(([k])=>cp[k]>0)
+    .map(([k,lbl])=>`<tr>
+      <td style="${tdStyle}">${lbl}</td>
+      <td style="${tdRStyle}color:var(--grn2);font-weight:700;">¥${fmt(cp[k])}</td>
+    </tr>`).join('');
+
+  // 年間実績テーブル
+  const yearTbl=yearList.length?`
+    <div style="overflow-x:auto;"><table style="${tblStyle}">
+      <thead><tr>
+        <th style="${thStyle}">年度</th>
+        <th style="${thRStyle}">集荷数</th>
+        <th style="${thRStyle}">売上</th>
+        <th style="${thRStyle}">稼働日</th>
+      </tr></thead>
+      <tbody>${yearList.map((y,i)=>`<tr style="background:${i%2?'var(--sur2)':'var(--sur)'};">
+        <td style="${tdStyle}font-weight:700;">${y.year}年</td>
+        <td style="${tdRStyle}color:var(--grn2);font-weight:700;">${fmt(y.qty)}個</td>
+        <td style="${tdRStyle}color:var(--tel2);font-weight:700;">¥${fmt(y.amt)}</td>
+        <td style="${tdRStyle}color:var(--blu2);">${y.days.size}日</td>
+      </tr>`).join('')}</tbody>
+    </table></div>` : `<div style="color:var(--txt2);font-size:12px;padding:8px 0;">実績データなし</div>`;
+
+  // 月別推移テーブル
+  const monTbl=monList.length?`
+    <div style="overflow-x:auto;"><table style="${tblStyle}">
+      <thead><tr>
+        <th style="${thStyle}">月</th>
+        <th style="${thRStyle}">集荷数</th>
+        <th style="${thRStyle}">前月比</th>
+        <th style="${thRStyle}">売上</th>
+        <th style="${thRStyle}">稼働日</th>
+      </tr></thead>
+      <tbody>${monList.map((m,i)=>{
+        const prev=monList[i+1];
+        const diff=diff=prev?m.qty-prev.qty:null;
+        const diffStr=diff!==null?`<span style="font-size:10px;color:${diff>=0?'var(--grn2)':'var(--red2)'};font-weight:700;margin-left:4px;">${diff>=0?'▲':'▼'}${Math.abs(diff)}</span>`:'';
+        const pct=prev&&prev.qty?((m.qty/prev.qty*100-100).toFixed(1)+'%'):'−';
+        return `<tr style="background:${i%2?'var(--sur2)':'var(--sur)'};">
+          <td style="${tdStyle}font-weight:700;">${m.ym.slice(5)}月</td>
+          <td style="${tdRStyle}font-weight:700;">${fmt(m.qty)}個${diffStr}</td>
+          <td style="${tdRStyle}color:var(--txt2);font-size:11px;">${pct}</td>
+          <td style="${tdRStyle}color:var(--tel2);font-weight:700;">¥${fmt(m.amt)}</td>
+          <td style="${tdRStyle}color:var(--blu2);">${m.days.size}日</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div style="color:var(--txt2);font-size:12px;padding:8px 0;">${thisYear}年のデータなし</div>`;
+
+  // 日別実績テーブル
+  const dayTbl=dayRows.length?`
+    <div style="overflow-x:auto;"><table style="${tblStyle}">
+      <thead><tr>
+        <th style="${thStyle}">日付</th>
+        <th style="${thStyle}">担当者</th>
+        <th style="${thRStyle}">ゆうパック</th>
+        <th style="${thRStyle}">パケット</th>
+        <th style="${thRStyle}">その他</th>
+        <th style="${thRStyle}">合計</th>
+        <th style="${thRStyle}">金額</th>
+      </tr></thead>
+      <tbody>${dayRows.map((r,i)=>{
+        const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
+        const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
+        const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
+        const tot=yp+pk+oth;
+        let amt=0; IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
+        return `<tr style="background:${i%2?'var(--sur2)':'var(--sur)'};">
+          <td style="${tdStyle}font-family:'DM Mono',monospace;">${r.date||'−'}</td>
+          <td style="${tdStyle}font-weight:600;">${r.staff||'−'}</td>
+          <td style="${tdRStyle}color:var(--y60);">${yp||'−'}</td>
+          <td style="${tdRStyle}color:var(--pk1);">${pk||'−'}</td>
+          <td style="${tdRStyle}color:var(--txt2);">${oth||'−'}</td>
+          <td style="${tdRStyle}font-weight:800;font-size:13px;color:var(--txt);">${tot}</td>
+          <td style="${tdRStyle}color:var(--tel2);font-weight:700;">${amt?'¥'+fmt(amt):'−'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : `<div style="color:var(--txt2);font-size:12px;padding:8px 0;">日別データなし</div>`;
+
   // ── 本文 ──
   const bodyHtml=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-      <!-- 基本情報 -->
-      <div class="card">
-        <div class="ct mb10"><div class="cbar"></div>基本情報</div>
-        <div style="display:grid;gap:4px;">
-          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div style="${cardStyle}">
+          <div style="${secStyle}">基本情報</div>
+          <div style="${infoRowStyle}">
             <span style="color:var(--txt2);font-size:11px;">顧客番号</span>
-            <span style="font-family:var(--mono);font-weight:700;color:var(--amb2);">${cu.custNo||'−'}</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:800;font-size:15px;color:var(--amb2);">${cu.custNo||'−'}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+          <div style="${infoRowStyle}">
             <span style="color:var(--txt2);font-size:11px;">顧客名</span>
-            <span style="font-weight:700;">${cu.name||'−'}</span>
+            <span style="font-weight:700;font-size:14px;color:var(--txt);">${cu.name||'−'}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+          <div style="${infoRowStyle}">
             <span style="color:var(--txt2);font-size:11px;">地域</span>
-            <span>${cu.region||'−'}</span>
+            <span style="color:var(--txt);">${cu.region||'−'}</span>
           </div>
-          <div style="display:flex;justify-content:space-between;padding:4px 0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">
             <span style="color:var(--txt2);font-size:11px;">契約開始日</span>
-            <span>${cu.start||'−'}</span>
+            <span style="color:var(--txt);">${cu.start||'−'}</span>
           </div>
         </div>
-        <div class="ct mt12 mb10"><div class="cbar"></div>契約単価</div>
-        <div style="display:grid;gap:2px;font-size:11px;">
-          ${pv(cp.p60,'ゆうパック 60サイズ')}
-          ${pv(cp.p80,'ゆうパック 80サイズ')}
-          ${pv(cp.p100,'ゆうパック 100サイズ')}
-          ${pv(cp.p120,'ゆうパック 120サイズ')}
-          ${pv(cp.p140,'ゆうパック 140サイズ')}
-          ${pv(cp.p160,'ゆうパック 160サイズ')}
-          ${pv(cp.pk1,'ゆうパケット 通常')}
-          ${pv(cp.pk2,'ゆうパケット 7cm〜')}
-          ${pv(cp.cp,'クリックポスト')}
-          ${pv(cp.ke,'ケース')}
-          ${pv(cp.te,'定形外(ゆうメール)')}
-          ${!Object.values(cp).some(v=>v>0)?'<div style="color:var(--light);font-size:11px;padding:8px 0;">単価未設定</div>':''}
+        <div style="${cardStyle}">
+          <div style="${secStyle}">契約単価（税込）</div>
+          ${priceRows?`<table style="${tblStyle}"><tbody>${priceRows}</tbody></table>`
+            :`<div style="color:var(--txt2);font-size:12px;padding:4px 0;">単価未設定</div>`}
         </div>
       </div>
-
-      <!-- 年間実績 -->
-      <div class="card">
-        <div class="ct mb10"><div class="cbar"></div>年間実績</div>
-        ${yearList.length ? `
-        <div style="overflow-x:auto;">
-          <table style="width:100%;font-size:11px;border-collapse:collapse;">
-            <thead><tr style="background:var(--bg3);">
-              <th style="padding:6px 8px;text-align:left;">年度</th>
-              <th style="padding:6px 8px;text-align:right;">集荷数</th>
-              <th style="padding:6px 8px;text-align:right;">売上金額</th>
-              <th style="padding:6px 8px;text-align:right;">稼働日数</th>
-            </tr></thead>
-            <tbody>
-              ${yearList.map(y=>`<tr style="border-bottom:1px solid var(--div);">
-                <td style="padding:6px 8px;font-weight:700;">${y.year}年</td>
-                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);">${fmt(y.qty)}個</td>
-                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">¥${fmt(y.amt)}</td>
-                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);">${y.days.size}日</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>` : '<div style="color:var(--light);font-size:11px;padding:8px;">実績データなし</div>'}
-
-        <div class="ct mt12 mb10"><div class="cbar"></div>${thisYear}年 月別推移</div>
-        ${monList.length ? `
-        <div style="overflow-x:auto;">
-          <table style="width:100%;font-size:11px;border-collapse:collapse;">
-            <thead><tr style="background:var(--bg3);">
-              <th style="padding:5px 8px;text-align:left;">月</th>
-              <th style="padding:5px 8px;text-align:right;">集荷数</th>
-              <th style="padding:5px 8px;text-align:right;">売上</th>
-              <th style="padding:5px 8px;text-align:right;">稼働日</th>
-            </tr></thead>
-            <tbody>
-              ${monList.map((m,i)=>{
-                const prev=monList[i+1];
-                const diff=prev?m.qty-prev.qty:null;
-                const diffStr=diff!==null?`<span style="font-size:9px;color:${diff>=0?'var(--grn2)':'var(--red2)'};margin-left:4px;">${diff>=0?'+':''}${diff}</span>`:'';
-                return `<tr style="border-bottom:1px solid var(--div);">
-                  <td style="padding:5px 8px;font-weight:700;">${m.ym.slice(5)}月</td>
-                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${fmt(m.qty)}個${diffStr}</td>
-                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">¥${fmt(m.amt)}</td>
-                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${m.days.size}日</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>` : `<div style="color:var(--light);font-size:11px;padding:8px;">${thisYear}年のデータなし</div>`}
+      <div>
+        <div style="${cardStyle}">
+          <div style="${secStyle}">年間実績</div>
+          ${yearTbl}
+        </div>
+        <div style="${cardStyle}">
+          <div style="${secStyle}">${thisYear}年 月別推移</div>
+          ${monTbl}
+        </div>
       </div>
     </div>
+    <div style="${cardStyle}">
+      <div style="${secStyle}">日別実績（直近50件）</div>
+      ${dayTbl}
+    </div>`;
 
-    <!-- 日別実績 -->
-    <div class="card">
-      <div class="ct mb10"><div class="cbar"></div>日別実績（直近50件）</div>
-      ${dayRows.length ? `
-      <div style="overflow-x:auto;">
-        <table style="width:100%;font-size:11px;border-collapse:collapse;">
-          <thead><tr style="background:var(--bg3);">
-            <th style="padding:6px 8px;text-align:left;">日付</th>
-            <th style="padding:6px 8px;text-align:left;">担当者</th>
-            <th style="padding:6px 8px;text-align:right;">ゆうパック</th>
-            <th style="padding:6px 8px;text-align:right;">パケット</th>
-            <th style="padding:6px 8px;text-align:right;">その他</th>
-            <th style="padding:6px 8px;text-align:right;">合計数</th>
-            <th style="padding:6px 8px;text-align:right;">金額</th>
-          </tr></thead>
-          <tbody>
-            ${dayRows.map(r=>{
-              const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
-              const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
-              const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
-              const tot=yp+pk+oth;
-              let amt=0;
-              const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2','クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
-              IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
-              return `<tr style="border-bottom:1px solid var(--div);">
-                <td style="padding:5px 8px;font-family:var(--mono);">${r.date||'−'}</td>
-                <td style="padding:5px 8px;">${r.staff||'−'}</td>
-                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--sage);">${yp||'−'}</td>
-                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--blu2);">${pk||'−'}</td>
-                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${oth||'−'}</td>
-                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-weight:700;">${tot}</td>
-                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">${amt?'¥'+fmt(amt):'−'}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>` : '<div style="color:var(--light);font-size:11px;padding:8px;">日別データなし</div>'}
-    </div>
-  `;
-
-  // CSV用データ
+  // CSV
   const csvData=[
     ['日付','担当者','ゆうパック','パケット','その他','合計数','金額'],
     ...dayRows.map(r=>{
-      const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2','クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
       const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
       const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
       const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
@@ -3852,7 +3896,7 @@ function openCustDetail(custId){
   ].map(row=>row.join(','));
 
   openReportDetail(
-    `${cu.custNo?'['+cu.custNo+'] ':''}${cu.name} 顧客詳細`,
+    `${cu.custNo?'['+cu.custNo+'] ':''}${cu.name}`,
     kpiHtml,
     bodyHtml,
     csvData,
@@ -3860,193 +3904,6 @@ function openCustDetail(custId){
   );
 }
 
-
-function renderCustTbl() {
-  const q=toHankaku(($('cust-search')?.value||'').trim().toLowerCase());
-  const sort=$('cust-sort')?.value||'no-asc';
-  // フィルタ
-  let list=D.customers.filter(c=>{
-    if(!q)return true;
-    return matchZenHan(c.name,q)||matchZenHan(String(c.custNo||''),q);
-  });
-  // ソート
-  list=[...list].sort((a,b)=>{
-    if(sort==='no-asc')  return (parseInt(a.custNo)||0)-(parseInt(b.custNo)||0);
-    if(sort==='no-desc') return (parseInt(b.custNo)||0)-(parseInt(a.custNo)||0);
-    if(sort==='name-asc')  return (a.name||'').localeCompare(b.name||'','ja');
-    if(sort==='name-desc') return (b.name||'').localeCompare(a.name||'','ja');
-    return 0;
-  });
-  const cc=$('cust-count');
-  if(cc)cc.textContent=q?`${list.length}件ヒット / 全${D.customers.length}件`:`全${list.length}件`;
-  let h='';
-  list.forEach(c=>{
-    const noBadge=c.custNo?`<span class="mono fw7" style="color:var(--amb2)">${c.custNo}</span>`:'<span class="xs muted">−</span>';
-    const cp=c.colPrices||{};
-    const pv=v=>v?`¥${fmt(v)}`:'-';
-    // 検索ハイライト
-    const hl=txt=>{if(!q||!txt)return txt||'';try{const esc=q.replace(/[\-\[\]{}()*+?.,\\\^$|#\s]/g,'\\$&');return txt.replace(new RegExp('('+esc+')','gi'),'<mark style="background:rgba(192,57,43,.25);border-radius:2px;padding:0 1px;">$1</mark>');}catch(e){return txt;}};
-    h+=`<tr class="clickable" onclick="openCustDetail(${c.id})" style="cursor:pointer;">
-      <td>${noBadge}</td>
-      <td class="fw7">${hl(c.name||'')}</td>
-      <td class="xs muted">${c.region||''}</td>
-      <td class="tr mono c60">${pv(cp.p60)}</td>
-      <td class="tr mono c80">${pv(cp.p80)}</td>
-      <td class="tr mono c100">${pv(cp.p100)}</td>
-      <td class="tr mono c120">${pv(cp.p120)}</td>
-      <td class="tr mono c140">${pv(cp.p140)}</td>
-      <td class="tr mono c160">${pv(cp.p160)}</td>
-      <td class="tr mono cpk1">${pv(cp.pk1)}</td>
-      <td class="tr mono cpk2">${pv(cp.pk2)}</td>
-      <td class="tr mono ccp">${pv(cp.cp)}</td>
-      <td class="tr mono cke">${pv(cp.ke)}</td>
-      <td class="tr mono cte">${pv(cp.te)}</td>
-      <td><span class="bdg bg">契約中</span></td>
-      <td><button class="btn b-gh btn-sm" onclick="editCust(${c.id})">編集</button></td>
-    </tr>`;
-  });
-  $('tb-cust').innerHTML=h||`<tr><td colspan="16" style="text-align:center;padding:18px;color:var(--txt2)">${q?'該当する顧客が見つかりません':'顧客データがありません'}</td></tr>`;
-}
-
-// ─── 集荷請求 ───
-function renderPUInv() {
-  const mon=toYM($('pinv-mon')?.value||'');
-  const rows=D.pickup.filter(r=>!mon||r.date.startsWith(mon));
-  const cm={};
-  rows.forEach(r=>{
-    if(!cm[r.customerId])cm[r.customerId]={id:r.customerId,name:r.customerName,items:{}};
-    IK.forEach(k=>{cm[r.customerId].items[k]=(cm[r.customerId].items[k]||0)+iq(r,k);});
-  });
-  let h='';
-  Object.values(cm).forEach((c,i)=>{
-    const cu=D.customers.find(x=>x.id===c.id);
-    let yp=0,yamt=0,pkt=0,pamt=0,cp=0,ke=0,te=0,ch=0,tot=0;
-    IK.forEach(k=>{
-      const q=c.items[k]||0;const p=getCustPrice(cu, k);const a=q*p;
-      if(k.startsWith('ゆうパック_')){yp+=q;yamt+=a;}
-      else if(k.startsWith('ゆうパケット_')){pkt+=q;pamt+=a;}
-      else if(k==='クリックポスト')cp+=q;
-      else if(k==='ケース')ke+=q;
-      else if(k==='定形外(ゆうメール)')te+=q;
-      else if(k==='チャーター')ch+=q;
-      tot+=a;
-    });
-    h+=`<tr>
-      <td class="mono">PU-${mon.replace('/','')}-${String(i+1).padStart(3,'0')}</td>
-      <td class="fw7">${c.name}</td><td>${mon}</td>
-      <td class="tr">${yp?fmt(yp)+'個 ¥'+fmt(yamt):'-'}</td>
-      <td class="tr">${pkt?fmt(pkt)+'個 ¥'+fmt(pamt):'-'}</td>
-      <td class="tr ccp">${cp?fmt(cp):'-'}</td>
-      <td class="tr cke">${ke?fmt(ke):'-'}</td>
-      <td class="tr cte">${te?fmt(te):'-'}</td>
-      <td class="tr cch">${ch?fmt(ch)+'件':'-'}</td>
-      <td class="tr fw7" style="color:var(--tel2)">¥${fmt(tot)}</td>
-      <td><span class="bdg bz">未発行</span></td>
-      <td><button class="btn b-gh btn-sm">PDF</button></td>
-    </tr>`;
-  });
-  $('tb-pinv').innerHTML=h||`<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
-}
-
-// ─── 郵便局照合 ───
-let cmpFixTargetId = null;
-
-function renderCmp() {
-  const mon = toYM($('cmp-mon')?.value||'');
-  const off = $('cmp-off')?.value||'';
-  const st  = $('cmp-st')?.value||'全件';
-
-  let rows = D.delivery.filter(r =>
-    (!mon || r.date.startsWith(mon)) &&
-    (!off || r.office === off)
-  );
-  if(st==='差異あり') rows=rows.filter(r=>r.status==='差異あり');
-  else if(st==='未照合') rows=rows.filter(r=>r.status==='未照合');
-  else if(st==='照合済') rows=rows.filter(r=>r.status==='照合済');
-
-  let h='',ok=0,ng=0,un=0,totalDiff=0;
-  rows.sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>{
-    const diff = r.postData!==null ? r.kanryo - r.postData : null;
-    const diffDir = diff===null?null:diff>0?'over':'under'; // over=日報超過(要確認) / under=局超過(確定可)
-    if(diff!==null) totalDiff += Math.abs(diff);
-    const ds = diff===null ? '<span class="muted">−</span>'
-      : diff===0 ? '<span style="color:var(--grn2);font-weight:700;">±0</span>'
-      : diff>0
-        ? `<span style="color:var(--red2);font-weight:700;" title="要確認：日報が郵便局より多い">+${diff} 🚨</span>`
-        : `<span style="color:var(--amb2);font-weight:700;" title="局が多い：修正不要で確定可能">${diff} ℹ️</span>`;
-    const sb = r.status==='照合済'  ? '<span class="bdg bg">照合済</span>'
-             : r.status==='差異あり' ? '<span class="bdg br">差異あり</span>'
-             : '<span class="bdg bz">未照合</span>';
-    if(r.status==='照合済')ok++; else if(r.status==='差異あり')ng++; else un++;
-
-    // 修正履歴バッジ
-    const fixBadge = r.fixHistory?.length
-      ? `<span class="bdg ba" title="${r.fixHistory.slice(-1)[0].reason||''}">修正${r.fixHistory.length}回</span>` : '';
-
-    // 操作ボタン
-    let ops = '';
-    if(r.status==='照合済') {
-      ops = `<span class="bdg bg">完了</span>`;
-    } else if(r.status==='差異あり') {
-      const isOver = r._diffDir==='over' || (r.kanryo > r.postData && r.postData!==null);
-      if(isOver){
-        // 日報＞局：要確認（修正推奨・承認は確認メモ必要）
-        ops = `<button class="btn b-red btn-sm" onclick="openCmpFix(${r.id})">🔧 修正</button>
-               <button class="btn b-amb btn-sm" onclick="approveCmp(${r.id})" style="margin-left:4px;" title="確認メモを入力して確定">⚠️ 確認確定</button>`;
-      } else {
-        // 局＞日報：修正不要で確定可能
-        ops = `<button class="btn b-gh btn-sm" onclick="openCmpFix(${r.id})">🔧 修正</button>
-               <button class="btn b-grn btn-sm" onclick="approveCmp(${r.id})" style="margin-left:4px;" title="局が多いケース：そのまま確定できます">✅ 確定</button>`;
-      }
-    } else {
-      ops = `<button class="btn b-grn btn-sm" onclick="approveCmp(${r.id})">承認</button>`;
-    }
-
-    // 原因列
-    // 暫定ドライバー候補バッジ
-    const tempBadge2 = r._tempCandidates?.length
-      ? `<div style="font-size:9px;background:rgba(154,122,58,.12);color:var(--amber);border-radius:4px;padding:2px 6px;margin-top:3px;cursor:pointer;" onclick="openTempSplit(${r.id})">
-          🔄 暫定合算候補：${r._tempCandidates.map(t=>t.name).join('・')}　[確定]
-         </div>` : '';
-
-    const causeEl = r.status==='差異あり'
-      ? `<div><select class="fi" style="font-size:10px;padding:3px 6px;" onchange="setCmpCause(${r.id},this.value)">
-           <option value=""${!r.cause?' selected':''}>選択...</option>
-           <option value="日報誤り"${r.cause==='日報誤り'?' selected':''}>日報側の誤り</option>
-           <option value="郵便局誤り"${r.cause==='郵便局誤り'?' selected':''}>郵便局側の誤り</option>
-           <option value="両方誤り"${r.cause==='両方誤り'?' selected':''}>両方の誤り</option>
-           <option value="確認中"${r.cause==='確認中'?' selected':''}>確認中</option>
-           <option value="局が多い"${r.cause==='局が多い'?' selected':''}>局が多い（確定済）</option>
-           <option value="暫定合算"${r.cause==='暫定合算'?' selected':''}>暫定ドライバー合算</option>
-         </select>${tempBadge2}</div>`
-      : `<span class="xs muted">${r.cause||'−'}</span>`;
-
-    h+=`<tr>
-      <td class="mono">${r.date}</td><td>${r.office}</td><td class="fw7">${r.staff}</td>
-      <td class="tr fw7">${r.kanryo}</td>
-      <td class="tr">${r.postData!==null?r.postData:'<span class="muted">未取込</span>'}</td>
-      <td class="tr">${ds}</td>
-      <td>${causeEl}${fixBadge}</td>
-      <td>${sb}</td>
-      <td style="white-space:nowrap;">${ops}</td>
-    </tr>`;
-  });
-
-  $('tb-cmp').innerHTML = h || `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
-  $('cmp-ok-b').textContent=`照合済 ${ok}`;
-  $('cmp-ng-b').textContent=`差異 ${ng}`;
-  $('cmp-un-b').textContent=`未照合 ${un}`;
-  $('nb-diff').textContent=ng+un;
-
-  // KPI
-  const el=$('cmp-kpi');
-  if(el) el.innerHTML=[
-    {l:'照合済',v:ok,u:'件',c:'--grn'},
-    {l:'差異あり',v:ng,u:'件',c:'--red'},
-    {l:'未照合',v:un,u:'件',c:'--amb'},
-    {l:'差異数合計',v:totalDiff,u:'個',c:'--blu'},
-  ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div></div>`).join('');
-}
 
 // ══ 暫定ドライバー合算分割処理 ══
 function openTempSplit(recordId){
