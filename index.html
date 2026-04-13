@@ -1555,6 +1555,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div style="font-size:10px;color:var(--txt2);">請求・精算 › システム設定</div></div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
+      <!-- 品目グループ設定 -->
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>集荷品目グループ設定
+          <span style="font-size:9px;color:var(--txt2);margin-left:8px;">同じ単価のサイズをグループ化して1つの名称で表示</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;">
+          例：60〜140サイズが同単価の場合 →「ゆうパック」としてまとめ、160サイズのみ「ゆうパック大」として別表示
+        </div>
+        <div id="item-group-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+        <button class="btn b-blu btn-sm" onclick="addItemGroup()">＋ グループを追加</button>
+        <button class="btn b-grn btn-sm" style="margin-left:6px;" onclick="saveItemGroups()">💾 保存</button>
+        <button class="btn b-gh btn-sm" style="margin-left:6px;" onclick="renderItemGroupList()">リセット</button>
+      </div>
+
       <div class="card" style="max-width:400px;">
         <div class="ct mb12"><div class="cbar"></div>管理者PIN変更</div>
         <div class="f2 mb8">
@@ -2920,6 +2934,131 @@ const ITEMS = {
   'チャーター':           { label:'チャーター',     cls:'cch',  defPrice:5000, unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch'   },
 };
 const IK = Object.keys(ITEMS); // masterKey の配列
+
+// 品目グループ設定（localStorage永続化）
+// デフォルト：全サイズ個別表示
+function getItemGroups(){
+  const saved = localStorage.getItem('nikki_item_groups');
+  if(saved){try{return JSON.parse(saved);}catch{}}
+  // デフォルト：空（グループ化なし＝全サイズ個別表示）
+  return [];
+}
+function saveItemGroupsData(groups){
+  localStorage.setItem('nikki_item_groups',JSON.stringify(groups));
+}
+
+// 品目グループ設定UI描画
+function renderItemGroupList(){
+  const wrap = document.getElementById('item-group-list');
+  if(!wrap) return;
+  const groups = getItemGroups();
+  const sizes = ['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'];
+  const sizeLabels = {'ゆうパック_60':'60','ゆうパック_80':'80','ゆうパック_100':'100',
+    'ゆうパック_120':'120','ゆうパック_140':'140','ゆうパック_160':'160'};
+
+  if(!groups.length){
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--light);padding:8px;">グループ未設定（全サイズ個別表示）</div>';
+    return;
+  }
+
+  wrap.innerHTML = groups.map((g,gi)=>`
+    <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:7px;padding:10px;" data-gi="${gi}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="font-size:10px;color:var(--mid);">グループ名：</div>
+        <input type="text" value="${g.name||''}" placeholder="例：ゆうパック" maxlength="20"
+          class="fi" style="flex:1;font-size:12px;padding:4px 8px;"
+          oninput="_igName(${gi},this.value)">
+        <button onclick="removeItemGroup(${gi})" style="background:none;border:1px solid var(--brd);color:var(--light);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
+      </div>
+      <div style="font-size:10px;color:var(--mid);margin-bottom:5px;">対象サイズ：</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${sizes.map(s=>`
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;">
+            <input type="checkbox" value="${s}" ${(g.sizes||[]).includes(s)?'checked':''}
+              onchange="_igSize(${gi},'${s}',this.checked)">
+            ${sizeLabels[s]}
+          </label>`).join('')}
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;">
+          <input type="checkbox" value="__all__" onchange="_igAll(${gi},this.checked)">
+          全選択
+        </label>
+      </div>
+    </div>`).join('');
+}
+
+function _igName(gi, val){
+  const groups=getItemGroups(); groups[gi].name=val; saveItemGroupsData(groups);
+}
+function _igSize(gi, size, checked){
+  const groups=getItemGroups();
+  if(!groups[gi].sizes) groups[gi].sizes=[];
+  if(checked){ if(!groups[gi].sizes.includes(size)) groups[gi].sizes.push(size); }
+  else { groups[gi].sizes=groups[gi].sizes.filter(s=>s!==size); }
+  saveItemGroupsData(groups);
+}
+function _igAll(gi, checked){
+  const sizes=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'];
+  const groups=getItemGroups();
+  groups[gi].sizes = checked ? [...sizes] : [];
+  saveItemGroupsData(groups);
+  renderItemGroupList();
+}
+function addItemGroup(){
+  const groups=getItemGroups();
+  groups.push({name:'',sizes:[]});
+  saveItemGroupsData(groups);
+  renderItemGroupList();
+}
+function removeItemGroup(gi){
+  const groups=getItemGroups();
+  groups.splice(gi,1);
+  saveItemGroupsData(groups);
+  renderItemGroupList();
+}
+function saveItemGroups(){
+  // 既にリアルタイム保存済みだが確認メッセージ
+  alert('品目グループ設定を保存しました。\n集荷日報入力・明細に反映されます。');
+  renderItemGroupList();
+}
+
+// 品目グループを適用したラベルを返す
+// 同グループ内のサイズは1行にまとめて表示
+function getGroupedItemLabel(masterKey){
+  const groups=getItemGroups();
+  for(const g of groups){
+    if((g.sizes||[]).includes(masterKey)){
+      return g.name || ITEMS[masterKey]?.label || masterKey;
+    }
+  }
+  return ITEMS[masterKey]?.label || masterKey;
+}
+
+// 集荷明細の品目名を取得（グループ化対応）
+// 同グループは最初のサイズのみ表示、以降はスキップ
+function buildGroupedItems(itemsObj){
+  const groups=getItemGroups();
+  const result=[];
+  const usedSizes=new Set();
+
+  groups.forEach(g=>{
+    if(!g.name||!g.sizes?.length) return;
+    // グループ内の合計数量を計算
+    const total = g.sizes.reduce((sum,s)=>sum+(itemsObj[s]||0),0);
+    if(total>0){
+      result.push({label:g.name, qty:total, isGroup:true, sizes:g.sizes});
+      g.sizes.forEach(s=>usedSizes.add(s));
+    }
+  });
+
+  // グループに含まれないサイズは個別表示
+  Object.entries(itemsObj).forEach(([k,v])=>{
+    if(v>0 && !usedSizes.has(k)){
+      result.push({label:ITEMS[k]?.label||k, qty:v, masterKey:k});
+    }
+  });
+
+  return result;
+}
 
 // ─────────────────────────────────────────────
 // データストア
@@ -10144,6 +10283,7 @@ function requireTS(section, navEl){
   if(isTSAuthenticated()){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
+    if(section==='ts-settings') setTimeout(()=>renderItemGroupList(),100);
     return;
   }
   tsPendingAction = {type:'nav', section, navEl};
@@ -10222,6 +10362,7 @@ function executeTSAction(){
   tsPendingAction=null;
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
+    if(a.section==='ts-settings') setTimeout(()=>renderItemGroupList(),100);
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
