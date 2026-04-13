@@ -3613,6 +3613,254 @@ function renderSum() {
 }
 
 // ─── 顧客・契約テーブル ───
+// ══ 顧客詳細ページ ══
+function openCustDetail(custId){
+  const cu=D.customers.find(x=>x.id===custId);
+  if(!cu){ alert('顧客データが見つかりません'); return; }
+
+  const cp=cu.colPrices||cu.prices||{};
+  const pv=(v,lbl)=>v?`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+    <span style="color:var(--txt2);font-size:11px;">${lbl}</span>
+    <span style="font-family:var(--mono);font-weight:700;">¥${fmt(v)}</span>
+  </div>`:'';
+
+  // ── 実績集計 ──
+  const puRows=D.pickup.filter(r=>r.customerId===custId||r.customerName===cu.name);
+
+  // 年別集計
+  const yearMap={};
+  puRows.forEach(r=>{
+    const y=(r.date||'').slice(0,4);
+    if(!y) return;
+    if(!yearMap[y]) yearMap[y]={year:y,qty:0,amt:0,days:new Set()};
+    IK.forEach(k=>{
+      const qty=iq(r,k);
+      yearMap[y].qty+=qty;
+      yearMap[y].amt+=qty*(cp[k.replace(/[^a-z0-9]/gi,'').replace('ゆうパック','p').replace('ゆうパケット','pk')] || 0);
+    });
+    yearMap[y].days.add(r.date);
+  });
+  const yearList=Object.values(yearMap).sort((a,b)=>b.year.localeCompare(a.year));
+
+  // 月別集計（当年）
+  const thisYear=new Date().getFullYear().toString();
+  const monMap={};
+  puRows.filter(r=>(r.date||'').startsWith(thisYear)).forEach(r=>{
+    const ym=(r.date||'').slice(0,7);
+    if(!ym) return;
+    if(!monMap[ym]) monMap[ym]={ym,qty:0,amt:0,days:new Set()};
+    let rowAmt=0;
+    IK.forEach(k=>{
+      const qty=iq(r,k);
+      monMap[ym].qty+=qty;
+      const priceKey={
+        'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100',
+        'ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160',
+        'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
+        'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te',
+      }[k]||'';
+      rowAmt+=qty*(cp[priceKey]||0);
+    });
+    monMap[ym].amt+=rowAmt;
+    monMap[ym].days.add(r.date);
+  });
+  const monList=Object.values(monMap).sort((a,b)=>b.ym.localeCompare(a.ym));
+
+  // 日別実績（直近30件）
+  const dayRows=[...puRows]
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''))
+    .slice(0,50);
+
+  // ── KPI ──
+  const totalQty=puRows.reduce((s,r)=>s+IK.reduce((q,k)=>q+iq(r,k),0),0);
+  const totalAmt=puRows.reduce((s,r)=>{
+    let a=0;
+    IK.forEach(k=>{
+      const pk={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100',
+        'ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160',
+        'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
+        'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'}[k]||'';
+      a+=iq(r,k)*(cp[pk]||0);
+    });
+    return s+a;
+  },0);
+  const totalDays=new Set(puRows.map(r=>r.date)).size;
+
+  const kpiHtml=`
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計集荷数</div>
+        <div style="font-size:20px;font-weight:900;color:var(--sage);">${fmt(totalQty)}<span style="font-size:11px;">個</span></div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計売上</div>
+        <div style="font-size:20px;font-weight:900;color:var(--tel2);">¥${fmt(totalAmt)}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">累計稼働日数</div>
+        <div style="font-size:20px;font-weight:900;color:var(--blu2);">${totalDays}<span style="font-size:11px;">日</span></div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;">
+        <div style="font-size:9px;color:var(--txt2);margin-bottom:4px;">契約開始</div>
+        <div style="font-size:13px;font-weight:700;color:var(--mid);">${cu.start||'−'}</div>
+      </div>
+    </div>`;
+
+  // ── 本文 ──
+  const bodyHtml=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <!-- 基本情報 -->
+      <div class="card">
+        <div class="ct mb10"><div class="cbar"></div>基本情報</div>
+        <div style="display:grid;gap:4px;">
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+            <span style="color:var(--txt2);font-size:11px;">顧客番号</span>
+            <span style="font-family:var(--mono);font-weight:700;color:var(--amb2);">${cu.custNo||'−'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+            <span style="color:var(--txt2);font-size:11px;">顧客名</span>
+            <span style="font-weight:700;">${cu.name||'−'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--div);">
+            <span style="color:var(--txt2);font-size:11px;">地域</span>
+            <span>${cu.region||'−'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:4px 0;">
+            <span style="color:var(--txt2);font-size:11px;">契約開始日</span>
+            <span>${cu.start||'−'}</span>
+          </div>
+        </div>
+        <div class="ct mt12 mb10"><div class="cbar"></div>契約単価</div>
+        <div style="display:grid;gap:2px;font-size:11px;">
+          ${pv(cp.p60,'ゆうパック 60サイズ')}
+          ${pv(cp.p80,'ゆうパック 80サイズ')}
+          ${pv(cp.p100,'ゆうパック 100サイズ')}
+          ${pv(cp.p120,'ゆうパック 120サイズ')}
+          ${pv(cp.p140,'ゆうパック 140サイズ')}
+          ${pv(cp.p160,'ゆうパック 160サイズ')}
+          ${pv(cp.pk1,'ゆうパケット 通常')}
+          ${pv(cp.pk2,'ゆうパケット 7cm〜')}
+          ${pv(cp.cp,'クリックポスト')}
+          ${pv(cp.ke,'ケース')}
+          ${pv(cp.te,'定形外(ゆうメール)')}
+          ${!Object.values(cp).some(v=>v>0)?'<div style="color:var(--light);font-size:11px;padding:8px 0;">単価未設定</div>':''}
+        </div>
+      </div>
+
+      <!-- 年間実績 -->
+      <div class="card">
+        <div class="ct mb10"><div class="cbar"></div>年間実績</div>
+        ${yearList.length ? `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <thead><tr style="background:var(--bg3);">
+              <th style="padding:6px 8px;text-align:left;">年度</th>
+              <th style="padding:6px 8px;text-align:right;">集荷数</th>
+              <th style="padding:6px 8px;text-align:right;">売上金額</th>
+              <th style="padding:6px 8px;text-align:right;">稼働日数</th>
+            </tr></thead>
+            <tbody>
+              ${yearList.map(y=>`<tr style="border-bottom:1px solid var(--div);">
+                <td style="padding:6px 8px;font-weight:700;">${y.year}年</td>
+                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);">${fmt(y.qty)}個</td>
+                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">¥${fmt(y.amt)}</td>
+                <td style="padding:6px 8px;text-align:right;font-family:var(--mono);">${y.days.size}日</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : '<div style="color:var(--light);font-size:11px;padding:8px;">実績データなし</div>'}
+
+        <div class="ct mt12 mb10"><div class="cbar"></div>${thisYear}年 月別推移</div>
+        ${monList.length ? `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;font-size:11px;border-collapse:collapse;">
+            <thead><tr style="background:var(--bg3);">
+              <th style="padding:5px 8px;text-align:left;">月</th>
+              <th style="padding:5px 8px;text-align:right;">集荷数</th>
+              <th style="padding:5px 8px;text-align:right;">売上</th>
+              <th style="padding:5px 8px;text-align:right;">稼働日</th>
+            </tr></thead>
+            <tbody>
+              ${monList.map((m,i)=>{
+                const prev=monList[i+1];
+                const diff=prev?m.qty-prev.qty:null;
+                const diffStr=diff!==null?`<span style="font-size:9px;color:${diff>=0?'var(--grn2)':'var(--red2)'};margin-left:4px;">${diff>=0?'+':''}${diff}</span>`:'';
+                return `<tr style="border-bottom:1px solid var(--div);">
+                  <td style="padding:5px 8px;font-weight:700;">${m.ym.slice(5)}月</td>
+                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${fmt(m.qty)}個${diffStr}</td>
+                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">¥${fmt(m.amt)}</td>
+                  <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${m.days.size}日</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>` : `<div style="color:var(--light);font-size:11px;padding:8px;">${thisYear}年のデータなし</div>`}
+      </div>
+    </div>
+
+    <!-- 日別実績 -->
+    <div class="card">
+      <div class="ct mb10"><div class="cbar"></div>日別実績（直近50件）</div>
+      ${dayRows.length ? `
+      <div style="overflow-x:auto;">
+        <table style="width:100%;font-size:11px;border-collapse:collapse;">
+          <thead><tr style="background:var(--bg3);">
+            <th style="padding:6px 8px;text-align:left;">日付</th>
+            <th style="padding:6px 8px;text-align:left;">担当者</th>
+            <th style="padding:6px 8px;text-align:right;">ゆうパック</th>
+            <th style="padding:6px 8px;text-align:right;">パケット</th>
+            <th style="padding:6px 8px;text-align:right;">その他</th>
+            <th style="padding:6px 8px;text-align:right;">合計数</th>
+            <th style="padding:6px 8px;text-align:right;">金額</th>
+          </tr></thead>
+          <tbody>
+            ${dayRows.map(r=>{
+              const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
+              const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
+              const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
+              const tot=yp+pk+oth;
+              let amt=0;
+              const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2','クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
+              IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
+              return `<tr style="border-bottom:1px solid var(--div);">
+                <td style="padding:5px 8px;font-family:var(--mono);">${r.date||'−'}</td>
+                <td style="padding:5px 8px;">${r.staff||'−'}</td>
+                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--sage);">${yp||'−'}</td>
+                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--blu2);">${pk||'−'}</td>
+                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);">${oth||'−'}</td>
+                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-weight:700;">${tot}</td>
+                <td style="padding:5px 8px;text-align:right;font-family:var(--mono);color:var(--tel2);">${amt?'¥'+fmt(amt):'−'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` : '<div style="color:var(--light);font-size:11px;padding:8px;">日別データなし</div>'}
+    </div>
+  `;
+
+  // CSV用データ
+  const csvData=[
+    ['日付','担当者','ゆうパック','パケット','その他','合計数','金額'],
+    ...dayRows.map(r=>{
+      const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2','クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
+      const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
+      const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
+      const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
+      let amt=0; IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
+      return [r.date||'',r.staff||'',yp,pk,oth,yp+pk+oth,amt];
+    })
+  ].map(row=>row.join(','));
+
+  openReportDetail(
+    `${cu.custNo?'['+cu.custNo+'] ':''}${cu.name} 顧客詳細`,
+    kpiHtml,
+    bodyHtml,
+    csvData,
+    `顧客詳細_${cu.name}.csv`
+  );
+}
+
+
 function renderCustTbl() {
   const q=toHankaku(($('cust-search')?.value||'').trim().toLowerCase());
   const sort=$('cust-sort')?.value||'no-asc';
@@ -3638,7 +3886,7 @@ function renderCustTbl() {
     const pv=v=>v?`¥${fmt(v)}`:'-';
     // 検索ハイライト
     const hl=txt=>{if(!q||!txt)return txt||'';try{const esc=q.replace(/[\-\[\]{}()*+?.,\\\^$|#\s]/g,'\\$&');return txt.replace(new RegExp('('+esc+')','gi'),'<mark style="background:rgba(192,57,43,.25);border-radius:2px;padding:0 1px;">$1</mark>');}catch(e){return txt;}};
-    h+=`<tr>
+    h+=`<tr class="clickable" onclick="openCustDetail(${c.id})" style="cursor:pointer;">
       <td>${noBadge}</td>
       <td class="fw7">${hl(c.name||'')}</td>
       <td class="xs muted">${c.region||''}</td>
@@ -4619,7 +4867,20 @@ function saveCust(){
   }
   const fbCusts=lsGet(LS_KEYS.CUSTOMERS,[])||[];
   const cu=D.customers.find(c=>c.custNo===custNo);
-  if(cu){const fi=fbCusts.findIndex(x=>x.id===cu.id);if(fi>=0)fbCusts[fi]={...fbCusts[fi],name:cu.name,region:cu.region};else fbCusts.push({id:cu.id,customerNo:'',name:cu.name,region:cu.region});}
+  if(cu){
+    // Firebase顧客データを完全保存（日報アプリで使えるよう custNo・region・colPrices含む）
+    const fbRec={
+      id:cu.id,
+      custNo:cu.custNo||'',
+      name:cu.name,
+      region:cu.region||'',
+      start:cu.start||'',
+      colPrices:cu.colPrices||{},
+    };
+    const fi=fbCusts.findIndex(x=>x.id===cu.id);
+    if(fi>=0) fbCusts[fi]={...fbCusts[fi],...fbRec};
+    else fbCusts.push(fbRec);
+  }
   fbSet('customers',fbCusts);
   closeM('m-cust');renderCustTbl();updOffSels();
 }
