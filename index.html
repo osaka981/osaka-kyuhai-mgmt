@@ -642,6 +642,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div style="display:flex;align-items:flex-end;gap:6px;">
             <button class="btn b-gh btn-sm" onclick="renderDelReport()">🔄 更新</button>
             <button class="btn b-gh btn-sm" onclick="expDelReportCSV()">📥 CSV</button>
+            <button class="btn b-red btn-sm" onclick="openDelSummaryPrint()">🖨 個人別配達合計表（4人/枚）</button>
           </div>
         </div>
       </div>
@@ -2090,8 +2091,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </select>
     </div>
     <div class="fg">
-      <label>担当営業所</label>
-      <select id="st-off" class="fi" onchange="prevEmpNo()"></select>
+      <label>メイン郵便局</label>
+      <select id="st-off" class="fi" onchange="prevEmpNo();renderSubOfficeList()"></select>
     </div>
     <div class="fg">
       <label>社員番号
@@ -2103,6 +2104,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <input type="text" id="st-empno-disp" class="fi" onblur="normField(this)" readonly
         style="font-family:'DM Mono',monospace;font-weight:700;color:var(--amb2);font-size:16px;letter-spacing:.2em;background:var(--bg3);"
         placeholder="営業所選択で自動発番">
+    </div>
+  </div>
+  <!-- 追加郵便局（複数対応） -->
+  <div style="margin-bottom:10px;">
+    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
+    <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">
+        メイン郵便局以外も担当する場合は追加してください（役員・異動者・掛け持ちの方）
+      </div>
+      <div id="sub-office-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px;"></div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="sub-office-add-sel" class="fi" style="flex:1;font-size:12px;">
+          <option value="">追加する郵便局を選択...</option>
+        </select>
+        <button type="button" onclick="addSubOffice()" class="btn b-blu btn-sm">＋ 追加</button>
+      </div>
     </div>
   </div>
 
@@ -3156,6 +3173,66 @@ function renderAll() {
 }
 
 // ─── 営業所セレクト同期 ───
+// ══ 複数郵便局対応 ══
+function renderSubOfficeList(){
+  const chips=$('sub-office-chips');
+  const addSel=$('sub-office-add-sel');
+  if(!chips||!addSel) return;
+  const mainOff=$('st-off')?.value||'';
+  addSel.innerHTML='<option value="">追加する郵便局を選択...</option>';
+  D.offices.forEach(o=>{
+    if(o.name!==mainOff){
+      const opt=document.createElement('option');
+      opt.value=o.name; opt.textContent=o.name;
+      addSel.appendChild(opt);
+    }
+  });
+}
+
+function addSubOffice(){
+  const sel=$('sub-office-add-sel');
+  const val=sel?.value;
+  if(!val) return;
+  const chips=$('sub-office-chips');
+  if(!chips) return;
+  if([...chips.querySelectorAll('.sub-off-chip')].some(ch=>ch.dataset.office===val)){
+    alert('すでに追加されています'); return;
+  }
+  const chip=document.createElement('div');
+  chip.className='sub-off-chip';
+  chip.dataset.office=val;
+  chip.style.cssText='display:inline-flex;align-items:center;gap:5px;background:rgba(92,107,192,.12);border:1px solid rgba(92,107,192,.3);border-radius:14px;padding:4px 10px;font-size:11px;color:#5c6bc0;';
+  chip.innerHTML=`<span>${val}</span><button type="button" onclick="removeSubOffice(this)" style="background:none;border:none;color:#5c6bc0;cursor:pointer;font-size:12px;padding:0;line-height:1;">×</button>`;
+  chips.appendChild(chip);
+  if(sel) sel.value='';
+}
+
+function removeSubOffice(btn){
+  btn.closest('.sub-off-chip')?.remove();
+}
+
+function loadSubOfficesForEdit(s){
+  const chips=$('sub-office-chips');
+  if(!chips) return;
+  chips.innerHTML='';
+  (s.subOffices||[]).forEach(office=>{
+    const chip=document.createElement('div');
+    chip.className='sub-off-chip';
+    chip.dataset.office=office;
+    chip.style.cssText='display:inline-flex;align-items:center;gap:5px;background:rgba(92,107,192,.12);border:1px solid rgba(92,107,192,.3);border-radius:14px;padding:4px 10px;font-size:11px;color:#5c6bc0;';
+    chip.innerHTML=`<span>${office}</span><button type="button" onclick="removeSubOffice(this)" style="background:none;border:none;color:#5c6bc0;cursor:pointer;font-size:12px;padding:0;line-height:1;">×</button>`;
+    chips.appendChild(chip);
+  });
+  renderSubOfficeList();
+}
+
+function getAllOfficesForDriver(s){
+  const offices=[s.office].filter(Boolean);
+  (s.subOffices||[]).forEach(o=>{ if(!offices.includes(o)) offices.push(o); });
+  return offices;
+}
+
+
 function updOffSels() {
   const ids = ['dd-off','pu-off','inv-off','st-off','cmp-off'];
   ids.forEach(id => {
@@ -4424,7 +4501,7 @@ function renderStaff(flt){
       <td><div class="fw7">${s.name}</div>${s.kana?`<div class="xs muted">${s.kana}</div>`:''}</td>
       <td>${kb}</td>
       <td>${compBadge}</td>
-      <td>${s.office}</td>
+      <td>${s.office}${s.subOffices?.length?` <span style='font-size:9px;color:#5c6bc0;'>+${s.subOffices.length}局</span>`:''}</td>
       <td class="mono xs">${s.tel||'−'}</td>
       <td>${s.kyuyo}</td>
       <td class="tr mono xs">${s.kyuyo==='個数制（歩合）'?
@@ -5086,6 +5163,203 @@ function renderDelReport(){
 
   if(_rptDelTab==='staff') renderDelReportStaff(rows);
   else renderDelReportOffice(rows);
+}
+
+
+// ══ 個人別配達合計表（4人/枚）印刷プレビュー ══
+function openDelSummaryPrint(){
+  const mon   = $('rpt-del-mon')?.value||'';
+  const offFlt= $('rpt-del-off')?.value||'';
+  const stFlt = $('rpt-del-staff')?.value||'';
+  const monStr= mon.replace('-','/');
+
+  // フィルター適用
+  const rows = D.delivery.filter(r=>{
+    if(mon && !r.date?.startsWith(monStr)) return false;
+    if(offFlt && r.office!==offFlt) return false;
+    if(stFlt  && r.staff!==stFlt)   return false;
+    return true;
+  });
+
+  // 従事員ごとに集計（郵便局別）
+  const staffMap = {};
+  rows.forEach(r=>{
+    if(!staffMap[r.staff]) staffMap[r.staff]={
+      name:r.staff, mainOffice:r.office,
+      byPost:{}, total:{mochi:0,kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,modori:0,yoku:0,days:new Set()}
+    };
+    const sm=staffMap[r.staff];
+    const post=r.postOffice||r.office||'未設定';
+    if(!sm.byPost[post]) sm.byPost[post]={
+      mochi:0,kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,modori:0,yoku:0,days:new Set()
+    };
+    const pm=sm.byPost[post];
+    const t=sm.total;
+    [pm,t].forEach(m=>{
+      m.mochi+=r.mochidashi||0; m.kanryo+=r.kanryo||0; m.tenso+=r.tenso||0;
+      m.yakan+=r.yakan||0; m.ogata+=r.ogata||0; m.shukka+=r.shukka||0;
+      m.modori+=r.mochimodoiri||0; m.yoku+=r['翌日廻し']||0;
+      m.days.add(r.date);
+    });
+  });
+
+  const staffList=Object.values(staffMap)
+    .sort((a,b)=>a.mainOffice.localeCompare(b.mainOffice)||a.name.localeCompare(b.name));
+
+  if(!staffList.length){ alert('対象データがありません'); return; }
+
+  // 月・期間
+  const [y,m]=mon?mon.split('-').map(Number):[new Date().getFullYear(),new Date().getMonth()+1];
+  const lastDay=new Date(y,m,0).getDate();
+  const period=`${y}年${m}月度　期間：${y}/${String(m).padStart(2,'0')}/01〜${y}/${String(m).padStart(2,'0')}/${lastDay}`;
+  const now=new Date().toLocaleString('ja-JP',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  // 数値フォーマット
+  const N=v=>v?v.toLocaleString():'0';
+
+  // 1人分のHTMLを生成
+  function renderOneStaff(s){
+    const posts=Object.entries(s.byPost);
+    const hasMultiPost=posts.length>1;
+    const t=s.total;
+
+    // 郵便局別行
+    let bodyRows='';
+    posts.forEach(([postName,pm])=>{
+      const days=pm.days.size;
+      bodyRows+=`<tr>
+        ${hasMultiPost?`<td style="color:#666;font-size:9px;padding:4px 6px;">${postName}</td>`:''}
+        <td class="td-num">${N(pm.mochi)}</td>
+        <td class="td-key">${N(pm.kanryo)}</td>
+        <td class="td-num">${N(pm.tenso)}</td>
+        <td class="td-yakan">${N(pm.yakan)}</td>
+        <td class="td-num">${pm.ogata||'0'}</td>
+        <td class="td-shukka">${pm.shukka||'0'}</td>
+        <td class="td-num">${pm.modori||'0'}</td>
+        <td class="td-num">${pm.yoku||'0'}</td>
+        <td style="text-align:center;color:#16a085;font-weight:700;font-family:monospace;">${days}</td>
+      </tr>`;
+    });
+
+    // 合計行（複数局の場合のみ）
+    let totalRow='';
+    if(hasMultiPost){
+      totalRow=`<tr style="background:#1b263b;">
+        <td style="color:#fff;font-size:9px;font-weight:700;padding:4px 6px;">合計</td>
+        <td class="td-num" style="color:#fff;">${N(t.mochi)}</td>
+        <td class="td-key" style="color:#ffd166;">${N(t.kanryo)}</td>
+        <td class="td-num" style="color:#fff;">${N(t.tenso)}</td>
+        <td class="td-yakan" style="color:#93c5fd;">${N(t.yakan)}</td>
+        <td class="td-num" style="color:#fff;">${t.ogata||'0'}</td>
+        <td class="td-shukka" style="color:#6ee7b7;">${t.shukka||'0'}</td>
+        <td class="td-num" style="color:#fff;">${t.modori||'0'}</td>
+        <td class="td-num" style="color:#fff;">${t.yoku||'0'}</td>
+        <td style="text-align:center;color:#6ee7b7;font-weight:700;font-family:monospace;">${t.days.size}</td>
+      </tr>`;
+    }
+
+    const postCol=hasMultiPost?'<th style="min-width:60px;">郵便局</th>':'';
+
+    return `<div class="person-block">
+      <div class="person-header">
+        <div>
+          <span class="person-id">社員名：${s.name}</span>
+          <span class="person-office">郵便局：${s.mainOffice}${hasMultiPost?' 他':''}</span>
+        </div>
+        <div style="text-align:right;font-size:9px;color:rgba(255,255,255,.7);">${period}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            ${postCol}
+            <th>持出</th><th style="background:#e63946;">完了・転送</th>
+            <th>転送</th><th style="color:#93c5fd;">夜間</th>
+            <th>大型</th><th style="color:#6ee7b7;">集荷</th>
+            <th>持戻</th><th>翌日</th><th>稼働日</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+        ${totalRow?`<tfoot>${totalRow}</tfoot>`:''}
+      </table>
+    </div>`;
+  }
+
+  // 4人ずつグループ化してページを生成
+  let pages='';
+  for(let i=0;i<staffList.length;i+=4){
+    const group=staffList.slice(i,i+4);
+    pages+=`<div class="a4-page">
+      <div class="page-title-bar">
+        <div class="page-title">個人別配達合計表</div>
+        <div class="page-meta">作成日時　${now}　ページ　${Math.floor(i/4)+1} / ${Math.ceil(staffList.length/4)}</div>
+      </div>
+      ${group.map(s=>renderOneStaff(s)).join('')}
+    </div>`;
+  }
+
+  // プレビューウィンドウを開く
+  const win=window.open('','_blank','width=900,height=700');
+  win.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<title>個人別配達合計表</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Noto Sans JP',sans-serif;background:#e8e8e8;color:#1a1a2e;}
+.toolbar{background:#1b263b;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.toolbar button{padding:7px 18px;border-radius:6px;border:none;font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-weight:700;}
+.btn-print{background:#e63946;color:#fff;}
+.btn-close{background:rgba(255,255,255,.15);color:#fff;}
+.toolbar-info{font-size:11px;color:rgba(255,255,255,.6);margin-left:auto;}
+.a4-page{
+  width:210mm;min-height:297mm;
+  background:#fff;margin:16px auto;
+  padding:8mm 8mm;
+  box-shadow:0 2px 12px rgba(0,0,0,.15);
+  page-break-after:always;
+}
+.page-title-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:3px solid #1b263b;padding-bottom:6px;margin-bottom:8px;
+}
+.page-title{font-size:16px;font-weight:900;color:#1b263b;letter-spacing:1px;}
+.page-meta{font-size:8px;color:#666;}
+.person-block{margin-bottom:6px;border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;}
+.person-header{
+  background:linear-gradient(135deg,#0d1b2a 0%,#1b263b 100%);
+  color:#fff;padding:6px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.person-id{font-size:12px;font-weight:700;margin-right:12px;}
+.person-office{font-size:10px;color:rgba(255,255,255,.7);}
+table{width:100%;border-collapse:collapse;font-size:10px;}
+thead tr{background:#1b263b;}
+thead th{color:#fff;padding:5px 4px;text-align:center;font-size:9px;font-weight:700;border-right:1px solid rgba(255,255,255,.1);white-space:nowrap;}
+thead th:last-child{border-right:none;}
+tbody tr{border-bottom:1px solid #eee;}
+tbody tr:nth-child(even){background:#f8f9fb;}
+tbody td{padding:5px 4px;font-size:10px;border-right:1px solid #f0f0f0;}
+tbody td:last-child{border-right:none;}
+.td-num{text-align:right;font-family:'DM Mono',monospace;font-weight:600;}
+.td-key{text-align:right;font-family:'DM Mono',monospace;font-weight:800;font-size:11px;color:#1b263b;}
+.td-yakan{text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:#2563eb;}
+.td-shukka{text-align:right;font-family:'DM Mono',monospace;font-weight:600;color:#059669;}
+tfoot tr{background:#1b263b;}
+tfoot td{padding:5px 4px;color:#fff;font-weight:700;font-size:10px;border-right:1px solid rgba(255,255,255,.1);text-align:right;font-family:'DM Mono',monospace;}
+@media print{
+  body{background:#fff;}
+  .toolbar{display:none;}
+  .a4-page{margin:0;box-shadow:none;page-break-after:always;width:100%;}
+}
+</style>
+</head><body>
+<div class="toolbar">
+  <button class="btn-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
+  <button class="btn-close" onclick="window.close()">✕ 閉じる</button>
+  <div class="toolbar-info">${staffList.length}名 / ${Math.ceil(staffList.length/4)}ページ（4人/枚）</div>
+</div>
+${pages}
+</body></html>`);
+  win.document.close();
 }
 
 // 従事員別集計
@@ -6872,6 +7146,13 @@ function saveStaff(continueAdd=false){
     holder:$('st-bank-holder')?.value.trim()||'',
   };
 
+  // 追加郵便局を収集
+  const subOffices=[];
+  document.querySelectorAll('#sub-office-chips .sub-off-chip').forEach(chip=>{
+    const v=chip.dataset.office;
+    if(v&&v!==officeName) subOffices.push(v);
+  });
+
   const newDrv={
     id:Date.now(),
     empNo,
@@ -6879,6 +7160,7 @@ function saveStaff(continueAdd=false){
     kana:$('st-kana')?.value||'',
     officeType,
     office:officeName,
+    subOffices, // 追加郵便局（複数）
     kubun:kbn,
     tel:$('st-tel')?.value||'',
     tel2:$('st-tel2')?.value||'',
@@ -6932,7 +7214,7 @@ function saveStaff(continueAdd=false){
 
   // Firebaseのnikki_driversにも追加
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
-  fbDrivers.push({id:String(empNo),name:newDrv.name,company:companyName,officeType,office:officeName});
+  fbDrivers.push({id:String(empNo),name:newDrv.name,company:companyName,officeType,office:officeName,subOffices,kyuyo:newDrv.kyuyo||''});
   fbSet('drivers',fbDrivers);
 
   // フォームリセット
