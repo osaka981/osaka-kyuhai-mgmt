@@ -3755,15 +3755,22 @@ function renderCmp() {
     }
 
     // 原因列
+    // 暫定ドライバー候補バッジ
+    const tempBadge2 = r._tempCandidates?.length
+      ? `<div style="font-size:9px;background:rgba(154,122,58,.12);color:var(--amber);border-radius:4px;padding:2px 6px;margin-top:3px;cursor:pointer;" onclick="openTempSplit(${r.id})">
+          🔄 暫定合算候補：${r._tempCandidates.map(t=>t.name).join('・')}　[確定]
+         </div>` : '';
+
     const causeEl = r.status==='差異あり'
-      ? `<select class="fi" style="font-size:10px;padding:3px 6px;" onchange="setCmpCause(${r.id},this.value)">
+      ? `<div><select class="fi" style="font-size:10px;padding:3px 6px;" onchange="setCmpCause(${r.id},this.value)">
            <option value=""${!r.cause?' selected':''}>選択...</option>
            <option value="日報誤り"${r.cause==='日報誤り'?' selected':''}>日報側の誤り</option>
            <option value="郵便局誤り"${r.cause==='郵便局誤り'?' selected':''}>郵便局側の誤り</option>
            <option value="両方誤り"${r.cause==='両方誤り'?' selected':''}>両方の誤り</option>
            <option value="確認中"${r.cause==='確認中'?' selected':''}>確認中</option>
            <option value="局が多い"${r.cause==='局が多い'?' selected':''}>局が多い（確定済）</option>
-         </select>`
+           <option value="暫定合算"${r.cause==='暫定合算'?' selected':''}>暫定ドライバー合算</option>
+         </select>${tempBadge2}</div>`
       : `<span class="xs muted">${r.cause||'−'}</span>`;
 
     h+=`<tr>
@@ -3792,6 +3799,46 @@ function renderCmp() {
     {l:'差異数合計',v:totalDiff,u:'個',c:'--blu'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div></div>`).join('');
 }
+
+// ══ 暫定ドライバー合算分割処理 ══
+function openTempSplit(recordId){
+  const r=D.delivery.find(x=>x.id===recordId);
+  if(!r||!r._tempCandidates?.length) return;
+
+  const candidates=r._tempCandidates;
+  const diff=r.postData-r.kanryo;
+  const lines=[
+    `照合差異の自動判定結果`,
+    ``,
+    `対象：${r.staff} / ${r.date}`,
+    `日報：${r.kanryo}件 / 郵便局：${r.postData}件 / 差異：+${diff}件`,
+    ``,
+    `暫定ドライバー候補：`,
+    ...candidates.map(t=>`  ${t.name}（推定${t.suggestQty}件）`),
+    ``,
+    `暫定ドライバー分を確定しますか？`,
+    `OKを押すと「暫定合算」として記録されます。`,
+  ].join('\n');
+
+  if(!confirm(lines)) return;
+
+  // 照合結果に記録
+  r.cause='暫定合算';
+  r._splitConfirmed=true;
+  if(!r.fixHistory)r.fixHistory=[];
+  r.fixHistory.push({
+    at:new Date().toISOString(),
+    type:'tempSplit',
+    candidates: candidates.map(t=>t.name),
+    diff,
+    reason:'暫定ドライバー合算を確認',
+  });
+  r.status='照合済';
+
+  renderCmp();renderDash();
+  _showSaveToast('暫定合算として照合済みにしました');
+}
+
 
 function setCmpCause(id, val) {
   const r = D.delivery.find(x=>x.id===id);
@@ -3922,18 +3969,40 @@ function applyFix(){
 }
 
 function runAutoCompare(){
+  // Firebaseから暫定ドライバー情報を取得
+  const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
+  const tempDrivers=fbDrivers.filter(d=>d.isTemp&&d.tempMergeId);
+
   D.delivery.forEach(r=>{
     if(r.postData!==null&&r.status==='未照合'){
       if(r.kanryo===r.postData){
         r.status='照合済';
       } else if(r.kanryo>r.postData){
-        // 日報＞郵便局：要確認
         r.status='差異あり';
-        r._diffDir='over'; // 日報超過フラグ
+        r._diffDir='over';
       } else {
-        // 郵便局＞日報：差異ありだが確定可能
         r.status='差異あり';
-        r._diffDir='under'; // 局超過フラグ（確定可能）
+        r._diffDir='under';
+
+        // 暫定ドライバー自動判定：局>日報の場合、合算の可能性をチェック
+        const diff=r.postData-r.kanryo; // 局が多い分
+        const matchTemp=tempDrivers.filter(td=>{
+          // 合算先IDがこのレコードのドライバーと一致するか確認
+          const mergeDriver=D.staff.find(s=>s.empNo===td.tempMergeId||s.id===td.tempMergeId);
+          if(!mergeDriver) return false;
+          const nameMatch=mergeDriver.name===r.staff;
+          if(!nameMatch) return false;
+          // 期間チェック
+          if(td.tempStart&&td.tempStart>r.date) return false;
+          if(td.tempEnd&&td.tempEnd<r.date) return false;
+          return true;
+        });
+        if(matchTemp.length>0){
+          r._tempCandidates=matchTemp.map(td=>({
+            id:td.id, name:td.name, suggestQty:diff
+          }));
+          r._autoNote=`暫定ドライバー合算の可能性（${matchTemp.map(td=>td.name).join('・')} 計${diff}件）`;
+        }
       }
     }
   });
