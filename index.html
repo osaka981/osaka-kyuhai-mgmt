@@ -1365,6 +1365,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </tbody></table>
           <div class="sep"></div>
           <button class="btn b-gh btn-sm" onclick="dlTemplates()">📥 テンプレートCSVダウンロード</button>
+          <button class="btn b-blu btn-sm" onclick="dlPostTemplate()" style="margin-left:6px;">📊 郵便局向けExcelテンプレート</button>
         </div>
       </div>
     </div>
@@ -9722,6 +9723,23 @@ function dlTemplates(){
   const t2=['日付,営業所,従事員名,顧客名,地域,品目,数量,単位','2025/03/06,大阪北営業所,田中 一郎,株式会社アルファ,大阪市北区,ゆうパック_60,12,個','2025/03/06,大阪北営業所,田中 一郎,株式会社アルファ,大阪市北区,ゆうパケット_通常,28,個','2025/03/06,大阪南営業所,鈴木 二郎,ベータ商事株式会社,大阪市中央区,ゆうパック_80,15,個','2025/03/06,大阪南営業所,鈴木 二郎,ベータ商事株式会社,大阪市中央区,チャーター,1,件'].join('\n');
   dlcsv(t1,'【テンプレート】宅配日報.csv');
   setTimeout(()=>dlcsv(t2,'【テンプレート】集荷日報.csv'),400);
+}
+
+// 郵便局向けExcelテンプレートの案内（GitHubからダウンロード）
+function dlPostTemplate(){
+  // Excelファイルはシステム外で管理・配布
+  // 案内モーダルを表示
+  const msg = [
+    '郵便局向け配達実績報告書テンプレート（Excel）の使い方：',
+    '',
+    '① 管理者からテンプレートファイルを郵便局担当者に送付',
+    '② 担当者が「宅配実績入力」シートに記入（黄色セルのみ）',
+    '③ 記入済みファイルをメールで受け取り、CSVインポート画面から取込',
+    '',
+    '※ テンプレートファイルは担当者から入手してください。',
+    '　 または「テンプレートCSVダウンロード」から代替のCSVをご利用ください。',
+  ].join('\n');
+  alert(msg);
 }
 
 function dlcsv(csv,fn){
