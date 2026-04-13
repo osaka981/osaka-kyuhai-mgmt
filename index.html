@@ -2567,6 +2567,7 @@ const FB_CONFIG = {
 const LS_KEYS = {
   YP:       'nikki_yp_logs',
   COL:      'nikki_col_logs',
+  ATT:      'nikki_att_logs',
   DRIVERS:  'nikki_drivers',
   CUSTOMERS:'nikki_customers',
   OFFICES:  'nikki_offices',
@@ -2605,7 +2606,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','drivers','customers','offices','regions'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -2779,6 +2780,11 @@ function setupRealtimeSync() {
     lsSet(LS_KEYS.OFFICES, snap.val());
     applyFirebaseData();
     updOffSels(); renderOffCards(); renderDelOtabs();
+  });
+  onValue(ref(fbDB, 'nikki/att_logs'), snap => {
+    if (!snap.exists()) return;
+    lsSet(LS_KEYS.ATT, snap.val());
+    renderSalary(); // 勤怠データ更新時は給与計算を再描画
   });
 }
 
@@ -8721,10 +8727,53 @@ function renderSalary(){
 
     // ── 基本給 ──
     const tk=cond.tanka||0;
+    const kyuyo=cond.kyuyo||s.kyuyo||'個数制（歩合）';
+
+    // 勤怠ログから稼働時間を取得（時間単価・時間給のみ）
+    const ATT_LOGS=lsGet(LS_KEYS.ATT,[])||[];
+    const attRows=ATT_LOGS.filter(a=>{
+      if(!a.driverId||!a.date) return false;
+      // staffのIDまたは名前で紐付け
+      const matchId=a.driverId===s.id;
+      const matchName=a.driverName===s.name;
+      return (matchId||matchName) && a.date.startsWith(salMonStr);
+    });
+    // 月合計稼働時間（分）→ 時間単位
+    const totalWorkMin=attRows.reduce((sum,a)=>sum+(a.workMin||0),0);
+    const totalWorkH=totalWorkMin/60; // 小数時間
+
+    // 時間単価：稼働時間（att_logs）× 時間単価
+    let jikanAmt=0;
+    if(kyuyo==='時間単価'&&tk>0&&totalWorkH>0){
+      jikanAmt=Math.round(tk*totalWorkH);
+    }
+    // 時間給（パート）：稼働時間（att_logs）× 時間給
+    let jikankyuAmt=0;
+    if(kyuyo==='時間給'&&tk>0&&totalWorkH>0){
+      jikankyuAmt=Math.round(tk*totalWorkH);
+    }
+    // 日額：稼働日数（日報入力日） × 日額単価（従来通り）
+    let nichigakuAmt=0;
+    if(kyuyo==='日額'&&tk>0){
+      const workDays=new Set(delRows.map(r=>r.date)).size||new Set(puRows.map(r=>r.date)).size;
+      nichigakuAmt=tk*workDays;
+    }
+
     if(isKeisu){
-      base=delAmt+colAmt; // 個数制は単価のみ
-    } else if(cond.kyuyo==='保証'){
-      // 保証：基本額 or 実績単価計算の大きい方
+      base=delAmt+colAmt;
+    } else if(kyuyo==='時間単価'){
+      // att_logsに稼働時間があれば優先、なければ従来計算（完了件数×単価）
+      if(totalWorkH>0){
+        base=jikanAmt+(colAmt); // 集荷単価があれば加算
+      } else {
+        const totalKanryo=delRows.reduce((s,r)=>s+(r.kanryo||0)+(r.tenso||0),0);
+        base=tk*totalKanryo+(colAmt);
+      }
+    } else if(kyuyo==='時間給'){
+      base=jikankyuAmt>0?jikankyuAmt:tk; // att_logsなければ基本給そのまま
+    } else if(kyuyo==='日額'){
+      base=nichigakuAmt+(colAmt);
+    } else if(kyuyo==='保証'){
       base=Math.max(tk, delAmt+colAmt||tk);
     } else {
       base=tk+(delAmt+colAmt);
@@ -8733,7 +8782,16 @@ function renderSalary(){
 
     // ── 内訳テキスト ──
     const parts=[];
-    if(tk&&!isKeisu)parts.push(`基本 ¥${fmt(tk)}`);
+    if(kyuyo==='時間単価'&&totalWorkH>0){
+      parts.push(`時間単価 ¥${fmt(tk)}×${(totalWorkH).toFixed(2)}h=¥${fmt(jikanAmt)}`);
+    } else if(kyuyo==='時間給'&&totalWorkH>0){
+      parts.push(`時間給 ¥${fmt(tk)}×${(totalWorkH).toFixed(2)}h=¥${fmt(jikankyuAmt)}`);
+    } else if(kyuyo==='日額'&&nichigakuAmt>0){
+      const wd=new Set(delRows.map(r=>r.date)).size||new Set(puRows.map(r=>r.date)).size;
+      parts.push(`日額 ¥${fmt(tk)}×${wd}日=¥${fmt(nichigakuAmt)}`);
+    } else if(tk&&!isKeisu){
+      parts.push(`基本 ¥${fmt(tk)}`);
+    }
     if(useDelPrice&&delAmt)parts.push(`宅配 ¥${fmt(delAmt)}`);
     if(useColPrice&&(colAmt-areaAmt)>0)parts.push(`集荷 ¥${fmt(colAmt-areaAmt)}`);
     if(areaAmt>0)parts.push(`エリア ¥${fmt(areaAmt)}`);
