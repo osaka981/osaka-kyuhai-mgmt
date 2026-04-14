@@ -2412,13 +2412,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="sep"></div>
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 給与・単価（管理者のみ）</div>
 
-  <!-- 給与形態 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
-    <div class="fg">
-      <label>給与形態
+  <!-- 給与形態・基本額（横並び） -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;">
+    <div class="fg" style="margin:0;">
+      <label style="font-size:11px;">給与形態
         <span style="font-size:9px;color:var(--tel2);margin-left:6px;">← 区分と連動</span>
       </label>
-      <select id="st-ky" class="fi" onchange="onKyuChange()">
+      <select id="st-ky" class="fi" onchange="onKyuChange()" style="margin-top:3px;">
         <optgroup label="── 雇用契約 ──">
           <option value="月給">月給（社員・役員）</option>
           <option value="時間給">時間給（パート）</option>
@@ -2431,35 +2431,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </optgroup>
       </select>
     </div>
-    <div class="fg" id="st-tk-wrap">
-      <label id="st-tk-label">基本給（円/月）</label>
-      <input type="number" id="st-tk" class="fi" placeholder="280000">
+    <div class="fg" id="st-tk-wrap" style="margin:0;">
+      <label id="st-tk-label" style="font-size:11px;">基本額（円）</label>
+      <input type="number" id="st-tk" class="fi" placeholder="280000" style="margin-top:3px;">
+      <div id="st-tk-hint" style="font-size:9px;color:var(--amb2);margin-top:2px;"></div>
     </div>
   </div>
-  <!-- 宅配・集荷単価を給与に加算するか -->
-  <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;">
-    <span style="font-size:10px;color:var(--txt2);font-weight:700;">単価を給与に加算：</span>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
-      <input type="checkbox" id="st-add-del" style="width:13px;height:13px;">
-      <span style="color:var(--blu2);">🚛 宅配単価を加算</span>
-    </label>
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
-      <input type="checkbox" id="st-add-col" style="width:13px;height:13px;">
-      <span style="color:var(--tel2);">📦 集荷単価を加算</span>
-    </label>
-    <span id="st-pay-hint" style="margin-left:auto;font-size:9.5px;color:var(--amb2);"></span>
-  </div>
-
-  <!-- 単価タブ -->
-  <!-- 単価 税込・税別切り替え -->
-  <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:6px;">
-    <span style="font-size:9px;color:var(--txt2);">単価区分:</span>
-    <button type="button" id="st-tax-btn-ex" onclick="setStTax('ex')"
-      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;transition:all .12s;">税別</button>
-    <button type="button" id="st-tax-btn-in" onclick="setStTax('in')"
-      style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);transition:all .12s;">税込</button>
-    <input type="hidden" id="st-tax-type" value="ex">
-    <span id="st-tax-hint" style="font-size:9px;color:var(--amb2);margin-left:3px;">税抜で入力</span>
+  <!-- 宅配・集荷 一括税切替（個別切替はタブ内に残す） -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;">
+    <span style="font-size:10px;color:var(--txt2);font-weight:700;flex-shrink:0;">単価 一括:</span>
+    <button type="button" onclick="setAllStTax('ex')"
+      style="padding:2px 10px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
+    <button type="button" onclick="setAllStTax('in')"
+      style="padding:2px 10px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">全て税込</button>
+    <span style="font-size:9px;color:var(--txt2);margin-left:4px;">※ 宅配・集荷タブで個別設定も可能</span>
+    <input type="hidden" id="st-add-del" value="false">
+    <input type="hidden" id="st-add-col" value="false">
   </div>
 
 
@@ -2488,6 +2475,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 集荷単価 -->
   <div id="ptab-content-col" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span style="font-size:9px;color:var(--txt2);font-weight:700;">集荷単価 一括:</span>
+      <button type="button" onclick="setColTabTaxAll('ex')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
+      <button type="button" onclick="setColTabTaxAll('in')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">全て税込</button>
+      <span style="font-size:9px;color:var(--txt2);margin-left:4px;">個別変更も可能</span>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
       <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-st-cp60" data-tax="ex"><button onclick="setItemTax('st-cp60','in')" class="">税込</button><button onclick="setItemTax('st-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp60" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="150" oninput="onStCp60Change()"></div>
       <div class="fg"><label class="c80" style="font-size:9px;">80サイズ（円）<span class="tax-tog" id="tt-st-cp80" data-tax="ex"><button onclick="setItemTax('st-cp80','in')" class="">税込</button><button onclick="setItemTax('st-cp80','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp80" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="180"></div>
@@ -3098,10 +3091,28 @@ function onStZipInput(inp){
     }).catch(()=>{});
 }
 
-// 住所→郵便番号 逆引き（簡易）
+// 住所→郵便番号 逆引き（HeartRailsで市区町村レベル逆引き）
 function onStAddrInput(inp){
-  // 住所変更時は郵便番号フィールドをクリアして手入力を促す
-  // 逆引きは精度が低いため自動入力はしない
+  const addr = inp.value.trim();
+  if(addr.length < 4) return;
+  // 既に郵便番号が入力済みなら何もしない
+  const zip = $('st-zip');
+  if(zip && zip.value.replace(/[^0-9]/g,'').length === 7) return;
+  // 市区町村を抽出してzipcloudで検索
+  // 例：「大阪市北区○○」→「大阪市北区」でAPIを叩く
+  const m = addr.match(/^(.{2,6}[都道府県])(.{2,8}[市区町村])/);
+  if(!m) return;
+  const city = m[1] + m[2];
+  fetch(`https://zipcloud.ibsnet.co.jp/api/search?address=${encodeURIComponent(city)}&limit=1`)
+    .then(r => r.json()).then(d => {
+      const r0 = d?.results?.[0];
+      if(!r0) return;
+      const zipval = r0.zipcode || '';
+      if(zip && !zip.value && zipval) {
+        // ハイフン付きで入力
+        zip.value = zipval.slice(0,3) + '-' + zipval.slice(3);
+      }
+    }).catch(()=>{});
 }
 
 // 担当郵便局バッジUI
@@ -3277,7 +3288,7 @@ function resetStaffModal(){
    'st-tk','st-empno-disp'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   // チェックボックス
-  ['st-empno-manual','st-add-del','st-add-col','st-hosho-b-on','st-hosho-c-on'].forEach(id=>{
+  ['st-empno-manual','st-hosho-b-on','st-hosho-c-on'].forEach(id=>{
     const e=$(id);if(e)e.checked=false;
   });
   // 選択リセット
@@ -4907,6 +4918,19 @@ function setStTabTax(tab, type){
   if(exBtn){ exBtn.style.background=type==='ex'?'var(--red)':'transparent'; exBtn.style.color=type==='ex'?'#fff':'var(--txt2)'; exBtn.style.borderColor=type==='ex'?'var(--red)':'var(--brd2)'; }
   if(inBtn){ inBtn.style.background=type==='in'?'var(--grn)':'transparent'; inBtn.style.color=type==='in'?'#fff':'var(--txt2)'; inBtn.style.borderColor=type==='in'?'var(--grn)':'var(--brd2)'; }
 }
+function setColTabTaxAll(type){
+  // 集荷タブの全品目の税を一括切替
+  ['st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160',
+   'st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'].forEach(id=>setItemTax(id,type));
+}
+function setAllStTax(type){
+  // 宅配タブ・集荷タブ・その他タブを一括で切替
+  setStTabTax('del', type);
+  setStTabTax('col', type);
+  setStTabTax('oth', type);
+  // 確認メッセージ
+  toast('全単価を'+(type==='in'?'税込':'税別')+'に切り替えました');
+}
 function setStTax(type){
   const isIn = type === 'in';
   const btnEx = $('st-tax-btn-ex'), btnIn = $('st-tax-btn-in');
@@ -5248,23 +5272,33 @@ function onCompanySelChange(){
 function onKyuChange(){
   const ky=$('st-ky')?.value;
   const tkl=$('st-tk-label');
-  const map={
-    '月給':'基本給（円/月）',
-    '保証':'保証額（円/月）',
-    '時給':'時給（円/時間）',
-    '個数制（歩合）':'基本単価（円/個）※加算なし可',
-    '日給':'日給（円/日）',
+  const hint=$('st-tk-hint');
+  // 給与形態ごとのラベル・ヒント
+  const config={
+    '月給':{label:'基本給（円/月）',hint:'月給。宅配・集荷単価は別途タブで設定。',show:true},
+    '時間給':{label:'時給（円/時間）',hint:'時給×稼働時間で計算。',show:true},
+    '個数制（歩合）':{label:'基本単価（参考）',hint:'宅配・集荷タブの単価×件数で計算。この欄は参考値。',show:false},
+    '時間単価':{label:'時間単価（円/時間）',hint:'時間単価×稼働時間で計算。',show:true},
+    '日額':{label:'日額（円/日）',hint:'日額×稼働日数で計算。',show:true},
+    '保証':{label:'保証額（円/月）',hint:'最低保証。件数×単価が保証額を下回る場合に補填。',show:true},
   };
-  if(tkl)tkl.textContent=map[ky]||'基本額（円）';
-  // 個数制はtk欄を薄く（単価が不要な場合）
+  const cfg=config[ky]||{label:'基本額（円）',hint:'',show:true};
+  if(tkl) tkl.textContent=cfg.label;
+  if(hint) hint.textContent=cfg.hint;
+  // 個数制は入力欄を薄く（単価設定は別タブ）
   const tkWrap=$('st-tk-wrap');
-  if(tkWrap)tkWrap.style.opacity=ky==='個数制（歩合）'?'0.55':'1';
-  // ヒント更新
-  const hint=$('st-pay-hint');
-  if(hint){
-    if(ky==='個数制（歩合）')hint.textContent='※ 基本単価は未使用。宅配・集荷単価のみで計算';
-    else hint.textContent='※ 基本給 ＋ チェックした単価を加算';
-  }
+  if(tkWrap) tkWrap.style.opacity=cfg.show?'1':'0.45';
+  // 上部ラベルも更新
+  const autoLbl=$('st-ky-auto-label');
+  const kyLabelMap={
+    '月給':'月給（社員・役員）',
+    '時間給':'時間給（パート）― 時給×稼働時間',
+    '個数制（歩合）':'業務委託（歩合）― 宅配/集荷単価×件数',
+    '時間単価':'業務委託（時間単価）― 時間単価×稼働時間',
+    '日額':'業務委託（日額）― 日額×稼働日数',
+    '保証':'業務委託（保証あり）― 最低保証額',
+  };
+  if(autoLbl) autoLbl.textContent=kyLabelMap[ky]||ky;
 }
 
 // ── チャーター管理 ──
@@ -7873,8 +7907,8 @@ function saveStaff(continueAdd=false){
     companyPrices,
     kyuyo:$('st-ky')?.value,
     tanka:parseInt($('st-tk')?.value)||0,
-    addDelPrice:$('st-add-del')?.checked||false,
-    addColPrice:$('st-add-col')?.checked||false,
+    addDelPrice:false,  // 廃止（単価は宅配・集荷タブで管理）
+    addColPrice:false,
     payHistory:collectPayHistory(),
     buai:0,
     fixedPrices:{
