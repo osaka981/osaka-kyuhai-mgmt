@@ -1990,12 +1990,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 単価セクション タブ -->
   <div style="display:flex;border:1px solid var(--brd2);border-radius:5px;overflow:hidden;margin-bottom:8px;">
-    <button type="button" class="otab on" id="cu-ptab-col" onclick="switchCuTab('col')" style="flex:1;font-size:10.5px;">📦 集荷単価</button>
+    <button type="button" class="otab on" id="cu-ptab-col" onclick="switchCuTab('col')" style="flex:1;font-size:10.5px;">集荷単価</button>
     <button type="button" class="otab" id="cu-ptab-other" onclick="switchCuTab('other')" style="flex:1;font-size:10.5px;">📋 その他・立替</button>
     <button type="button" class="otab" id="cu-ptab-offset" onclick="switchCuTab('offset')" style="flex:1;font-size:10.5px;">⚖️ 相殺・手当</button>
   </div>
 
-  <!-- 📦 集荷単価タブ -->
+  <!-- 集荷単価タブ -->
   <div id="cu-ptab-content-col" style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
       <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-cu-cp60" data-tax="ex"><button onclick="setItemTax('cu-cp60','in')" class="">税込</button><button onclick="setItemTax('cu-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp60" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()" onblur="onCuYP60Change()"></div>
@@ -2117,21 +2117,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- タブ（sticky固定） -->
   <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;position:sticky;top:0;z-index:10;">
     <button type="button" id="ptab-info" onclick="switchStTab('info')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">基本情報</button>
     <button type="button" id="ptab-del" onclick="switchStTab('del')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">🚛 宅配単価</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">宅配単価</button>
     <button type="button" id="ptab-col" onclick="switchStTab('col')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📦 集荷単価</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">集荷単価</button>
     <button type="button" id="ptab-other" onclick="switchStTab('other')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📋 その他</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">その他</button>
     <button type="button" id="ptab-offset" onclick="switchStTab('offset')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">⚖️ 控除・手当</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">控除・手当</button>
     <button type="button" id="ptab-advance" onclick="switchStTab('advance')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">💴 前払い</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">前払い</button>
     <button type="button" id="ptab-confirm" onclick="switchStTab('confirm')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:700;">📋 確認</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-size:13px;font-weight:700;">確認</button>
     <button type="button" id="ptab-history" onclick="switchStTab('history')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📅 履歴</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">履歴</button>
   </div>
 
   <div style="overflow-y:auto;flex:1;padding:14px 16px;min-height:0;">
@@ -2269,14 +2269,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <!-- 住所（郵便番号⇔住所 相互自動入力） -->
-  <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;margin-bottom:8px;">
+  <!-- 住所（郵便番号→住所 自動入力） -->
+  <div style="display:grid;grid-template-columns:180px 1fr;gap:8px;margin-bottom:8px;">
     <div class="fg">
-      <label>郵便番号
-        <span style="font-size:9px;color:var(--tel2);margin-left:4px;">→住所自動入力</span>
+      <label style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+        郵便番号
+        <span style="font-size:9px;color:var(--tel2);">→住所自動入力</span>
+        <a href="https://www.post.japanpost.jp/zipcode/" target="_blank"
+          style="font-size:9px;color:var(--blu2);text-decoration:none;background:rgba(66,133,244,.1);border:0.5px solid rgba(66,133,244,.4);border-radius:3px;padding:1px 5px;cursor:pointer;">調べる</a>
       </label>
       <input type="text" id="st-zip" class="fi" placeholder="000-0000" maxlength="8"
-        oninput="toHankakuField(this);onStZipInput(this)" style="font-family:monospace;">
+        oninput="toHankakuField(this);onStZipInput(this)" style="font-family:monospace;margin-top:3px;">
     </div>
     <div class="fg">
       <label>住所</label>
@@ -2293,75 +2296,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <span style="font-size:9px;color:var(--tel2);margin-left:4px;">フリートと同期</span>
       </label>
       <input type="date" id="st-end" class="fi" onchange="syncEndDateToFleet(this.value)">
-    </div>
-  </div>
-
-  <!-- ■ 給与形態（区分から自動決定） -->
-  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 給与形態</div>
-  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;margin-bottom:8px;">
-    <!-- 区分から自動決定された給与形態ラベル（下部のselectと連動） -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-      <div id="st-ky-auto-label" style="font-size:13px;font-weight:700;color:var(--grn2);flex:1;">個数制（歩合）</div>
-    </div>
-
-    <!-- 役員報酬（社員・役員のみ・PIN保護） -->
-    <div id="st-exec-pay-area" style="display:none;">
-      <div style="border-top:1px solid var(--brd);padding-top:8px;">
-        <div style="font-size:11px;color:var(--txt2);margin-bottom:6px;">役員報酬（非公開）</div>
-        <div id="st-exec-pay-locked" style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:11px;color:var(--light);">― 非公開 ―</div>
-          <button type="button" class="btn b-gh btn-sm" onclick="unlockExecPay()">PIN認証して入力</button>
-        </div>
-        <div id="st-exec-pay-unlocked" style="display:none;">
-          <input type="number" id="st-exec-pay" class="fi" placeholder="月額報酬（円）"
-            oninput="toHankakuField(this)" style="font-size:14px;font-weight:700;">
-        </div>
-      </div>
-    </div>
-
-    <!-- 保証・手当設定（折りたたみ） -->
-    <div id="st-hosho-area" style="display:none;border-top:1px solid var(--brd);padding-top:8px;margin-top:8px;">
-      <div style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"
-        onclick="toggleHosho()">
-        <div style="font-size:11px;font-weight:700;color:var(--amb2);">保証・手当設定</div>
-        <span id="hosho-chev" style="font-size:10px;color:var(--amb2);">▶ 展開</span>
-      </div>
-      <div id="hosho-body" style="display:none;">
-        <!-- B：日額保証（最低ライン） -->
-        <div style="background:rgba(160,96,32,.07);border:1px solid rgba(160,96,32,.2);border-radius:6px;padding:8px 10px;margin-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <input type="checkbox" id="st-hosho-b-on" onchange="toggleHoshoB(this.checked)">
-            <label for="st-hosho-b-on" style="font-size:11px;font-weight:700;color:var(--amb2);cursor:pointer;">B：日額保証（最低ライン）</label>
-          </div>
-          <div id="st-hosho-b-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
-            <div class="fg" style="margin:0;">
-              <label style="font-size:10px;">日額保証額（円/日）</label>
-              <input type="number" id="st-hosho-b-amt" class="fi" placeholder="例：3500" oninput="toHankakuField(this)">
-            </div>
-            <div class="fg" style="margin:0;">
-              <label style="font-size:10px;">最低出勤日数（日/月）</label>
-              <input type="number" id="st-hosho-b-days" class="fi" placeholder="例：20" oninput="toHankakuField(this)">
-            </div>
-          </div>
-        </div>
-        <!-- C：日額手当（歩合に加算） -->
-        <div style="background:rgba(26,107,58,.07);border:1px solid rgba(26,107,58,.2);border-radius:6px;padding:8px 10px;">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <input type="checkbox" id="st-hosho-c-on" onchange="toggleHoshoC(this.checked)">
-            <label for="st-hosho-c-on" style="font-size:11px;font-weight:700;color:var(--grn2);cursor:pointer;">C：日額手当（歩合に加算）</label>
-          </div>
-          <div id="st-hosho-c-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
-            <div class="fg" style="margin:0;">
-              <label style="font-size:10px;">日額手当（円/日）</label>
-              <input type="number" id="st-hosho-c-amt" class="fi" placeholder="例：1000" oninput="toHankakuField(this)">
-            </div>
-            <div class="fg" style="margin:0;">
-              <label style="font-size:10px;">最低出勤日数（日/月）</label>
-              <input type="number" id="st-hosho-c-days" class="fi" placeholder="例：15" oninput="toHankakuField(this)">
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -2412,52 +2346,107 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="sep"></div>
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 給与・単価（管理者のみ）</div>
 
-  <!-- 給与形態・基本額（横並び） -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;">
-    <div class="fg" style="margin:0;">
-      <label style="font-size:11px;">給与形態
-        <span style="font-size:9px;color:var(--tel2);margin-left:6px;">← 区分と連動</span>
-      </label>
-      <select id="st-ky" class="fi" onchange="onKyuChange()" style="margin-top:3px;">
-        <optgroup label="── 雇用契約 ──">
-          <option value="月給">月給（社員・役員）</option>
-          <option value="時間給">時間給（パート）</option>
-        </optgroup>
-        <optgroup label="── 業務委託 ──">
-          <option value="個数制（歩合）" selected>業務委託料（歩合）</option>
-          <option value="時間単価">業務委託料（時間単価）</option>
-          <option value="日額">業務委託料（日額）</option>
-          <option value="保証">業務委託料（保証あり）</option>
-        </optgroup>
-      </select>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- 1段目：給与形態 + 基本額 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div class="fg" style="margin:0;">
+        <label style="font-size:11px;">給与形態
+          <span style="font-size:9px;color:var(--tel2);margin-left:6px;">← 区分と連動</span>
+        </label>
+        <select id="st-ky" class="fi" onchange="onKyuChange()" style="margin-top:3px;">
+          <optgroup label="── 雇用契約 ──">
+            <option value="月給">月給（社員・役員）</option>
+            <option value="時間給">時間給（パート）</option>
+          </optgroup>
+          <optgroup label="── 業務委託 ──">
+            <option value="個数制（歩合）" selected>業務委託料（歩合）</option>
+            <option value="時間単価">業務委託料（時間単価）</option>
+            <option value="日額">業務委託料（日額）</option>
+            <option value="保証">業務委託料（保証あり）</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="fg" id="st-tk-wrap" style="margin:0;">
+        <label id="st-tk-label" style="font-size:11px;">基本額（円）</label>
+        <input type="number" id="st-tk" class="fi" placeholder="280000" style="margin-top:3px;">
+        <div id="st-tk-hint" style="font-size:9px;color:var(--amb2);margin-top:2px;"></div>
+      </div>
     </div>
-    <div class="fg" id="st-tk-wrap" style="margin:0;">
-      <label id="st-tk-label" style="font-size:11px;">基本額（円）</label>
-      <input type="number" id="st-tk" class="fi" placeholder="280000" style="margin-top:3px;">
-      <div id="st-tk-hint" style="font-size:9px;color:var(--amb2);margin-top:2px;"></div>
+
+    <!-- 2段目：区分連動ラベル + 保証・手当・役員報酬 -->
+    <div style="border-top:1px solid var(--brd);padding-top:8px;">
+      <div id="st-ky-auto-label" style="font-size:13px;font-weight:700;color:var(--grn2);margin-bottom:6px;">個数制（歩合）</div>
+
+      <!-- 役員報酬（社員・役員のみ） -->
+      <div id="st-exec-pay-area" style="display:none;margin-bottom:8px;">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">役員報酬（非公開）</div>
+        <div id="st-exec-pay-locked" style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:11px;color:var(--light);">― 非公開 ―</div>
+          <button type="button" class="btn b-gh btn-sm" onclick="unlockExecPay()">PIN認証して入力</button>
+        </div>
+        <div id="st-exec-pay-unlocked" style="display:none;">
+          <input type="number" id="st-exec-pay" class="fi" placeholder="月額報酬（円）"
+            oninput="toHankakuField(this)" style="font-size:14px;font-weight:700;">
+        </div>
+      </div>
+
+      <!-- 保証・手当設定（折りたたみ） -->
+      <div id="st-hosho-area" style="display:none;">
+        <div style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"
+          onclick="toggleHosho()">
+          <div style="font-size:11px;font-weight:700;color:var(--amb2);">保証・手当設定</div>
+          <span id="hosho-chev" style="font-size:10px;color:var(--amb2);">▶ 展開</span>
+        </div>
+        <div id="hosho-body" style="display:none;">
+          <div style="background:rgba(160,96,32,.07);border:1px solid rgba(160,96,32,.2);border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="checkbox" id="st-hosho-b-on" onchange="toggleHoshoB(this.checked)">
+              <label for="st-hosho-b-on" style="font-size:11px;font-weight:700;color:var(--amb2);cursor:pointer;">B：日額保証（最低ライン）</label>
+            </div>
+            <div id="st-hosho-b-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="fg" style="margin:0;"><label style="font-size:10px;">日額保証額（円/日）</label><input type="number" id="st-hosho-b-amt" class="fi" placeholder="例：3500" oninput="toHankakuField(this)"></div>
+              <div class="fg" style="margin:0;"><label style="font-size:10px;">最低出勤日数（日/月）</label><input type="number" id="st-hosho-b-days" class="fi" placeholder="例：20" oninput="toHankakuField(this)"></div>
+            </div>
+          </div>
+          <div style="background:rgba(26,107,58,.07);border:1px solid rgba(26,107,58,.2);border-radius:6px;padding:8px 10px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+              <input type="checkbox" id="st-hosho-c-on" onchange="toggleHoshoC(this.checked)">
+              <label for="st-hosho-c-on" style="font-size:11px;font-weight:700;color:var(--grn2);cursor:pointer;">C：日額手当（歩合に加算）</label>
+            </div>
+            <div id="st-hosho-c-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+              <div class="fg" style="margin:0;"><label style="font-size:10px;">日額手当（円/日）</label><input type="number" id="st-hosho-c-amt" class="fi" placeholder="例：1000" oninput="toHankakuField(this)"></div>
+              <div class="fg" style="margin:0;"><label style="font-size:10px;">最低出勤日数（日/月）</label><input type="number" id="st-hosho-c-days" class="fi" placeholder="例：15" oninput="toHankakuField(this)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3段目：宅配単価・集荷単価タブへのショートカット -->
+    <div style="border-top:1px solid var(--brd);padding-top:10px;margin-top:10px;display:flex;gap:8px;">
+      <button type="button" onclick="switchStTab('del')"
+        style="flex:1;padding:8px 10px;background:rgba(66,133,244,.08);border:1.5px solid rgba(66,133,244,.3);border-radius:7px;font-size:12px;font-weight:700;color:var(--blu2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;">
+        宅配単価を設定
+      </button>
+      <button type="button" onclick="switchStTab('col')"
+        style="flex:1;padding:8px 10px;background:rgba(52,168,83,.08);border:1.5px solid rgba(52,168,83,.3);border-radius:7px;font-size:12px;font-weight:700;color:var(--grn2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;">
+        集荷単価を設定
+      </button>
     </div>
   </div>
-  <!-- 宅配・集荷 一括税切替（個別切替はタブ内に残す） -->
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;">
-    <span style="font-size:10px;color:var(--txt2);font-weight:700;flex-shrink:0;">単価 一括:</span>
-    <button type="button" onclick="setAllStTax('ex')"
-      style="padding:2px 10px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
-    <button type="button" onclick="setAllStTax('in')"
-      style="padding:2px 10px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">全て税込</button>
-    <span style="font-size:9px;color:var(--txt2);margin-left:4px;">※ 宅配・集荷タブで個別設定も可能</span>
-    <input type="hidden" id="st-add-del" value="false">
-    <input type="hidden" id="st-add-col" value="false">
-  </div>
+  <input type="hidden" id="st-add-del" value="false">
+  <input type="hidden" id="st-add-col" value="false">
 
 
   <!-- 宅配単価 -->
   </div><!-- end stpanel-info -->
   <div id="stpanel-info-end-marker" style="display:none;"></div>
   <div id="ptab-content-del" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-      <span style="font-size:9px;color:var(--txt2);font-weight:700;">税区分:</span>
-      <button type="button" id="st-del-tax-btn-ex" onclick="setStTabTax('del','ex')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">税別</button>
-      <button type="button" id="st-del-tax-btn-in" onclick="setStTabTax('del','in')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">税込</button>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+      <span style="font-size:9px;color:var(--txt2);font-weight:700;">宅配単価 一括:</span>
+      <button type="button" onclick="setDelTabTaxAll('ex')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
+      <button type="button" onclick="setDelTabTaxAll('in')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">全て税込</button>
+      <span style="font-size:9px;color:var(--txt2);margin-left:4px;">個別変更も可能</span>
       <input type="hidden" id="st-del-tax-type" value="ex">
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
@@ -2585,11 +2574,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="st-route-list" style="display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 
-  <!-- 💴 前払い管理タブ -->
+  <!-- 前払い管理タブ -->
   <div id="ptab-content-advance" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div>
-        <div style="font-size:14px;font-weight:700;color:var(--amb2);">💴 前払い（前渡し）管理</div>
+        <div style="font-size:14px;font-weight:700;color:var(--amb2);">前払い（前渡し）管理</div>
         <div style="font-size:11px;color:var(--txt2);margin-top:3px;">月末の業務委託料から自動相殿されます。残高は翁月に繰り越されます。</div>
       </div>
       <button type="button" class="btn b-amb btn-sm" onclick="addAdvanceRow()">＋ 前払い追加</button>
@@ -4918,17 +4907,23 @@ function setStTabTax(tab, type){
   if(exBtn){ exBtn.style.background=type==='ex'?'var(--red)':'transparent'; exBtn.style.color=type==='ex'?'#fff':'var(--txt2)'; exBtn.style.borderColor=type==='ex'?'var(--red)':'var(--brd2)'; }
   if(inBtn){ inBtn.style.background=type==='in'?'var(--grn)':'transparent'; inBtn.style.color=type==='in'?'#fff':'var(--txt2)'; inBtn.style.borderColor=type==='in'?'var(--grn)':'var(--brd2)'; }
 }
+function setDelTabTaxAll(type){
+  // 宅配タブの全品目の税を一括切替
+  ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka',
+   'st-ps1','st-ps2','st-ps3','st-ps4'].forEach(id=>setItemTax(id,type));
+  // ボタン見た目も更新
+  const ex=$('st-del-tax-btn-ex'),inn=$('st-del-tax-btn-in');
+  if(ex){ ex.style.background=type==='ex'?'var(--red)':'transparent'; ex.style.color=type==='ex'?'#fff':'var(--txt2)'; ex.style.borderColor=type==='ex'?'var(--red)':'var(--brd2)'; }
+  if(inn){ inn.style.background=type==='in'?'var(--grn)':'transparent'; inn.style.color=type==='in'?'#fff':'var(--txt2)'; inn.style.borderColor=type==='in'?'var(--grn)':'var(--brd2)'; }
+}
 function setColTabTaxAll(type){
   // 集荷タブの全品目の税を一括切替
   ['st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160',
    'st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'].forEach(id=>setItemTax(id,type));
 }
 function setAllStTax(type){
-  // 宅配タブ・集荷タブ・その他タブを一括で切替
-  setStTabTax('del', type);
-  setStTabTax('col', type);
-  setStTabTax('oth', type);
-  // 確認メッセージ
+  setDelTabTaxAll(type);
+  setColTabTaxAll(type);
   toast('全単価を'+(type==='in'?'税込':'税別')+'に切り替えました');
 }
 function setStTax(type){
@@ -5287,7 +5282,13 @@ function onKyuChange(){
   if(hint) hint.textContent=cfg.hint;
   // 個数制は入力欄を薄く（単価設定は別タブ）
   const tkWrap=$('st-tk-wrap');
-  if(tkWrap) tkWrap.style.opacity=cfg.show?'1':'0.45';
+  if(tkWrap) tkWrap.style.opacity=cfg.show?'1':'0.35';
+  const tkInp=$('st-tk');
+  if(tkInp){
+    tkInp.disabled=!cfg.show;
+    tkInp.style.cursor=cfg.show?'':'not-allowed';
+    tkInp.style.pointerEvents=cfg.show?'':'none';
+  }
   // 上部ラベルも更新
   const autoLbl=$('st-ky-auto-label');
   const kyLabelMap={
@@ -8631,12 +8632,12 @@ function buildStConfirm(){
       row('TEL', tel) +
       row('給与体系', kyu)
     ) +
-    section('🚛 宅配単価',
+    section('宅配単価',
       row('完了', kanryo?kanryo+'円':'', '未設定') +
       row('転送', tenso?tenso+'円':'', '未設定') +
       `<div class="reg-preview-row"><span class="reg-preview-label">単価坪</span><span class="reg-preview-val">${tanka?`<span class="reg-ok">✔ ${tanka}円</span>`:'<span class="reg-empty">未設定</span>'}</span></div>`
     ) +
-    section('📦 集荷単価',
+    section('集荷単価',
       row('YP60', del60?del60+'円':'', '未設定')
     ) +
     section('📋 その他・立替',
@@ -8683,7 +8684,7 @@ function buildCoConfirm(){
     section('🏢 営業所',
       `<div class="reg-preview-row"><span class="reg-preview-label">担当営業所</span><span class="reg-preview-val">${offices.length?`<span class="reg-ok">✔ ${offices.join('・')}</span>`:'<span class="reg-empty">未選択</span>'}</span></div>`
     ) +
-    section('🚛 宅配単価',
+    section('宅配単価',
       row('完了単価', kanryo?kanryo+'円':'', '未設定')
     ) +
     section('📦 集荷顧客別単価',
@@ -8730,9 +8731,9 @@ function buildConfirmContent(key, el){
     const kanryo=$('st-pkanryo')?.value;
     const del60=$('st-cp60')?.value;
     const otherN=document.querySelectorAll('#st-other-rows > div').length;
-    html+=section('👤 基本情報', row('氏名',name)+row('区分',kbn)+row('営業所',off)+row('社員番号',empno)+row('TEL',tel));
-    html+=section('🚛 宅配単価', row('完了',kanryo?kanryo+'円':''));
-    html+=section('📦 集荷単価', row('YP60',del60?del60+'円':''));
+    html+=section('基本情報', row('氏名',name)+row('区分',kbn)+row('営業所',off)+row('社員番号',empno)+row('TEL',tel));
+    html+=section('宅配単価', row('完了',kanryo?kanryo+'円':''));
+    html+=section('集荷単価', row('YP60',del60?del60+'円':''));
     html+=section('📋 その他立替', `<div class="reg-row"><span class="reg-lbl">登録件数</span><span class="${otherN>0?'reg-ok':'reg-empty'}">${otherN}件</span></div>`);
   } else if(key==='co'||key==='co2'){
     const name=$('co-name')?.value||'';
@@ -8748,7 +8749,7 @@ function buildConfirmContent(key, el){
     const otherN=document.querySelectorAll('#co-other-rows-price > div').length;
     html+=section('🏭 基本情報', row('会社名',name)+row('コード',code)+row('TEL',tel)+row('担当者',contact));
     html+=section('🏢 営業所', `<div class="reg-row"><span class="reg-lbl">担当営業所</span><span class="${offices.length?'reg-ok':'reg-empty'}">${offices.length?offices.join('・'):'未選択'}</span></div>`);
-    html+=section('🚛 宅配単価', row('完了単価',kanryo?kanryo+'円':''));
+    html+=section('宅配単価', row('完了単価',kanryo?kanryo+'円':''));
     html+=section('📦 集荷顧客別', `<div class="reg-row"><span class="reg-lbl">登録顧客数</span><span class="${custN>0?'reg-ok':'reg-empty'}">${custN}社</span></div>`);
     html+=section('💳 支払い経費', row('銀行名',$('co-bank-name')?.value)+`<div class="reg-row"><span class="reg-lbl">ガソリンカード</span><span class="${gasN>0?'reg-ok':'reg-empty'}">${gasN}枚</span></div>`+`<div class="reg-row"><span class="reg-lbl">庸車代</span><span class="${yoshaN>0?'reg-ok':'reg-empty'}">${yoshaN}件</span></div>`);
     html+=section('⚠️ 違約金修理', `<div class="reg-row"><span class="reg-lbl">登録件数</span><span class="${chargeN>0?'reg-ok':'reg-empty'}">${chargeN}件</span></div>`);
@@ -9649,11 +9650,11 @@ function openPayHistModal(sid, editFrom){
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
           <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
             <input type="checkbox" id="mph-add-del" style="width:13px;height:13px;">
-            <span style="color:var(--blu2);">🚛 宅配単価を加算</span>
+            <span style="color:var(--blu2);">宅配単価を加算</span>
           </label>
           <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;">
             <input type="checkbox" id="mph-add-col" style="width:13px;height:13px;">
-            <span style="color:var(--tel2);">📦 集荷単価を加算</span>
+            <span style="color:var(--tel2);">集荷単価を加算</span>
           </label>
         </div>
       </div>
@@ -11754,7 +11755,7 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
       <div style="display:flex;border:1px solid var(--brd2);border-radius:5px;overflow:hidden;margin-bottom:10px;">
         <button type="button" class="otab on" id="co-ptab-del" onclick="switchCoTab('del')" style="flex:1;font-size:11px;">🚛 宅配</button>
         <button type="button" class="otab" id="co-ptab-col" onclick="switchCoTab('col')" style="flex:1;font-size:11px;">📦 集荷</button>
-        <button type="button" class="otab" id="co-ptab-oth" onclick="switchCoTab('oth')" style="flex:1;font-size:11px;">📋 その他</button>
+        <button type="button" class="otab" id="co-ptab-oth" onclick="switchCoTab('oth')" style="flex:1;font-size:11px;">その他</button>
         <button type="button" class="otab" id="co-ptab-rt" onclick="switchCoTab('rt')" style="flex:1;font-size:11px;">🗺️ ルート・チャーター</button>
       </div>
       <!-- ① 宅配単価（固定5項目） -->
