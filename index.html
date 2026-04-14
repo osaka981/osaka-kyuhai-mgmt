@@ -2134,27 +2134,29 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">📅 履歴</button>
   </div>
 
-  <div style="overflow-y:auto;flex:1;padding:14px 16px;">
+  <div style="overflow-y:auto;flex:1;padding:14px 16px;min-height:0;">
 
   <!-- 基本情報パネル -->
   <div id="stpanel-info">
+
+  <!-- ■ 区分・営業所・社員番号 -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 区分・営業所・社員番号</div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
     <div class="fg">
       <label>区分</label>
       <select id="st-kbn" class="fi" onchange="onStKbnChange()">
         <option value="社員・役員">社員・役員</option>
-        <option value="パート">パート（事務）</option>
+        <option value="パート（事務）">パート（事務）</option>
         <option value="個人事業主（歩合）" selected>個人事業主（歩合）</option>
         <option value="個人事業主（時間単価）">個人事業主（時間単価）</option>
         <option value="個人事業主（日額）">個人事業主（日額）</option>
         <option value="委託会社所属">委託会社所属</option>
-        <option value="スポット">スポット（単発）</option>
+        <option value="スポット（単発）">スポット（単発）</option>
       </select>
     </div>
     <div class="fg">
       <label>メイン郵便局</label>
-      <select id="st-off" class="fi" onchange="prevEmpNo();renderSubOfficeList()"></select>
+      <select id="st-off" class="fi" onchange="prevEmpNo();renderSubOfficeBadges()"></select>
     </div>
     <div class="fg">
       <label>社員番号
@@ -2168,24 +2170,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         placeholder="営業所選択で自動発番">
     </div>
   </div>
-  <!-- 追加郵便局（複数対応） -->
-  <div style="margin-bottom:10px;">
-    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
-    <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;">
-      <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">
-        メイン郵便局以外も担当する場合は追加してください（役員・異動者・掛け持ちの方）
-      </div>
-      <div id="sub-office-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px;"></div>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <select id="sub-office-add-sel" class="fi" style="flex:1;font-size:12px;">
-          <option value="">追加する郵便局を選択...</option>
-        </select>
-        <button type="button" onclick="addSubOffice()" class="btn b-blu btn-sm">＋ 追加</button>
-      </div>
-    </div>
+
+  <!-- ■ 担当郵便局（バッジ選択UI） -->
+  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
+  <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
+    <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">タップして追加・もう一度タップで削除</div>
+    <div id="sub-office-badges" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px;"></div>
+    <div style="font-size:10px;color:var(--txt2);">メイン郵便局以外に担当する場合は上のバッジをタップしてください</div>
   </div>
 
-  <!-- 会社委託の場合：委託会社情報（氏名より上） -->
+  <!-- 委託会社情報 -->
   <div id="st-company-area" style="display:none;">
     <div class="xs muted fw7 mb8" style="letter-spacing:.4px;color:var(--tel2);">■ 委託会社情報</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;background:rgba(14,90,74,.07);border:1px solid rgba(14,90,74,.2);border-radius:6px;padding:10px;">
@@ -2207,56 +2201,172 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <label>会社住所</label>
         <input type="text" id="st-company-addr" class="fi" placeholder="大阪市○○区...">
       </div>
-      <!-- 会社単価：折りたたみ式 -->
       <div style="grid-column:span 2;margin-top:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:5px 0;" onclick="toggleCompanyPrices(this)">
-          <div class="xs muted fw7">📋 単価条件詳細（集荷ルートタブで詳細設定済みの場合は不要）</div>
+          <div class="xs muted fw7">📋 単価条件詳細</div>
           <span class="cp-toggle-arrow" style="font-size:10px;color:var(--txt2);transition:transform .2s;">▶</span>
         </div>
         <div class="cp-detail" style="display:none;">
-          <div id="st-company-prices" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
-          </div>
+          <div id="st-company-prices" style="display:flex;flex-direction:column;gap:6px;margin-top:6px;"></div>
           <button type="button" class="btn b-gh btn-sm mt6" onclick="addCompanyPriceRow()">＋ 単価条件追加</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- 個人情報 -->
+  <!-- ■ 個人情報 -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 個人情報</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>氏名</label><input type="text" id="st-name" class="fi" placeholder="山田 太郎"></div>
-    <div class="fg"><label>フリガナ</label><input type="text" id="st-kana" class="fi" placeholder="ヤマダ タロウ"></div>
-    <div class="fg"><label>連絡先（携帯）</label><input type="tel" oninput="telField(this)" onblur="telField(this)" id="st-tel" class="fi" placeholder="090-XXXX-XXXX"></div>
-    <div class="fg"><label>緊急連絡先</label><input type="tel" oninput="telField(this)" onblur="telField(this)" id="st-tel2" class="fi" placeholder="06-XXXX-XXXX"></div>
-    <div class="fg"><label>住所</label><input type="text" id="st-addr" class="fi" placeholder="大阪市北区○○1-2-3"></div>
-    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi"></div>
-    <div class="fg"><label>入社日</label><input type="date" id="st-start" class="fi"></div>
-    <div class="fg"><label>退社日</label><input type="date" id="st-end" class="fi"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <!-- 姓・名（分割） -->
+    <div class="fg">
+      <label>姓</label>
+      <input type="text" id="st-sei" class="fi" placeholder="山田" oninput="syncStName()">
+    </div>
+    <div class="fg">
+      <label>名</label>
+      <input type="text" id="st-mei" class="fi" placeholder="太郎" oninput="syncStName()">
+    </div>
+    <input type="hidden" id="st-name">
+    <!-- フリガナ（姓・名・ひらがな自動変換） -->
+    <div class="fg">
+      <label>フリガナ（姓）</label>
+      <input type="text" id="st-kana-sei" class="fi" placeholder="やまだ" oninput="kanaToHira(this);syncStKana()">
+    </div>
+    <div class="fg">
+      <label>フリガナ（名）</label>
+      <input type="text" id="st-kana-mei" class="fi" placeholder="たろう" oninput="kanaToHira(this);syncStKana()">
+    </div>
+    <input type="hidden" id="st-kana">
   </div>
 
-  <!-- 免許証 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+  <!-- 連絡先 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
     <div class="fg">
-      <label>免許証番号</label>
-      <input type="text" id="st-license" class="fi" placeholder="123456789012">
+      <label>連絡先（携帯）</label>
+      <input type="tel" id="st-tel" class="fi" placeholder="090-XXXX-XXXX"
+        oninput="toHankakuField(this)" onblur="telField(this)">
+    </div>
+    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi"></div>
+  </div>
+
+  <!-- 緊急連絡先（続柄・氏名・電話） -->
+  <div style="background:rgba(139,74,58,.05);border:1px solid rgba(139,74,58,.18);border-radius:7px;padding:10px;margin-bottom:8px;">
+    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 緊急連絡先</div>
+    <div style="display:grid;grid-template-columns:120px 1fr 1fr;gap:8px;">
+      <div class="fg" style="margin:0;">
+        <label style="font-size:10px;">続柄</label>
+        <input type="text" id="st-emer-rel" class="fi" style="font-size:12px;" placeholder="父・配偶者 等">
+      </div>
+      <div class="fg" style="margin:0;">
+        <label style="font-size:10px;">氏名</label>
+        <input type="text" id="st-emer-name" class="fi" style="font-size:12px;" placeholder="山田 花子">
+      </div>
+      <div class="fg" style="margin:0;">
+        <label style="font-size:10px;">電話番号</label>
+        <input type="tel" id="st-emer-tel" class="fi" style="font-size:12px;" placeholder="090-XXXX-XXXX"
+          oninput="toHankakuField(this)" onblur="telField(this)">
+      </div>
+    </div>
+  </div>
+
+  <!-- 住所（郵便番号⇔住所 相互自動入力） -->
+  <div style="display:grid;grid-template-columns:160px 1fr;gap:8px;margin-bottom:8px;">
+    <div class="fg">
+      <label>郵便番号
+        <span style="font-size:9px;color:var(--tel2);margin-left:4px;">→住所自動入力</span>
+      </label>
+      <input type="text" id="st-zip" class="fi" placeholder="000-0000" maxlength="8"
+        oninput="toHankakuField(this);onStZipInput(this)" style="font-family:monospace;">
     </div>
     <div class="fg">
-      <label>免許有効期限</label>
-      <input type="date" id="st-license-exp" class="fi">
+      <label>住所</label>
+      <input type="text" id="st-addr" class="fi" placeholder="大阪市北区○○1-2-3"
+        oninput="onStAddrInput(this)">
     </div>
-    <div class="fg" style="grid-column:span 2">
-      <label>免許証写真（表面）</label>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input type="file" id="st-license-img" accept="image/*" onchange="onLicenseImg(this)" style="font-size:11px;">
-        <div id="st-license-preview" style="display:none;">
-          <img id="st-license-thumb" style="height:60px;border-radius:4px;border:1px solid var(--brd);">
+  </div>
+
+  <!-- 入退社日 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div class="fg"><label>入社日</label><input type="date" id="st-start" class="fi"></div>
+    <div class="fg">
+      <label>退社日
+        <span style="font-size:9px;color:var(--tel2);margin-left:4px;">フリートと同期</span>
+      </label>
+      <input type="date" id="st-end" class="fi" onchange="syncEndDateToFleet(this.value)">
+    </div>
+  </div>
+
+  <!-- ■ 給与形態（区分から自動決定） -->
+  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 給与形態</div>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;margin-bottom:8px;">
+    <!-- 区分から自動決定された給与形態を表示 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <div id="st-ky-auto-label" style="font-size:13px;font-weight:700;color:var(--grn2);flex:1;">個数制（歩合）</div>
+      <input type="hidden" id="st-ky">
+    </div>
+
+    <!-- 役員報酬（社員・役員のみ・PIN保護） -->
+    <div id="st-exec-pay-area" style="display:none;">
+      <div style="border-top:1px solid var(--brd);padding-top:8px;">
+        <div style="font-size:11px;color:var(--txt2);margin-bottom:6px;">役員報酬（非公開）</div>
+        <div id="st-exec-pay-locked" style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:11px;color:var(--light);">― 非公開 ―</div>
+          <button type="button" class="btn b-gh btn-sm" onclick="unlockExecPay()">PIN認証して入力</button>
+        </div>
+        <div id="st-exec-pay-unlocked" style="display:none;">
+          <input type="number" id="st-exec-pay" class="fi" placeholder="月額報酬（円）"
+            oninput="toHankakuField(this)" style="font-size:14px;font-weight:700;">
+        </div>
+      </div>
+    </div>
+
+    <!-- 保証・手当設定（折りたたみ） -->
+    <div id="st-hosho-area" style="display:none;border-top:1px solid var(--brd);padding-top:8px;margin-top:8px;">
+      <div style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"
+        onclick="toggleHosho()">
+        <div style="font-size:11px;font-weight:700;color:var(--amb2);">保証・手当設定</div>
+        <span id="hosho-chev" style="font-size:10px;color:var(--amb2);">▶ 展開</span>
+      </div>
+      <div id="hosho-body" style="display:none;">
+        <!-- B：日額保証（最低ライン） -->
+        <div style="background:rgba(160,96,32,.07);border:1px solid rgba(160,96,32,.2);border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <input type="checkbox" id="st-hosho-b-on" onchange="toggleHoshoB(this.checked)">
+            <label for="st-hosho-b-on" style="font-size:11px;font-weight:700;color:var(--amb2);cursor:pointer;">B：日額保証（最低ライン）</label>
+          </div>
+          <div id="st-hosho-b-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="fg" style="margin:0;">
+              <label style="font-size:10px;">日額保証額（円/日）</label>
+              <input type="number" id="st-hosho-b-amt" class="fi" placeholder="例：3500" oninput="toHankakuField(this)">
+            </div>
+            <div class="fg" style="margin:0;">
+              <label style="font-size:10px;">最低出勤日数（日/月）</label>
+              <input type="number" id="st-hosho-b-days" class="fi" placeholder="例：20" oninput="toHankakuField(this)">
+            </div>
+          </div>
+        </div>
+        <!-- C：日額手当（歩合に加算） -->
+        <div style="background:rgba(26,107,58,.07);border:1px solid rgba(26,107,58,.2);border-radius:6px;padding:8px 10px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <input type="checkbox" id="st-hosho-c-on" onchange="toggleHoshoC(this.checked)">
+            <label for="st-hosho-c-on" style="font-size:11px;font-weight:700;color:var(--grn2);cursor:pointer;">C：日額手当（歩合に加算）</label>
+          </div>
+          <div id="st-hosho-c-body" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="fg" style="margin:0;">
+              <label style="font-size:10px;">日額手当（円/日）</label>
+              <input type="number" id="st-hosho-c-amt" class="fi" placeholder="例：1000" oninput="toHankakuField(this)">
+            </div>
+            <div class="fg" style="margin:0;">
+              <label style="font-size:10px;">最低出勤日数（日/月）</label>
+              <input type="number" id="st-hosho-c-days" class="fi" placeholder="例：15" oninput="toHankakuField(this)">
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- インボイス・振込口座（個人事業主向け） -->
+    <!-- インボイス・振込口座（個人事業主向け） -->
   <div class="sep"></div>
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ インボイス・振込口座（個人事業主・外部委託）</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
@@ -2942,6 +3052,198 @@ function applyTheme(mode){
 function toggleTheme(){
   const current=localStorage.getItem('nikki_theme')||'dark';
   applyTheme(current==='dark'?'light':'dark');
+}
+
+
+// ══ 従業員台帳 基本情報 新UI ══
+
+// 姓・名を結合してhidden inputに同期
+function syncStName(){
+  const sei=$('st-sei')?.value||'';
+  const mei=$('st-mei')?.value||'';
+  const name=(sei+' '+mei).trim();
+  if($('st-name')) $('st-name').value=name;
+}
+function syncStKana(){
+  const sei=$('st-kana-sei')?.value||'';
+  const mei=$('st-kana-mei')?.value||'';
+  const kana=(sei+' '+mei).trim();
+  if($('st-kana')) $('st-kana').value=kana;
+}
+
+// フリガナをひらがなに自動変換
+function kanaToHira(inp){
+  inp.value=inp.value.replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0x60));
+}
+
+// 電話・郵便番号・数字フィールドを半角に自動変換
+function toHankakuField(inp){
+  inp.value=inp.value.replace(/[０-９]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0))
+    .replace(/[ー－‐]/g,'-').replace(/[　]/g,' ');
+}
+
+// 郵便番号→住所 自動入力（HeartRails API）
+function onStZipInput(inp){
+  toHankakuField(inp);
+  const zip=inp.value.replace(/[^0-9]/g,'');
+  if(zip.length!==7) return;
+  fetch(`https://api.heartrails.com/api/json?method=searchByPostal&postal=${zip}`)
+    .then(r=>r.json()).then(d=>{
+      const loc=d?.response?.location?.[0];
+      if(!loc)return;
+      const addr=(loc.prefecture||'')+(loc.city||'')+(loc.town||'');
+      if($('st-addr')) $('st-addr').value=addr;
+    }).catch(()=>{});
+}
+
+// 住所→郵便番号 逆引き（簡易）
+function onStAddrInput(inp){
+  // 住所変更時は郵便番号フィールドをクリアして手入力を促す
+  // 逆引きは精度が低いため自動入力はしない
+}
+
+// 担当郵便局バッジUI
+function renderSubOfficeBadges(){
+  const wrap=$('sub-office-badges');if(!wrap)return;
+  const mainOff=$('st-off')?.value||'';
+  // 全郵便局リストを取得（D.officesから）
+  const offices=D.offices||[];
+  const allNames=[...new Set([...offices.map(o=>o.name),...(D.staff||[]).map(s=>s.office).filter(Boolean)])].filter(Boolean).sort();
+  const selected=getSubOffices();
+
+  wrap.innerHTML=allNames.filter(n=>n!==mainOff).map(name=>{
+    const on=selected.includes(name);
+    return `<span onclick="toggleSubOfficeBadge('${name.replace(/'/g,"\'")}',this)"
+      style="cursor:pointer;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:700;border:1.5px solid ${on?'var(--blu2)':'var(--brd2)'};background:${on?'var(--blu3)':'transparent'};color:${on?'var(--blu2)':'var(--txt2)'};">
+      ${name}
+    </span>`;
+  }).join('');
+}
+
+function getSubOffices(){
+  // hidden inputに保存された選択済み郵便局リストを取得
+  const v=$('st-sub-offices-val')?.value||'';
+  try{return JSON.parse(v)||[];}catch{return [];}
+}
+function setSubOffices(list){
+  let el=$('st-sub-offices-val');
+  if(!el){
+    el=document.createElement('input');el.type='hidden';el.id='st-sub-offices-val';
+    $('sub-office-badges')?.parentElement?.appendChild(el);
+  }
+  el.value=JSON.stringify(list);
+}
+function toggleSubOfficeBadge(name,el){
+  const list=getSubOffices();
+  const idx=list.indexOf(name);
+  if(idx>=0) list.splice(idx,1); else list.push(name);
+  setSubOffices(list);
+  // バッジの見た目を更新
+  const on=list.includes(name);
+  el.style.borderColor=on?'var(--blu2)':'var(--brd2)';
+  el.style.background=on?'var(--blu3)':'transparent';
+  el.style.color=on?'var(--blu2)':'var(--txt2)';
+}
+
+// 区分→給与形態 自動決定
+const KBN_KY_MAP={
+  '社員・役員':'月給',
+  'パート（事務）':'時間給',
+  '個人事業主（歩合）':'個数制（歩合）',
+  '個人事業主（時間単価）':'時間単価',
+  '個人事業主（日額）':'日額',
+  '委託会社所属':'個数制（歩合）',
+  'スポット（単発）':'個数制（歩合）',
+};
+const KY_LABEL_MAP={
+  '月給':'月給',
+  '時間給':'時間給（パート）',
+  '個数制（歩合）':'業務委託（歩合）― 宅配/集荷単価×件数',
+  '時間単価':'業務委託（時間単価）― 1件○○円×完了件数',
+  '日額':'業務委託（日額）― 1ルート○○円×稼働日数',
+};
+
+function onStKbnChange(){
+  const kbn=$('st-kbn')?.value||'';
+  const ky=KBN_KY_MAP[kbn]||'個数制（歩合）';
+  if($('st-ky')) $('st-ky').value=ky;
+  // ラベル更新
+  const lbl=$('st-ky-auto-label');
+  if(lbl) lbl.textContent=KY_LABEL_MAP[ky]||ky;
+  // 役員報酬エリアの表示切替
+  const execArea=$('st-exec-pay-area');
+  if(execArea) execArea.style.display=(kbn==='社員・役員')?'block':'none';
+  // 保証・手当エリアの表示切替（業務委託のみ）
+  const hoshoArea=$('st-hosho-area');
+  const showHosho=['個人事業主（歩合）','個人事業主（時間単価）','個人事業主（日額）','委託会社所属','スポット（単発）'].includes(kbn);
+  if(hoshoArea) hoshoArea.style.display=showHosho?'block':'none';
+  // 委託会社エリア
+  const compArea=$('st-company-area');
+  if(compArea) compArea.style.display=(kbn==='委託会社所属')?'block':'none';
+}
+
+// 役員報酬 PIN認証
+function unlockExecPay(){
+  const pin=prompt('PIN（6桁）を入力してください');
+  if(!pin) return;
+  // TS-PINで認証
+  const stored=lsGet(LS_KEYS.TS_PIN,'000000');
+  if(pin!==stored){ alert('PINが違います'); return; }
+  const locked=$('st-exec-pay-locked');
+  const unlocked=$('st-exec-pay-unlocked');
+  if(locked) locked.style.display='none';
+  if(unlocked) unlocked.style.display='block';
+}
+
+// 保証・手当 折りたたみ
+function toggleHosho(){
+  const body=$('hosho-body');
+  const chev=$('hosho-chev');
+  if(!body)return;
+  const open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(chev) chev.textContent=open?'▶ 展開':'▼ 閉じる';
+}
+function toggleHoshoB(on){
+  const body=$('st-hosho-b-body');
+  if(!body)return;
+  body.style.display=on?'grid':'none';
+  // チェックON時は入力欄を有効化、OFF時は無効化
+  ['st-hosho-b-amt','st-hosho-b-days'].forEach(id=>{
+    const el=$(id);if(!el)return;
+    el.disabled=!on;
+    el.style.opacity=on?'1':'0.4';
+    el.style.pointerEvents=on?'':'none';
+  });
+}
+function toggleHoshoC(on){
+  const body=$('st-hosho-c-body');
+  if(!body)return;
+  body.style.display=on?'grid':'none';
+  ['st-hosho-c-amt','st-hosho-c-days'].forEach(id=>{
+    const el=$(id);if(!el)return;
+    el.disabled=!on;
+    el.style.opacity=on?'1':'0.4';
+    el.style.pointerEvents=on?'':'none';
+  });
+}
+
+// 退社日 フリートと同期（ドライバーのみ）
+function syncEndDateToFleet(dateVal){
+  const editId=$('m-staff')?._editId;
+  const s=editId?D.staff.find(x=>x.id===editId):null;
+  if(!s) return;
+  // ドライバーの場合のみFirebaseに同期
+  const kbn=s.kubun||s.kbn||'';
+  const isDriver=['個人事業主（歩合）','個人事業主（時間単価）','個人事業主（日額）','委託会社所属','スポット（単発）'].includes(kbn);
+  if(!isDriver) return;
+  // nikki/drivers の endDate を更新
+  const drivers=lsGet(LS_KEYS.DRIVERS,[])||[];
+  const d=drivers.find(x=>x.empNo===s.empNo||x.id===s.empNo);
+  if(d){
+    d.endDate=dateVal;
+    fbSet('drivers',drivers);
+  }
 }
 
 
@@ -4851,14 +5153,6 @@ function prevEmpNo(){
   if(no){disp.value=no;}else{disp.value='';}
 }
 
-function onStKbnChange(){
-  const kbn=$('st-kbn')?.value;
-  const ca=$('st-company-area');
-  if(ca) ca.style.display='none'; // 会社委託は委託会社管理から登録
-  // 集荷ルートタブは非表示（委託会社管理側で設定）
-  const routeBtn=$('ptab-route');
-  if(routeBtn) routeBtn.style.display='none';
-}
 
 function buildCompanySel(){
   const sel=$('st-company-sel');
@@ -7473,12 +7767,8 @@ function saveStaff(continueAdd=false){
     holder:$('st-bank-holder')?.value.trim()||'',
   };
 
-  // 追加郵便局を収集
-  const subOffices=[];
-  document.querySelectorAll('#sub-office-chips .sub-off-chip').forEach(chip=>{
-    const v=chip.dataset.office;
-    if(v&&v!==officeName) subOffices.push(v);
-  });
+  // 追加郵便局を収集（バッジUIから）
+  const subOffices=getSubOffices().filter(n=>n!==officeName);
 
   const newDrv={
     id:Date.now(),
@@ -7489,15 +7779,22 @@ function saveStaff(continueAdd=false){
     office:officeName,
     subOffices, // 追加郵便局（複数）
     kubun:kbn,
+    sei:$('st-sei')?.value||'',
+    mei:$('st-mei')?.value||'',
+    kanaSei:$('st-kana-sei')?.value||'',
+    kanaMei:$('st-kana-mei')?.value||'',
     tel:$('st-tel')?.value||'',
-    tel2:$('st-tel2')?.value||'',
+    emerRel:$('st-emer-rel')?.value||'',
+    emerName:$('st-emer-name')?.value||'',
+    emerTel:$('st-emer-tel')?.value||'',
+    zip:$('st-zip')?.value||'',
     addr:$('st-addr')?.value||'',
     birth:$('st-birth')?.value||'',
     startDate:$('st-start')?.value||'',
     endDate:$('st-end')?.value||'',
-    license:$('st-license')?.value||'',
-    licenseExp:$('st-license-exp')?.value||'',
-    licenseImg,
+    execPay:$('st-exec-pay')?.value||'',
+    hoshoB:{on:$('st-hosho-b-on')?.checked||false,amt:parseInt($('st-hosho-b-amt')?.value)||0,days:parseInt($('st-hosho-b-days')?.value)||0},
+    hoshoC:{on:$('st-hosho-c-on')?.checked||false,amt:parseInt($('st-hosho-c-amt')?.value)||0,days:parseInt($('st-hosho-c-days')?.value)||0},
     companyId,
     companyName,
     companyTel:$('st-company-tel')?.value||'',
@@ -7594,19 +7891,37 @@ let _rtStaffId = null;
 
 // ─── パターン切り替え ───
 function onRtPatternChange(){
-  const pt = $('rt-pattern')?.value;
-  ['D','A','E'].forEach(k=>{
-    const el=$('rt-area-'+k);
-    if(el) el.style.display='none';
+  // 車建のみに変更。B・Cエリアは常に非表示
+  ['rt-area-A','rt-area-B','rt-area-C'].forEach(id=>{
+    const el=$(id); if(el) el.style.display='none';
   });
-  if(pt==='B') $('rt-area-B').style.display='';
-  else if(pt==='C') $('rt-area-C').style.display='';
-  // Aエリアは常に非表示（📦集荷タブに統合）
-  const aArea=$('rt-area-A');if(aArea)aArea.style.display='none';
-
-  const lbl=$('rt-cust-label');
-  if(lbl) lbl.textContent='対象顧客（複数選択可）';
 }
+
+// ── 集荷ルート一覧描画 ──
+function renderRouteList(){
+  const el=$('st-route-list');if(!el)return;
+  const editId=$('m-staff')?._editId;
+  const s=editId?D.staff.find(x=>x.id===editId):null;
+  const routes=s?.colRoutes||[];
+  if(!routes.length){
+    el.innerHTML='<div style="color:var(--txt2);font-size:11px;padding:8px 0;">集荷ルート未登録</div>';
+    return;
+  }
+  el.innerHTML=routes.map(r=>`
+    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:7px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;color:var(--tel2);">${r.name||'名称未設定'}</div>
+        <div style="font-size:10px;color:var(--txt2);margin-top:2px;">
+          車建 ¥${fmt(r.routePrice||r.dailyAmt||0)} / ルート
+          ${r.taxType==='in'?'（税込）':'（税別）'}
+          ${r.customers?.length?` ／ 対象顧客 ${r.customers.length}社`:''}
+        </div>
+      </div>
+      <button class="btn b-gh btn-sm" onclick="openRouteModal('${r.id}')">編集</button>
+      <button class="btn b-gh btn-sm" style="color:var(--red2);" onclick="deleteRoute('${r.id}')">削除</button>
+    </div>`).join('');
+}
+
 
 // ─── モーダルを開く ───
 function openRouteModal(routeId){
@@ -7619,14 +7934,11 @@ function openRouteModal(routeId){
   if(titleEl) titleEl.textContent=routeId?'🗺️ 集荷ルート編集':'🗺️ 集荷ルート登録';
 
   // リセット
-  ['rt-name','rt-daily','rt-p60','rt-p80','rt-p100','rt-p120','rt-p140','rt-p160',
-   'rt-pk1','rt-pk2','rt-cp','rt-ke','rt-te','rt-note','rt-cust-search'].forEach(id=>{
+  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{
     const e=$(id);if(e)e.value='';
   });
   if($('rt-pattern')) $('rt-pattern').value='D';
   if($('rt-tax')) $('rt-tax').value='ex';
-  if($('rt-steps')) $('rt-steps').innerHTML='';
-  if($('rt-step-preview')) $('rt-step-preview').style.display='none';
   renderRtCustChips();
   onRtPatternChange();
 
@@ -7636,29 +7948,15 @@ function openRouteModal(routeId){
     const rt=(s?.colRoutes||[]).find(r=>r.id===routeId);
     if(rt){
       if($('rt-name')) $('rt-name').value=rt.name||'';
-      // B→D, C→A に正規化して表示
-      // 旧パターン名を新パターン名に正規化
-      const ptMap={'D':'A','B':'A','E':'C','C':'B'};
-      const dispPt=ptMap[rt.pattern]||rt.pattern||'A';
-      if($('rt-pattern')){ $('rt-pattern').value=dispPt; onRtPatternChange(); }
       if($('rt-tax')) $('rt-tax').value=rt.taxType||'ex';
       if($('rt-note')) $('rt-note').value=rt.note||'';
+      // ルート単価復元（車建）
+      if($('rt-route-price')) $('rt-route-price').value=rt.routePrice||rt.dailyAmt||0;
       _rtSelCusts=(rt.customers||[]).map(cid=>{
         const c=D.customers.find(x=>x.id===cid);
         return c?{id:cid,name:c.name}:null;
       }).filter(Boolean);
       renderRtCustChips();
-      // 単価復元
-      if((rt.pattern==='A'||rt.pattern==='D'||rt.pattern==='B') && rt.itemPrices){
-        const p=rt.itemPrices;
-        ['60','80','100','120','140','160'].forEach(sz=>{const e=$('rt-p'+sz);if(e)e.value=p['p'+sz]||0;});
-        ['pk1','pk2','cp','ke','te'].forEach(k=>{const e=$('rt-'+k);if(e)e.value=p[k]||0;});
-      }
-      if(rt.pattern==='B'||rt.pattern==='A'&&rt.dailyAmt||rt.pattern==='C'){
-        if($('rt-daily')) $('rt-daily').value=rt.dailyAmt||0;
-        if(rt.steps) rt.steps.forEach(st=>addRtStep(st));
-        renderRtStepPreview();
-      }
     }
   }
   openM('m-route');
@@ -7798,8 +8096,8 @@ function renderRtStepPreview(){
 function saveRoute(){
   const name=($('rt-name')?.value||'').trim();
   if(!name){alert('ルート名を入力してください');return;}
-  const dispPt=$('rt-pattern')?.value||'A';
-  const pattern=dispPt;
+  const routePrice=parseInt($('rt-route-price')?.value)||0;
+  if(!routePrice){alert('ルート単価を入力してください');return;}
 
   // 重複チェック（同じ従業員内で）
   const s=_rtStaffId?D.staff.find(x=>x.id===_rtStaffId):null;
@@ -7808,40 +8106,16 @@ function saveRoute(){
     if(dup){alert(`「${name}」は既に登録されています。別の名前にしてください。`);return;}
   }
 
-  let itemPrices=null,steps=null,dailyAmt=0;
-  if(pattern==='A'){
-    itemPrices={
-      p60:parseInt($('rt-p60')?.value)||0, p80:parseInt($('rt-p80')?.value)||0,
-      p100:parseInt($('rt-p100')?.value)||0, p120:parseInt($('rt-p120')?.value)||0,
-      p140:parseInt($('rt-p140')?.value)||0, p160:parseInt($('rt-p160')?.value)||0,
-      pk1:parseInt($('rt-pk1')?.value)||0, pk2:parseInt($('rt-pk2')?.value)||0,
-      cp:parseInt($('rt-cp')?.value)||0, ke:parseInt($('rt-ke')?.value)||0,
-      te:parseInt($('rt-te')?.value)||0,
-    };
-  }
-  if(pattern==='B'){
-    dailyAmt=parseInt($('rt-daily')?.value)||0;
-    steps=[];
-    document.querySelectorAll('#rt-steps > div').forEach(row=>{
-      const cnt=parseInt(row.querySelector('.rs-cnt')?.value)||0;
-      const amt=parseInt(row.querySelector('.rs-amt')?.value)||0;
-      const breakdown=[];
-      row.querySelectorAll('.rs-bd-row').forEach(br=>{
-        const label=br.querySelector('.rs-bd-name')?.value||'';
-        const bamt=parseInt(br.querySelector('.rs-bd-amt')?.value)||0;
-        if(label||bamt) breakdown.push({label,amt:bamt});
-      });
-      if(cnt>0||amt>0) steps.push({minCount:cnt,amt,breakdown});
-    });
-    steps.sort((a,b)=>a.minCount-b.minCount);
-  }
-
   const newRoute={
     id:_rtEditId||('rt_'+Date.now()),
-    name, pattern,
+    name,
+    pattern:'D',       // 車建固定
+    routePrice,        // ルート単価
+    dailyAmt:routePrice, // 互換用
     customers:_rtSelCusts.map(c=>c.id),
     taxType:$('rt-tax')?.value||'ex',
-    dailyAmt, itemPrices, steps,
+    itemPrices:null,
+    steps:null,
     note:$('rt-note')?.value||'',
   };
 
@@ -11115,18 +11389,55 @@ function editStaff(id){
   const s=D.staff.find(x=>x.id===id);if(!s)return;
   openM('m-staff');
   // 基本情報をセット
-  if($('st-kbn'))$('st-kbn').value=s.kubun||'社員';
+  if($('st-kbn'))$('st-kbn').value=s.kubun||'個人事業主（歩合）';
   if($('st-off'))$('st-off').value=s.office||'';
   if($('st-empno-disp'))$('st-empno-disp').value=s.empNo||'';
+  // 姓・名を分割して復元
+  const nameParts=(s.name||'').split(/\s+/);
+  if($('st-sei'))$('st-sei').value=s.sei||nameParts[0]||'';
+  if($('st-mei'))$('st-mei').value=s.mei||nameParts.slice(1).join(' ')||'';
   if($('st-name'))$('st-name').value=s.name||'';
+  const kanaParts=(s.kana||'').split(/\s+/);
+  if($('st-kana-sei'))$('st-kana-sei').value=s.kanaSei||kanaParts[0]||'';
+  if($('st-kana-mei'))$('st-kana-mei').value=s.kanaMei||kanaParts.slice(1).join(' ')||'';
   if($('st-kana'))$('st-kana').value=s.kana||'';
   if($('st-tel'))$('st-tel').value=s.tel||'';
-  if($('st-tel2'))$('st-tel2').value=s.tel2||'';
+  // 緊急連絡先復元
+  if($('st-emer-rel'))$('st-emer-rel').value=s.emerRel||'';
+  if($('st-emer-name'))$('st-emer-name').value=s.emerName||'';
+  if($('st-emer-tel'))$('st-emer-tel').value=s.emerTel||'';
+  // 住所・郵便番号復元
+  if($('st-zip'))$('st-zip').value=s.zip||'';
   if($('st-addr'))$('st-addr').value=s.addr||'';
   if($('st-birth'))$('st-birth').value=s.birth||'';
   if($('st-start'))$('st-start').value=s.startDate||'';
-  if($('st-license'))$('st-license').value=s.license||'';
-  if($('st-ky'))$('st-ky').value=s.kyuyo||'個数制（歩合）';
+  if($('st-end'))$('st-end').value=s.endDate||'';
+  // 給与形態（区分から自動決定）
+  onStKbnChange();
+  const ky=KBN_KY_MAP[s.kubun||'']||s.kyuyo||'個数制（歩合）';
+  if($('st-ky'))$('st-ky').value=ky;
+  const lbl=$('st-ky-auto-label');
+  if(lbl) lbl.textContent=KY_LABEL_MAP[ky]||ky;
+  // 役員報酬
+  if($('st-exec-pay'))$('st-exec-pay').value=s.execPay||'';
+  // 保証・手当復元
+  if(s.hoshoB){
+    if($('st-hosho-b-on'))$('st-hosho-b-on').checked=s.hoshoB.on||false;
+    toggleHoshoB(s.hoshoB.on||false);
+    if($('st-hosho-b-amt'))$('st-hosho-b-amt').value=s.hoshoB.amt||'';
+    if($('st-hosho-b-days'))$('st-hosho-b-days').value=s.hoshoB.days||'';
+  }
+  if(s.hoshoC){
+    if($('st-hosho-c-on'))$('st-hosho-c-on').checked=s.hoshoC.on||false;
+    toggleHoshoC(s.hoshoC.on||false);
+    if($('st-hosho-c-amt'))$('st-hosho-c-amt').value=s.hoshoC.amt||'';
+    if($('st-hosho-c-days'))$('st-hosho-c-days').value=s.hoshoC.days||'';
+  }
+  // 担当郵便局バッジ復元
+  setTimeout(()=>{
+    setSubOffices(s.subOffices||[]);
+    renderSubOfficeBadges();
+  },100);
   if($('st-add-del'))$('st-add-del').checked=s.addDelPrice||false;
   if($('st-add-col'))$('st-add-col').checked=s.addColPrice||false;
   // 給与履歴復元
@@ -11595,20 +11906,30 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
 <div class="modal" style="width:780px;max-width:98vw;max-height:92vh;overflow-y:auto;";position:relative;">
   <div class="mhd"><div class="mtt" id="m-route-title">🗺️ 集荷ルート登録</div><button class="mx" onclick="closeM('m-route')">×</button></div>
 
-  <!-- ルート名・パターン -->
-  <div style="display:grid;grid-template-columns:1fr 260px;gap:12px;margin-bottom:14px;">
-    <div class="fg">
-      <label style="font-size:12px;font-weight:700;">ルート名 <span style="color:var(--red2);">*</span></label>
-      <input type="text" id="rt-name" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;" placeholder="例：港区グループ・徳岡ルート">
+  <!-- ルート名 -->
+  <div class="fg" style="margin-bottom:14px;">
+    <label style="font-size:12px;font-weight:700;">ルート名 <span style="color:var(--red2);">*</span></label>
+    <input type="text" id="rt-name" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;" placeholder="例：港区グループ・徳岡ルート">
+  </div>
+  <!-- 単価（車建のみ） -->
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:14px;">
+    <div style="font-size:12px;font-weight:700;color:var(--grn2);margin-bottom:10px;">
+      車建（ルート固定単価）
+      <span style="font-size:10px;color:var(--txt2);font-weight:400;margin-left:8px;">何社集荷しても1ルートとして計算</span>
     </div>
-    <div class="fg">
-      <label style="font-size:12px;font-weight:700;">単価パターン <span style="color:var(--red2);">*</span></label>
-      <select id="rt-pattern" class="fi" style="font-size:13px;padding:7px 10px;margin-top:4px;" onchange="onRtPatternChange()">
-        <option value="B">B：日額／件数連動</option>
-        <option value="C">C：チャーター（都度）</option>
-      </select>
+    <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:end;">
+      <div class="fg">
+        <label style="font-size:11px;">ルート単価（円）</label>
+        <input type="number" id="rt-route-price" class="fi" style="font-size:16px;font-weight:700;padding:7px 10px;margin-top:4px;" placeholder="例：5000" min="0">
+      </div>
+      <div style="font-size:11px;color:var(--txt2);padding-bottom:8px;line-height:1.7;">
+        休業・一部未集荷の場合も同単価。<br>
+        同日・同ルート複数入力時は照合画面で合算確認。
+      </div>
     </div>
   </div>
+  <!-- 非表示：旧パターン互換用 -->
+  <input type="hidden" id="rt-pattern" value="D">
 
   <!-- 対象顧客 -->
   <div style="margin-bottom:14px;">
@@ -11637,7 +11958,7 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
 
   <!-- パターンD：品目別単価 -->
   <div id="rt-area-A" style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
-    <div style="font-size:12px;font-weight:700;color:var(--red2);margin-bottom:10px;">A：品目別単価（円/個）<span style="font-size:10px;color:var(--txt2);font-weight:400;margin-left:8px;">※顧客1社ずつ設定</span></div>
+    <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:10px;">品目別単価（参考）</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
       <div class="fg"><label style="font-size:11px;" class="c60">YP 60サイズ</label><input type="number" id="rt-p60" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="c80">YP 80サイズ</label><input type="number" id="rt-p80" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
@@ -11653,8 +11974,8 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
     </div>
   </div>
 
-  <!-- パターンA：日額固定＋件数連動 -->
-  <div id="rt-area-B" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+  <!-- パターンB・Cは現在未使用（車建のみ） -->
+  <div id="rt-area-B" style="display:none;">
     <div style="font-size:12px;font-weight:700;color:var(--blu2);margin-bottom:10px;">B：日額固定 ／ 件数連動</div>
     <!-- 日額固定 -->
     <div style="margin-bottom:12px;">
@@ -11685,11 +12006,7 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
     </div>
   </div>
 
-  <!-- パターンE：チャーター -->
-  <div id="rt-area-C" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:12px;">
-    <div style="font-size:12px;font-weight:700;color:var(--amb2);margin-bottom:6px;">C：チャーター（都度入力）</div>
-    <div style="font-size:12px;color:var(--txt2);">集荷日報入力時またはCSVインポート時に都度金額を入力します。ここでの単価設定は不要です。</div>
-  </div>
+  <div id="rt-area-C" style="display:none;"></div>
 
   <div class="mft">
     <button class="btn b-gh" style="font-size:13px;padding:8px 20px;" onclick="closeM('m-route')">キャンセル</button>
