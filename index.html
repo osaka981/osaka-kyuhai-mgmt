@@ -2114,8 +2114,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button class="mx" onclick="confirmCloseStaff()">×</button>
   </div>
 
-  <!-- タブ -->
-  <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;">
+  <!-- タブ（sticky固定） -->
+  <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;position:sticky;top:0;z-index:10;">
     <button type="button" id="ptab-info" onclick="switchStTab('info')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">👤 基本情報</button>
     <button type="button" id="ptab-del" onclick="switchStTab('del')"
