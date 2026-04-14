@@ -3307,6 +3307,13 @@ function resetStaffModal(){
   onStKbnChange();
 }
 
+// 従業員台帳を新規登録モードで開く
+function openNewStaff(){
+  resetStaffModal();
+  openM('m-staff');
+  setTimeout(()=>switchStTab('info'),50);
+}
+
 
 async function initFirebase() {
   try {
