@@ -1426,7 +1426,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('個人事業主')">個人</button>
         </div>
-        <button class="btn b-grn btn-sm" onclick="openM('m-staff')">＋ 従事員登録</button>
+        <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
       </div>
       <div class="card">
         <div class="tw"><table>
@@ -2111,7 +2111,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
   <div class="mhd">
     <div class="mtt">👤 従業員台帳</div>
-    <button class="mx" onclick="closeM('m-staff')">×</button>
+    <button class="mx" onclick="confirmCloseStaff()">×</button>
   </div>
 
   <!-- タブ -->
@@ -2299,10 +2299,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- ■ 給与形態（区分から自動決定） -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 給与形態</div>
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;margin-bottom:8px;">
-    <!-- 区分から自動決定された給与形態を表示 -->
+    <!-- 区分から自動決定された給与形態ラベル（下部のselectと連動） -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <div id="st-ky-auto-label" style="font-size:13px;font-weight:700;color:var(--grn2);flex:1;">個数制（歩合）</div>
-      <input type="hidden" id="st-ky">
     </div>
 
     <!-- 役員報酬（社員・役員のみ・PIN保護） -->
@@ -2416,7 +2415,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 給与形態 -->
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
     <div class="fg">
-      <label>給与形態</label>
+      <label>給与形態
+        <span style="font-size:9px;color:var(--tel2);margin-left:6px;">← 区分と連動</span>
+      </label>
       <select id="st-ky" class="fi" onchange="onKyuChange()">
         <optgroup label="── 雇用契約 ──">
           <option value="月給">月給（社員・役員）</option>
@@ -3085,13 +3086,14 @@ function toHankakuField(inp){
 // 郵便番号→住所 自動入力（HeartRails API）
 function onStZipInput(inp){
   toHankakuField(inp);
+  // ハイフンを除いた7桁で検索
   const zip=inp.value.replace(/[^0-9]/g,'');
   if(zip.length!==7) return;
-  fetch(`https://api.heartrails.com/api/json?method=searchByPostal&postal=${zip}`)
+  fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zip}`)
     .then(r=>r.json()).then(d=>{
-      const loc=d?.response?.location?.[0];
-      if(!loc)return;
-      const addr=(loc.prefecture||'')+(loc.city||'')+(loc.town||'');
+      const r0=d?.results?.[0];
+      if(!r0)return;
+      const addr=(r0.address1||'')+(r0.address2||'')+(r0.address3||'');
       if($('st-addr')) $('st-addr').value=addr;
     }).catch(()=>{});
 }
@@ -3166,14 +3168,15 @@ const KY_LABEL_MAP={
 function onStKbnChange(){
   const kbn=$('st-kbn')?.value||'';
   const ky=KBN_KY_MAP[kbn]||'個数制（歩合）';
-  if($('st-ky')) $('st-ky').value=ky;
-  // ラベル更新
+  // 下部のselectも連動
+  if($('st-ky')){ $('st-ky').value=ky; onKyuChange(); }
+  // 上部ラベル更新
   const lbl=$('st-ky-auto-label');
   if(lbl) lbl.textContent=KY_LABEL_MAP[ky]||ky;
-  // 役員報酬エリアの表示切替
+  // 役員報酬エリア
   const execArea=$('st-exec-pay-area');
   if(execArea) execArea.style.display=(kbn==='社員・役員')?'block':'none';
-  // 保証・手当エリアの表示切替（業務委託のみ）
+  // 保証・手当エリア（業務委託のみ）
   const hoshoArea=$('st-hosho-area');
   const showHosho=['個人事業主（歩合）','個人事業主（時間単価）','個人事業主（日額）','委託会社所属','スポット（単発）'].includes(kbn);
   if(hoshoArea) hoshoArea.style.display=showHosho?'block':'none';
@@ -3244,6 +3247,64 @@ function syncEndDateToFleet(dateVal){
     d.endDate=dateVal;
     fbSet('drivers',drivers);
   }
+}
+
+
+// ── 従業員台帳を閉じる前の確認 ──
+function confirmCloseStaff(){
+  // 入力チェック（名前か区分が入力されていれば確認）
+  const sei=$('st-sei')?.value||'';
+  const mei=$('st-mei')?.value||'';
+  const hasInput=sei||mei;
+  if(hasInput){
+    if(!confirm('入力中のデータがあります。\n閉じると入力内容は破棄されます。\n\nよろしいですか？')) return;
+  }
+  resetStaffModal();
+  closeM('m-staff');
+}
+
+// ── 従業員台帳モーダルのリセット ──
+function resetStaffModal(){
+  // 基本情報
+  ['st-sei','st-mei','st-kana-sei','st-kana-mei','st-name','st-kana',
+   'st-tel','st-emer-rel','st-emer-name','st-emer-tel',
+   'st-zip','st-addr','st-birth','st-start','st-end',
+   'st-exec-pay','st-hosho-b-amt','st-hosho-b-days','st-hosho-c-amt','st-hosho-c-days',
+   'st-note','st-invoice','st-biz-name',
+   'st-bank-name','st-bank-branch','st-bank-no','st-bank-holder',
+   'st-company-name','st-company-tel','st-company-fax','st-company-email',
+   'st-company-contact','st-company-addr',
+   'st-tk','st-empno-disp'
+  ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // チェックボックス
+  ['st-empno-manual','st-add-del','st-add-col','st-hosho-b-on','st-hosho-c-on'].forEach(id=>{
+    const e=$(id);if(e)e.checked=false;
+  });
+  // 選択リセット
+  if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
+  if($('st-ky'))$('st-ky').value='個数制（歩合）';
+  if($('st-bank-type'))$('st-bank-type').value='普通';
+  // エリア非表示
+  if($('st-exec-pay-area'))$('st-exec-pay-area').style.display='none';
+  if($('st-exec-pay-locked'))$('st-exec-pay-locked').style.display='flex';
+  if($('st-exec-pay-unlocked'))$('st-exec-pay-unlocked').style.display='none';
+  if($('st-hosho-area'))$('st-hosho-area').style.display='none';
+  if($('hosho-body'))$('hosho-body').style.display='none';
+  if($('hosho-chev'))$('hosho-chev').textContent='▶ 展開';
+  if($('st-hosho-b-body'))$('st-hosho-b-body').style.display='none';
+  if($('st-hosho-c-body'))$('st-hosho-c-body').style.display='none';
+  if($('st-company-area'))$('st-company-area').style.display='none';
+  // バッジリセット
+  setSubOffices([]);
+  if($('sub-office-badges'))$('sub-office-badges').innerHTML='';
+  // _editIdリセット
+  if($('m-staff'))$('m-staff')._editId=null;
+  // 行列リセット
+  ['st-pay-history-list','st-company-prices','advance-rows'].forEach(id=>{
+    const e=$(id);if(e)e.innerHTML='';
+  });
+  // ラベル更新
+  onStKbnChange();
 }
 
 
@@ -11387,6 +11448,7 @@ function openM(id){
 
 function editStaff(id){
   const s=D.staff.find(x=>x.id===id);if(!s)return;
+  resetStaffModal();
   openM('m-staff');
   // 基本情報をセット
   if($('st-kbn'))$('st-kbn').value=s.kubun||'個人事業主（歩合）';
