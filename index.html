@@ -4033,6 +4033,109 @@ function renderAll() {
   renderPUInv();
 }
 
+// ── 欠落関数のスタブ（Firebase未接続時のエラー防止）──
+function renderCmp(){
+  const mon=toYM($('cmp-mon')?.value||'');
+  const off=$('cmp-off')?.value||'';
+  const st=$('cmp-st')?.value||'全件';
+  const rows=(D.delivery||[]).filter(function(r){
+    if(mon&&(!r.date||r.date.substring(0,7)!==mon)) return false;
+    if(off&&r.office!==off) return false;
+    const diff=r.postKanryo!==undefined&&r.postKanryo!==null&&r.kanryo!==r.postKanryo;
+    if(st==='差異あり'&&!diff) return false;
+    if(st==='照合済'&&(diff||!r.cmpOk)) return false;
+    if(st==='未照合'&&r.cmpOk) return false;
+    return true;
+  });
+  const ok=rows.filter(function(r){return r.cmpOk;}).length;
+  const ng=rows.filter(function(r){return r.postKanryo!==undefined&&r.kanryo!==r.postKanryo;}).length;
+  const un=rows.filter(function(r){return !r.cmpOk&&(r.postKanryo===undefined||r.postKanryo===null);}).length;
+  if($('cmp-ok-b')) $('cmp-ok-b').textContent='照合済 '+ok;
+  if($('cmp-ng-b')) $('cmp-ng-b').textContent='差異 '+ng;
+  if($('cmp-un-b')) $('cmp-un-b').textContent='未照合 '+un;
+  const nb=$('nb-diff'); if(nb){nb.textContent=ng+un;nb.style.display=(ng+un)>0?'':'none';}
+  const tbody=$('tb-cmp'); if(!tbody) return;
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  const html=[];
+  rows.forEach(function(r){
+    const diff=r.postKanryo!==undefined&&r.kanryo!==r.postKanryo;
+    const cls=diff?'tr-ng':r.cmpOk?'tr-ok':'';
+    const scls=r.cmpOk?'bg':diff?'br':'bz';
+    const stxt=r.cmpOk?'照合済':diff?'差異':'未照合';
+    html.push('<tr class="'+cls+'">');
+    html.push('<td>'+esc(r.date||'')+'</td>');
+    html.push('<td>'+esc(r.office||'')+'</td>');
+    html.push('<td>'+esc(r.staff||'')+'</td>');
+    html.push('<td class="tr">'+fmt(r.kanryo||0)+'</td>');
+    html.push('<td class="tr">'+(r.postKanryo!==undefined?fmt(r.postKanryo):'&#8212;')+'</td>');
+    html.push('<td class="tr">'+(diff?'<span style="color:var(--red2)">'+fmt((r.kanryo||0)-(r.postKanryo||0))+'</span>':'&#8212;')+'</td>');
+    html.push('<td><span class="bdg '+scls+'">'+stxt+'</span></td>');
+    html.push('<td>'+esc(r.cmpCause||'')+'</td>');
+    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(r.id||'')+'" onclick="openCmpFix(this.dataset.id)">修正</button></td>');
+    html.push('</tr>');
+  });
+  tbody.innerHTML=html.join('');
+}
+
+function renderCustTbl(){
+  const q=($('cust-search')?.value||'').trim().toLowerCase();
+  const sort=$('cust-sort')?.value||'no-asc';
+  let list=[...(D.customers||[])];
+  if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(cu.no||'').toLowerCase().includes(q);});
+  list.sort(function(a,b){
+    if(sort==='no-asc')  return (a.no||'').localeCompare(b.no||'');
+    if(sort==='no-desc') return (b.no||'').localeCompare(a.no||'');
+    if(sort==='name-asc') return (a.name||'').localeCompare(b.name||'');
+    if(sort==='name-desc') return (b.name||'').localeCompare(a.name||'');
+    return 0;
+  });
+  const tbody=$('tb-cust'); if(!tbody) return;
+  if(!list.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2);">顧客データなし</td></tr>';return;}
+  const html=[];
+  list.forEach(function(cu){
+    html.push('<tr>');
+    html.push('<td>'+esc(cu.no||'')+'</td>');
+    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(cu.id||'')+'" onclick="editCust(this.dataset.id)">'+esc(cu.name||'')+'</button></td>');
+    html.push('<td>'+esc(cu.office||'')+'</td>');
+    html.push('<td>'+esc(cu.tel||'')+'</td>');
+    html.push('<td>'+esc(cu.startDate||'')+'</td>');
+    html.push('<td><button class="btn btn-sm b-red" data-id="'+esc(cu.id||'')+'" onclick="deleteCust(this.dataset.id)">削除</button></td>');
+    html.push('</tr>');
+  });
+  tbody.innerHTML=html.join('');
+}
+
+function renderPUInv(){
+  const mon=toYM($('pinv-mon')?.value||'');
+  const rows=(D.pickup||[]).filter(function(r){return !mon||r.date?.startsWith(mon);});
+  const map={};
+  rows.forEach(function(r){
+    const k=r.customerName||'未設定';
+    if(!map[k]) map[k]={name:k,items:{},total:0};
+    Object.entries(r.items||{}).forEach(function(pair){
+      map[k].items[pair[0]]=(map[k].items[pair[0]]||0)+(pair[1]||0);
+      map[k].total+=(pair[1]||0);
+    });
+  });
+  const list=Object.values(map).sort(function(a,b){return b.total-a.total;});
+  const tbody=$('tb-pinv'); if(!tbody) return;
+  if(!list.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  const html=[];
+  list.forEach(function(cu,i){
+    const ypSum=Object.entries(cu.items).filter(function(e){return e[0].includes('ゆうパック');}).reduce(function(s,e){return s+e[1];},0);
+    const pkSum=Object.entries(cu.items).filter(function(e){return e[0].includes('ゆうパケット');}).reduce(function(s,e){return s+e[1];},0);
+    html.push('<tr>');
+    html.push('<td>'+(i+1)+'</td>');
+    html.push('<td>'+esc(cu.name)+'</td>');
+    html.push('<td>'+(mon||'全期間')+'</td>');
+    html.push('<td class="tr">'+fmt(ypSum)+'</td>');
+    html.push('<td class="tr">'+fmt(pkSum)+'</td>');
+    html.push('<td class="tr">'+fmt(cu.total)+'</td>');
+    html.push('</tr>');
+  });
+  tbody.innerHTML=html.join('');
+}
+
 // ─── 営業所セレクト同期 ───
 // ══ 複数郵便局対応 ══
 function renderSubOfficeList(){
