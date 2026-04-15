@@ -574,18 +574,19 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 
 
 /* ━━ 案B：上部ヘッダーナビ CSS ━━ */
-#top-nav{background:#1a2238;display:flex;align-items:stretch;height:var(--sz-h-tn,44px);position:sticky;top:0;z-index:300;flex-shrink:0;}
-#top-nav .tn-logo{padding:0 16px;display:flex;align-items:center;font-size:13px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:.5px;gap:8px;flex-shrink:0;}
-#top-nav .tn-logo-sub{font-size:8px;color:rgba(255,255,255,.35);letter-spacing:2px;font-family:'DM Mono',monospace;}
-#top-nav .tn-tabs{display:flex;flex:1;overflow:hidden;}
-#top-nav .tn-tab{padding:0 15px;display:flex;align-items:center;font-size:var(--sz-tn,12.5px);color:rgba(255,255,255,.45);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color .1s;flex-shrink:0;}
-#top-nav .tn-tab:hover{color:rgba(255,255,255,.82);}
-#top-nav .tn-tab.active{color:#fff;border-bottom:3px solid #5c9ee8;}
-#top-nav .tn-right{padding:0 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;}
-#top-nav .tn-ts-btn{padding:4px 10px;border-radius:5px;font-size:11px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
+#top-nav{background:#1a2238;display:flex;flex-wrap:wrap;align-items:stretch;height:auto;position:sticky;top:0;z-index:300;flex-shrink:0;}
+#top-nav .tn-logo{padding:14px 22px;display:flex;align-items:center;font-size:20px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:1.5px;gap:8px;flex-shrink:0;}
+#top-nav .tn-logo-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:3px;font-family:'DM Mono',monospace;}
+#top-nav .tn-tabs{order:3;width:100%;flex:none;display:flex;background:#141a2e;border-top:1px solid rgba(255,255,255,.08);}
+#top-nav .tn-tab{flex:1;justify-content:center;padding:18px 10px;display:flex;align-items:center;font-size:var(--sz-tn,17px);font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:1px;}
+#top-nav .tn-tab:hover{color:rgba(255,255,255,.82);background:rgba(255,255,255,.05);}
+#top-nav .tn-tab.active{color:#fff;border-bottom:4px solid #5c9ee8;background:rgba(92,158,232,.1);}
+#top-nav .tn-right{padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+#top-nav .tn-right button{font-size:13px;padding:8px 15px;border-radius:6px;}
+#top-nav .tn-ts-btn{padding:6px 12px;border-radius:5px;font-size:12px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
 #top-nav .tn-ts-btn.authed{color:rgba(255,200,50,.95);background:rgba(255,200,50,.15);}
-#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:var(--sz-p-sn,6px 14px);display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;min-height:var(--sz-h-sn,44px);align-items:center;}
-.sn-btn{padding:var(--sz-p-sn-btn,6px 13px);border-radius:6px;font-size:var(--sz-sn,12px);color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;}
+#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:var(--sz-p-sn,12px 20px);display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:var(--sz-h-sn,60px);align-items:center;}
+.sn-btn{padding:var(--sz-p-sn-btn,12px 28px);border-radius:8px;font-size:var(--sz-sn,15.5px);color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
 .sn-btn:hover{border-color:var(--txt2);color:var(--txt);}
 .sn-btn.active{background:#1a2238;color:#fff;border-color:#1a2238;}
 [data-theme='light'] .sn-btn.active{background:#1a2238;color:#fff;}
@@ -715,7 +716,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <div class="tn-right">
     <span id="fb-status-badge-top" style="font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);color:var(--txt2);"></span>
-    <span class="tb-dt" id="today-s-top" style="font-size:9px;color:rgba(255,255,255,.45);font-family:'DM Mono',monospace;"></span>
+    <span class="tb-dt" id="today-s-top" style="font-size:13px;color:rgba(255,255,255,.65);font-family:'DM Mono',monospace;letter-spacing:.5px;"></span>
     <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
     <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋宅配日報</button>
     <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
@@ -1464,72 +1465,77 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- CSVインポート -->
     <div id="s-import" class="sec">
-      <div class="g2">
-        <div>
-          <div class="card mb12">
-            <div class="ch"><div class="ct"><div class="cbar"></div>日報アプリ → 管理システム 取込</div></div>
-            <div class="al al-ok mb8"><span>✅</span><span>日報アプリのCSV出力をそのまま取込できます。宅配・集荷を自動判別します。</span></div>
-            <div class="drop" id="dp-d" onclick="document.getElementById('fi-d').click()"
-              ondragover="dov(event,'dp-d')" ondragleave="dlv('dp-d')" ondrop="hdrop(event,'d')">
-              <div style="font-size:26px;margin-bottom:5px;">📋</div>
-              <div class="sm muted">宅配 / 集荷 日報CSVをドロップ</div>
-              <div class="xs muted mt8">クリックして選択 .csv / .xlsx</div>
-            </div>
-            <input type="file" id="fi-d" accept=".csv" style="display:none" onchange="hfile(event,'d')">
-            <div id="res-d" class="mt8"></div>
+      <!-- ドロップゾーン横並び -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div class="card" style="display:flex;flex-direction:column;">
+          <div class="ch"><div class="ct"><div class="cbar"></div>日報アプリ → 管理システム 取込</div></div>
+          <div class="al al-ok mb8"><span>✅</span><span>日報アプリのCSV出力をそのまま取込できます。宅配・集荷を自動判別します。</span></div>
+          <div class="drop" id="dp-d" onclick="document.getElementById('fi-d').click()"
+            ondragover="dov(event,'dp-d')" ondragleave="dlv('dp-d')" ondrop="hdrop(event,'d')" style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+            <div style="font-size:30px;margin-bottom:6px;">📋</div>
+            <div class="sm muted">宅配 / 集荷 日報CSVをドロップ</div>
+            <div class="xs muted mt8">クリックして選択 .csv / .xlsx</div>
           </div>
-          <div class="card">
-            <div class="ch"><div class="ct"><div class="cbar"></div>郵便局データ 取込</div></div>
-            <div class="drop" id="dp-p" onclick="document.getElementById('fi-p').click()"
-              ondragover="dov(event,'dp-p')" ondragleave="dlv('dp-p')" ondrop="hdrop(event,'p')">
-              <div style="font-size:26px;margin-bottom:5px;">📮</div>
-              <div class="sm muted">郵便局CSVをドロップ</div>
-            </div>
-            <input type="file" id="fi-p" accept=".csv" style="display:none" onchange="hfile(event,'p')">
-            <div id="res-p" class="mt8"></div>
+          <input type="file" id="fi-d" accept=".csv" style="display:none" onchange="hfile(event,'d')">
+          <div id="res-d" class="mt8"></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column;">
+          <div class="ch"><div class="ct"><div class="cbar"></div>郵便局データ 取込</div></div>
+          <div class="drop" id="dp-p" onclick="document.getElementById('fi-p').click()"
+            ondragover="dov(event,'dp-p')" ondragleave="dlv('dp-p')" ondrop="hdrop(event,'p')" style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+            <div style="font-size:30px;margin-bottom:6px;">📮</div>
+            <div class="sm muted">郵便局CSVをドロップ</div>
+            <div class="xs muted mt8">クリックして選択 .csv</div>
+          </div>
+          <input type="file" id="fi-p" accept=".csv" style="display:none" onchange="hfile(event,'p')">
+          <div id="res-p" class="mt8"></div>
+        </div>
+      </div>
+      <!-- フォーマット仕様（全幅） -->
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="cbar"></div>CSVフォーマット仕様</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px;">
+          <div>
+            <div class="fw7 sm mb8">■ 宅配日報（日報アプリ 出力列）</div>
+            <table style="font-size:10.5px;"><thead><tr><th>列名（別名可）</th><th>内容・例</th></tr></thead><tbody>
+              <tr><td>日付</td><td class="mono">2025/03/06</td></tr>
+              <tr><td>営業所</td><td>大阪北営業所</td></tr>
+              <tr><td>従事員名 / 担当者名</td><td>田中 一郎</td></tr>
+              <tr><td>区分 / 種別</td><td>社員</td></tr>
+              <tr><td class="fw7">持ち出し / 持出個数</td><td class="mono">120</td></tr>
+              <tr><td class="fw7">完了 / 配達完了数</td><td class="mono">108</td></tr>
+              <tr><td>夜間 / 夜間（20時以降）</td><td class="mono">12</td></tr>
+              <tr><td>転送完付 / 転送還付</td><td class="mono">3</td></tr>
+              <tr><td>持ち戻り / 持戻り</td><td class="mono">7</td></tr>
+              <tr><td class="c60 fw7">翌日廻し / 翌日回し</td><td class="mono">2</td></tr>
+              <tr><td>集荷</td><td class="mono">5</td></tr>
+              <tr><td>備考</td><td>特記事項</td></tr>
+            </tbody></table>
+          </div>
+          <div>
+            <div class="fw7 sm mb8">■ 集荷日報（品目ごとに1行形式）</div>
+            <table style="font-size:10.5px;"><thead><tr><th>列名</th><th>品目キー（masterKey）</th></tr></thead><tbody>
+              <tr><td>日付 / 営業所 / 従事員名</td><td class="muted">基本情報</td></tr>
+              <tr><td>顧客名</td><td>山田商事㈱</td></tr>
+              <tr><td>地域</td><td>大阪市北区</td></tr>
+              <tr><td class="c60 fw7">品目 / 品目名</td><td class="mono c60">ゆうパック_60</td></tr>
+              <tr><td></td><td class="mono c80">ゆうパック_80</td></tr>
+              <tr><td></td><td class="mono c100">ゆうパック_100</td></tr>
+              <tr><td></td><td class="mono c120">ゆうパック_120</td></tr>
+              <tr><td></td><td class="mono c140">ゆうパック_140</td></tr>
+              <tr><td></td><td class="mono c160">ゆうパック_160</td></tr>
+              <tr><td></td><td class="mono cpk1">ゆうパケット_通常</td></tr>
+              <tr><td></td><td class="mono cpk2">ゆうパケット_7cm以上</td></tr>
+              <tr><td></td><td class="mono ccp">クリックポスト</td></tr>
+              <tr><td></td><td class="mono cke">ケース</td></tr>
+              <tr><td></td><td class="mono cte">定形外(ゆうメール)</td></tr>
+              <tr><td></td><td class="mono cch">チャーター</td></tr>
+              <tr><td>数量</td><td class="mono">12</td></tr>
+              <tr><td>単位</td><td>個 / 件</td></tr>
+            </tbody></table>
           </div>
         </div>
-        <div class="card">
-          <div class="ch"><div class="ct"><div class="cbar"></div>CSVフォーマット仕様</div></div>
-
-          <div class="fw7 sm mb8">■ 宅配日報（日報アプリ 出力列）</div>
-          <table style="font-size:10.5px;"><thead><tr><th>列名（別名可）</th><th>内容・例</th></tr></thead><tbody>
-            <tr><td>日付</td><td class="mono">2025/03/06</td></tr>
-            <tr><td>営業所</td><td>大阪北営業所</td></tr>
-            <tr><td>従事員名 / 担当者名</td><td>田中 一郎</td></tr>
-            <tr><td>区分 / 種別</td><td>社員</td></tr>
-            <tr><td class="fw7">持ち出し / 持出個数</td><td class="mono">120</td></tr>
-            <tr><td class="fw7">完了 / 配達完了数</td><td class="mono">108</td></tr>
-            <tr><td>夜間 / 夜間（20時以降）</td><td class="mono">12</td></tr>
-            <tr><td>転送完付 / 転送還付</td><td class="mono">3</td></tr>
-            <tr><td>持ち戻り / 持戻り</td><td class="mono">7</td></tr>
-            <tr><td class="c60 fw7">翌日廻し / 翌日回し</td><td class="mono">2</td></tr>
-            <tr><td>集荷</td><td class="mono">5</td></tr>
-            <tr><td>備考</td><td>特記事項</td></tr>
-          </tbody></table>
-
-          <div class="sep"></div>
-          <div class="fw7 sm mb8">■ 集荷日報（品目ごとに1行形式）</div>
-          <table style="font-size:10.5px;"><thead><tr><th>列名</th><th>品目キー（masterKey）</th></tr></thead><tbody>
-            <tr><td>日付 / 営業所 / 従事員名</td><td class="muted">基本情報</td></tr>
-            <tr><td>顧客名</td><td>山田商事㈱</td></tr>
-            <tr><td>地域</td><td>大阪市北区</td></tr>
-            <tr><td class="c60 fw7">品目 / 品目名</td><td class="mono c60">ゆうパック_60</td></tr>
-            <tr><td></td><td class="mono c80">ゆうパック_80</td></tr>
-            <tr><td></td><td class="mono c100">ゆうパック_100</td></tr>
-            <tr><td></td><td class="mono c120">ゆうパック_120</td></tr>
-            <tr><td></td><td class="mono c140">ゆうパック_140</td></tr>
-            <tr><td></td><td class="mono c160">ゆうパック_160</td></tr>
-            <tr><td></td><td class="mono cpk1">ゆうパケット_通常</td></tr>
-            <tr><td></td><td class="mono cpk2">ゆうパケット_7cm以上</td></tr>
-            <tr><td></td><td class="mono ccp">クリックポスト</td></tr>
-            <tr><td></td><td class="mono cke">ケース</td></tr>
-            <tr><td></td><td class="mono cte">定形外(ゆうメール)</td></tr>
-            <tr><td></td><td class="mono cch">チャーター</td></tr>
-            <tr><td>数量</td><td class="mono">12</td></tr>
-            <tr><td>単位</td><td>個 / 件</td></tr>
-          </tbody></table>
-          <div class="sep"></div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--brd);">
           <button class="btn b-gh btn-sm" onclick="dlTemplates()">📥 テンプレートCSVダウンロード</button>
           <button class="btn b-blu btn-sm" onclick="dlPostTemplate()" style="margin-left:6px;">郵便局向けExcelテンプレート</button>
         </div>
