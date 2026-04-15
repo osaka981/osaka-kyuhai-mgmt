@@ -1146,6 +1146,26 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     </div>
 
+    <!-- 数量照合 -->
+    <div id="s-reconcile" class="sec">
+      <div class="card mb12">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>集荷 数量照合（顧客 vs 従事員）</div>
+        </div>
+        <div class="al al-ok mb8"><span>ℹ️</span><span>顧客の確定数量と従事員の申告数量を比較します。申告が顧客数量を超える場合は⚠️で表示されます。</span></div>
+        <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="min-width:150px;">
+            <label>月</label>
+            <input type="month" id="rc-mon" class="fi" onchange="renderReconcile()">
+          </div>
+          <button class="btn b-blu btn-sm" onclick="renderReconcile()">🔄 照合更新</button>
+          <button class="btn b-grn btn-sm" onclick="confirmReconcile()">✅ 確定して書類生成へ</button>
+        </div>
+      </div>
+
+      <div id="rc-content"></div>
+    </div>
+
     <!-- 郵便局照合 -->
     <div id="s-cmp" class="sec">
       <div class="card mb12">
@@ -3595,6 +3615,7 @@ const _TOP_TABS = {
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
+    { s:'reconcile', label:'数量照合' },
   ]},
   admin:    { subs: [
     { s:'offices',     label:'営業所管理' },
@@ -4130,7 +4151,7 @@ window.onload = () => {
   $('today-s').textContent = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
   // 今月セット
   const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  ['del-mon','pu-mon','sum-mon','sal-mon','pinv-mon'].forEach(id => { if($(id)) $(id).value = ym; });
+  ['del-mon','pu-mon','sum-mon','sal-mon','pinv-mon','rc-mon'].forEach(id => { if($(id)) $(id).value = ym; });
   $('cmp-mon').value = ym;
   $('dd-date').value = d.toISOString().slice(0,10);
   $('pu-date').value = d.toISOString().slice(0,10);
@@ -10648,6 +10669,142 @@ function renderOffCards(){
         <tr><td class="muted" style="padding:4px 0;">TEL</td><td class="mono">${o.tel||'−'}</td></tr>
       </table></div>`;
   }).join('');
+}
+
+// ─── 数量照合 ───
+let _rcData = []; // 照合データ保持
+
+function renderReconcile(){
+  const mon = $('rc-mon')?.value;
+  if(!mon){ $('rc-content').innerHTML = '<div class="al al-e"><span>⚠️</span><span>月を選択してください</span></div>'; return; }
+
+  // 月の集荷データを顧客×従事員で集計
+  const rows = (D.pickup||[]).filter(r => (r.date||'').startsWith(mon));
+  if(!rows.length){ $('rc-content').innerHTML = '<div class="al al-e"><span>ℹ️</span><span>該当月の集荷データがありません</span></div>'; return; }
+
+  // 顧客ごとに集計
+  const cuMap = {};
+  rows.forEach(r => {
+    const cn = r.customerName || '未設定';
+    if(!cuMap[cn]) cuMap[cn] = { name:cn, staffMap:{}, total:0 };
+    const qty = IK.reduce((s,k) => s + (iq(r,k)||0), 0);
+    cuMap[cn].total += qty;
+    if(!cuMap[cn].staffMap[r.staff]) cuMap[cn].staffMap[r.staff] = { name:r.staff, office:r.office, qty:0, kubun:'' };
+    cuMap[cn].staffMap[r.staff].qty += qty;
+    // 区分を取得
+    const st = (D.staff||[]).find(s => s.name === r.staff);
+    if(st) cuMap[cn].staffMap[r.staff].kubun = st.kubun || '';
+  });
+
+  // HTML構築
+  _rcData = [];
+  let html = '';
+  Object.values(cuMap).forEach(cu => {
+    const staffList = Object.values(cu.staffMap).sort((a,b) => b.qty - a.qty);
+    const rcItem = { customer:cu.name, customerQty:cu.total, staffList, confirmed:false, adjustedQty:cu.total };
+    _rcData.push(rcItem);
+
+    html += `<div class="card mb12">
+      <div class="ch">
+        <div class="ct"><div class="cbar"></div>${esc(cu.name)}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="xs muted">確定数量:</span>
+          <input type="number" class="fi" style="width:100px;text-align:right;" value="${cu.total}"
+            data-rc-cust="${esc(cu.name)}" onchange="updateRcQty(this)">
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>従事員</th><th>区分</th><th>営業所</th><th class="tr">申告数量</th><th class="tr">割合</th><th>判定</th>
+        </tr></thead>
+        <tbody>`;
+
+    staffList.forEach(s => {
+      const pct = cu.total > 0 ? (s.qty / cu.total * 100).toFixed(1) : '0.0';
+      html += `<tr>
+        <td class="fw7">${esc(s.name)}</td>
+        <td><span class="bdg" style="font-size:var(--sz-xs);">${esc(s.kubun||'不明')}</span></td>
+        <td>${esc(s.office)}</td>
+        <td class="tr mono fw7">${s.qty.toLocaleString()}</td>
+        <td class="tr mono muted">${pct}%</td>
+        <td></td>
+      </tr>`;
+    });
+
+    // 合計行
+    html += `<tr style="border-top:2px solid var(--brd2);font-weight:700;">
+        <td colspan="3">合計</td>
+        <td class="tr mono">${cu.total.toLocaleString()}</td>
+        <td class="tr mono">100%</td>
+        <td id="rc-status-${esc(cu.name).replace(/\s/g,'_')}">
+          <span style="color:var(--grn2);">✅ 一致</span>
+        </td>
+      </tr>`;
+    html += `</tbody></table></div>`;
+  });
+
+  if(!html) html = '<div class="al al-e"><span>ℹ️</span><span>データがありません</span></div>';
+  $('rc-content').innerHTML = html;
+}
+
+function updateRcQty(el){
+  const custName = el.dataset.rcCust;
+  const newQty = parseInt(el.value) || 0;
+  const item = _rcData.find(r => r.customer === custName);
+  if(!item) return;
+  item.adjustedQty = newQty;
+  const staffTotal = item.staffList.reduce((s,st) => s + st.qty, 0);
+  const statusEl = $('rc-status-' + custName.replace(/\s/g,'_'));
+  if(!statusEl) return;
+
+  if(staffTotal <= newQty){
+    statusEl.innerHTML = '<span style="color:var(--grn2);">✅ OK</span>';
+  } else {
+    const diff = staffTotal - newQty;
+    statusEl.innerHTML = `<span style="color:var(--red2);">⚠️ 超過 +${diff.toLocaleString()}</span>`;
+  }
+}
+
+function confirmReconcile(){
+  if(!_rcData.length){ showAlert('照合データがありません。先に月を選択して照合を実行してください。'); return; }
+  // 超過チェック
+  const over = _rcData.filter(r => {
+    const staffTotal = r.staffList.reduce((s,st) => s + st.qty, 0);
+    return staffTotal > r.adjustedQty;
+  });
+  if(over.length){
+    const names = over.map(o => o.customer).join('、');
+    showDialog(
+      `⚠️ ${names} で申告数量が確定数量を超過しています。\n\n超過分は確定数量に自動修正されます。確定しますか？`,
+      'はい、確定する',
+      () => { finalizeReconcile(); },
+      'キャンセル'
+    );
+  } else {
+    showDialog(
+      '全顧客の数量が一致しています。確定して書類生成に進みますか？',
+      '確定する',
+      () => { finalizeReconcile(); },
+      'キャンセル'
+    );
+  }
+}
+
+function finalizeReconcile(){
+  // 確定データを保存（将来的に書類生成で利用）
+  const mon = $('rc-mon')?.value || '';
+  const result = _rcData.map(r => ({
+    customer: r.customer,
+    confirmedQty: r.adjustedQty,
+    staffBreakdown: r.staffList.map(s => ({
+      name: s.name, kubun: s.kubun, office: s.office,
+      originalQty: s.qty,
+      adjustedQty: Math.min(s.qty, Math.round(s.qty / r.staffList.reduce((t,x)=>t+x.qty,0) * r.adjustedQty))
+    }))
+  }));
+  // localStorage に保存
+  try { localStorage.setItem('rc_confirmed_' + mon, JSON.stringify(result)); } catch(e){}
+  showAlert(`${mon} の数量照合を確定しました。\n\n※ 書類自動生成機能は次回実装予定です。`);
 }
 
 // ─── CSVインポート ───
