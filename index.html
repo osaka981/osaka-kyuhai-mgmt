@@ -1681,7 +1681,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 営業所管理 -->
     <div id="s-offices" class="sec">
       <div style="display:flex;justify-content:flex-end;margin-bottom:18px;"><button class="btn b-grn btn-sm" onclick="openM('m-office')">＋ 営業所</button></div>
-      <div id="off-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:11px;"></div>
+      <div id="off-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
 
       <!-- 表示サイズ設定 -->
       <div class="card" style="max-width:500px;margin-top:24px;">
@@ -10626,26 +10626,23 @@ function deleteOffice(){
 
 function renderOffCards(){
   $('off-cards').innerHTML=D.offices.map(o=>{
-    const typeBadges=(o.typesDel?'<span class="bdg bb" style="font-size:8.5px;">🚛宅配</span>':'')+
-                     (o.typesCol?'<span class="bdg bt" style="font-size:8.5px;margin-left:3px;">📦集荷</span>':'');
-    return `<div class="card">
-      <div class="ch">
-        <div class="ct" style="gap:6px;">
+    return `<div class="card" style="display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;">
           <div class="cbar"></div>
-          ${o.officeCode?`<span style="font-family:'DM Mono',monospace;font-size:11px;background:var(--amb3);color:var(--amb2);border:1px solid var(--amb);border-radius:3px;padding:1px 7px;font-weight:700;letter-spacing:.1em;">${dispCode(o.officeCode)}</span>`:''}
-          ${o.name}
-          <span style="margin-left:4px;">${typeBadges}</span>
+          ${o.officeCode?`<span style="font-family:'DM Mono',monospace;font-size:var(--sz-sm,12.5px);background:var(--amb3);color:var(--amb2);border:1px solid var(--amb);border-radius:4px;padding:2px 9px;font-weight:700;letter-spacing:.1em;">${dispCode(o.officeCode)}</span>`:''}
         </div>
         <div style="display:flex;gap:5px;">
           <button class="btn b-gh btn-sm" onclick="editOffice(${o.id})">編集</button>
           <button class="btn btn-sm" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);" onclick="deleteOfficeById(${o.id})">🗑</button>
         </div>
       </div>
-      <table style="font-size:11.5px;">
-        <tr><td class="muted" style="padding:3px 0;width:60px;">コード</td><td class="fw7 mono" style="color:var(--amb2)">${o.officeCode?dispCode(o.officeCode):'未設定'}</td></tr>
-        <tr><td class="muted" style="padding:3px 0;">所長</td><td class="fw7">${o.head||'−'}</td></tr>
-        <tr><td class="muted" style="padding:3px 0;">住所</td><td>${o.addr||'−'}</td></tr>
-        <tr><td class="muted" style="padding:3px 0;">TEL</td><td class="mono">${o.tel||'−'}</td></tr>
+      <div style="font-size:var(--sz-ct,13.5px);font-weight:800;padding:10px 0;border-top:1px solid var(--brd);border-bottom:1px solid var(--brd);margin-bottom:10px;letter-spacing:.5px;">${o.name}</div>
+      <table>
+        <tr><td class="muted" style="padding:4px 0;width:55px;">コード</td><td class="fw7 mono" style="color:var(--amb2)">${o.officeCode?dispCode(o.officeCode):'未設定'}</td></tr>
+        <tr><td class="muted" style="padding:4px 0;">所長</td><td class="fw7">${o.head||'未設定'}</td></tr>
+        <tr><td class="muted" style="padding:4px 0;">住所</td><td>${o.addr||'未設定'}</td></tr>
+        <tr><td class="muted" style="padding:4px 0;">TEL</td><td class="mono">${o.tel||'−'}</td></tr>
       </table></div>`;
   }).join('');
 }
