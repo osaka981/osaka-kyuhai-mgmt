@@ -3497,19 +3497,20 @@ function switchTopTab(tab, skipNav) {
   document.querySelectorAll('.tn-tab').forEach(el => el.classList.remove('active'));
   const activeTab = document.getElementById('tntab-' + tab);
   if (activeTab) activeTab.classList.add('active');
-  // サブナビを描画
-  renderSubNav(tab);
   // タブ内の最初のサブページに遷移（skipNavがtrueなら遷移しない）
   if (!skipNav) {
     const first = _TOP_TABS[tab]?.subs?.[0];
     if (first) {
-      if (first.badge === 'ts') requireTS(first.s, null);
-      else navByS(first.s);
+      if (first.badge === 'ts') { requireTS(first.s, null); renderSubNav(tab, first.s); return; }
+      navByS(first.s);
+      renderSubNav(tab, first.s);  // navByS後にサブナビ描画してactiveを正しく反映
+      return;
     }
   }
+  renderSubNav(tab, null);
 }
 
-function renderSubNav(tab) {
+function renderSubNav(tab, activeS) {
   const wrap = document.getElementById('sub-nav');
   if (!wrap) return;
   const subs = _TOP_TABS[tab]?.subs || [];
@@ -3519,7 +3520,10 @@ function renderSubNav(tab) {
     if (sub.badge === 'diff' && diffCount > 0) badge = `<span class="sn-badge-r">${diffCount}</span>`;
     else if (sub.badge === 'ts') badge = `<span class="sn-badge-ts">TS</span>`;
     else if (sub.badge === 'new') badge = `<span class="sn-badge-n">NEW</span>`;
-    const isActive = document.querySelector('#s-' + sub.s)?.style.display !== 'none';
+    // activeS指定があればそれを使う、なければ.sec.onクラスで判定
+    const isActive = activeS
+      ? sub.s === activeS
+      : document.getElementById('s-' + sub.s)?.classList.contains('on');
     return `<button class="sn-btn${isActive?' active':''}" onclick="snNav('${sub.s}')">${sub.label}${badge}</button>`;
   }).join('');
 }
@@ -3529,12 +3533,7 @@ function snNav(s) {
   const sub = Object.values(_TOP_TABS).flatMap(t=>t.subs).find(x=>x.s===s);
   if (sub?.badge === 'ts') { requireTS(s, null); return; }
   navByS(s);
-  // サブナビのactiveを更新
-  document.querySelectorAll('.sn-btn').forEach(btn => btn.classList.remove('active'));
-  const subs = _TOP_TABS[_currentTopTab]?.subs || [];
-  const idx = subs.findIndex(x => x.s === s);
-  const btns = document.querySelectorAll('.sn-btn');
-  if (btns[idx]) btns[idx].classList.add('active');
+  renderSubNav(_currentTopTab, s);
 }
 
 // 既存のnav()を置き換え（data-s属性から遷移するラッパー）
@@ -11509,8 +11508,8 @@ function nav(el){
   if(s==='dashboard')    { if(typeof renderDash==='function') renderDash(); }
   // 上部ナビのトップタブ・サブタブを同期
   const topTab=_PAGE_TO_TAB?.[s];
-  if(topTab&&topTab!==_currentTopTab){ _currentTopTab=topTab; }
-  if(typeof renderSubNav==='function') renderSubNav(_currentTopTab);
+  if(topTab&&topTab!==_currentTopTab){ switchTopTab(topTab, true); }
+  if(typeof renderSubNav==='function') renderSubNav(_currentTopTab, s);
   // サブタブのactiveを更新
   setTimeout(()=>{
     const subs=_TOP_TABS?.[_currentTopTab]?.subs||[];
