@@ -22,88 +22,77 @@
   --y120:#7acfff;--y140:#8adaff;--y160:#a0e8ff;
   --pk1:#ff9e4a;--pk2:#ffb86a;
   --cp:#80d040;--ke:#e0b040;--te:#e05070;--ch:#a050e0;
-  /* ── 表示サイズ変数（小=デフォルト） ── */
-  --sz-root:14px;
-  --sz-body:13px;
-  --sz-tn:17px;
-  --sz-sn:16px;
-  --sz-tbl:11.5px;
-  --sz-th:9px;
-  --sz-btn:11.5px;
-  --sz-btn-sm:10.5px;
-  --sz-ct:12px;
-  --sz-kv:22px;
-  --sz-kl:9px;
-  --sz-fi:12px;
-  --sz-lbl:9.5px;
-  --sz-xs:9.5px;
-  --sz-sm:11px;
-  --sz-mtt:15px;
-  --sz-modal-fi:13px;
-  --sz-modal-btn:12px;
-  --sz-h-tn:auto;
-  --sz-h-sn:66px;
-  --sz-p-td:7px 9px;
-  --sz-p-th:6px 9px;
-  --sz-p-sn:14px 22px;
-  --sz-p-sn-btn:14px 32px;
-  --sz-p-fi:6px 9px;
-  --sz-p-content:16px;
-  --sz-p-btn:6px 12px;
-  --sz-p-btn-sm:4px 9px;
+  /* ── 表示サイズ変数（小=デフォルト）── ヘッダー・サブタブは固定 ── */
+  --sz-root:15.5px;
+  --sz-tbl:13px;
+  --sz-th:10.5px;
+  --sz-btn:13px;
+  --sz-btn-sm:12px;
+  --sz-ct:13.5px;
+  --sz-kv:26px;
+  --sz-kl:10.5px;
+  --sz-fi:13.5px;
+  --sz-lbl:11px;
+  --sz-xs:11px;
+  --sz-sm:12.5px;
+  --sz-mtt:16px;
+  --sz-modal-fi:14.5px;
+  --sz-modal-btn:13px;
+  --sz-p-td:8px 10px;
+  --sz-p-th:7px 10px;
+  --sz-p-fi:7px 10px;
+  --sz-p-content:18px;
+  --sz-p-btn:7px 14px;
+  --sz-p-btn-sm:5px 11px;
+  --sz-p-card:15px 16px;
+  --sz-kpi-cols:repeat(4,1fr);
 }
 
-/* ── サイズ: 中 ── */
+/* ── サイズ: 中 (×1.12) ── */
 html[data-size="m"]{
-  --sz-root:15.5px;--sz-body:14px;
-  --sz-tn:19px;--sz-sn:18px;
-  --sz-tbl:13px;--sz-th:10.5px;
-  --sz-btn:13px;--sz-btn-sm:12px;
-  --sz-ct:13.5px;--sz-kv:26px;--sz-kl:10px;
-  --sz-fi:13.5px;--sz-lbl:11px;--sz-xs:11px;--sz-sm:12.5px;
-  --sz-mtt:16.5px;--sz-modal-fi:14.5px;--sz-modal-btn:13px;
-  --sz-h-tn:auto;--sz-h-sn:72px;
-  --sz-p-td:8px 10px;--sz-p-th:7px 10px;
-  --sz-p-sn:16px 24px;--sz-p-sn-btn:16px 36px;
-  --sz-p-fi:7px 10px;--sz-p-content:18px;
-  --sz-p-btn:7px 14px;--sz-p-btn-sm:5px 11px;
-}
-/* ── サイズ: 大 ── */
-html[data-size="l"]{
-  --sz-root:17px;--sz-body:15px;
-  --sz-tn:21px;--sz-sn:20px;
+  --sz-root:17px;
   --sz-tbl:14.5px;--sz-th:12px;
   --sz-btn:14.5px;--sz-btn-sm:13.5px;
-  --sz-ct:15px;--sz-kv:32px;--sz-kl:11.5px;
+  --sz-ct:15px;--sz-kv:30px;--sz-kl:12px;
   --sz-fi:15px;--sz-lbl:12.5px;--sz-xs:12.5px;--sz-sm:14px;
   --sz-mtt:18px;--sz-modal-fi:16px;--sz-modal-btn:14.5px;
-  --sz-h-tn:auto;--sz-h-sn:80px;
   --sz-p-td:9px 12px;--sz-p-th:8px 12px;
-  --sz-p-sn:18px 26px;--sz-p-sn-btn:18px 40px;
   --sz-p-fi:8px 12px;--sz-p-content:20px;
   --sz-p-btn:8px 16px;--sz-p-btn-sm:6px 13px;
+  --sz-p-card:17px 18px;
+  --sz-kpi-cols:repeat(4,1fr);
 }
-/* ── サイズ: 特大 ── */
-html[data-size="xl"]{
-  --sz-root:19px;--sz-body:17px;
-  --sz-tn:23px;--sz-sn:22px;
-  --sz-tbl:16px;--sz-th:13px;
+/* ── サイズ: 大 (×1.25) ── */
+html[data-size="l"]{
+  --sz-root:19px;
+  --sz-tbl:16px;--sz-th:13.5px;
   --sz-btn:16px;--sz-btn-sm:15px;
-  --sz-ct:17px;--sz-kv:38px;--sz-kl:13px;
+  --sz-ct:17px;--sz-kv:36px;--sz-kl:13.5px;
   --sz-fi:17px;--sz-lbl:14px;--sz-xs:14px;--sz-sm:15.5px;
   --sz-mtt:20px;--sz-modal-fi:18px;--sz-modal-btn:16px;
-  --sz-h-tn:auto;--sz-h-sn:88px;
-  --sz-p-td:11px 14px;--sz-p-th:10px 14px;
-  --sz-p-sn:20px 28px;--sz-p-sn-btn:20px 44px;
-  --sz-p-fi:10px 14px;--sz-p-content:22px;
-  --sz-p-btn:10px 20px;--sz-p-btn-sm:7px 15px;
+  --sz-p-td:10px 13px;--sz-p-th:9px 13px;
+  --sz-p-fi:9px 13px;--sz-p-content:22px;
+  --sz-p-btn:9px 18px;--sz-p-btn-sm:7px 15px;
+  --sz-p-card:20px 22px;
+  --sz-kpi-cols:repeat(auto-fill,minmax(220px,1fr));
+}
+/* ── サイズ: 特大 (×1.4) ── */
+html[data-size="xl"]{
+  --sz-root:21px;
+  --sz-tbl:18px;--sz-th:15px;
+  --sz-btn:18px;--sz-btn-sm:16.5px;
+  --sz-ct:19px;--sz-kv:42px;--sz-kl:15px;
+  --sz-fi:19px;--sz-lbl:15.5px;--sz-xs:15.5px;--sz-sm:17px;
+  --sz-mtt:22px;--sz-modal-fi:20px;--sz-modal-btn:18px;
+  --sz-p-td:12px 15px;--sz-p-th:11px 15px;
+  --sz-p-fi:11px 15px;--sz-p-content:24px;
+  --sz-p-btn:11px 22px;--sz-p-btn-sm:8px 17px;
+  --sz-p-card:24px 26px;
+  --sz-kpi-cols:repeat(auto-fill,minmax(260px,1fr));
 }
 #size-btns .active-sz{background:#e63946!important;color:#fff!important;border-color:#e63946!important;}
-.sz-toggle{display:inline-flex;gap:0;border:1px solid rgba(255,255,255,.15);border-radius:5px;overflow:hidden;margin-left:4px;}
-.sz-toggle button{background:transparent;border:none;color:rgba(255,255,255,.4);font-size:11px;font-weight:700;padding:5px 8px;cursor:pointer;font-family:'DM Mono',monospace;transition:all .12s;border-right:1px solid rgba(255,255,255,.1);}
-.sz-toggle button:last-child{border-right:none;}
-.sz-toggle button:hover{color:rgba(255,255,255,.7);background:rgba(255,255,255,.06);}
-.sz-toggle button.active-sz{background:#5c9ee8;color:#fff;}
+html[data-size="l"] .modal{width:800px;}
+html[data-size="xl"] .modal{width:900px;padding:28px;}
 
 /* ── ライトモード（通常モード） ── */
 [data-theme="light"]{
@@ -193,7 +182,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 .btn-sm{padding:var(--sz-p-btn-sm,4px 9px);font-size:var(--sz-btn-sm,10.5px);}
 
 /* CARD */
-.card{background:var(--sur);border:1px solid var(--brd);border-radius:7px;padding:13px 14px;;min-width:0;}
+.card{background:var(--sur);border:1px solid var(--brd);border-radius:7px;padding:var(--sz-p-card,15px 16px);min-width:0;}
 .ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;}
 .ct{font-size:var(--sz-ct,12px);font-weight:700;display:flex;align-items:center;gap:6px;}
 .cbar{width:2.5px;height:13px;background:var(--red);border-radius:2px;}
@@ -202,7 +191,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
 
 /* KPI */
-.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;}
+.krow{display:grid;grid-template-columns:var(--sz-kpi-cols,repeat(auto-fit,minmax(130px,1fr)));gap:9px;margin-bottom:12px;}
 .kpi{background:var(--sur);border:1px solid var(--brd);border-radius:6px;padding:11px 13px;position:relative;overflow:hidden;}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc,var(--red));}
 .kl{font-size:var(--sz-kl,9px);color:var(--txt2);margin-bottom:4px;letter-spacing:.3px;}
@@ -583,15 +572,15 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 #top-nav .tn-logo{padding:14px 22px;display:flex;align-items:center;font-size:20px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:1.5px;gap:8px;flex-shrink:0;}
 #top-nav .tn-logo-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:3px;font-family:'DM Mono',monospace;}
 #top-nav .tn-tabs{order:3;width:100%;flex:none;display:flex;background:#141a2e;border-top:1px solid rgba(255,255,255,.08);}
-#top-nav .tn-tab{flex:1;justify-content:center;padding:18px 10px;display:flex;align-items:center;font-size:var(--sz-tn,17px);font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:1px;}
+#top-nav .tn-tab{flex:1;justify-content:center;padding:18px 10px;display:flex;align-items:center;font-size:17px;font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:1px;}
 #top-nav .tn-tab:hover{color:rgba(255,255,255,.82);background:rgba(255,255,255,.05);}
 #top-nav .tn-tab.active{color:#fff;border-bottom:4px solid #5c9ee8;background:rgba(92,158,232,.1);}
 #top-nav .tn-right{padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
 #top-nav .tn-right button{font-size:13px;padding:8px 15px;border-radius:6px;}
 #top-nav .tn-ts-btn{padding:6px 12px;border-radius:5px;font-size:12px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
 #top-nav .tn-ts-btn.authed{color:rgba(255,200,50,.95);background:rgba(255,200,50,.15);}
-#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:var(--sz-p-sn,14px 22px);display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:var(--sz-h-sn,66px);align-items:center;}
-.sn-btn{padding:var(--sz-p-sn-btn,14px 32px);border-radius:8px;font-size:var(--sz-sn,16px);color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
+#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:14px 22px;display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:66px;align-items:center;}
+.sn-btn{padding:14px 32px;border-radius:8px;font-size:16px;color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
 .sn-btn:hover{border-color:var(--txt2);color:var(--txt);}
 .sn-btn.active{background:#1a2238;color:#fff;border-color:#1a2238;}
 [data-theme='light'] .sn-btn.active{background:#1a2238;color:#fff;}
@@ -727,12 +716,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
     <button onclick="openNewStaff()" style="background:#5c6bc0;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋従業員</button>
     <button onclick="openM('m-office')" style="background:#607d8b;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋営業所</button>
-    <div class="sz-toggle" id="sz-toggle-header">
-      <button data-sz="s" onclick="setUiSize('s')" title="小">S</button>
-      <button data-sz="m" onclick="setUiSize('m')" title="中">M</button>
-      <button data-sz="l" onclick="setUiSize('l')" title="大">L</button>
-      <button data-sz="xl" onclick="setUiSize('xl')" title="特大">XL</button>
-    </div>
     <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);">🌙</button>
     <button class="tn-ts-btn" id="ts-top-btn" onclick="requireTS('ts-inv',null)">TS</button>
   </div>
@@ -2914,8 +2897,8 @@ function setUiSize(sz){
   if(!valid.includes(sz)) sz = 's';
   document.documentElement.setAttribute('data-size', sz);
   try{ localStorage.setItem('uiSize', sz); }catch(e){}
-  // ボタン active 表示（設定画面 + ヘッダー両方）
-  document.querySelectorAll('#size-btns [data-sz], #sz-toggle-header [data-sz]').forEach(b=>{
+  // ボタン active 表示（設定画面）
+  document.querySelectorAll('#size-btns [data-sz]').forEach(b=>{
     b.classList.toggle('active-sz', b.dataset.sz === sz);
   });
 }
