@@ -68,7 +68,7 @@
 
 *{margin:0;padding:0;box-sizing:border-box;}
 html{font-size:14px;}
-body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt);display:flex;min-height:100vh;}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt);display:flex;flex-direction:column;min-height:100vh;}
 
 /* SIDEBAR */
 #sb{display:none;}
@@ -900,10 +900,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
 
-    </div>          
-        </div>
+    </div>
         <div id="dup-result" style="padding:8px 0;"></div>
-      </div>
 
       <!-- 宅配日報 重複一覧 -->
       <div class="card mb12" id="dup-del-card" style="display:none;">
@@ -944,7 +942,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span id="dup-pu-count" class="xs muted"></span>
         </div>
       </div>
-    </div>
 
 
     <!-- 売上・支払明細 -->
@@ -2799,6 +2796,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <script>
 'use strict';
+
+// ── HTML エスケープ ──
+function esc(s){
+  if(s==null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
 // ── 社員番号ユーティリティ ──
 // officeCode(2桁) + 連番(2桁) を自動生成
