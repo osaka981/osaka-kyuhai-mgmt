@@ -71,7 +71,7 @@ html{font-size:14px;}
 body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt);display:flex;min-height:100vh;}
 
 /* SIDEBAR */
-#sb{width:212px;min-width:212px;background:var(--bg2);border-right:1px solid var(--brd);display:flex;flex-direction:column;position:fixed;height:100vh;z-index:200;overflow-y:auto;}
+#sb{display:none;}
 .logo{padding:16px 14px 14px;border-bottom:1px solid var(--brd);background:linear-gradient(150deg,#140608 0%,#1c0d0a 100%);position:relative;overflow:hidden;}
 .logo::after{content:'';position:absolute;right:-8px;top:-8px;width:52px;height:52px;background:radial-gradient(circle,rgba(192,57,43,.25),transparent 70%);}
 .logo-sub{font-size:8px;color:rgba(255,255,255,.28);letter-spacing:3px;font-family:'DM Mono',monospace;margin-bottom:5px;}
@@ -93,7 +93,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 .nbadge{margin-left:auto;background:var(--red);color:#fff;font-size:8px;padding:1px 5px;border-radius:8px;font-weight:700;}
 
 /* MAIN */
-#main{margin-left:212px;flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0;overflow-x:hidden;}
+#main{margin-left:0;flex:1;display:flex;flex-direction:column;min-height:100vh;min-width:0;overflow-x:hidden;}
 .tb{background:var(--bg2);border-bottom:1px solid var(--brd);height:48px;min-height:48px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;overflow:hidden;}
 .tb-t{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;white-space:nowrap;flex-shrink:0;min-width:80px;}
 .tb-r{display:flex;align-items:center;gap:5px;flex-shrink:0;flex-wrap:nowrap;overflow:visible;}
@@ -600,19 +600,44 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
 </nav>
 
+<div id="top-nav">
+  <div class="tn-logo">
+    <div>
+      <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
+      大阪急配
+    </div>
+  </div>
+  <div class="tn-tabs">
+    <div class="tn-tab active" id="tntab-home" onclick="switchTopTab('home')">HOME</div>
+    <div class="tn-tab" id="tntab-post" onclick="switchTopTab('post')">郵便局</div>
+    <div class="tn-tab" id="tntab-col" onclick="switchTopTab('col')">集荷</div>
+    <div class="tn-tab" id="tntab-hr" onclick="switchTopTab('hr')">給与・人事</div>
+    <div class="tn-tab" id="tntab-analysis" onclick="switchTopTab('analysis')">集計・分析</div>
+    <div class="tn-tab" id="tntab-admin" onclick="switchTopTab('admin')">管理</div>
+  </div>
+  <div class="tn-right">
+    <span id="fb-status-badge-top" style="font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);color:var(--txt2);"></span>
+    <span class="tb-dt" id="today-s-top" style="font-size:9px;color:rgba(255,255,255,.45);font-family:'DM Mono',monospace;"></span>
+    <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
+    <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋宅配日報</button>
+    <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
+    <button onclick="openNewStaff()" style="background:#5c6bc0;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋従業員</button>
+    <button onclick="openM('m-office')" style="background:#607d8b;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋営業所</button>
+    <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);">🌙</button>
+    <button class="tn-ts-btn" id="ts-top-btn" onclick="requireTS('ts-inv',null)">TS</button>
+  </div>
+</div>
+
+<div id="sub-nav">
+  <!-- JS で動的に描画 -->
+</div>
+
 <div id="main">
-  <div class="tb">
+  <div class="tb" style="display:none;">
     <div class="tb-t" id="pg-title">ダッシュボード</div>
     <div class="tb-r">
-      <button id="theme-toggle-btn" onclick="toggleTheme()" title="テーマ切替"
-        style="background:none;border:1px solid var(--brd2);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--txt2);transition:all .15s;">
-        🌙
-      </button>
-      <span id="fb-status-badge" style="display:none;align-items:center;gap:4px;font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);"></span>
+      <span id="fb-status-badge" style="display:none;"></span>
       <span class="tb-dt" id="today-s"></span>
-      <button onclick="manualSync()" id="sync-btn" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">更新</button>
-      <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 宅配日報</button>
-      <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 集荷日報</button>
       <button onclick="nav(document.querySelector('[data-s=staff]'))" style="background:#ffb6d4;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 従業員</button>
       <button onclick="openM('m-office')" style="background:#0756c5;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 営業所</button>
     </div>
@@ -3399,6 +3424,157 @@ function updateTabNavBtns(key){
   }
 }
 
+// ━━ 案B ナビゲーション JS ━━
+
+// タブ構成
+const _TOP_TABS = {
+  home:     { subs: [
+    { s:'dashboard', label:'ダッシュボード' },
+    { s:'alert',     label:'アラート', badge:'alert' },
+  ]},
+  post:     { subs: [
+    { s:'del',        label:'日報一覧' },
+    { s:'del-report', label:'日報レポート' },
+    { s:'cmp',        label:'郵便局照合', badge:'diff' },
+    { s:'del-inv',    label:'請求書' },
+    { s:'ts-prices',  label:'郵便局単価', badge:'ts' },
+    { s:'ts-inv',     label:'郵便局請求書', badge:'ts' },
+  ]},
+  col:      { subs: [
+    { s:'pu',         label:'日報一覧' },
+    { s:'pu-report',  label:'日報レポート' },
+    { s:'pu-sum',     label:'品目別集計' },
+    { s:'pu-cust',    label:'顧客・契約管理' },
+    { s:'pu-inv',     label:'集荷請求管理' },
+  ]},
+  hr:       { subs: [
+    { s:'staff',       label:'従業員管理' },
+    { s:'company',     label:'委託会社管理' },
+    { s:'salary',      label:'給与計算' },
+    { s:'pay-history', label:'給与履歴' },
+  ]},
+  analysis: { subs: [
+    { s:'billing', label:'売上・支払明細' },
+  ]},
+  admin:    { subs: [
+    { s:'offices',     label:'営業所管理' },
+    { s:'import',      label:'CSVインポート' },
+    { s:'ts-settings', label:'システム設定', badge:'ts' },
+  ]},
+};
+
+// どのページがどのタブに属するか
+const _PAGE_TO_TAB = {};
+Object.entries(_TOP_TABS).forEach(([tab, cfg]) => {
+  cfg.subs.forEach(sub => { _PAGE_TO_TAB[sub.s] = tab; });
+});
+
+let _currentTopTab = 'home';
+
+function switchTopTab(tab, skipNav) {
+  _currentTopTab = tab;
+  // ヘッダータブのactive切替
+  document.querySelectorAll('.tn-tab').forEach(el => el.classList.remove('active'));
+  const activeTab = document.getElementById('tntab-' + tab);
+  if (activeTab) activeTab.classList.add('active');
+  // サブナビを描画
+  renderSubNav(tab);
+  // タブ内の最初のサブページに遷移（skipNavがtrueなら遷移しない）
+  if (!skipNav) {
+    const first = _TOP_TABS[tab]?.subs?.[0];
+    if (first) {
+      if (first.badge === 'ts') requireTS(first.s, null);
+      else navByS(first.s);
+    }
+  }
+}
+
+function renderSubNav(tab) {
+  const wrap = document.getElementById('sub-nav');
+  if (!wrap) return;
+  const subs = _TOP_TABS[tab]?.subs || [];
+  const diffCount = parseInt($('nb-diff')?.textContent || '0');
+  wrap.innerHTML = subs.map(sub => {
+    let badge = '';
+    if (sub.badge === 'diff' && diffCount > 0) badge = `<span class="sn-badge-r">${diffCount}</span>`;
+    else if (sub.badge === 'ts') badge = `<span class="sn-badge-ts">TS</span>`;
+    else if (sub.badge === 'new') badge = `<span class="sn-badge-n">NEW</span>`;
+    const isActive = document.querySelector('#s-' + sub.s)?.style.display !== 'none';
+    return `<button class="sn-btn${isActive?' active':''}" onclick="snNav('${sub.s}')">${sub.label}${badge}</button>`;
+  }).join('');
+}
+
+function snNav(s) {
+  // TSページはPIN認証
+  const sub = Object.values(_TOP_TABS).flatMap(t=>t.subs).find(x=>x.s===s);
+  if (sub?.badge === 'ts') { requireTS(s, null); return; }
+  navByS(s);
+  // サブナビのactiveを更新
+  document.querySelectorAll('.sn-btn').forEach(btn => btn.classList.remove('active'));
+  const subs = _TOP_TABS[_currentTopTab]?.subs || [];
+  const idx = subs.findIndex(x => x.s === s);
+  const btns = document.querySelectorAll('.sn-btn');
+  if (btns[idx]) btns[idx].classList.add('active');
+}
+
+// 既存のnav()を置き換え（data-s属性から遷移するラッパー）
+function navByS(s) {
+  // 旧secクラスのon/off切替（既存コードとの互換を維持）
+  document.querySelectorAll('.sec').forEach(x => x.classList.remove('on'));
+  const target = document.getElementById('s-' + s);
+  if (target) target.classList.add('on');
+  // pg-title更新
+  const pgTitle = document.getElementById('pg-title');
+  if (pgTitle) {
+    const sub = Object.values(_TOP_TABS).flatMap(t=>t.subs).find(x=>x.s===s);
+    if (sub) pgTitle.textContent = sub.label;
+  }
+  // 描画関数を実際の関数名で呼ぶ（ブラウザで確認済みの名前）
+  const _call = (fn) => { if(typeof window[fn]==='function') window[fn](); };
+  if (s==='dashboard')   _call('renderDash');
+  if (s==='del')         _call('renderDel');
+  if (s==='del-report')  _call('renderDelReport');
+  if (s==='cmp')         {} /* cmpはFirebaseのonValue監視で自動更新 */
+  if (s==='del-inv')     _call('switchDelInvTab') || (()=>{ if(typeof switchDelInvTab==='function') switchDelInvTab('emp'); })();
+  if (s==='pu')          _call('renderPU');
+  if (s==='pu-report')   _call('renderPUReport');
+  if (s==='pu-sum')      _call('renderSum');
+  if (s==='pu-cust')     {} /* onValue自動更新 */
+  if (s==='pu-inv')      _call('renderPUInv');
+  if (s==='staff')       _call('renderStaff');
+  if (s==='company')     _call('renderCompanyPage');
+  if (s==='salary')      _call('renderSalary');
+  if (s==='pay-history') _call('initPayHistPage');
+  if (s==='billing')     _call('renderBilling');
+  if (s==='offices')     _call('renderOffCards');
+}
+
+// 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
+const _origNav = window.nav;
+function nav(el) {
+  const s = el?.dataset?.s || el?.getAttribute?.('data-s');
+  if (!s) return;
+  // 対応するトップタブに切替
+  const topTab = _PAGE_TO_TAB[s];
+  if (topTab && topTab !== _currentTopTab) switchTopTab(topTab, true);
+  snNav(s);
+}
+
+// 今日の日付を上部ナビにも表示
+function syncTopNavDate() {
+  const el = document.getElementById('today-s-top');
+  const src = document.getElementById('today-s');
+  if (el && src) el.textContent = src.textContent;
+}
+
+// 初期化
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    syncTopNavDate();
+    switchTopTab('home');
+  }, 100);
+});
+
 async function initFirebase() {
   try {
     const { initializeApp, getDatabase } = window._fbImports || {};
@@ -6159,6 +6335,29 @@ tfoot td{padding:5px 4px;color:#fff;font-weight:700;font-size:10px;border-right:
   .toolbar{display:none;}
   .a4-page{margin:0;box-shadow:none;page-break-after:always;width:100%;}
 }
+
+/* ━━ 案B：上部ヘッダーナビ CSS ━━ */
+#top-nav{background:#1a2238;display:flex;align-items:stretch;height:44px;position:sticky;top:0;z-index:300;flex-shrink:0;}
+#top-nav .tn-logo{padding:0 16px;display:flex;align-items:center;font-size:13px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:.5px;gap:8px;flex-shrink:0;}
+#top-nav .tn-logo-sub{font-size:8px;color:rgba(255,255,255,.35);letter-spacing:2px;font-family:'DM Mono',monospace;}
+#top-nav .tn-tabs{display:flex;flex:1;overflow:hidden;}
+#top-nav .tn-tab{padding:0 15px;display:flex;align-items:center;font-size:12.5px;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:color .1s;flex-shrink:0;}
+#top-nav .tn-tab:hover{color:rgba(255,255,255,.82);}
+#top-nav .tn-tab.active{color:#fff;border-bottom:3px solid #5c9ee8;}
+#top-nav .tn-right{padding:0 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;}
+#top-nav .tn-ts-btn{padding:4px 10px;border-radius:5px;font-size:11px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
+#top-nav .tn-ts-btn.authed{color:rgba(255,200,50,.95);background:rgba(255,200,50,.15);}
+/* サブナビ（角丸ボタン 案3） */
+#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:6px 14px;display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;min-height:44px;align-items:center;}
+.sn-btn{padding:6px 13px;border-radius:6px;font-size:12px;color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;}
+.sn-btn:hover{border-color:var(--txt2);color:var(--txt);}
+.sn-btn.active{background:#1a2238;color:#fff;border-color:#1a2238;}
+[data-theme='light'] .sn-btn.active{background:#1a2238;color:#fff;}
+.sn-badge-r{font-size:9px;background:rgba(220,50,50,.85);color:#fff;border-radius:8px;padding:0 5px;min-width:16px;text-align:center;}
+.sn-badge-n{font-size:9px;background:rgba(76,175,136,.2);color:#0a7a5a;border-radius:3px;padding:0 4px;}
+.sn-badge-ts{font-size:9px;background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
+/* .tb は日報入力ボタン行として維持（pg-titleは削除） */
+.tb{background:var(--bg2);border-bottom:1px solid var(--brd);min-height:44px;padding:0 14px;display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-shrink:0;}
 </style>
 </head><body>
 <div class="toolbar">
@@ -11185,18 +11384,43 @@ function initSbGroups(){
 }
 
 function nav(el){
-  const s=el.dataset.s;
+  const s=el?.dataset?.s||el?.getAttribute?.('data-s');
+  if(!s)return;
+  // 旧secクラス切替（互換維持）
   document.querySelectorAll('.sec').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(x=>x.classList.remove('on'));
   $('s-'+s)?.classList.add('on');
-  el.classList.add('on');
-  $('pg-title').textContent=PT[s]||s;
-  if(s==='pu-inv')    renderPUInv();
-  if(s==='pu-sum')    renderSum();
-  if(s==='salary')    renderSalary();
-  if(s==='company')   renderCompanyPage();
-  if(s==='pay-history') initPayHistPage();
-  if(s==='staff')     renderStaff();
+  if(el?.classList) el.classList.add('on');
+  if($('pg-title')) $('pg-title').textContent=PT[s]||s;
+  // 各ページの描画
+  if(s==='pu-inv')       renderPUInv();
+  if(s==='pu-sum')       renderSum();
+  if(s==='salary')       renderSalary();
+  if(s==='company')      renderCompanyPage();
+  if(s==='pay-history')  initPayHistPage();
+  if(s==='staff')        renderStaff();
+  if(s==='del')          { if(typeof renderDel==='function') renderDel(); }
+  if(s==='del-report')   { if(typeof renderDelReport==='function') renderDelReport(); }
+  if(s==='cmp')          renderCmp?.();
+  if(s==='pu')           { if(typeof renderPU==='function') renderPU(); }
+  if(s==='pu-report')    { if(typeof renderPUReport==='function') renderPUReport(); }
+  if(s==='pu-cust')      { /* onValue自動更新 */ }
+  if(s==='billing')      { if(typeof renderBilling==='function') renderBilling(); }
+  if(s==='dashboard')    { if(typeof renderDash==='function') renderDash(); }
+  // 上部ナビのトップタブ・サブタブを同期
+  const topTab=_PAGE_TO_TAB?.[s];
+  if(topTab&&topTab!==_currentTopTab){ _currentTopTab=topTab; }
+  if(typeof renderSubNav==='function') renderSubNav(_currentTopTab);
+  // サブタブのactiveを更新
+  setTimeout(()=>{
+    const subs=_TOP_TABS?.[_currentTopTab]?.subs||[];
+    const idx=subs.findIndex(x=>x.s===s);
+    document.querySelectorAll('.sn-btn').forEach((btn,i)=>btn.classList.toggle('active',i===idx));
+    // トップタブのactiveも更新
+    document.querySelectorAll('.tn-tab').forEach(t=>t.classList.remove('active'));
+    const tnTab=document.getElementById('tntab-'+_currentTopTab);
+    if(tnTab) tnTab.classList.add('active');
+  },10);
 }
 
 
