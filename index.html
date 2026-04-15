@@ -1676,6 +1676,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-offices" class="sec">
       <div style="display:flex;justify-content:flex-end;margin-bottom:18px;"><button class="btn b-grn btn-sm" onclick="openM('m-office')">＋ 営業所</button></div>
       <div id="off-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:11px;"></div>
+
+      <!-- 表示サイズ設定 -->
+      <div class="card" style="max-width:500px;margin-top:24px;">
+        <div class="ct mb12"><div class="cbar"></div>表示サイズ</div>
+        <div style="font-size:var(--sz-xs);color:var(--txt2);margin-bottom:12px;">画面全体のフォントやボタンの大きさを変更します。ヘッダー・サブタブは固定です。設定はブラウザに保存されます。</div>
+        <div id="size-btns" style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn b-gh" data-sz="s" onclick="setUiSize('s')" style="min-width:80px;justify-content:center;">小（S）</button>
+          <button class="btn b-gh" data-sz="m" onclick="setUiSize('m')" style="min-width:80px;justify-content:center;">中（M）</button>
+          <button class="btn b-gh" data-sz="l" onclick="setUiSize('l')" style="min-width:80px;justify-content:center;">大（L）</button>
+          <button class="btn b-gh" data-sz="xl" onclick="setUiSize('xl')" style="min-width:80px;justify-content:center;">特大（XL）</button>
+        </div>
+        <div id="size-preview" style="margin-top:12px;padding:10px;border:1px dashed var(--brd2);border-radius:5px;font-size:var(--sz-tbl);color:var(--txt2);">プレビュー：このテキストのサイズが変わります</div>
+      </div>
     </div>
 
     <!-- TS: 郵便局請求書 -->
@@ -1733,17 +1746,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-blu btn-sm" onclick="addItemGroup()">＋ グループを追加</button>
         <button class="btn b-grn btn-sm" style="margin-left:6px;" onclick="saveItemGroups()">💾 保存</button>
         <button class="btn b-gh btn-sm" style="margin-left:6px;" onclick="renderItemGroupList()">リセット</button>
-      </div>
-
-      <div class="card mb12" style="max-width:500px;">
-        <div class="ct mb12"><div class="cbar"></div>表示サイズ</div>
-        <div style="font-size:var(--sz-xs);color:var(--txt2);margin-bottom:10px;">画面全体のフォントサイズやボタンの大きさを変更します。設定はブラウザに保存されます。</div>
-        <div id="size-btns" style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button class="btn b-gh btn-sm" data-sz="s" onclick="setUiSize('s')">小（現行）</button>
-          <button class="btn b-gh btn-sm" data-sz="m" onclick="setUiSize('m')">中</button>
-          <button class="btn b-gh btn-sm" data-sz="l" onclick="setUiSize('l')">大</button>
-          <button class="btn b-gh btn-sm" data-sz="xl" onclick="setUiSize('xl')">特大</button>
-        </div>
       </div>
 
       <div class="card" style="max-width:400px;">
