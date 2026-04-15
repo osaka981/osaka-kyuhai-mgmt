@@ -1960,7 +1960,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <!-- 顧客・契約登録 -->
 <div id="m-cust" class="mbg">
 <div class="modal modal-w">
-  <div class="mhd"><div class="mtt">🤝 顧客・単価契約登録</div><button class="mx" onclick="closeM('m-cust')">×</button></div>
+  <div class="mhd">
+    <div class="mtt">顧客・単価契約登録</div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button id="tabnav-prev-cust" type="button" onclick="tabNavMove('cust',-1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);"
+        disabled>←</button>
+      <button id="tabnav-next-cust" type="button" onclick="tabNavMove('cust',1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);">→</button>
+      <button class="mx" onclick="closeM('m-cust')">×</button>
+    </div>
+  </div>
   <div class="f2 mb8">
     <div class="fg">
       <label>顧客番号
@@ -2109,9 +2119,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <!-- 従業員台帳登録モーダル -->
 <div id="m-staff" class="mbg">
 <div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
-  <div class="mhd">
-    <div class="mtt">👤 従業員台帳</div>
-    <button class="mx" onclick="confirmCloseStaff()">×</button>
+  <div class="mhd" style="padding-bottom:0;">
+    <div class="mtt">従業員台帳</div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button id="tabnav-prev-staff" type="button" onclick="tabNavMove('staff',-1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);"
+        disabled>←</button>
+      <button id="tabnav-next-staff" type="button" onclick="tabNavMove('staff',1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);">→</button>
+      <button class="mx" onclick="confirmCloseStaff()">×</button>
+    </div>
   </div>
 
   <!-- タブ（sticky固定） -->
@@ -3311,9 +3328,76 @@ function resetStaffModal(){
 function openNewStaff(){
   resetStaffModal();
   openM('m-staff');
-  setTimeout(()=>switchStTab('info'),50);
+  setTimeout(()=>updateTabNavBtns('staff'),80);
+  setTimeout(()=>{switchStTab('info');updateTabNavBtns('staff');},50);
 }
 
+
+// ══ タブ ← → ナビゲーション ══
+const _TAB_NAV = {
+  staff: {
+    tabs: ['info','del','col','other','offset','advance','confirm','route','history'],
+    fn: (t) => switchStTab(t),
+    getActive: () => {
+      const tabs = ['info','del','col','other','offset','advance','confirm','route','history'];
+      for(const t of tabs){
+        const b = $('ptab-'+t);
+        if(b && b.style.background && b.style.background !== 'transparent' && b.style.background !== '') return t;
+      }
+      return 'info';
+    }
+  },
+  cust: {
+    tabs: ['col','other','offset'],
+    fn: (t) => switchCuTab(t),
+    getActive: () => {
+      for(const t of ['col','other','offset']){
+        const b = $('cu-ptab-'+t);
+        if(b && b.classList.contains('on')) return t;
+      }
+      return 'col';
+    }
+  },
+  company: {
+    tabs: ['del','col','oth','rt'],
+    fn: (t) => switchCoTab(t),
+    getActive: () => {
+      for(const t of ['del','col','oth','rt']){
+        const b = $('co-ptab-'+t);
+        if(b && b.classList.contains('on')) return t;
+      }
+      return 'del';
+    }
+  }
+};
+
+function tabNavMove(key, dir){
+  const cfg = _TAB_NAV[key]; if(!cfg) return;
+  const cur = cfg.getActive();
+  const idx = cfg.tabs.indexOf(cur);
+  const next = cfg.tabs[idx + dir];
+  if(next !== undefined) cfg.fn(next);
+  // ← → ボタンのdisabledを更新（少し遅延してタブ切替後に反映）
+  setTimeout(() => updateTabNavBtns(key), 30);
+}
+
+function updateTabNavBtns(key){
+  const cfg = _TAB_NAV[key]; if(!cfg) return;
+  const cur = cfg.getActive();
+  const idx = cfg.tabs.indexOf(cur);
+  const prevBtn = $('tabnav-prev-'+key);
+  const nextBtn = $('tabnav-next-'+key);
+  if(prevBtn){
+    prevBtn.disabled = idx <= 0;
+    prevBtn.style.opacity = idx <= 0 ? '0.25' : '1';
+    prevBtn.style.cursor = idx <= 0 ? 'not-allowed' : 'pointer';
+  }
+  if(nextBtn){
+    nextBtn.disabled = idx >= cfg.tabs.length - 1;
+    nextBtn.style.opacity = idx >= cfg.tabs.length - 1 ? '0.25' : '1';
+    nextBtn.style.cursor = idx >= cfg.tabs.length - 1 ? 'not-allowed' : 'pointer';
+  }
+}
 
 async function initFirebase() {
   try {
@@ -4871,6 +4955,7 @@ function switchCuTab(t){
     if(btn) btn.classList.toggle('on', id===t);
     if(con) con.style.display = id===t ? '' : 'none';
   });
+  setTimeout(()=>updateTabNavBtns('cust'),30);
 }
 
 // ─── 税込・税別 切り替え（顧客） ───
@@ -7470,6 +7555,7 @@ function switchStTab(t){
   if(t==='route')   renderRouteList();
   if(t==='confirm') buildStConfirm();
   if(t==='advance') renderAdvanceTab();
+  setTimeout(()=>updateTabNavBtns('staff'),30);
 }
 
 // ══ 前払い管理 ══
@@ -8585,6 +8671,7 @@ function switchCoTab(t){
   });
   if(t==='rt') renderCoRouteInline();
   if(t==='col') initCoColTab();
+  setTimeout(()=>updateTabNavBtns('company'),30);
 }
 
 
@@ -11660,7 +11747,17 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
 <!-- 委託会社登録・編集モーダル -->
 <div id="m-company" class="mbg">
 <div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
-  <div class="mhd"><div class="mtt" id="m-company-title">🏭 委託会社登録</div><button class="mx" onclick="closeM('m-company')">×</button></div>
+  <div class="mhd">
+    <div class="mtt" id="m-company-title">委託会社登録</div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button id="tabnav-prev-company" type="button" onclick="tabNavMove('company',-1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);"
+        disabled>←</button>
+      <button id="tabnav-next-company" type="button" onclick="tabNavMove('company',1)"
+        style="width:28px;height:28px;border-radius:5px;border:1px solid var(--brd);background:var(--bg3);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--txt2);">→</button>
+      <button class="mx" onclick="closeM('m-company')">×</button>
+    </div>
+  </div>
 
   <!-- タブ（くっきりタブ） -->
   <div style="display:flex;gap:2px;padding:0;flex-shrink:0;background:var(--bg2,#e8eaf0);border-bottom:3px solid var(--tel2);">
