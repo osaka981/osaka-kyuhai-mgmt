@@ -97,6 +97,8 @@ html[data-size="l"] .modal{width:800px;}
 html[data-size="xl"] .modal{width:900px;padding:28px;}
 html[data-size="l"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))!important;}
 html[data-size="xl"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))!important;}
+html[data-size="l"] input[type="month"].fi,html[data-size="l"] input[type="date"].fi{min-width:200px;}
+html[data-size="xl"] input[type="month"].fi,html[data-size="xl"] input[type="date"].fi{min-width:230px;}
 html[data-size="l"] .g2{gap:14px;}
 html[data-size="xl"] .g2{gap:18px;}
 
@@ -238,6 +240,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 .fg{display:flex;flex-direction:column;gap:3px;}
 .fg label{font-size:var(--sz-lbl,9.5px);color:var(--txt2);font-weight:700;letter-spacing:.3px;}
 .fi{background:var(--bg3);border:1px solid var(--brd2);border-radius:4px;padding:var(--sz-p-fi,6px 9px);color:var(--txt);font-family:inherit;font-size:var(--sz-fi,12px);outline:none;transition:border-color .15s;width:100%;}
+input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .fi:focus{border-color:var(--red);}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 .f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;}
@@ -253,7 +256,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 
 /* OFFICE TABS */
 .otabs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
-.otab{padding:4px 11px;border-radius:3px;font-size:11px;cursor:pointer;background:var(--sur);color:var(--txt2);border:1px solid var(--brd);transition:all .12s;}
+.otab{padding:8px 16px;border-radius:5px;font-size:var(--sz-sm,12.5px);cursor:pointer;background:var(--sur);color:var(--txt2);border:1px solid var(--brd);transition:all .12s;font-weight:600;}
 .co-tab-panel{display:block;}
 .co-tab{transition:background .12s,color .12s,border-color .12s;}
 .otab:hover{color:var(--txt);}
@@ -578,7 +581,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 #top-nav .tn-logo{padding:14px 22px;display:flex;align-items:center;font-size:20px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:1.5px;gap:8px;flex-shrink:0;}
 #top-nav .tn-logo-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:3px;font-family:'DM Mono',monospace;}
 #top-nav .tn-tabs{order:3;width:100%;flex:none;display:flex;background:#141a2e;border-top:1px solid rgba(255,255,255,.08);}
-#top-nav .tn-tab{flex:1;justify-content:center;padding:18px 10px;display:flex;align-items:center;font-size:17px;font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:1px;}
+#top-nav .tn-tab{padding:16px 28px;display:flex;align-items:center;font-size:17px;font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:.5px;}
 #top-nav .tn-tab:hover{color:rgba(255,255,255,.82);background:rgba(255,255,255,.05);}
 #top-nav .tn-tab.active{color:#fff;border-bottom:4px solid #5c9ee8;background:rgba(92,158,232,.1);}
 #top-nav .tn-right{padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;}
@@ -586,7 +589,7 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 #top-nav .tn-ts-btn{padding:6px 12px;border-radius:5px;font-size:12px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
 #top-nav .tn-ts-btn.authed{color:rgba(255,200,50,.95);background:rgba(255,200,50,.15);}
 #sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:14px 22px;display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:66px;align-items:center;}
-.sn-btn{padding:14px 32px;border-radius:8px;font-size:16px;color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
+.sn-btn{padding:14px 34px;border-radius:8px;font-size:16px;color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
 .sn-btn:hover{border-color:var(--txt2);color:var(--txt);}
 .sn-btn.active{background:#1a2238;color:#fff;border-color:#1a2238;}
 [data-theme='light'] .sn-btn.active{background:#1a2238;color:#fff;}
@@ -774,7 +777,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <div class="otabs" id="del-otabs"></div>
-          <input type="month" id="del-mon" class="fi" style="width:136px" onchange="renderDel()">
+          <input type="month" id="del-mon" class="fi" onchange="renderDel()">
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expDelCSV()">📥 CSV出力</button>
@@ -1302,7 +1305,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div id="delinv-emp-area">
         <div class="flbc mb12">
           <div class="fla gap6">
-            <input type="month" id="delinv-emp-mon" class="fi" style="width:136px;">
+            <input type="month" id="delinv-emp-mon" class="fi">
             <select id="delinv-emp-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
             <select id="delinv-emp-target" class="fi" style="width:160px;">
               <option value="">全従業員・委託</option>
@@ -1339,7 +1342,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
           <div class="flbc mb12">
             <div class="fla gap6">
-              <input type="month" id="delinv-post-mon" class="fi" style="width:136px;">
+              <input type="month" id="delinv-post-mon" class="fi">
               <select id="delinv-post-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
             </div>
             <button class="btn b-red btn-sm" onclick="genPostInv()">📄 郵便局請求書生成</button>
@@ -1362,7 +1365,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-pu" class="sec">
       <div class="flbc mb12">
         <div class="fla gap6">
-          <input type="month" id="pu-mon" class="fi" style="width:136px" onchange="renderPU()">
+          <input type="month" id="pu-mon" class="fi" onchange="renderPU()">
           <select id="pu-cf" class="fi" style="width:150px" onchange="renderPU()"><option value="">全顧客</option></select>
         </div>
         <div class="fla gap6">
@@ -1396,7 +1399,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-pu-sum" class="sec">
       <div class="flbc mb12">
         <div class="fla gap6">
-          <input type="month" id="sum-mon" class="fi" style="width:136px" onchange="renderSum()">
+          <input type="month" id="sum-mon" class="fi" onchange="renderSum()">
           <select id="sum-view" class="fi" style="width:120px" onchange="renderSum()">
             <option value="item">品目別</option>
             <option value="cust">顧客別</option>
@@ -1444,7 +1447,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-pu-inv" class="sec">
       <div class="flbc mb12">
         <div class="fla gap6">
-          <input type="month" id="pinv-mon" class="fi" style="width:136px" onchange="renderPUInv()">
+          <input type="month" id="pinv-mon" class="fi" onchange="renderPUInv()">
         </div>
         <button class="btn b-grn btn-sm" onclick="renderPUInv()">🔄 請求書自動生成</button>
       </div>
@@ -1575,7 +1578,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div id="sal-panel-calc">
         <div class="flbc mb12">
           <div class="fla gap6">
-            <input type="month" id="sal-mon" class="fi" style="width:136px" onchange="renderSalary()">
+            <input type="month" id="sal-mon" class="fi" onchange="renderSalary()">
             <button class="btn b-blu btn-sm" onclick="renderSalary()">🔄 自動計算</button>
           </div>
           <div class="fla gap6">
@@ -1706,7 +1709,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div class="flbc mb12">
         <div class="fla gap6">
-          <input type="month" id="tsinv-mon" class="fi" style="width:136px;">
+          <input type="month" id="tsinv-mon" class="fi">
           <select id="tsinv-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
         </div>
         <button class="btn b-grn btn-sm" onclick="renderTSInv()">🔄 請求書生成</button>
