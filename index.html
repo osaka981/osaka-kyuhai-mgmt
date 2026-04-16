@@ -14038,6 +14038,7 @@ function requireTS(section, navEl){
   if(isTSAuthenticated()){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
+    else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
     if(section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
     return;
   }
@@ -14117,6 +14118,7 @@ function executeTSAction(){
   tsPendingAction=null;
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
+    else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
     if(a.section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
