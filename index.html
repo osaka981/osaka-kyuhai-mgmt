@@ -1170,8 +1170,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <label>月</label>
             <input type="month" id="rc-mon" class="fi" onchange="renderReconcile()">
           </div>
-          <button class="btn b-blu btn-sm" onclick="renderReconcile()">🔄 照合更新</button>
-          <button class="btn b-grn btn-sm" onclick="confirmReconcile()">✅ 確定して書類生成へ</button>
+          <button class="btn b-blu btn-sm" onclick="renderReconcile()">照合更新</button>
+          <button class="btn b-grn btn-sm" onclick="confirmReconcile()">確定して書類生成へ</button>
         </div>
       </div>
 
@@ -1581,7 +1581,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-staff" class="sec">
       <div class="flbc mb12">
         <div class="fla gap6" style="flex-wrap:wrap;">
-          <input type="text" id="staff-search" class="fi" placeholder="🔍 番号・氏名で検索..." style="width:220px;" oninput="renderStaff(document.getElementById('staff-search')._flt||'')">
+          <input type="text" id="staff-search" class="fi" placeholder="番号・氏名で検索..." style="width:220px;" oninput="renderStaff(document.getElementById('staff-search')._flt||'')">
           <button class="btn b-gh btn-sm" onclick="fltStaff('')">全員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('社員')">社員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
@@ -3004,6 +3004,9 @@ const FB_CONFIG = {
   messagingSenderId: "86627546503",
   appId: "1:86627546503:web:62d338fb75ebaa91bbcf22"
 };
+
+// フリート管理GAS URL（メール送信用）
+const FLEET_GAS_URL = 'https://script.google.com/macros/s/AKfycbw6img2X6uLInjioPFUVyfTTVIUiAtiEWpu5Y3_axE0BOrroOKSFMRQL_9quxeuuD0/exec';
 
 // LS キー（日報アプリと共通）
 const LS_KEYS = {
@@ -11058,7 +11061,7 @@ function renderStaffAnalysis(el, name){
       </div>
 
       <div class="fs-card">
-        <div class="ct mb12"><div class="cbar"></div>📈 評価スコア</div>
+        <div class="ct mb12"><div class="cbar"></div>評価スコア</div>
         <div style="text-align:center;padding:10px 0;">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--amb2);line-height:1;">${score.total}<span style="font-size:22px;color:var(--txt2);">/100</span></div>
           <div style="font-size:20px;color:var(--amb2);letter-spacing:4px;margin-top:6px;">${starEmoji(score.total)}</div>
@@ -11077,7 +11080,7 @@ function renderStaffAnalysis(el, name){
     <!-- 右カラム -->
     <div>
       <div class="fs-card">
-        <div class="ct mb12"><div class="cbar"></div>🏆 順位（稼働者中）</div>
+        <div class="ct mb12"><div class="cbar"></div>順位（稼働者中）</div>
         <div class="tw"><table><thead><tr><th>項目</th><th class="tr">順位</th><th class="tr">数値</th><th class="tr">${esc(cmpLabel)}</th></tr></thead><tbody>
           <tr><td class="fw7">配達完了</td><td class="tr mono fw7" style="color:var(--blu2)">${rankings.kanryo.rank[name]||'-'}/${rankings.kanryo.total}</td><td class="tr mono">${me.kanryo.toLocaleString()}</td><td class="tr mono muted">${Math.round(cmpStat.kanryo).toLocaleString()}</td></tr>
           <tr><td class="fw7">集荷個数</td><td class="tr mono fw7" style="color:var(--tel2)">${rankings.puTot.rank[name]||'-'}/${rankings.puTot.total}</td><td class="tr mono">${me.puTot.toLocaleString()}</td><td class="tr mono muted">${Math.round(cmpStat.puTot).toLocaleString()}</td></tr>
@@ -11552,6 +11555,148 @@ function _calcCustBilling(custName, monStr){
 }
 
 // ── PDF生成（簡易印刷ベース） ──
+// ─── 書類HTMLビルダー（メール送信でも再利用） ───
+function _buildPaySlipHTML(staffName, monStr){
+  const pay=_calcStaffPayment(staffName, monStr);
+  if(!pay.staff) return null;
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  const isExternal=pay.staff.kubun==='個人事業主'||pay.staff.kubun==='会社委託';
+  const title=isExternal?'支払明細書':'給与明細書';
+  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">${title}</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">${esc(pay.staff.name)} 様</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">支払金額</div>
+      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
+      <div>〒599-8247 大阪府堺市中区○○</div>
+      <div>TEL: 072-XXX-XXXX</div>
+      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
+    </div>
+    <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
+  return {title, html, amount:pay.total};
+}
+
+function _buildInvoiceProxyHTML(staffName, monStr){
+  const pay=_calcStaffPayment(staffName, monStr);
+  if(!pay.staff) return null;
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">請 求 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">大阪急配株式会社 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">ご請求金額</div>
+      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">${esc(pay.staff.companyName||pay.staff.name)}</div>
+      ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
+      <div style="margin-top:12px;"><span class="stamp">${esc((pay.staff.companyName||pay.staff.name).slice(0,2))}</span></div>
+    </div>
+    <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
+  return {title:'請求書（発行代行）', html, amount:pay.total};
+}
+
+function _buildCustInvoiceHTML(custName, monStr){
+  const bill=_calcCustBilling(custName, monStr);
+  if(!bill.customer) return null;
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  let rows=bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">${b.qty.toLocaleString()}</td><td class="tr">¥${b.unit.toLocaleString()}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">請 求 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">${esc(bill.customer.name)} 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">ご請求金額（税抜）</div>
+      <div class="doc-amount">¥${bill.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
+      <div>〒599-8247 大阪府堺市中区○○</div>
+      <div>TEL: 072-XXX-XXXX</div>
+      <div>インボイス登録番号：T○○○○○○○○○○○○○</div>
+      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
+    </div>
+    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。</div>`;
+  return {title:'請求書', html, amount:bill.total};
+}
+
+// ─── GAS経由メール送信 ───
+async function sendMailViaGAS({to, cc, subject, body, pdfBase64, pdfName}){
+  try{
+    const res = await fetch(FLEET_GAS_URL, {
+      method:'POST',
+      redirect:'follow',
+      body: JSON.stringify({
+        action:'sendMailFromMgmt',
+        to, cc: cc||'',
+        subject: subject||'',
+        body: body||'',
+        pdfBase64: pdfBase64||'',
+        pdfName: pdfName||''
+      })
+    });
+    const data = await res.json();
+    return data;
+  }catch(err){
+    return {ok:false, error:err.message};
+  }
+}
+
+// HTML→PDF生成（jsPDF使用せず、印刷可能なHTMLをbase64化）
+// ※ブラウザ内PDF生成は重いので、HTMLをデータURL化してそのまま添付する簡易版
+// Gmailで正常に添付表示されるHTML(.html)として送付
+function _htmlToBase64(html, title){
+  const fullHtml=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+    <style>
+      body{font-family:'Yu Gothic','Noto Sans JP',sans-serif;color:#1a1a2e;padding:40px;background:#fff;}
+      .doc-header{border-bottom:3px solid #1a2238;padding-bottom:16px;margin-bottom:24px;}
+      .doc-title{font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;}
+      .doc-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:12px;color:#555;}
+      .doc-to{font-size:20px;font-weight:700;margin-top:24px;border-bottom:1px solid #888;padding-bottom:4px;}
+      .doc-from{text-align:right;margin-top:16px;font-size:14px;line-height:1.8;}
+      .doc-amount-box{background:#f5f5f5;border:2px solid #1a2238;padding:16px;margin:24px 0;text-align:center;}
+      .doc-amount-label{font-size:12px;color:#555;letter-spacing:4px;}
+      .doc-amount{font-family:'Yu Gothic',serif;font-size:36px;font-weight:800;color:#1a2238;}
+      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px;}
+      th{background:#1a2238;color:#fff;padding:10px 8px;text-align:left;}
+      td{border-bottom:1px solid #ccc;padding:8px;}
+      td.tr{text-align:right;font-family:'DM Mono',monospace;}
+      .doc-footer{margin-top:40px;font-size:11px;color:#777;}
+      .stamp{display:inline-block;width:60px;height:60px;border:2px solid #c0392b;border-radius:50%;color:#c0392b;text-align:center;line-height:56px;font-weight:700;font-size:11px;letter-spacing:2px;position:relative;}
+      .stamp::after{content:'';position:absolute;inset:4px;border:1px solid #c0392b;border-radius:50%;}
+    </style></head><body>${html}</body></html>`;
+  // UTF-8のbase64エンコード
+  return btoa(unescape(encodeURIComponent(fullHtml)));
+}
+
 function _printDocWindow(title, html){
   const w=window.open('', '_blank', 'width=900,height=1100');
   if(!w){ showAlert('ポップアップがブロックされました'); return; }
@@ -11715,15 +11860,15 @@ function renderStaffDocs(el, name){
         <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">📄 ${isExternal?'支払明細':'給与明細'}を発行</button>
-        ${isExternal?`<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">📑 請求書代行を発行</button>`:''}
+        <button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">${isExternal?'支払明細':'給与明細'}を発行</button>
+        ${isExternal?`<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">請求書代行を発行</button>`:''}
       </div>
     </div>
     ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
   </div>
 
   <div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>📋 発行履歴</div>`;
+    <div class="ct mb12"><div class="cbar"></div>発行履歴</div>`;
   if(history.length){
     html+=`<div class="tw"><table><thead><tr><th>発行日</th><th>種類</th><th>対象月</th><th class="tr">金額</th><th></th></tr></thead><tbody>`;
     history.forEach(h=>{
@@ -11733,7 +11878,7 @@ function renderStaffDocs(el, name){
         <td><span class="bdg">${typeLabel}</span></td>
         <td class="mono">${h.month||''}</td>
         <td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td>
-        <td><button class="btn b-gh btn-sm" onclick="${h.type==='paySlip'?'generatePaySlip':'generateInvoiceProxy'}('${esc(name)}','${h.month}')">📄再発行</button></td>
+        <td><button class="btn b-gh btn-sm" onclick="${h.type==='paySlip'?'generatePaySlip':'generateInvoiceProxy'}('${esc(name)}','${h.month}')">再発行</button></td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -11749,7 +11894,7 @@ function renderStaffMail(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
 
   let html=`<div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="ct mb12"><div class="cbar"></div>${esc(name)} 宛メール送信</div>
     <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-mail-to" value="${esc(email)}" placeholder="メールアドレス"></div>
     <div class="fg mb8"><label>件名</label><input class="fi" id="fs-mail-sub" value="${ym}分 明細書送付の件"></div>
     <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-mail-body" rows="8" style="resize:vertical;">${esc(name)} 様
@@ -11760,22 +11905,59 @@ ${ym.replace('-','年')}月分の明細書をお送りいたします。
 
 大阪急配株式会社</textarea></div>
     <div class="mb8">
-      <label class="xs muted">添付：</label>
+      <label class="xs muted">添付書類：</label>
       <label style="margin-right:10px;"><input type="checkbox" id="fs-mail-att1" checked> 支払/給与明細</label>
       <label><input type="checkbox" id="fs-mail-att2"> 請求書代行</label>
     </div>
-    <button class="btn b-blu" onclick="sendStaffMail('${esc(name)}')">📨 メーラーで送信</button>
-    <div class="xs muted mt8">※ ブラウザの既定メーラーが起動します。明細PDF添付は別途印刷→PDF保存後に手動添付してください。</div>
+    <div class="fg mb8" style="max-width:180px;"><label>対象月</label><input type="month" id="fs-mail-mon" class="fi" value="${ym}"></div>
+    <button class="btn b-blu" id="fs-mail-send-btn" onclick="sendStaffMail('${esc(name)}')">メール送信</button>
+    <span id="fs-mail-status" class="xs" style="margin-left:10px;"></span>
+    <div class="xs muted mt8">※ GAS経由で自動送信されます。PDF添付ご希望の場合は印刷画面から「PDFに保存」→手動添付してください。書類HTMLは自動添付されます。</div>
   </div>`;
   el.innerHTML=html;
 }
 
-function sendStaffMail(name){
-  const to=$('fs-mail-to').value;
+async function sendStaffMail(name){
+  const to=$('fs-mail-to').value.trim();
   const sub=$('fs-mail-sub').value;
   const body=$('fs-mail-body').value;
+  const mon=$('fs-mail-mon')?.value||'';
+  const att1=$('fs-mail-att1')?.checked;
+  const att2=$('fs-mail-att2')?.checked;
+  const btn=$('fs-mail-send-btn');
+  const status=$('fs-mail-status');
+
   if(!to){showAlert('宛先メールアドレスが未入力です');return;}
-  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+
+  btn.disabled=true; btn.textContent='送信中...';
+  status.textContent=''; status.style.color='';
+
+  // 添付書類HTML生成
+  let pdfBase64='', pdfName='';
+  if(att1 && mon){
+    const doc=_buildPaySlipHTML(name, mon);
+    if(doc){
+      pdfBase64=_htmlToBase64(doc.html, doc.title);
+      pdfName=`${doc.title}_${name}_${mon}.html`;
+    }
+  }else if(att2 && mon){
+    const doc=_buildInvoiceProxyHTML(name, mon);
+    if(doc){
+      pdfBase64=_htmlToBase64(doc.html, doc.title);
+      pdfName=`請求書_${name}_${mon}.html`;
+    }
+  }
+
+  const res=await sendMailViaGAS({to, subject:sub, body, pdfBase64, pdfName});
+
+  btn.disabled=false; btn.textContent='メール送信';
+  if(res.ok){
+    status.textContent='送信完了 (添付'+(res.attachmentCount||0)+'件)';
+    status.style.color='var(--grn2)';
+  }else{
+    status.textContent='送信失敗: '+(res.error||'');
+    status.style.color='var(--red2)';
+  }
 }
 
 // ── 顧客 書類タブ ──
@@ -11797,16 +11979,16 @@ function renderCustDocs(el, name){
         <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--tel2);line-height:1;">¥${bill.total.toLocaleString()}</div>
         <div class="xs muted mt8">集荷 ${bill.rowCount}件</div>
       </div>
-      <button class="btn b-blu" onclick="generateCustInvoice('${esc(name)}','${mon}')">📄 請求書を発行</button>
+      <button class="btn b-blu" onclick="generateCustInvoice('${esc(name)}','${mon}')">請求書を発行</button>
     </div>
     ${bill.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>品目</th><th class="tr">数量</th><th class="tr">単価</th><th class="tr">金額</th></tr></thead><tbody>${bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">${b.qty}</td><td class="tr mono">¥${b.unit}</td><td class="tr mono fw7">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
   </div>
   <div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>📋 発行履歴</div>`;
+    <div class="ct mb12"><div class="cbar"></div>発行履歴</div>`;
   if(history.length){
     html+=`<div class="tw"><table><thead><tr><th>発行日</th><th>対象月</th><th class="tr">金額</th><th></th></tr></thead><tbody>`;
     history.forEach(h=>{
-      html+=`<tr><td class="mono xs">${(h.issuedAt||'').slice(0,10)}</td><td class="mono">${h.month}</td><td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td><td><button class="btn b-gh btn-sm" onclick="generateCustInvoice('${esc(name)}','${h.month}')">📄再発行</button></td></tr>`;
+      html+=`<tr><td class="mono xs">${(h.issuedAt||'').slice(0,10)}</td><td class="mono">${h.month}</td><td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td><td><button class="btn b-gh btn-sm" onclick="generateCustInvoice('${esc(name)}','${h.month}')">再発行</button></td></tr>`;
     });
     html+=`</tbody></table></div>`;
   } else html+=`<div class="xs muted">発行履歴はありません</div>`;
@@ -11819,7 +12001,7 @@ function renderCustMail(el, name){
   const email=cu?.email||'';
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   let html=`<div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="ct mb12"><div class="cbar"></div>${esc(name)} 宛メール送信</div>
     <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-cu-mail-to" value="${esc(email)}"></div>
     <div class="fg mb8"><label>件名</label><input class="fi" id="fs-cu-mail-sub" value="${ym}分 請求書送付の件"></div>
     <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-cu-mail-body" rows="8" style="resize:vertical;">${esc(name)} 御中
@@ -11829,17 +12011,51 @@ ${ym.replace('-','年')}月分の請求書をお送りいたします。
 お振込のほどよろしくお願い申し上げます。
 
 大阪急配株式会社</textarea></div>
-    <button class="btn b-blu" onclick="sendCustMail()">📨 メーラーで送信</button>
+    <div class="mb8">
+      <label class="xs muted">添付書類：</label>
+      <label><input type="checkbox" id="fs-cu-mail-att1" checked> 請求書</label>
+    </div>
+    <div class="fg mb8" style="max-width:180px;"><label>対象月</label><input type="month" id="fs-cu-mail-mon" class="fi" value="${ym}"></div>
+    <button class="btn b-blu" id="fs-cu-mail-send-btn" onclick="sendCustMail('${esc(name)}')">メール送信</button>
+    <span id="fs-cu-mail-status" class="xs" style="margin-left:10px;"></span>
+    <div class="xs muted mt8">※ GAS経由で自動送信されます。</div>
   </div>`;
   el.innerHTML=html;
 }
 
-function sendCustMail(){
-  const to=$('fs-cu-mail-to').value;
+async function sendCustMail(name){
+  const to=$('fs-cu-mail-to').value.trim();
   const sub=$('fs-cu-mail-sub').value;
   const body=$('fs-cu-mail-body').value;
+  const mon=$('fs-cu-mail-mon')?.value||'';
+  const att1=$('fs-cu-mail-att1')?.checked;
+  const btn=$('fs-cu-mail-send-btn');
+  const status=$('fs-cu-mail-status');
+
   if(!to){showAlert('宛先メールアドレスが未入力です');return;}
-  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+
+  btn.disabled=true; btn.textContent='送信中...';
+  status.textContent=''; status.style.color='';
+
+  let pdfBase64='', pdfName='';
+  if(att1 && mon){
+    const doc=_buildCustInvoiceHTML(name, mon);
+    if(doc){
+      pdfBase64=_htmlToBase64(doc.html, doc.title);
+      pdfName=`請求書_${name}_${mon}.html`;
+    }
+  }
+
+  const res=await sendMailViaGAS({to, subject:sub, body, pdfBase64, pdfName});
+
+  btn.disabled=false; btn.textContent='メール送信';
+  if(res.ok){
+    status.textContent='送信完了 (添付'+(res.attachmentCount||0)+'件)';
+    status.style.color='var(--grn2)';
+  }else{
+    status.textContent='送信失敗: '+(res.error||'');
+    status.style.color='var(--red2)';
+  }
 }
 
 // ── 委託会社 書類タブ ──
@@ -11869,7 +12085,7 @@ function renderCompanyDocs(el, name){
     html+=`<tr>
       <td>${staffLink(dp.name)}</td>
       <td class="tr mono fw7">¥${dp.amount.toLocaleString()}</td>
-      <td><button class="btn b-gh btn-sm" onclick="generatePaySlip('${esc(dp.name)}','${mon}')">📄明細</button></td>
+      <td><button class="btn b-gh btn-sm" onclick="generatePaySlip('${esc(dp.name)}','${mon}')">明細</button></td>
     </tr>`;
   });
   html+=`</tbody></table></div></div>`;
@@ -11881,7 +12097,7 @@ function renderCompanyMail(el, name){
   const email=co?.email||'';
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   let html=`<div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="ct mb12"><div class="cbar"></div>${esc(name)} 宛メール送信</div>
     <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-comp-mail-to" value="${esc(email)}"></div>
     <div class="fg mb8"><label>件名</label><input class="fi" id="fs-comp-mail-sub" value="${ym}分 支払明細送付の件"></div>
     <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-comp-mail-body" rows="8" style="resize:vertical;">${esc(name)} 御中
@@ -11891,17 +12107,36 @@ ${ym.replace('-','年')}月分の支払明細および請求書代行をお送�
 ご確認のほどよろしくお願いいたします。
 
 大阪急配株式会社</textarea></div>
-    <button class="btn b-blu" onclick="sendCompMail()">📨 メーラーで送信</button>
+    <div class="fg mb8" style="max-width:180px;"><label>対象月</label><input type="month" id="fs-comp-mail-mon" class="fi" value="${ym}"></div>
+    <button class="btn b-blu" id="fs-comp-mail-send-btn" onclick="sendCompMail()">メール送信</button>
+    <span id="fs-comp-mail-status" class="xs" style="margin-left:10px;"></span>
+    <div class="xs muted mt8">※ GAS経由で自動送信されます。添付書類は所属ドライバーごとに別途発行・送付が必要です。</div>
   </div>`;
   el.innerHTML=html;
 }
 
-function sendCompMail(){
-  const to=$('fs-comp-mail-to').value;
+async function sendCompMail(){
+  const to=$('fs-comp-mail-to').value.trim();
   const sub=$('fs-comp-mail-sub').value;
   const body=$('fs-comp-mail-body').value;
+  const btn=$('fs-comp-mail-send-btn');
+  const status=$('fs-comp-mail-status');
+
   if(!to){showAlert('宛先メールアドレスが未入力です');return;}
-  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+
+  btn.disabled=true; btn.textContent='送信中...';
+  status.textContent=''; status.style.color='';
+
+  const res=await sendMailViaGAS({to, subject:sub, body});
+
+  btn.disabled=false; btn.textContent='メール送信';
+  if(res.ok){
+    status.textContent='送信完了';
+    status.style.color='var(--grn2)';
+  }else{
+    status.textContent='送信失敗: '+(res.error||'');
+    status.style.color='var(--red2)';
+  }
 }
 
 // ─── 数量照合 ───
