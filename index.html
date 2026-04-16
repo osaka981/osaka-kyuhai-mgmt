@@ -10883,56 +10883,12 @@ function renderStaffMonthly(el, name){
 
 function renderStaffLedger(el, name){
   const st=(D.staff||[]).find(s=>s.name===name);
-  if(!st){ el.innerHTML='<div class="al al-e"><span>❌</span><span>従事員データが見つかりません</span></div>'; return; }
-
-  // 既存editStaffモーダルの内容を再構築
-  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>従事員台帳 ─ ${esc(st.name)}</div>`;
-  html+=`<div class="g2">
-    <div class="fg"><label>社員番号</label><input class="fi" id="fs-st-no" value="${esc(st.empNo||'')}"></div>
-    <div class="fg"><label>氏名</label><input class="fi" id="fs-st-name" value="${esc(st.name||'')}"></div>
-    <div class="fg"><label>区分</label><select class="fi" id="fs-st-kubun">
-      <option ${st.kubun==='社員'?'selected':''}>社員</option>
-      <option ${st.kubun==='役員'?'selected':''}>役員</option>
-      <option ${st.kubun==='パート'?'selected':''}>パート</option>
-      <option ${st.kubun==='個人事業主'?'selected':''}>個人事業主</option>
-      <option ${st.kubun==='会社委託'?'selected':''}>会社委託</option>
-    </select></div>
-    <div class="fg"><label>営業所</label><select class="fi" id="fs-st-office">${(D.offices||[]).map(o=>`<option ${o.name===st.office?'selected':''}>${o.name}</option>`).join('')}</select></div>
-    <div class="fg"><label>給与形態</label><select class="fi" id="fs-st-salType">
-      <option value="個数制（歩合）" ${st.salaryType==='個数制（歩合）'?'selected':''}>個数制（歩合）</option>
-      <option value="月給" ${st.salaryType==='月給'?'selected':''}>月給</option>
-      <option value="時間単価" ${st.salaryType==='時間単価'?'selected':''}>時間単価</option>
-      <option value="日額" ${st.salaryType==='日額'?'selected':''}>日額</option>
-    </select></div>
-    <div class="fg"><label>連絡先</label><input class="fi" id="fs-st-tel" value="${esc(st.tel||'')}"></div>
-    <div class="fg"><label>宅配単価</label><input type="number" class="fi" id="fs-st-pDel" value="${st.priceDelivery||0}"></div>
-    <div class="fg"><label>基本給/月額</label><input type="number" class="fi" id="fs-st-salary" value="${st.baseSalary||0}"></div>
-  </div>
-  <div style="margin-top:14px;display:flex;gap:8px;">
-    <button class="btn b-grn btn-sm" onclick="saveStaffFromFS()">💾 保存</button>
-    <button class="btn b-gh btn-sm" onclick="switchFSTab('ledger')">リセット</button>
-  </div></div>`;
-  el.innerHTML=html;
+  if(!st){ el.innerHTML='<div class="fs-card"><div class="al al-e"><span>❌</span><span>従事員データが見つかりません</span></div></div>'; return; }
+  el.innerHTML='<div class="fs-card"><div class="ct mb8"><div class="cbar"></div>従事員台帳</div><div class="xs muted">既存の編集モーダルを開いています…</div></div>';
+  editStaff(st.id);
 }
 
-function saveStaffFromFS(){
-  const name=_fsId;
-  const st=(D.staff||[]).find(s=>s.name===name);
-  if(!st){ showAlert('保存エラー'); return; }
-  st.empNo=$('fs-st-no').value;
-  st.name=$('fs-st-name').value;
-  st.kubun=$('fs-st-kubun').value;
-  st.office=$('fs-st-office').value;
-  st.salaryType=$('fs-st-salType').value;
-  st.tel=$('fs-st-tel').value;
-  st.priceDelivery=Number($('fs-st-pDel').value)||0;
-  st.baseSalary=Number($('fs-st-salary').value)||0;
-  _fsId=st.name; // 名前変更対応
-  $('fs-title').textContent=st.name;
-  $('fs-subtitle').textContent=`${st.kubun||''} ─ ${st.office||''}`;
-  syncToSheet();
-  showAlert('保存しました');
-}
+function saveStaffFromFS(){/* 既存モーダルの保存で対応 */}
 
 // ═══════════════════════════════════════════════
 // ─── 顧客集約ページ ───
@@ -11015,34 +10971,12 @@ function renderCustMonthly(el, name){
 
 function renderCustLedger(el, name){
   const cu=(D.customers||[]).find(c=>c.name===name);
-  if(!cu){ el.innerHTML='<div class="al al-e"><span>❌</span><span>顧客データが見つかりません</span></div>'; return; }
-  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>顧客台帳 ─ ${esc(cu.name)}</div>`;
-  html+=`<div class="g2">
-    <div class="fg"><label>顧客名</label><input class="fi" id="fs-cu-name" value="${esc(cu.name||'')}"></div>
-    <div class="fg"><label>顧客番号</label><input class="fi" id="fs-cu-no" value="${esc(cu.custNo||'')}"></div>
-    <div class="fg"><label>営業所</label><select class="fi" id="fs-cu-office">${(D.offices||[]).map(o=>`<option ${o.name===cu.office?'selected':''}>${o.name}</option>`).join('')}</select></div>
-    <div class="fg"><label>地域</label><input class="fi" id="fs-cu-region" value="${esc(cu.region||'')}"></div>
-    <div class="fg"><label>連絡先</label><input class="fi" id="fs-cu-tel" value="${esc(cu.tel||'')}"></div>
-    <div class="fg"><label>契約開始日</label><input type="date" class="fi" id="fs-cu-start" value="${cu.startDate||''}"></div>
-  </div>
-  <div style="margin-top:14px;"><button class="btn b-grn btn-sm" onclick="saveCustFromFS()">💾 保存</button></div></div>`;
-  el.innerHTML=html;
+  if(!cu){ el.innerHTML='<div class="fs-card"><div class="al al-e"><span>❌</span><span>顧客データが見つかりません</span></div></div>'; return; }
+  el.innerHTML='<div class="fs-card"><div class="ct mb8"><div class="cbar"></div>顧客台帳</div><div class="xs muted">既存の編集モーダルを開いています…</div></div>';
+  editCust(cu.id);
 }
 
-function saveCustFromFS(){
-  const cu=(D.customers||[]).find(c=>c.name===_fsId);
-  if(!cu){showAlert('保存エラー');return;}
-  cu.name=$('fs-cu-name').value;
-  cu.custNo=$('fs-cu-no').value;
-  cu.office=$('fs-cu-office').value;
-  cu.region=$('fs-cu-region').value;
-  cu.tel=$('fs-cu-tel').value;
-  cu.startDate=$('fs-cu-start').value;
-  _fsId=cu.name;
-  $('fs-title').textContent=cu.name;
-  syncToSheet();
-  showAlert('保存しました');
-}
+function saveCustFromFS(){/* 既存モーダルの保存で対応 */}
 
 // ═══════════════════════════════════════════════
 // ─── 営業所集約ページ ───
@@ -11143,32 +11077,12 @@ function renderOfficeMembers(el, name){
 
 function renderOfficeLedger(el, name){
   const of2=(D.offices||[]).find(o=>o.name===name);
-  if(!of2){el.innerHTML='<div class="al al-e"><span>❌</span><span>営業所データが見つかりません</span></div>';return;}
-  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>営業所情報 ─ ${esc(of2.name)}</div>`;
-  html+=`<div class="g2">
-    <div class="fg"><label>営業所名</label><input class="fi" id="fs-of-name" value="${esc(of2.name||'')}"></div>
-    <div class="fg"><label>コード</label><input class="fi" id="fs-of-code" value="${of2.officeCode||''}"></div>
-    <div class="fg"><label>所長</label><input class="fi" id="fs-of-head" value="${esc(of2.head||'')}"></div>
-    <div class="fg"><label>住所</label><input class="fi" id="fs-of-addr" value="${esc(of2.addr||'')}"></div>
-    <div class="fg"><label>TEL</label><input class="fi" id="fs-of-tel" value="${esc(of2.tel||'')}"></div>
-  </div>
-  <div style="margin-top:14px;"><button class="btn b-grn btn-sm" onclick="saveOfficeFromFS()">💾 保存</button></div></div>`;
-  el.innerHTML=html;
+  if(!of2){el.innerHTML='<div class="fs-card"><div class="al al-e"><span>❌</span><span>営業所データが見つかりません</span></div></div>';return;}
+  el.innerHTML='<div class="fs-card"><div class="ct mb8"><div class="cbar"></div>営業所情報</div><div class="xs muted">既存の編集モーダルを開いています…</div></div>';
+  editOffice(of2.id);
 }
 
-function saveOfficeFromFS(){
-  const of2=(D.offices||[]).find(o=>o.name===_fsId);
-  if(!of2){showAlert('保存エラー');return;}
-  of2.name=$('fs-of-name').value;
-  of2.officeCode=$('fs-of-code').value;
-  of2.head=$('fs-of-head').value;
-  of2.addr=$('fs-of-addr').value;
-  of2.tel=$('fs-of-tel').value;
-  _fsId=of2.name;
-  $('fs-title').textContent=of2.name;
-  syncToSheet();
-  showAlert('保存しました');
-}
+function saveOfficeFromFS(){/* 既存モーダルの保存で対応 */}
 
 // ─── 数量照合 ───
 let _rcData = []; // 照合データ保持
