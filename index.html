@@ -4230,8 +4230,8 @@ function renderCmp(){
     const stxt=r.cmpOk?'照合済':diff?'差異':'未照合';
     html.push('<tr class="'+cls+'">');
     html.push('<td>'+esc(r.date||'')+'</td>');
-    html.push('<td>'+esc(r.office||'')+'</td>');
-    html.push('<td>'+esc(r.staff||'')+'</td>');
+    html.push('<td>'+officeLink(r.office||'')+'</td>');
+    html.push('<td>'+staffLink(r.staff||'')+'</td>');
     html.push('<td class="tr">'+fmt(r.kanryo||0)+'</td>');
     html.push('<td class="tr">'+(r.postKanryo!==undefined?fmt(r.postKanryo):'&#8212;')+'</td>');
     html.push('<td class="tr">'+(diff?'<span style="color:var(--red2)">'+fmt((r.kanryo||0)-(r.postKanryo||0))+'</span>':'&#8212;')+'</td>');
@@ -4417,7 +4417,7 @@ function renderDash() {
     const diff=rs.filter(r=>r.status==='差異あり').length;
     const un=rs.filter(r=>r.status==='未照合').length;
     const b=diff?`<span class="bdg ba">差異${diff}</span>`:un?`<span class="bdg bz">未照合${un}</span>`:`<span class="bdg bg">正常</span>`;
-    h+=`<tr><td class="fw7">${o.name}</td><td class="tr">${fmt(s.mochidashi)}</td><td class="tr">${fmt(s.kanryo)}</td><td class="tr" style="color:var(--blu2)">${s.yakan}</td><td class="tr">${s.tenso}</td><td class="tr">${s.mochimodoiri}</td><td class="tr">${s['翌日廻し']}</td><td>${b}</td></tr>`;
+    h+=`<tr><td class="fw7">${officeLink(o.name)}</td><td class="tr">${fmt(s.mochidashi)}</td><td class="tr">${fmt(s.kanryo)}</td><td class="tr" style="color:var(--blu2)">${s.yakan}</td><td class="tr">${s.tenso}</td><td class="tr">${s.mochimodoiri}</td><td class="tr">${s['翌日廻し']}</td><td>${b}</td></tr>`;
   });
   $('tb-os').innerHTML = h;
 
@@ -4440,7 +4440,7 @@ function renderDash() {
   D.offices.forEach(o=>{
     const rs=D.delivery.filter(r=>r.date===td&&r.office===o.name);
     const b=rs.length===0?`<span class="bdg br">未入力</span>`:rs.some(r=>r.status==='差異あり')?`<span class="bdg ba">差異あり</span>`:`<span class="bdg bg">完了</span>`;
-    dh+=`<div class="flbc" style="padding:5px 0;border-bottom:1px solid var(--brd);font-size:11.5px;"><span>${o.name}</span>${b}</div>`;
+    dh+=`<div class="flbc" style="padding:5px 0;border-bottom:1px solid var(--brd);font-size:11.5px;"><span>${officeLink(o.name)}</span>${b}</div>`;
   });
   $('d-today').innerHTML = dh;
 
@@ -4496,7 +4496,7 @@ function renderDel() {
     // 金額計算
     const amt=(()=>{if(!r.unit)return 0;const u=r.unit;const s=u.s||[];return r.kanryo*(u.kanryo||0)+r.tenso*(u.tenso||0)+r.yakan*(u.yakan||0)+(r.ogata||0)*(u.ogata||0)+(r.shukka||0)*(u.shukka||0)+([r.sonota||[]].flat()).reduce((a,v,i)=>a+v*(s[i]||0),0);})();
     h+=`<tr>
-      <td class="mono">${r.date}</td><td>${r.office}</td><td class="fw7">${r.staff}</td>
+      <td class="mono">${r.date}</td><td>${officeLink(r.office)}</td><td class="fw7">${staffLink(r.staff)}</td>
       <td class="xs muted">${r.postOffice||'−'}</td>
       <td class="tr fw7">${r.mochidashi}</td><td class="tr">${r.kanryo}</td>
       <td class="tr" style="color:var(--blu2)">${r.yakan}</td>
@@ -4533,8 +4533,8 @@ function renderPU() {
     const tot=puTotal(r), amt=puAmt(r,cu);
     const cells=IK.map(k=>{const q=iq(r,k);return `<td class="tr${q>0?' '+ITEMS[k].cls+' fw7':''}">${q>0?fmt(q):''}</td>`;}).join('');
     h+=`<tr>
-      <td class="mono">${r.date}</td><td class="fw7">${r.staff}</td><td>${r.office}</td>
-      <td class="fw7">${r.customerName}</td><td class="xs muted">${r.region}</td>
+      <td class="mono">${r.date}</td><td class="fw7">${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td>
+      <td class="fw7">${custLink(r.customerName)}</td><td class="xs muted">${r.region}</td>
       ${cells}
       <td class="tr fw7">${fmt(tot)}</td>
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
@@ -4747,7 +4747,7 @@ function openCustDetail(custId){
         let amt=0; IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
         return `<tr style="background:${i%2?'var(--sur2)':'var(--sur)'};">
           <td style="${tdStyle}font-family:'DM Mono',monospace;">${r.date||'−'}</td>
-          <td style="${tdStyle}font-weight:600;">${r.staff||'−'}</td>
+          <td style="${tdStyle}font-weight:600;">${staffLink(r.staff||'−')}</td>
           <td style="${tdRStyle}color:var(--y60);">${yp||'−'}</td>
           <td style="${tdRStyle}color:var(--pk1);">${pk||'−'}</td>
           <td style="${tdRStyle}color:var(--txt2);">${oth||'−'}</td>
@@ -5765,7 +5765,7 @@ function renderStaff(flt){
     }
     const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='会社委託'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
-    const compBadge=s.companyName?`<span class="xs" style="color:var(--tel2);">${s.companyName}</span>`:'<span class="xs muted">−</span>';
+    const compBadge=s.companyName?`<span class="xs" style="color:var(--tel2);cursor:pointer;" onclick="event.stopPropagation();openFS('company','${esc(s.companyName)}')">${esc(s.companyName)}</span>`:'<span class="xs muted">−</span>';
     h+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
       <td>${empBadge}</td>
       <td><div class="fw7 staff-link">${esc(s.name)}</div>${s.kana?`<div class="xs muted">${esc(s.kana)}</div>`:''}</td>
@@ -5926,7 +5926,7 @@ function renderCharters(){
   el.innerHTML = rows.map(r=>`<tr>
     <td class="mono xs">${r.date||'−'}</td>
     <td><span class="bdg ${r.type==='del'?'bb':'bg'}">${r.type==='del'?'宅配':'集荷'}</span></td>
-    <td>${r.office||'−'}</td><td class="fw7">${r.staff||'−'}</td>
+    <td>${officeLink(r.office||'−')}</td><td class="fw7">${staffLink(r.staff||'−')}</td>
     <td>${r.client||'−'}</td>
     <td class="tr fw7" style="color:var(--tel2)">¥${fmt(r.amt||0)}</td>
     <td class="xs muted">${r.note||'−'}</td>
@@ -6906,7 +6906,7 @@ function showPUCustDetail(custName){
   const tbody=$('tb-rpt-pu-cust-detail');
   if(tbody) tbody.innerHTML=rows.map(r=>`<tr>
     <td class="mono xs">${r.date||'−'}</td>
-    <td>${r.staff||'−'}</td><td class="xs muted">${r.office||'−'}</td>
+    <td>${staffLink(r.staff||'−')}</td><td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr mono fw7">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
     <td><button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button></td>
@@ -6926,7 +6926,7 @@ function showPUStaffDetail(staffName){
   const tbody=$('tb-rpt-pu-cust-detail');
   if(tbody) tbody.innerHTML=rows.map(r=>`<tr>
     <td class="mono xs">${r.date||'−'}</td>
-    <td>${r.customerName||'−'}</td><td class="xs muted">${r.office||'−'}</td>
+    <td>${custLink(r.customerName||'−')}</td><td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr mono fw7">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
     <td><button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button></td>
@@ -7214,8 +7214,8 @@ function showPUCustDetail(custName){
   const today=new Date().toLocaleDateString('ja-JP');
   const trRows=rows.map(r=>`<tr>
     <td>${r.date||''}</td>
-    <td>${r.staff||'−'}</td>
-    <td class="xs muted">${r.office||'−'}</td>
+    <td>${staffLink(r.staff||'−')}</td>
+    <td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr" style="font-weight:700">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
     <td style="text-align:center"><button onclick="editPU(${r.id});closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
@@ -7272,8 +7272,8 @@ function showPUStaffDetail(staffName){
 
   const trRows=rows.map(r=>`<tr>
     <td>${r.date||''}</td>
-    <td style="font-weight:700">${r.customerName||'−'}</td>
-    <td class="xs muted">${r.office||'−'}</td>
+    <td style="font-weight:700">${custLink(r.customerName||'−')}</td>
+    <td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr" style="font-weight:700">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
     <td style="text-align:center"><button onclick="editPU(${r.id});closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
@@ -7412,7 +7412,7 @@ function scanDuplicates(){
               : '<span style="color:var(--grn);font-size:10px;font-weight:700;">✅残す</span>'}
           </td>
           <td class="mono xs">${r.date||''}</td>
-          <td class="fw7">${r.staff||'(未設定)'}</td>
+          <td class="fw7">${staffLink(r.staff||'(未設定)')}</td>
           <td class="tr mono">${fmt(r.mochidashi||0)}</td>
           <td class="tr mono fw7">${fmt(r.kanryo||0)}</td>
           <td class="tr mono">${fmt(r.tenso||0)}</td>
@@ -7461,8 +7461,8 @@ function scanDuplicates(){
               : '<span style="color:var(--grn);font-size:10px;font-weight:700;">✅残す</span>'}
           </td>
           <td class="mono xs">${r.date||''}</td>
-          <td>${r.staff||'(未設定)'}</td>
-          <td>${r.customerName||''}</td>
+          <td>${staffLink(r.staff||'(未設定)')}</td>
+          <td>${custLink(r.customerName||'')}</td>
           <td class="tr mono fw7">${fmt(total)}</td>
           <td>${isDup?'<span class="bdg bb">削除候補</span>':'<span class="bdg bg">保持</span>'}</td>
           <td>${isDup?`<button class="btn b-red btn-sm" onclick="deleteSingle('pu',${r.id})">🗑</button>`:''}</td>
@@ -10712,6 +10712,7 @@ function openFS(type, id){
   if(type==='staff') openStaffFS(id);
   else if(type==='customer') openCustFS(id);
   else if(type==='office') openOfficeFS(id);
+  else if(type==='company') openCompanyFS(id);
 }
 function closeFS(){
   $('fs-overlay').style.display='none';
@@ -10734,12 +10735,14 @@ function switchFSTab(key){
   if(_fsType==='staff') renderStaffFSTab(key);
   else if(_fsType==='customer') renderCustFSTab(key);
   else if(_fsType==='office') renderOfficeFSTab(key);
+  else if(_fsType==='company') renderCompanyFSTab(key);
 }
 
 // ── ヘルパー: リンク化テキスト生成 ──
-function staffLink(name){ return `<span class="staff-link" onclick="openFS('staff','${esc(name)}')">${esc(name)}</span>`; }
-function custLink(name){ return `<span class="cust-link" onclick="openFS('customer','${esc(name)}')">${esc(name)}</span>`; }
-function officeLink(name){ return `<span class="office-link" onclick="openFS('office','${esc(name)}')">${esc(name)}</span>`; }
+function staffLink(name){ return `<span class="staff-link" onclick="event.stopPropagation();openFS('staff','${esc(name)}')">${esc(name)}</span>`; }
+function custLink(name){ return `<span class="cust-link" onclick="event.stopPropagation();openFS('customer','${esc(name)}')">${esc(name)}</span>`; }
+function officeLink(name){ return `<span class="office-link" onclick="event.stopPropagation();openFS('office','${esc(name)}')">${esc(name)}</span>`; }
+function companyLink(name){ return `<span class="cust-link" onclick="event.stopPropagation();openFS('company','${esc(name)}')">${esc(name)}</span>`; }
 
 // ═══════════════════════════════════════════════
 // ─── 個人集約ページ ───
@@ -11083,6 +11086,146 @@ function renderOfficeLedger(el, name){
 }
 
 function saveOfficeFromFS(){/* 既存モーダルの保存で対応 */}
+
+// ═══════════════════════════════════════════════
+// ─── 委託会社集約ページ ───
+// ═══════════════════════════════════════════════
+function openCompanyFS(nameOrId){
+  const co = typeof nameOrId==='number'
+    ? (D.companies||[]).find(c=>c.id===nameOrId)
+    : (D.companies||[]).find(c=>c.name===nameOrId);
+  if(!co){ showAlert('委託会社が見つかりません'); closeFS(); return; }
+  _fsId=co.name;
+  $('fs-title').textContent=co.name;
+  $('fs-subtitle').textContent='委託会社';
+  setFSTabs([
+    {key:'members', label:'所属ドライバー'},
+    {key:'daily', label:'日報一覧'},
+    {key:'monthly', label:'月報'},
+    {key:'docs', label:'明細・書類'},
+    {key:'mail', label:'メール'},
+    {key:'ledger', label:'台帳'},
+  ], 'members');
+}
+
+function renderCompanyFSTab(key){
+  const body=$('fs-body');
+  const name=_fsId;
+  if(key==='members') renderCompanyMembers(body, name);
+  else if(key==='daily') renderCompanyDaily(body, name);
+  else if(key==='monthly') renderCompanyMonthly(body, name);
+  else if(key==='ledger') renderCompanyLedger(body, name);
+  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>${key==='docs'?'明細・書類':'メール'}</div><div class="xs muted mt8">次回実装予定</div></div>`;
+}
+
+function _companyDrivers(coName){
+  return (D.staff||[]).filter(s=>s.companyName===coName);
+}
+
+function renderCompanyMembers(el, name){
+  const drivers=_companyDrivers(name);
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>所属ドライバー（${drivers.length}名）</div>`;
+  if(drivers.length){
+    html+=`<div class="tw"><table><thead><tr><th>番号</th><th>氏名</th><th>営業所</th><th>給与形態</th><th class="tr">今月完了</th><th>連絡先</th></tr></thead><tbody>`;
+    drivers.forEach(s=>{
+      const kn=(D.delivery||[]).filter(r=>r.staff===s.name).reduce((a,r)=>a+(r.kanryo||0),0);
+      html+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
+        <td class="mono">${s.empNo||''}</td>
+        <td class="fw7 staff-link">${esc(s.name)}</td>
+        <td>${officeLink(s.office)}</td>
+        <td class="xs">${s.kyuyo||''}</td>
+        <td class="tr fw7">${kn.toLocaleString()}</td>
+        <td class="mono xs">${s.tel||'−'}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="xs muted">所属ドライバーがいません</div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderCompanyDaily(el, name){
+  const drivers=_companyDrivers(name);
+  const dNames=new Set(drivers.map(d=>d.name));
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-co-daily-mon')?.value||ym;
+
+  const delRows=(D.delivery||[]).filter(r=>dNames.has(r.staff)&&(r.date||'').startsWith(mon));
+  const puRows=(D.pickup||[]).filter(r=>dNames.has(r.staff)&&(r.date||'').startsWith(mon));
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-co-daily-mon" class="fi" value="${mon}" onchange="renderCompanyFSTab('daily')"></div></div>`;
+
+  if(delRows.length){
+    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th></tr></thead><tbody>`;
+    delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td><td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td><td class="tr" style="color:var(--y60)">${r.yakan||0}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+  if(puRows.length){
+    html+=`<div class="ct mb8 mt12"><div class="cbar"></div>集荷日報（${puRows.length}件）</div>`;
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>顧客</th><th class="tr">総個数</th></tr></thead><tbody>`;
+    puRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
+      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${custLink(r.customerName)}</td><td class="tr fw7">${tot}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+  if(!delRows.length&&!puRows.length) html+=`<div class="al al-e"><span>ℹ️</span><span>データなし</span></div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderCompanyMonthly(el, name){
+  const drivers=_companyDrivers(name);
+  const dNames=new Set(drivers.map(d=>d.name));
+  const months=[];const now=new Date();
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>月別サマリー（会社全体）</div>`;
+  html+=`<div class="tw"><table><thead><tr><th>月</th><th class="tr">稼働人数</th><th class="tr">配達完了</th><th class="tr">集荷個数</th></tr></thead><tbody>`;
+  months.forEach(m=>{
+    const del=(D.delivery||[]).filter(r=>dNames.has(r.staff)&&(r.date||'').startsWith(m));
+    const pu=(D.pickup||[]).filter(r=>dNames.has(r.staff)&&(r.date||'').startsWith(m));
+    const ppl=new Set([...del.map(r=>r.staff),...pu.map(r=>r.staff)]).size;
+    const kanryo=del.reduce((s,r)=>s+(r.kanryo||0),0);
+    const puTot=pu.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+    html+=`<tr><td class="fw7 mono">${m}</td><td class="tr">${ppl}</td><td class="tr fw7">${kanryo.toLocaleString()}</td><td class="tr fw7">${puTot.toLocaleString()}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  el.innerHTML=html;
+}
+
+function renderCompanyLedger(el, name){
+  const co=(D.companies||[]).find(c=>c.name===name);
+  if(!co){el.innerHTML='<div class="fs-card"><div class="al al-e"><span>❌</span><span>委託会社データが見つかりません</span></div></div>';return;}
+  el.innerHTML='<div class="fs-card"><div class="ct mb8"><div class="cbar"></div>委託会社台帳</div><div class="xs muted">既存の編集モーダルを開いています…</div></div>';
+  // 委託会社の編集は従事員モーダル内の会社タブから。直接会社情報を表示
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>委託会社情報 ─ ${esc(co.name)}</div>`;
+  html+=`<div class="g2">
+    <div class="fg"><label>会社名</label><input class="fi" id="fs-co-name" value="${esc(co.name||'')}"></div>
+    <div class="fg"><label>連絡先</label><input class="fi" id="fs-co-tel" value="${esc(co.tel||'')}"></div>
+    <div class="fg"><label>担当者</label><input class="fi" id="fs-co-contact" value="${esc(co.contact||'')}"></div>
+    <div class="fg"><label>住所</label><input class="fi" id="fs-co-addr" value="${esc(co.addr||'')}"></div>
+  </div>
+  <div style="margin-top:14px;"><button class="btn b-grn btn-sm" onclick="saveCompanyFromFS()">💾 保存</button></div></div>`;
+  el.innerHTML=html;
+}
+
+function saveCompanyFromFS(){
+  const co=(D.companies||[]).find(c=>c.name===_fsId);
+  if(!co){showAlert('保存エラー');return;}
+  co.name=$('fs-co-name').value;
+  co.tel=$('fs-co-tel').value;
+  co.contact=$('fs-co-contact').value;
+  co.addr=$('fs-co-addr').value;
+  _fsId=co.name;
+  $('fs-title').textContent=co.name;
+  syncToSheet();
+  showAlert('保存しました');
+}
 
 // ─── 数量照合 ───
 let _rcData = []; // 照合データ保持
