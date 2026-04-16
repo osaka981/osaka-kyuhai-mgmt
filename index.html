@@ -2408,27 +2408,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <!-- ■ 取引状態 -->
-  <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 取引状態</div>
-  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
-    <div style="display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:end;">
-      <div class="fg">
-        <label>状態</label>
-        <select id="cu-status" class="fi" onchange="onCuStatusChange()">
-          <option value="稼働中">稼働中</option>
-          <option value="休止">休止</option>
-          <option value="終了">取引終了（アーカイブ）</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label>状態変更理由（任意）</label>
-        <input type="text" id="cu-status-reason" class="fi" placeholder="例：契約満了、顧客事情により休止など">
-      </div>
-    </div>
-    <div class="xs muted mt8" id="cu-status-hint" style="line-height:1.6;"></div>
-    <div id="cu-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:var(--red3);border:1px solid rgba(192,57,43,.2);border-radius:4px;color:var(--red2);font-weight:600;"></div>
-  </div>
-
   <div class="sep"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
     <div class="xs muted fw7" style="letter-spacing:.4px;">■ 品目別 単価（円/個・件）</div>
@@ -2547,6 +2526,27 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div style="font-size:9px;color:var(--amb2);margin-bottom:5px;font-weight:700;">📊 税込換算プレビュー（入力値 ÷ 1.1 で保存）</div>
     <div id="cu-tax-preview-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:10px;font-family:'DM Mono',monospace;"></div>
   </div>
+
+  <!-- ■ 取引状態 -->
+  <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 取引状態</div>
+  <div id="cu-status-card" style="border-radius:6px;padding:12px;margin-bottom:10px;background:rgba(52,168,83,.08);border:1px solid rgba(52,168,83,.35);transition:background .2s,border-color .2s;">
+    <div style="display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:end;">
+      <div class="fg">
+        <label>状態</label>
+        <select id="cu-status" class="fi" onchange="onCuStatusChange()">
+          <option value="稼働中">稼働中</option>
+          <option value="終了">取引終了（アーカイブ）</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>状態変更理由（任意）</label>
+        <input type="text" id="cu-status-reason" class="fi" placeholder="例：契約満了、顧客事情によるなど">
+      </div>
+    </div>
+    <div class="xs mt8" id="cu-status-hint" style="line-height:1.6;"></div>
+    <div id="cu-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:4px;color:var(--red2);font-weight:600;line-height:1.6;"></div>
+  </div>
+
   <div id="cu-confirm-panel" class="reg-confirm-panel">
     <h4>📋 登録内容確認</h4>
     <div id="cu-confirm-body2">読み込み中...</div>
@@ -5945,26 +5945,32 @@ function onCustNoManual(){
     if(!isEdit)disp.value=genCustNo();
   }
 }
-// 顧客モーダル: 取引状態変更時のヒント表示
+// 顧客モーダル: 取引状態変更時のヒント表示＋カード背景色変更
 function onCuStatusChange(){
   const sel=$('cu-status');
   const hint=$('cu-status-hint');
   const info=$('cu-status-info');
-  if(!sel||!hint) return;
+  const card=$('cu-status-card');
+  if(!sel||!card) return;
   const val=sel.value;
   if(val==='稼働中'){
-    hint.textContent='通常の取引状態です。集荷データの入力、請求書発行が可能です。';
-    hint.style.color='var(--txt2)';
-    if(info) info.style.display='none';
-  } else if(val==='休止'){
-    hint.textContent='一時的に取引を休止します。集荷データ入力はできますが、請求書発行設定を手動でOFFにしておくと安全です。';
-    hint.style.color='var(--amb2)';
+    // 薄緑
+    card.style.background='rgba(52,168,83,.08)';
+    card.style.borderColor='rgba(52,168,83,.35)';
+    if(hint){
+      hint.textContent='通常の取引状態です。集荷データの入力、請求書発行が可能です。';
+      hint.style.color='var(--grn2)';
+      hint.style.fontWeight='600';
+    }
     if(info) info.style.display='none';
   } else if(val==='終了'){
-    hint.textContent='';
+    // 薄赤
+    card.style.background='rgba(192,57,43,.08)';
+    card.style.borderColor='rgba(192,57,43,.35)';
+    if(hint){ hint.textContent=''; hint.style.fontWeight='normal'; }
     if(info){
       info.style.display='block';
-      info.innerHTML='⚠ 取引終了として保存されます。<br>顧客情報は<strong>アーカイブ</strong>に移動され、一覧には表示されなくなります。<br>過去の集荷データ・請求書発行履歴は保持されます（法的保管期間：7年）。<br>アーカイブからの完全削除は管理タブ内「アーカイブ」から行えます。';
+      info.innerHTML='⚠ <strong>取引終了として保存されます</strong><br>顧客情報は<strong>アーカイブ</strong>に移動され、通常の一覧には表示されなくなります。<br>過去の集荷データ・請求書発行履歴は保持されます（法的保管期間：7年）。<br>取引再開はアーカイブ画面の「取引再開」ボタンから行えます。';
     }
   }
 }
@@ -6214,7 +6220,7 @@ function renderArchive(){
     html += `<td class="mono xs" style="color:${isExpired?'var(--red2)':'var(--txt2)'};font-weight:${isExpired?'700':'normal'};">${esc(expiresAt)}${isExpired?' (期限切れ)':''}</td>`;
     html += `<td class="xs">${esc(reason)}</td>`;
     html += `<td style="white-space:nowrap;">
-      <button class="btn btn-sm b-blu" onclick="archiveRestore('${_arcTab}',${x.id})">復元</button>
+      <button class="btn btn-sm" onclick="archiveRestore('${_arcTab}',${x.id})" style="background:rgba(52,168,83,.15);color:var(--grn2);border:1px solid rgba(52,168,83,.35);font-weight:600;">取引再開</button>
       <button class="btn btn-sm" onclick="archiveDelete('${_arcTab}',${x.id})" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);margin-left:4px;">完全削除</button>
     </td>`;
     html += '</tr>';
@@ -6234,9 +6240,9 @@ function archiveRestore(kind, id){
   if(!item) return;
 
   showDialog({
-    icon:'ℹ️', title:'アーカイブから復元',
-    msg:`「${item.name}」を稼働中に戻しますか？\n\n復元後は通常の一覧に再表示されます。`,
-    okText:'復元する', cancelText:'キャンセル'
+    icon:'ℹ️', title:'取引再開',
+    msg:`「${item.name}」との取引を再開しますか？\n\n再開後は稼働中として通常の一覧に再表示されます。`,
+    okText:'取引再開する', cancelText:'キャンセル'
   }).then(ok=>{
     if(!ok) return;
     item.status = (kind==='staff'?'在籍':kind==='office'?'稼働':'稼働中');
@@ -6250,7 +6256,7 @@ function archiveRestore(kind, id){
     else if(kind==='company'){ lsSet(LS_KEYS.COMPANIES, D.companies); renderCompanyPage && renderCompanyPage(); }
     else if(kind==='office'){ lsSet(LS_KEYS.OFFICES, D.offices); renderOffCards && renderOffCards(); }
     renderArchive();
-    showAlert({msg:`${label}「${item.name}」を復元しました`});
+    showAlert({msg:`${label}「${item.name}」との取引を再開しました`});
   });
 }
 
