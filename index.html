@@ -1718,19 +1718,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-offices" class="sec">
       <div style="display:flex;justify-content:flex-end;margin-bottom:18px;"><button class="btn b-grn btn-sm" onclick="openM('m-office')">＋ 営業所</button></div>
       <div id="off-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
-
-      <!-- 表示サイズ設定 -->
-      <div class="card" style="max-width:500px;margin-top:24px;">
-        <div class="ct mb12"><div class="cbar"></div>表示サイズ</div>
-        <div style="font-size:var(--sz-xs);color:var(--txt2);margin-bottom:12px;">画面全体のフォントやボタンの大きさを変更します。ヘッダー・サブタブは固定です。設定はブラウザに保存されます。</div>
-        <div id="size-btns" style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn b-gh" data-sz="s" onclick="setUiSize('s')" style="min-width:80px;justify-content:center;">小（S）</button>
-          <button class="btn b-gh" data-sz="m" onclick="setUiSize('m')" style="min-width:80px;justify-content:center;">中（M）</button>
-          <button class="btn b-gh" data-sz="l" onclick="setUiSize('l')" style="min-width:80px;justify-content:center;">大（L）</button>
-          <button class="btn b-gh" data-sz="xl" onclick="setUiSize('xl')" style="min-width:80px;justify-content:center;">特大（XL）</button>
-        </div>
-        <div id="size-preview" style="margin-top:12px;padding:10px;border:1px dashed var(--brd2);border-radius:5px;font-size:var(--sz-tbl);color:var(--txt2);">プレビュー：このテキストのサイズが変わります</div>
-      </div>
     </div>
 
     <!-- TS: 郵便局請求書 -->
@@ -12617,31 +12604,22 @@ function importAllData(inputEl){
   inputEl.value='';
 }
 
-// 表示サイズボタン（システム設定内）
+// 表示サイズボタン（システム設定内）- 既存のsetUiSizeと連携
 function renderSizeBtnsSys(){
   const wrap=$('size-btns-sys');
   if(!wrap) return;
-  const current=document.documentElement.getAttribute('data-size')||'S';
-  const sizes=[['S','標準'],['M','中'],['L','大'],['XL','特大']];
+  const current=(document.documentElement.getAttribute('data-size')||'s').toLowerCase();
+  const sizes=[['s','小 (S)'],['m','中 (M)'],['l','大 (L)'],['xl','特大 (XL)']];
   wrap.innerHTML=sizes.map(([v,lab])=>{
     const active=v===current;
-    return `<button type="button" onclick="setDisplaySize('${v}')" style="flex:1;padding:10px 14px;border:1.5px solid ${active?'var(--blu2)':'var(--brd2)'};background:${active?'var(--blu2)':'var(--bg3)'};color:${active?'#fff':'var(--txt)'};border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">${v} <span style="font-size:10px;opacity:.8;">${lab}</span></button>`;
+    return `<button type="button" onclick="setUiSize('${v}');renderSizeBtnsSys();" style="flex:1;padding:10px 14px;border:1.5px solid ${active?'var(--blu2)':'var(--brd2)'};background:${active?'var(--blu2)':'var(--bg3)'};color:${active?'#fff':'var(--txt)'};border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">${lab}</button>`;
   }).join('');
 }
 
+// setDisplaySize は廃止（setUiSize に一本化）
 function setDisplaySize(size){
-  document.documentElement.setAttribute('data-size', size);
-  try{ localStorage.setItem('displaySize', size); }catch(e){}
+  setUiSize(String(size).toLowerCase());
   renderSizeBtnsSys();
-  // 既存の size-btns (営業所管理内) も同期更新
-  const oldBtns=document.querySelectorAll('#size-btns button');
-  oldBtns.forEach(b=>{
-    const v=b.textContent.trim().charAt(0);
-    const active=(size===v);
-    b.style.background=active?'var(--blu2)':'var(--bg3)';
-    b.style.color=active?'#fff':'var(--txt)';
-    b.style.borderColor=active?'var(--blu2)':'var(--brd2)';
-  });
 }
 
 function loadSystemInfoToForm(){
