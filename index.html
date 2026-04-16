@@ -2298,6 +2298,89 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg"><label>地域</label><input type="text" id="cu-reg" class="fi" placeholder="例：大阪市北区"></div>
     <div class="fg"><label>契約開始日</label><input type="date" id="cu-start" class="fi"></div>
   </div>
+
+  <!-- ■ 顧客詳細情報 -->
+  <div class="xs muted fw7 mb8 mt8" style="letter-spacing:.4px;">■ 顧客詳細情報</div>
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
+    <div class="fg"><label>郵便番号</label><input type="text" id="cu-zip" class="fi" placeholder="599-8247" onblur="onCuZipBlur()"></div>
+    <div class="fg"><label>住所</label><input type="text" id="cu-addr" class="fi" placeholder="大阪府大阪市北区○○○"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div class="fg"><label>代表者名</label><input type="text" id="cu-rep-name" class="fi" placeholder="山田太郎"></div>
+    <div class="fg"><label>部署名</label><input type="text" id="cu-dept" class="fi" placeholder="経理部"></div>
+    <div class="fg"><label>担当者名</label><input type="text" id="cu-contact" class="fi" placeholder="佐藤花子"></div>
+    <div class="fg"><label>役職</label><input type="text" id="cu-title" class="fi" placeholder="課長"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div class="fg"><label>電話番号</label><input type="tel" id="cu-tel" class="fi" oninput="telField(this)" onblur="telField(this)" placeholder="06-XXXX-XXXX"></div>
+    <div class="fg"><label>FAX</label><input type="tel" id="cu-fax" class="fi" oninput="telField(this)" onblur="telField(this)" placeholder="06-XXXX-XXXX"></div>
+    <div class="fg"><label>メールアドレス</label><input type="email" id="cu-email" class="fi" placeholder="info@example.co.jp"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+    <div class="fg"><label>インボイス登録番号</label><input type="text" id="cu-invoice-no" class="fi" placeholder="T○○○○○○○○○○○○○"></div>
+    <div class="fg"><label>業種</label><input type="text" id="cu-industry" class="fi" placeholder="例：製造業"></div>
+  </div>
+
+  <!-- ■ 締め日・支払条件 -->
+  <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 締め日・支払条件</div>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+      <div class="fg">
+        <label>締め日</label>
+        <select id="cu-close-day" class="fi" onchange="updateCuPayPreview()">
+          <option value="10">10日</option>
+          <option value="15">15日</option>
+          <option value="20">20日</option>
+          <option value="25">25日</option>
+          <option value="末" selected>月末</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>支払月</label>
+        <select id="cu-pay-month" class="fi" onchange="updateCuPayPreview()">
+          <option value="当月">当月</option>
+          <option value="翌月" selected>翌月</option>
+          <option value="翌々月">翌々月</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>支払日</label>
+        <select id="cu-pay-day" class="fi" onchange="updateCuPayPreview()">
+          <option value="10">10日</option>
+          <option value="15">15日</option>
+          <option value="20">20日</option>
+          <option value="25">25日</option>
+          <option value="末" selected>月末</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>支払方法</label>
+        <select id="cu-pay-method" class="fi">
+          <option value="銀行振込" selected>銀行振込</option>
+          <option value="口座振替">口座振替</option>
+          <option value="現金">現金</option>
+          <option value="手形">手形</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+    </div>
+    <div class="xs muted mt8" id="cu-pay-preview" style="font-family:'DM Mono',monospace;color:var(--blu2);"></div>
+  </div>
+
+  <!-- ■ 書類発行設定 -->
+  <div class="xs muted fw7 mb8 mt8" style="letter-spacing:.4px;">■ 書類発行設定</div>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" id="cu-doc-invoice" checked>
+      <span style="font-size:12px;font-weight:600;">請求書を発行する</span>
+    </label>
+    <div class="xs muted mt4" style="margin-left:22px;">チェックを外すと集荷データがあっても請求書発行ボタンが無効になります</div>
+    <div class="fg mt8" style="max-width:400px;">
+      <label>備考（請求書に記載）</label>
+      <input type="text" id="cu-invoice-note" class="fi" placeholder="例：振込手数料は貴社負担でお願いします">
+    </div>
+  </div>
+
   <div class="sep"></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
     <div class="xs muted fw7" style="letter-spacing:.4px;">■ 品目別 単価（円/個・件）</div>
@@ -4449,25 +4532,38 @@ function renderCustTbl(){
   const q=($('cust-search')?.value||'').trim().toLowerCase();
   const sort=$('cust-sort')?.value||'no-asc';
   let list=[...(D.customers||[])];
-  if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(cu.no||'').toLowerCase().includes(q);});
+  if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(cu.custNo||'').toString().toLowerCase().includes(q);});
   list.sort(function(a,b){
-    if(sort==='no-asc')  return (a.no||'').localeCompare(b.no||'');
-    if(sort==='no-desc') return (b.no||'').localeCompare(a.no||'');
+    if(sort==='no-asc')  return String(a.custNo||'').localeCompare(String(b.custNo||''));
+    if(sort==='no-desc') return String(b.custNo||'').localeCompare(String(a.custNo||''));
     if(sort==='name-asc') return (a.name||'').localeCompare(b.name||'');
     if(sort==='name-desc') return (b.name||'').localeCompare(a.name||'');
     return 0;
   });
+  const cnt=$('cust-count'); if(cnt) cnt.textContent=`${list.length}件`;
   const tbody=$('tb-cust'); if(!tbody) return;
-  if(!list.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2);">顧客データなし</td></tr>';return;}
+  if(!list.length){tbody.innerHTML='<tr><td colspan="16" style="text-align:center;color:var(--txt2);padding:20px;">顧客データなし</td></tr>';return;}
   const html=[];
   list.forEach(function(cu){
+    const cp=cu.colPrices||cu.prices||{};
+    const active=cu.invoiceEnabled!==false;
     html.push('<tr>');
-    html.push('<td>'+esc(cu.no||'')+'</td>');
-    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(cu.id||'')+'" onclick="editCust(this.dataset.id)">'+esc(cu.name||'')+'</button></td>');
-    html.push('<td>'+esc(cu.office||'')+'</td>');
-    html.push('<td>'+esc(cu.tel||'')+'</td>');
-    html.push('<td>'+esc(cu.startDate||'')+'</td>');
-    html.push('<td><button class="btn btn-sm b-red" data-id="'+esc(cu.id||'')+'" onclick="deleteCust(this.dataset.id)">削除</button></td>');
+    html.push('<td class="mono">'+esc(cu.custNo||'')+'</td>');
+    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(String(cu.id||''))+'" onclick="editCust(parseInt(this.dataset.id))" style="font-weight:700;">'+esc(cu.name||'')+'</button></td>');
+    html.push('<td>'+esc(cu.region||'')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p60?'¥'+cp.p60:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p80?'¥'+cp.p80:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p100?'¥'+cp.p100:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p120?'¥'+cp.p120:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p140?'¥'+cp.p140:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.p160?'¥'+cp.p160:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.pk1?'¥'+cp.pk1:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.pk2?'¥'+cp.pk2:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.cp?'¥'+cp.cp:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.ke?'¥'+cp.ke:'-')+'</td>');
+    html.push('<td class="tr mono">'+(cp.te?'¥'+cp.te:'-')+'</td>');
+    html.push('<td>'+(active?'<span class="bdg" style="background:rgba(52,168,83,.15);color:var(--grn2);font-size:10px;padding:2px 6px;">稼働中</span>':'<span class="bdg" style="background:var(--bg3);color:var(--txt3);font-size:10px;padding:2px 6px;">停止</span>')+'</td>');
+    html.push('<td><button class="btn btn-sm" data-id="'+esc(String(cu.id||''))+'" onclick="deleteCust(parseInt(this.dataset.id))" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);">削除</button></td>');
     html.push('</tr>');
   });
   tbody.innerHTML=html.join('');
@@ -5799,6 +5895,33 @@ function onCustNoManual(){
     if(!isEdit)disp.value=genCustNo();
   }
 }
+// 顧客モーダル: 支払条件プレビュー
+function updateCuPayPreview(){
+  const cd=$('cu-close-day')?.value||'末';
+  const pm=$('cu-pay-month')?.value||'翌月';
+  const pd=$('cu-pay-day')?.value||'末';
+  const pv=$('cu-pay-preview');
+  if(pv){
+    pv.textContent=`例）4月${cd==='末'?'末':cd+'日'}締め → ${pm==='当月'?'4月':pm==='翌月'?'5月':'6月'}${pd==='末'?'末':pd+'日'}払い`;
+  }
+}
+
+// 顧客モーダル: 郵便番号→住所自動入力
+async function onCuZipBlur(){
+  const zip=($('cu-zip')?.value||'').replace(/[^\d]/g,'');
+  if(zip.length!==7) return;
+  try{
+    const res=await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${zip}`);
+    const data=await res.json();
+    if(data.results && data.results[0]){
+      const r=data.results[0];
+      const addr=`${r.address1}${r.address2}${r.address3}`;
+      const addrEl=$('cu-addr');
+      if(addrEl && !addrEl.value.trim()) addrEl.value=addr;
+    }
+  }catch(e){}
+}
+
 function saveCust(){
   const name=$('cu-name')?.value.trim();if(!name){alert('顧客名を入力してください');return;}
   let custNo=$('cu-no')?.value.trim()||genCustNo();
@@ -5853,7 +5976,32 @@ function saveCust(){
     yoshaAmt:parseInt($('cu-yosha-amt')?.value)||0,
     yoshaNote:$('cu-yosha-note')?.value||'',
   };
-  const custData={custNo,name,region:$('cu-reg')?.value.trim()||'',start:$('cu-start')?.value.replace(/-/g,'/')||'',colPrices,charter:charterRows,otherItems,offset};
+  const custData={
+    custNo,name,
+    region:$('cu-reg')?.value.trim()||'',
+    start:$('cu-start')?.value.replace(/-/g,'/')||'',
+    // 顧客詳細
+    zip:$('cu-zip')?.value.trim()||'',
+    addr:$('cu-addr')?.value.trim()||'',
+    repName:$('cu-rep-name')?.value.trim()||'',
+    dept:$('cu-dept')?.value.trim()||'',
+    contact:$('cu-contact')?.value.trim()||'',
+    title:$('cu-title')?.value.trim()||'',
+    tel:$('cu-tel')?.value.trim()||'',
+    fax:$('cu-fax')?.value.trim()||'',
+    email:$('cu-email')?.value.trim()||'',
+    invoiceNo:$('cu-invoice-no')?.value.trim()||'',
+    industry:$('cu-industry')?.value.trim()||'',
+    // 締め・支払条件
+    closeDay:$('cu-close-day')?.value||'末',
+    payMonth:$('cu-pay-month')?.value||'翌月',
+    payDay:$('cu-pay-day')?.value||'末',
+    payMethod:$('cu-pay-method')?.value||'銀行振込',
+    // 書類発行
+    invoiceEnabled: !!$('cu-doc-invoice')?.checked,
+    invoiceNote: $('cu-invoice-note')?.value||'',
+    colPrices,charter:charterRows,otherItems,offset
+  };
   if(editId){
     // 編集
     const idx=D.customers.findIndex(c=>c.id===editId);
@@ -5883,6 +6031,21 @@ function saveCust(){
   closeM('m-cust');renderCustTbl();updOffSels();
 }
 
+function deleteCust(id){
+  const cu=D.customers.find(c=>c.id===id);
+  if(!cu) return;
+  showDialog(`「${cu.name}」を削除しますか？\n\n関連する集荷データは残りますが、顧客情報は復元できません。`, '削除', ()=>{
+    D.customers=D.customers.filter(c=>c.id!==id);
+    lsSet(LS_KEYS.CUSTOMERS, D.customers);
+    // Firebaseからも削除
+    const fbCusts=(lsGet(LS_KEYS.CUSTOMERS,[])||[]).filter(c=>c.id!==id);
+    try{ fbSet('customers', fbCusts); }catch(e){}
+    renderCustTbl();
+    updOffSels();
+    showAlert('削除しました');
+  }, 'キャンセル');
+}
+
 function editCust(id){
   const c=D.customers.find(x=>x.id===id);if(!c)return;
   if($('cu-no')){
@@ -5894,6 +6057,27 @@ function editCust(id){
   if($('cu-no-manual'))$('cu-no-manual').checked=true;
   $('cu-name').value=c.name||'';$('cu-reg').value=c.region||'';
   if($('cu-start'))$('cu-start').value=(c.start||'').replace(/\//g,'-');
+  // 顧客詳細復元
+  if($('cu-zip'))$('cu-zip').value=c.zip||'';
+  if($('cu-addr'))$('cu-addr').value=c.addr||'';
+  if($('cu-rep-name'))$('cu-rep-name').value=c.repName||'';
+  if($('cu-dept'))$('cu-dept').value=c.dept||'';
+  if($('cu-contact'))$('cu-contact').value=c.contact||'';
+  if($('cu-title'))$('cu-title').value=c.title||'';
+  if($('cu-tel'))$('cu-tel').value=c.tel||'';
+  if($('cu-fax'))$('cu-fax').value=c.fax||'';
+  if($('cu-email'))$('cu-email').value=c.email||'';
+  if($('cu-invoice-no'))$('cu-invoice-no').value=c.invoiceNo||'';
+  if($('cu-industry'))$('cu-industry').value=c.industry||'';
+  // 締め・支払条件復元
+  if($('cu-close-day'))$('cu-close-day').value=c.closeDay||'末';
+  if($('cu-pay-month'))$('cu-pay-month').value=c.payMonth||'翌月';
+  if($('cu-pay-day'))$('cu-pay-day').value=c.payDay||'末';
+  if($('cu-pay-method'))$('cu-pay-method').value=c.payMethod||'銀行振込';
+  // 書類発行
+  if($('cu-doc-invoice'))$('cu-doc-invoice').checked=c.invoiceEnabled!==false; // デフォルトON
+  if($('cu-invoice-note'))$('cu-invoice-note').value=c.invoiceNote||'';
+  updateCuPayPreview();
   // 集荷単価復元
   const cp=c.colPrices||c.prices||{};
   if($('cu-cp60'))$('cu-cp60').value=cp.p60||'';
@@ -11909,26 +12093,84 @@ function _buildInvoiceProxyHTML(staffName, monStr){
 function _buildCustInvoiceHTML(custName, monStr){
   const bill=_calcCustBilling(custName, monStr);
   if(!bill.customer) return null;
+  const cu=bill.customer;
   const today=new Date().toISOString().slice(0,10);
   const mon=monStr.replace('-','年')+'月';
   let rows=bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">${b.qty.toLocaleString()}</td><td class="tr">¥${b.unit.toLocaleString()}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+
+  // 支払期日計算（締め月と支払条件から算出）
+  const payDeadline = _calcPaymentDeadline(cu, monStr);
+
+  // 宛先ブロック（住所・部署・代表者あれば表示）
+  let toBlock = `<div class="doc-to">${esc(cu.name)} 御中</div>`;
+  if(cu.zip || cu.addr || cu.dept || cu.repName || cu.contact){
+    toBlock = `<div style="margin-top:24px;margin-bottom:8px;">`;
+    if(cu.zip || cu.addr){
+      toBlock += `<div style="font-size:11px;color:#555;">${cu.zip?'〒'+esc(cu.zip)+' ':''}${esc(cu.addr||'')}</div>`;
+    }
+    toBlock += `<div style="font-size:20px;font-weight:700;border-bottom:1px solid #888;padding-bottom:4px;padding-top:4px;">${esc(cu.name)} 御中</div>`;
+    if(cu.dept||cu.title||cu.repName||cu.contact){
+      const parts=[];
+      if(cu.dept) parts.push(esc(cu.dept));
+      if(cu.title) parts.push(esc(cu.title));
+      if(cu.repName) parts.push(esc(cu.repName)+' 様');
+      else if(cu.contact) parts.push(esc(cu.contact)+' 様');
+      toBlock += `<div style="font-size:13px;color:#555;margin-top:4px;">${parts.join('　')}</div>`;
+    }
+    toBlock += `</div>`;
+  }
+
+  // 支払条件・備考
+  let payInfo = '';
+  if(payDeadline || cu.payMethod){
+    payInfo = `<div style="margin-top:14px;padding:10px;border:2px solid #1a2238;background:#f5f5ff;font-size:13px;">
+      ${payDeadline?`<div><strong>お支払期日：</strong><span style="font-size:16px;font-weight:700;color:#c0392b;">${esc(payDeadline)}</span></div>`:''}
+      ${cu.payMethod?`<div style="margin-top:4px;"><strong>お支払方法：</strong>${esc(cu.payMethod)}</div>`:''}
+    </div>`;
+  }
+
+  const info=_getSystemInfo();
+  const footerText = info.docFooterInvoice || '※ お振込は上記支払期日までにお願いいたします。';
+
   const html=`
     <div class="doc-header">
       <div class="doc-title">請 求 書</div>
       <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
     </div>
-    <div class="doc-to">${esc(bill.customer.name)} 御中</div>
+    ${toBlock}
     <div class="doc-amount-box">
       <div class="doc-amount-label">ご請求金額（税抜）</div>
       <div class="doc-amount">¥${bill.total.toLocaleString()}</div>
     </div>
+    ${payInfo}
     <table>
       <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
       <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
     </table>
     ${_buildCompanyFromBlock(true, true)}
-    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。${_buildBankInfoBlock()}</div>`;
+    ${_buildBankInfoBlock()}
+    <div class="doc-footer">${esc(footerText)}${cu.invoiceNote?'<br>'+esc(cu.invoiceNote):''}</div>`;
   return {title:'請求書', html, amount:bill.total};
+}
+
+// 支払期日計算（締め月＋支払条件から）
+function _calcPaymentDeadline(cu, monStr){
+  if(!cu || !monStr) return '';
+  const payMonth = cu.payMonth || '翌月';
+  const payDay = cu.payDay || '末';
+  // monStr = "YYYY-MM" (締め月)
+  const [y,m] = monStr.split('-').map(Number);
+  if(!y||!m) return '';
+  // 支払月オフセット
+  const monthOffset = payMonth==='当月'?0 : payMonth==='翌月'?1 : 2;
+  let targetY = y, targetM = m + monthOffset;
+  while(targetM > 12){ targetM -= 12; targetY += 1; }
+  // 支払日
+  if(payDay==='末'){
+    const lastDay = new Date(targetY, targetM, 0).getDate();
+    return `${targetY}年${targetM}月${lastDay}日`;
+  }
+  return `${targetY}年${targetM}月${payDay}日`;
 }
 
 // ─── GAS経由メール送信 ───
