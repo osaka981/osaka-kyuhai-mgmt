@@ -1797,21 +1797,43 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-grn btn-sm mt12" onclick="saveSystemInfo()">保存</button>
       </div>
 
-      <div class="card mb12" style="max-width:500px;">
-        <div class="ct mb12"><div class="cbar"></div>自社代表印（書類発行用・フリート共通）</div>
-        <div class="xs muted mb8">300×300px 透過PNG推奨。請求書・明細書・請求書発行代行に自動挿入されます。</div>
-        <div style="display:flex;align-items:flex-start;gap:12px;">
-          <div id="sys-stamp-preview" style="width:100px;height:100px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:10px;color:var(--txt3);text-align:center;padding:4px;">未設定</div>
-          <div style="flex:1;">
-            <input type="file" id="sys-stamp-file" accept="image/png" style="display:none;" onchange="onStampFileSelected(this,'system')">
-            <div style="display:flex;gap:6px;">
-              <button class="btn b-blu btn-sm" onclick="document.getElementById('sys-stamp-file').click()">画像選択</button>
-              <button class="btn btn-sm" id="sys-stamp-del-btn" onclick="deleteStampImage('system')" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;">削除</button>
+      <div class="card mb12" style="max-width:700px;">
+        <div class="ct mb12"><div class="cbar"></div>自社電子印（フリート管理から自動同期）</div>
+        <div class="xs muted mb12">フリート管理アプリで設定された会社印・代表印が自動的に表示されます。変更はフリート管理から行ってください。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+          <!-- 会社印 -->
+          <div style="padding:14px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+            <div class="xs fw7 mb8" style="display:flex;align-items:center;justify-content:space-between;">
+              <span>会社印</span>
+              <span id="sys-stamp-company-status" class="xs" style="font-weight:normal;"></span>
             </div>
-            <div id="sys-stamp-status" class="xs muted mt8"></div>
-            <input type="hidden" id="sys-stamp-url" value="">
-            <input type="hidden" id="sys-stamp-fileid" value="">
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <div id="sys-stamp-company-preview" style="width:100px;height:100px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:10px;color:var(--txt3);text-align:center;padding:4px;flex-shrink:0;">未設定</div>
+              <div class="xs muted" style="flex:1;">
+                <div>会社名：<span id="sys-stamp-company-name" style="color:var(--txt);font-weight:600;">-</span></div>
+                <div class="mt4">書類発行：<span id="sys-stamp-company-enabled" style="font-weight:600;">-</span></div>
+              </div>
+            </div>
           </div>
+          <!-- 代表印 -->
+          <div style="padding:14px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+            <div class="xs fw7 mb8" style="display:flex;align-items:center;justify-content:space-between;">
+              <span>代表印</span>
+              <span id="sys-stamp-rep-status" class="xs" style="font-weight:normal;"></span>
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:12px;">
+              <div id="sys-stamp-rep-preview" style="width:100px;height:100px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:10px;color:var(--txt3);text-align:center;padding:4px;flex-shrink:0;">未設定</div>
+              <div class="xs muted" style="flex:1;">
+                <div>代表者名：<span id="sys-stamp-rep-name" style="color:var(--txt);font-weight:600;">-</span></div>
+                <div class="mt4">書類発行：<span id="sys-stamp-rep-enabled" style="font-weight:600;">-</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt12" style="display:flex;gap:8px;align-items:center;">
+          <button class="btn b-gh btn-sm" onclick="loadFleetStampSettings()">フリートから再読込</button>
+          <span id="sys-stamp-sync-status" class="xs muted"></span>
+          <a href="https://osaka981.github.io/fleet-mgmt/" target="_blank" class="xs" style="margin-left:auto;color:var(--blu2);text-decoration:underline;">フリート管理を開く →</a>
         </div>
       </div>
 
@@ -12535,6 +12557,71 @@ function saveStampFee(){
   showAlert('電子印制作費を保存しました');
 }
 
+// フリート管理から印鑑設定を読み込んで表示（同Origin localStorageから）
+function loadFleetStampSettings(){
+  const status=$('sys-stamp-sync-status');
+  try{
+    const raw=localStorage.getItem('fleet_stamp_settings');
+    if(!raw){
+      if(status){ status.textContent='フリートで印鑑が未設定です'; status.style.color='var(--red2)'; }
+      // 未設定表示にリセット
+      ['sys-stamp-company-preview','sys-stamp-rep-preview'].forEach(id=>{const e=$(id);if(e)e.innerHTML='未設定';});
+      ['sys-stamp-company-name','sys-stamp-rep-name','sys-stamp-company-enabled','sys-stamp-rep-enabled'].forEach(id=>{const e=$(id);if(e)e.textContent='-';});
+      return;
+    }
+    const s=JSON.parse(raw);
+    // 会社印
+    const coPrev=$('sys-stamp-company-preview');
+    if(coPrev){
+      if(s.companyImage){
+        coPrev.innerHTML=`<img src="${s.companyImage}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+      } else {
+        coPrev.innerHTML='未設定';
+      }
+    }
+    if($('sys-stamp-company-name'))$('sys-stamp-company-name').textContent=s.companyName||'(未入力)';
+    const coEn=$('sys-stamp-company-enabled');
+    if(coEn){
+      coEn.textContent=s.companyEnabled?'有効':'無効';
+      coEn.style.color=s.companyEnabled?'var(--grn2)':'var(--txt3)';
+    }
+    // 代表印
+    const repPrev=$('sys-stamp-rep-preview');
+    if(repPrev){
+      if(s.repImage){
+        repPrev.innerHTML=`<img src="${s.repImage}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+      } else {
+        repPrev.innerHTML='未設定';
+      }
+    }
+    if($('sys-stamp-rep-name'))$('sys-stamp-rep-name').textContent=s.repName||'(未入力)';
+    const repEn=$('sys-stamp-rep-enabled');
+    if(repEn){
+      repEn.textContent=s.repEnabled?'有効':'無効';
+      repEn.style.color=s.repEnabled?'var(--grn2)':'var(--txt3)';
+    }
+    // systemInfoにも保存（書類生成時に参照）
+    const info=_getSystemInfo();
+    info.companyStampImage=s.companyImage||'';
+    info.repStampImage=s.repImage||'';
+    info.companyStampName=s.companyName||'';
+    info.repStampName=s.repName||'';
+    info.companyStampEnabled=!!s.companyEnabled;
+    info.repStampEnabled=!!s.repEnabled;
+    // 書類生成でも使えるよう companyStampUrl も更新（代表印を優先）
+    info.companyStampUrl=s.repImage||s.companyImage||'';
+    _saveSystemInfoLS(info);
+
+    if(status){
+      const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      status.textContent=`同期完了 (${time})`;
+      status.style.color='var(--grn2)';
+    }
+  }catch(err){
+    if(status){ status.textContent='読込エラー: '+err.message; status.style.color='var(--red2)'; }
+  }
+}
+
 // 書類フッター保存
 function saveDocFooters(){
   const info=_getSystemInfo();
@@ -12675,6 +12762,8 @@ function loadSystemInfoToForm(){
   } else if(fi){
     fi.textContent='Firebase設定が見つかりません';
   }
+  // フリートから印鑑設定を自動読込
+  if(typeof loadFleetStampSettings==='function') loadFleetStampSettings();
 }
 
 // onStampFileSelected の system ハンドラー完了後に呼ぶラッパー（自社代表印の場合はsystemInfoにも保存）
