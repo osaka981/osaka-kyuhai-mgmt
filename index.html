@@ -101,6 +101,18 @@ html[data-size="l"] input[type="month"].fi,html[data-size="l"] input[type="date"
 html[data-size="xl"] input[type="month"].fi,html[data-size="xl"] input[type="date"].fi{min-width:230px;}
 html[data-size="l"] .g2{gap:14px;}
 html[data-size="xl"] .g2{gap:18px;}
+/* ─── フルスクリーン集約ページ ─── */
+#fs-overlay .fs-tab{padding:10px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;background:var(--sur);color:var(--txt2);border:1px solid var(--brd);transition:all .12s;}
+#fs-overlay .fs-tab:hover{border-color:var(--txt2);color:var(--txt);}
+#fs-overlay .fs-tab.active{background:#1a2238;color:#fff;border-color:#1a2238;}
+[data-theme='light'] #fs-overlay .fs-tab.active{background:#1a2238;color:#fff;}
+#fs-overlay .fs-card{background:var(--sur);border:1px solid var(--brd);border-radius:7px;padding:var(--sz-p-card,15px 16px);margin-bottom:12px;}
+.staff-link{color:var(--blu2);cursor:pointer;text-decoration:none;font-weight:600;}
+.staff-link:hover{text-decoration:underline;color:var(--tel2);}
+.cust-link{color:var(--tel2);cursor:pointer;text-decoration:none;font-weight:600;}
+.cust-link:hover{text-decoration:underline;}
+.office-link{color:var(--amb2);cursor:pointer;text-decoration:none;font-weight:600;}
+.office-link:hover{text-decoration:underline;}
 
 /* ── ライトモード（通常モード） ── */
 [data-theme="light"]{
@@ -1568,7 +1580,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 従事員管理 -->
     <div id="s-staff" class="sec">
       <div class="flbc mb12">
-        <div class="fla gap6">
+        <div class="fla gap6" style="flex-wrap:wrap;">
+          <input type="text" id="staff-search" class="fi" placeholder="🔍 番号・氏名で検索..." style="width:220px;" oninput="renderStaff(document.getElementById('staff-search')._flt||'')">
           <button class="btn b-gh btn-sm" onclick="fltStaff('')">全員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('社員')">社員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
@@ -1788,6 +1801,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
   </div>
+</div>
+
+<!-- ===== フルスクリーン集約ページ ===== -->
+<div id="fs-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);overflow-y:auto;">
+  <div style="position:sticky;top:0;z-index:501;background:#1a2238;display:flex;align-items:center;padding:12px 22px;gap:14px;border-bottom:1px solid rgba(255,255,255,.1);">
+    <button onclick="closeFS()" style="background:none;border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;font-size:14px;padding:6px 14px;cursor:pointer;font-weight:700;">🔙 戻る</button>
+    <div id="fs-title" style="font-size:18px;font-weight:700;color:#fff;"></div>
+    <div id="fs-subtitle" style="font-size:13px;color:rgba(255,255,255,.5);"></div>
+  </div>
+  <div id="fs-tabs" style="background:var(--bg3);border-bottom:1px solid var(--brd);padding:10px 22px;display:flex;gap:8px;flex-wrap:wrap;position:sticky;top:52px;z-index:501;"></div>
+  <div id="fs-body" style="padding:20px 22px;"></div>
 </div>
 
 <!-- チャーター入力モーダル -->
@@ -5721,7 +5745,11 @@ function editCust(id){
 
 // ─── 従事員 ───
 function renderStaff(flt){
-  const rows=D.staff.filter(s=>!flt||s.kubun.includes(flt));
+  const searchEl=$('staff-search');
+  const q=(searchEl?.value||'').trim().toLowerCase();
+  if(searchEl) searchEl._flt=flt;
+  let rows=D.staff.filter(s=>!flt||s.kubun.includes(flt));
+  if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
   let h='';
   rows.forEach(s=>{
     const kn=D.delivery.filter(r=>r.staff===s.name).reduce((a,r)=>a+r.kanryo,0);
@@ -5738,12 +5766,12 @@ function renderStaff(flt){
     const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='会社委託'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
     const compBadge=s.companyName?`<span class="xs" style="color:var(--tel2);">${s.companyName}</span>`:'<span class="xs muted">−</span>';
-    h+=`<tr>
+    h+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
       <td>${empBadge}</td>
-      <td><div class="fw7">${s.name}</div>${s.kana?`<div class="xs muted">${s.kana}</div>`:''}</td>
+      <td><div class="fw7 staff-link">${esc(s.name)}</div>${s.kana?`<div class="xs muted">${esc(s.kana)}</div>`:''}</td>
       <td>${kb}</td>
       <td>${compBadge}</td>
-      <td>${s.office}${s.subOffices?.length?` <span style='font-size:9px;color:#5c6bc0;'>+${s.subOffices.length}局</span>`:''}</td>
+      <td>${officeLink(s.office)}${s.subOffices?.length?` <span style='font-size:9px;color:#5c6bc0;'>+${s.subOffices.length}局</span>`:''}</td>
       <td class="mono xs">${s.tel||'−'}</td>
       <td>${s.kyuyo}</td>
       <td class="tr mono xs">${s.kyuyo==='個数制（歩合）'?
@@ -5752,7 +5780,7 @@ function renderStaff(flt){
         s.kyuyo==='月給'?'¥'+fmt(s.tanka)+'/月':'¥'+fmt(s.tanka)}</td>
       <td class="tr">${fmt(kn)}</td>
       <td class="tr fw7">¥${fmt(est)}</td>
-      <td><button class="btn b-gh btn-sm" onclick="editStaff(${s.id})">編集</button></td>
+      <td><button class="btn b-gh btn-sm" onclick="event.stopPropagation();editStaff(${s.id})">編集</button></td>
     </tr>`;
   });
   $('tb-staff').innerHTML=h;
@@ -10669,6 +10697,477 @@ function renderOffCards(){
         <tr><td class="muted" style="padding:4px 0;">TEL</td><td class="mono">${o.tel||'−'}</td></tr>
       </table></div>`;
   }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// ─── フルスクリーン集約ページ ───
+// ═══════════════════════════════════════════════
+let _fsType='', _fsId=null, _fsTab='';
+
+function openFS(type, id){
+  _fsType=type; _fsId=id; _fsTab='';
+  const ov=$('fs-overlay');
+  ov.style.display='block';
+  document.body.style.overflow='hidden';
+  if(type==='staff') openStaffFS(id);
+  else if(type==='customer') openCustFS(id);
+  else if(type==='office') openOfficeFS(id);
+}
+function closeFS(){
+  $('fs-overlay').style.display='none';
+  document.body.style.overflow='';
+  _fsType=''; _fsId=null;
+}
+function setFSTabs(tabs, defaultTab){
+  const el=$('fs-tabs');
+  el.innerHTML=tabs.map(t=>`<button class="fs-tab${t.key===defaultTab?' active':''}" onclick="switchFSTab('${t.key}')">${t.label}</button>`).join('');
+  switchFSTab(defaultTab);
+}
+function switchFSTab(key){
+  _fsTab=key;
+  document.querySelectorAll('#fs-tabs .fs-tab').forEach(b=>b.classList.toggle('active',b.textContent===document.querySelector(`#fs-tabs .fs-tab[onclick*="'${key}'"]`)?.textContent||false));
+  // re-highlight
+  document.querySelectorAll('#fs-tabs .fs-tab').forEach(b=>{
+    const k=b.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+    b.classList.toggle('active', k===key);
+  });
+  if(_fsType==='staff') renderStaffFSTab(key);
+  else if(_fsType==='customer') renderCustFSTab(key);
+  else if(_fsType==='office') renderOfficeFSTab(key);
+}
+
+// ── ヘルパー: リンク化テキスト生成 ──
+function staffLink(name){ return `<span class="staff-link" onclick="openFS('staff','${esc(name)}')">${esc(name)}</span>`; }
+function custLink(name){ return `<span class="cust-link" onclick="openFS('customer','${esc(name)}')">${esc(name)}</span>`; }
+function officeLink(name){ return `<span class="office-link" onclick="openFS('office','${esc(name)}')">${esc(name)}</span>`; }
+
+// ═══════════════════════════════════════════════
+// ─── 個人集約ページ ───
+// ═══════════════════════════════════════════════
+function openStaffFS(nameOrId){
+  const st = typeof nameOrId==='number'
+    ? (D.staff||[]).find(s=>s.id===nameOrId)
+    : (D.staff||[]).find(s=>s.name===nameOrId);
+  if(!st){ showAlert('従事員が見つかりません'); closeFS(); return; }
+  _fsId = st.name;
+  $('fs-title').textContent = st.name;
+  $('fs-subtitle').textContent = `${st.kubun||''} ─ ${st.office||''}`;
+  setFSTabs([
+    {key:'daily', label:'日報一覧'},
+    {key:'monthly', label:'月報'},
+    {key:'analysis', label:'分析・評価'},
+    {key:'docs', label:'明細・書類'},
+    {key:'mail', label:'メール'},
+    {key:'ledger', label:'台帳'},
+  ], 'daily');
+}
+
+function renderStaffFSTab(key){
+  const body=$('fs-body');
+  const name=_fsId;
+  if(key==='daily') renderStaffDaily(body, name);
+  else if(key==='monthly') renderStaffMonthly(body, name);
+  else if(key==='ledger') renderStaffLedger(body, name);
+  else if(key==='analysis') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>分析・評価</div><div class="xs muted mt8">次回実装予定</div></div>';
+  else if(key==='docs') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>明細・書類</div><div class="xs muted mt8">次回実装予定</div></div>';
+  else if(key==='mail') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>メール送信</div><div class="xs muted mt8">次回実装予定</div></div>';
+}
+
+function renderStaffDaily(el, name){
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-daily-mon" class="fi" value="${ym}" onchange="renderStaffFSTab('daily')"></div>
+    </div>`;
+
+  const mon=$('fs-daily-mon')?.value||ym;
+  // 宅配日報
+  const delRows=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(mon));
+  if(delRows.length){
+    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
+    html+=`<div class="tw"><table><thead><tr>
+      <th>日付</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th>
+    </tr></thead><tbody>`;
+    delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      html+=`<tr>
+        <td class="mono">${r.date||''}</td><td>${officeLink(r.office)}</td>
+        <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
+        <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
+        <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+        <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+
+  // 集荷日報
+  const puRows=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(mon));
+  if(puRows.length){
+    html+=`<div class="ct mb8 mt12"><div class="cbar"></div>集荷日報（${puRows.length}件）</div>`;
+    html+=`<div class="tw"><table><thead><tr>
+      <th>日付</th><th>営業所</th><th>顧客</th><th>地域</th><th class="tr">総個数</th>
+    </tr></thead><tbody>`;
+    puRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
+      html+=`<tr>
+        <td class="mono">${r.date||''}</td><td>${officeLink(r.office)}</td>
+        <td>${custLink(r.customerName)}</td><td class="xs muted">${r.region||''}</td>
+        <td class="tr fw7">${tot}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+
+  if(!delRows.length && !puRows.length) html+=`<div class="al al-e"><span>ℹ️</span><span>該当月のデータがありません</span></div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderStaffMonthly(el, name){
+  // 直近12ヶ月のサマリー
+  const months=[];
+  const now=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>月別サマリー（直近12ヶ月）</div>`;
+  html+=`<div class="tw"><table><thead><tr>
+    <th>月</th><th class="tr">稼働日</th><th class="tr">配達完了</th><th class="tr">集荷数</th><th class="tr">宅配売上</th><th class="tr">集荷売上</th>
+  </tr></thead><tbody>`;
+
+  const monthData=[];
+  months.forEach(m=>{
+    const del=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(m));
+    const pu=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(m));
+    const days=new Set([...del.map(r=>r.date),...pu.map(r=>r.date)]).size;
+    const kanryo=del.reduce((s,r)=>s+(r.kanryo||0),0);
+    const puTot=pu.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+    // 簡易売上計算
+    const st=(D.staff||[]).find(s=>s.name===name);
+    const delAmt=kanryo*(st?.priceDelivery||0);
+    const puAmt2=pu.reduce((s,r)=>{
+      const cu=(D.customers||[]).find(c=>c.name===r.customerName);
+      return s+IK.reduce((t,k)=>t+(iq(r,k)||0)*(cu?.prices?.[k]||0),0);
+    },0);
+
+    monthData.push({m,days,kanryo,puTot,delAmt,puAmt:puAmt2});
+    const cls=days>0?'':'style="color:var(--txt3)"';
+    html+=`<tr ${cls}>
+      <td class="fw7 mono">${m}</td><td class="tr">${days}</td>
+      <td class="tr fw7">${kanryo.toLocaleString()}</td><td class="tr fw7">${puTot.toLocaleString()}</td>
+      <td class="tr mono" style="color:var(--blu2)">${delAmt?'¥'+delAmt.toLocaleString():'-'}</td>
+      <td class="tr mono" style="color:var(--tel2)">${puAmt2?'¥'+puAmt2.toLocaleString():'-'}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+
+  // 簡易棒グラフ（配達完了）
+  const maxK=Math.max(...monthData.map(d=>d.kanryo),1);
+  html+=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>配達完了 推移</div>`;
+  html+=`<div style="display:flex;align-items:flex-end;gap:4px;height:120px;padding:8px 0;">`;
+  monthData.forEach(d=>{
+    const h=Math.max(2, d.kanryo/maxK*100);
+    const label=d.m.slice(5);
+    html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <span style="font-size:9px;color:var(--txt2);">${d.kanryo||''}</span>
+      <div style="width:100%;max-width:40px;height:${h}px;background:var(--blu2);border-radius:3px 3px 0 0;"></div>
+      <span style="font-size:9px;color:var(--txt3);">${label}</span>
+    </div>`;
+  });
+  html+=`</div></div>`;
+
+  el.innerHTML=html;
+}
+
+function renderStaffLedger(el, name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st){ el.innerHTML='<div class="al al-e"><span>❌</span><span>従事員データが見つかりません</span></div>'; return; }
+
+  // 既存editStaffモーダルの内容を再構築
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>従事員台帳 ─ ${esc(st.name)}</div>`;
+  html+=`<div class="g2">
+    <div class="fg"><label>社員番号</label><input class="fi" id="fs-st-no" value="${esc(st.empNo||'')}"></div>
+    <div class="fg"><label>氏名</label><input class="fi" id="fs-st-name" value="${esc(st.name||'')}"></div>
+    <div class="fg"><label>区分</label><select class="fi" id="fs-st-kubun">
+      <option ${st.kubun==='社員'?'selected':''}>社員</option>
+      <option ${st.kubun==='役員'?'selected':''}>役員</option>
+      <option ${st.kubun==='パート'?'selected':''}>パート</option>
+      <option ${st.kubun==='個人事業主'?'selected':''}>個人事業主</option>
+      <option ${st.kubun==='会社委託'?'selected':''}>会社委託</option>
+    </select></div>
+    <div class="fg"><label>営業所</label><select class="fi" id="fs-st-office">${(D.offices||[]).map(o=>`<option ${o.name===st.office?'selected':''}>${o.name}</option>`).join('')}</select></div>
+    <div class="fg"><label>給与形態</label><select class="fi" id="fs-st-salType">
+      <option value="個数制（歩合）" ${st.salaryType==='個数制（歩合）'?'selected':''}>個数制（歩合）</option>
+      <option value="月給" ${st.salaryType==='月給'?'selected':''}>月給</option>
+      <option value="時間単価" ${st.salaryType==='時間単価'?'selected':''}>時間単価</option>
+      <option value="日額" ${st.salaryType==='日額'?'selected':''}>日額</option>
+    </select></div>
+    <div class="fg"><label>連絡先</label><input class="fi" id="fs-st-tel" value="${esc(st.tel||'')}"></div>
+    <div class="fg"><label>宅配単価</label><input type="number" class="fi" id="fs-st-pDel" value="${st.priceDelivery||0}"></div>
+    <div class="fg"><label>基本給/月額</label><input type="number" class="fi" id="fs-st-salary" value="${st.baseSalary||0}"></div>
+  </div>
+  <div style="margin-top:14px;display:flex;gap:8px;">
+    <button class="btn b-grn btn-sm" onclick="saveStaffFromFS()">💾 保存</button>
+    <button class="btn b-gh btn-sm" onclick="switchFSTab('ledger')">リセット</button>
+  </div></div>`;
+  el.innerHTML=html;
+}
+
+function saveStaffFromFS(){
+  const name=_fsId;
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st){ showAlert('保存エラー'); return; }
+  st.empNo=$('fs-st-no').value;
+  st.name=$('fs-st-name').value;
+  st.kubun=$('fs-st-kubun').value;
+  st.office=$('fs-st-office').value;
+  st.salaryType=$('fs-st-salType').value;
+  st.tel=$('fs-st-tel').value;
+  st.priceDelivery=Number($('fs-st-pDel').value)||0;
+  st.baseSalary=Number($('fs-st-salary').value)||0;
+  _fsId=st.name; // 名前変更対応
+  $('fs-title').textContent=st.name;
+  $('fs-subtitle').textContent=`${st.kubun||''} ─ ${st.office||''}`;
+  syncToSheet();
+  showAlert('保存しました');
+}
+
+// ═══════════════════════════════════════════════
+// ─── 顧客集約ページ ───
+// ═══════════════════════════════════════════════
+function openCustFS(nameOrId){
+  const cu = typeof nameOrId==='number'
+    ? (D.customers||[]).find(c=>c.id===nameOrId)
+    : (D.customers||[]).find(c=>c.name===nameOrId);
+  if(!cu){ showAlert('顧客が見つかりません'); closeFS(); return; }
+  _fsId=cu.name;
+  $('fs-title').textContent=cu.name;
+  $('fs-subtitle').textContent=cu.region||'';
+  setFSTabs([
+    {key:'daily', label:'日報一覧'},
+    {key:'monthly', label:'月報'},
+    {key:'sales', label:'売上分析'},
+    {key:'docs', label:'書類'},
+    {key:'mail', label:'メール'},
+    {key:'ledger', label:'台帳'},
+  ], 'daily');
+}
+
+function renderCustFSTab(key){
+  const body=$('fs-body');
+  const name=_fsId;
+  if(key==='daily') renderCustDaily(body, name);
+  else if(key==='monthly') renderCustMonthly(body, name);
+  else if(key==='ledger') renderCustLedger(body, name);
+  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>${key==='sales'?'売上分析':key==='docs'?'書類':key==='mail'?'メール':key}</div><div class="xs muted mt8">次回実装予定</div></div>`;
+}
+
+function renderCustDaily(el, name){
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-cu-daily-mon')?.value||ym;
+  const rows=(D.pickup||[]).filter(r=>r.customerName===name&&(r.date||'').startsWith(mon));
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-cu-daily-mon" class="fi" value="${mon}" onchange="renderCustFSTab('daily')"></div>
+    </div>
+    <div class="ct mb8"><div class="cbar"></div>集荷日報（${rows.length}件）</div>`;
+
+  if(rows.length){
+    html+=`<div class="tw"><table><thead><tr>
+      <th>日付</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th>
+    </tr></thead><tbody>`;
+    rows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
+      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td><td class="xs muted">${r.region||''}</td><td class="tr fw7">${tot}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else {
+    html+=`<div class="al al-e"><span>ℹ️</span><span>該当月のデータがありません</span></div>`;
+  }
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderCustMonthly(el, name){
+  const months=[];
+  const now=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+  const cu=(D.customers||[]).find(c=>c.name===name);
+
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>月別集荷サマリー（直近12ヶ月）</div>`;
+  html+=`<div class="tw"><table><thead><tr><th>月</th><th class="tr">件数</th><th class="tr">総個数</th><th class="tr">売上</th></tr></thead><tbody>`;
+  months.forEach(m=>{
+    const rows=(D.pickup||[]).filter(r=>r.customerName===name&&(r.date||'').startsWith(m));
+    const tot=rows.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+    const amt=rows.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0)*(cu?.prices?.[k]||0),0),0);
+    const cls=rows.length?'':'style="color:var(--txt3)"';
+    html+=`<tr ${cls}><td class="fw7 mono">${m}</td><td class="tr">${rows.length}</td><td class="tr fw7">${tot.toLocaleString()}</td><td class="tr mono" style="color:var(--tel2)">${amt?'¥'+amt.toLocaleString():'-'}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  el.innerHTML=html;
+}
+
+function renderCustLedger(el, name){
+  const cu=(D.customers||[]).find(c=>c.name===name);
+  if(!cu){ el.innerHTML='<div class="al al-e"><span>❌</span><span>顧客データが見つかりません</span></div>'; return; }
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>顧客台帳 ─ ${esc(cu.name)}</div>`;
+  html+=`<div class="g2">
+    <div class="fg"><label>顧客名</label><input class="fi" id="fs-cu-name" value="${esc(cu.name||'')}"></div>
+    <div class="fg"><label>顧客番号</label><input class="fi" id="fs-cu-no" value="${esc(cu.custNo||'')}"></div>
+    <div class="fg"><label>営業所</label><select class="fi" id="fs-cu-office">${(D.offices||[]).map(o=>`<option ${o.name===cu.office?'selected':''}>${o.name}</option>`).join('')}</select></div>
+    <div class="fg"><label>地域</label><input class="fi" id="fs-cu-region" value="${esc(cu.region||'')}"></div>
+    <div class="fg"><label>連絡先</label><input class="fi" id="fs-cu-tel" value="${esc(cu.tel||'')}"></div>
+    <div class="fg"><label>契約開始日</label><input type="date" class="fi" id="fs-cu-start" value="${cu.startDate||''}"></div>
+  </div>
+  <div style="margin-top:14px;"><button class="btn b-grn btn-sm" onclick="saveCustFromFS()">💾 保存</button></div></div>`;
+  el.innerHTML=html;
+}
+
+function saveCustFromFS(){
+  const cu=(D.customers||[]).find(c=>c.name===_fsId);
+  if(!cu){showAlert('保存エラー');return;}
+  cu.name=$('fs-cu-name').value;
+  cu.custNo=$('fs-cu-no').value;
+  cu.office=$('fs-cu-office').value;
+  cu.region=$('fs-cu-region').value;
+  cu.tel=$('fs-cu-tel').value;
+  cu.startDate=$('fs-cu-start').value;
+  _fsId=cu.name;
+  $('fs-title').textContent=cu.name;
+  syncToSheet();
+  showAlert('保存しました');
+}
+
+// ═══════════════════════════════════════════════
+// ─── 営業所集約ページ ───
+// ═══════════════════════════════════════════════
+function openOfficeFS(nameOrId){
+  const of2 = typeof nameOrId==='number'
+    ? (D.offices||[]).find(o=>o.id===nameOrId)
+    : (D.offices||[]).find(o=>o.name===nameOrId);
+  if(!of2){ showAlert('営業所が見つかりません'); closeFS(); return; }
+  _fsId=of2.name;
+  $('fs-title').textContent=of2.name;
+  $('fs-subtitle').textContent='営業所コード: '+(of2.officeCode?dispCode(of2.officeCode):'未設定');
+  setFSTabs([
+    {key:'del', label:'宅配日報'},
+    {key:'pu', label:'集荷日報'},
+    {key:'monthly', label:'月報'},
+    {key:'members', label:'所属従事員'},
+    {key:'ledger', label:'営業所情報'},
+  ], 'del');
+}
+
+function renderOfficeFSTab(key){
+  const body=$('fs-body');
+  const name=_fsId;
+  if(key==='del') renderOfficeDel(body, name);
+  else if(key==='pu') renderOfficePU(body, name);
+  else if(key==='monthly') renderOfficeMonthly(body, name);
+  else if(key==='members') renderOfficeMembers(body, name);
+  else if(key==='ledger') renderOfficeLedger(body, name);
+}
+
+function renderOfficeDel(el, name){
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-of-del-mon')?.value||ym;
+  const rows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-del-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('del')"></div></div>
+    <div class="ct mb8"><div class="cbar"></div>宅配日報（${rows.length}件）</div>`;
+  if(rows.length){
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
+    rows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td><td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td><td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="al al-e"><span>ℹ️</span><span>データなし</span></div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderOfficePU(el, name){
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-of-pu-mon')?.value||ym;
+  const rows=(D.pickup||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-pu-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('pu')"></div></div>
+    <div class="ct mb8"><div class="cbar"></div>集荷日報（${rows.length}件）</div>`;
+  if(rows.length){
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>顧客</th><th class="tr">総個数</th></tr></thead><tbody>`;
+    rows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
+      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${custLink(r.customerName)}</td><td class="tr fw7">${tot}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="al al-e"><span>ℹ️</span><span>データなし</span></div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderOfficeMonthly(el, name){
+  const months=[];const now=new Date();
+  for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));}
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>月別サマリー</div>`;
+  html+=`<div class="tw"><table><thead><tr><th>月</th><th class="tr">宅配件数</th><th class="tr">配達完了</th><th class="tr">集荷件数</th><th class="tr">集荷個数</th></tr></thead><tbody>`;
+  months.forEach(m=>{
+    const del=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(m));
+    const pu=(D.pickup||[]).filter(r=>r.office===name&&(r.date||'').startsWith(m));
+    const kanryo=del.reduce((s,r)=>s+(r.kanryo||0),0);
+    const puTot=pu.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+    html+=`<tr><td class="fw7 mono">${m}</td><td class="tr">${del.length}</td><td class="tr fw7">${kanryo.toLocaleString()}</td><td class="tr">${pu.length}</td><td class="tr fw7">${puTot.toLocaleString()}</td></tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  el.innerHTML=html;
+}
+
+function renderOfficeMembers(el, name){
+  const members=(D.staff||[]).filter(s=>s.office===name);
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>所属従事員（${members.length}名）</div>`;
+  if(members.length){
+    html+=`<div class="tw"><table><thead><tr><th>番号</th><th>氏名</th><th>区分</th><th>給与形態</th><th>連絡先</th></tr></thead><tbody>`;
+    members.forEach(s=>{
+      html+=`<tr><td class="mono">${s.empNo||''}</td><td>${staffLink(s.name)}</td><td><span class="bdg">${esc(s.kubun||'')}</span></td><td class="xs">${s.salaryType||''}</td><td class="mono xs">${s.tel||''}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="xs muted">所属従事員がいません</div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderOfficeLedger(el, name){
+  const of2=(D.offices||[]).find(o=>o.name===name);
+  if(!of2){el.innerHTML='<div class="al al-e"><span>❌</span><span>営業所データが見つかりません</span></div>';return;}
+  let html=`<div class="fs-card"><div class="ct mb12"><div class="cbar"></div>営業所情報 ─ ${esc(of2.name)}</div>`;
+  html+=`<div class="g2">
+    <div class="fg"><label>営業所名</label><input class="fi" id="fs-of-name" value="${esc(of2.name||'')}"></div>
+    <div class="fg"><label>コード</label><input class="fi" id="fs-of-code" value="${of2.officeCode||''}"></div>
+    <div class="fg"><label>所長</label><input class="fi" id="fs-of-head" value="${esc(of2.head||'')}"></div>
+    <div class="fg"><label>住所</label><input class="fi" id="fs-of-addr" value="${esc(of2.addr||'')}"></div>
+    <div class="fg"><label>TEL</label><input class="fi" id="fs-of-tel" value="${esc(of2.tel||'')}"></div>
+  </div>
+  <div style="margin-top:14px;"><button class="btn b-grn btn-sm" onclick="saveOfficeFromFS()">💾 保存</button></div></div>`;
+  el.innerHTML=html;
+}
+
+function saveOfficeFromFS(){
+  const of2=(D.offices||[]).find(o=>o.name===_fsId);
+  if(!of2){showAlert('保存エラー');return;}
+  of2.name=$('fs-of-name').value;
+  of2.officeCode=$('fs-of-code').value;
+  of2.head=$('fs-of-head').value;
+  of2.addr=$('fs-of-addr').value;
+  of2.tel=$('fs-of-tel').value;
+  _fsId=of2.name;
+  $('fs-title').textContent=of2.name;
+  syncToSheet();
+  showAlert('保存しました');
 }
 
 // ─── 数量照合 ───
