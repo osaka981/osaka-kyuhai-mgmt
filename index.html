@@ -10771,9 +10771,9 @@ function renderStaffFSTab(key){
   if(key==='daily') renderStaffDaily(body, name);
   else if(key==='monthly') renderStaffMonthly(body, name);
   else if(key==='ledger') renderStaffLedger(body, name);
-  else if(key==='analysis') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>分析・評価</div><div class="xs muted mt8">次回実装予定</div></div>';
-  else if(key==='docs') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>明細・書類</div><div class="xs muted mt8">次回実装予定</div></div>';
-  else if(key==='mail') body.innerHTML='<div class="fs-card"><div class="ct"><div class="cbar"></div>メール送信</div><div class="xs muted mt8">次回実装予定</div></div>';
+  else if(key==='analysis') renderStaffAnalysis(body, name);
+  else if(key==='docs') renderStaffDocs(body, name);
+  else if(key==='mail') renderStaffMail(body, name);
 }
 
 function renderStaffDaily(el, name){
@@ -10891,6 +10891,238 @@ function renderStaffLedger(el, name){
   editStaff(st.id);
 }
 
+// ── 分析・評価 ──
+function _calcStaffMonthStats(name, monStr){
+  const del=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
+  const pu=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
+  const days=new Set([...del.map(r=>r.date),...pu.map(r=>r.date)]).size;
+  const kanryo=del.reduce((s,r)=>s+(r.kanryo||0),0);
+  const mochi=del.reduce((s,r)=>s+(r.mochidashi||0),0);
+  const yakan=del.reduce((s,r)=>s+(r.yakan||0),0);
+  const modo=del.reduce((s,r)=>s+(r.mochimodoiri||0),0);
+  const yoku=del.reduce((s,r)=>s+(r['翌日廻し']||0),0);
+  const puTot=pu.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+  const kanryoRate=mochi>0?(kanryo/mochi*100):0;
+  const modoRate=mochi>0?(modo/mochi*100):0;
+  return {days,kanryo,mochi,yakan,modo,yoku,puTot,kanryoRate,modoRate,delCount:del.length,puCount:pu.length};
+}
+
+function _calcStaffScore(name, monStr){
+  const me=_calcStaffMonthStats(name, monStr);
+  // 全体平均（稼働あり従事員）
+  const allStats=(D.staff||[]).map(s=>({name:s.name, stat:_calcStaffMonthStats(s.name, monStr)}))
+    .filter(x=>x.stat.days>0);
+  if(!allStats.length) return {total:0, breakdown:{}};
+  const avgKanryo=allStats.reduce((s,x)=>s+x.stat.kanryo,0)/allStats.length;
+  const avgPuTot=allStats.reduce((s,x)=>s+x.stat.puTot,0)/allStats.length;
+  const avgDays=allStats.reduce((s,x)=>s+x.stat.days,0)/allStats.length;
+  const avgYakan=allStats.reduce((s,x)=>s+x.stat.yakan,0)/allStats.length;
+
+  // 配達量スコア(30) - 平均比
+  const s1=avgKanryo>0?Math.min(30, Math.round(me.kanryo/avgKanryo*20)):0;
+  // 集荷量スコア(20) - 平均比
+  const s2=avgPuTot>0?Math.min(20, Math.round(me.puTot/avgPuTot*15)):0;
+  // 正確性スコア(20) - 持戻り率低いほど高得点
+  const s3=me.mochi>0?Math.max(0, Math.round(20-me.modoRate*2)):10;
+  // 継続性スコア(15) - 稼働日数
+  const s4=avgDays>0?Math.min(15, Math.round(me.days/avgDays*12)):0;
+  // 夜間対応スコア(15) - 夜間配達量
+  const s5=avgYakan>0?Math.min(15, Math.round(me.yakan/avgYakan*10)):0;
+
+  return {
+    total: s1+s2+s3+s4+s5,
+    breakdown:{
+      delivery:{score:s1, max:30, label:'配達量'},
+      pickup:{score:s2, max:20, label:'集荷量'},
+      accuracy:{score:s3, max:20, label:'正確性'},
+      continuity:{score:s4, max:15, label:'継続性'},
+      nightwork:{score:s5, max:15, label:'夜間対応'},
+    }
+  };
+}
+
+function _calcStaffRankings(monStr){
+  const stats=(D.staff||[]).map(s=>({
+    name:s.name,
+    stat:_calcStaffMonthStats(s.name, monStr),
+  })).filter(x=>x.stat.days>0);
+  const rank=(key)=>{
+    const sorted=[...stats].sort((a,b)=>b.stat[key]-a.stat[key]);
+    const idx={};
+    sorted.forEach((x,i)=>idx[x.name]=i+1);
+    return {total:sorted.length, rank:idx};
+  };
+  return {
+    kanryo: rank('kanryo'),
+    puTot:  rank('puTot'),
+    days:   rank('days'),
+    yakan:  rank('yakan'),
+  };
+}
+
+function renderStaffAnalysis(el, name){
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-anl-mon')?.value||ym;
+  const cmpTarget=$('fs-anl-cmp')?.value||'__avg__';
+
+  const me=_calcStaffMonthStats(name, mon);
+  const score=_calcStaffScore(name, mon);
+  const rankings=_calcStaffRankings(mon);
+
+  // 比較対象の統計
+  let cmpStat, cmpLabel;
+  if(cmpTarget==='__avg__'){
+    const activeStaff=(D.staff||[]).filter(s=>s.name!==name);
+    const stats=activeStaff.map(s=>_calcStaffMonthStats(s.name, mon)).filter(x=>x.days>0);
+    if(stats.length){
+      cmpStat={
+        days: stats.reduce((s,x)=>s+x.days,0)/stats.length,
+        kanryo: stats.reduce((s,x)=>s+x.kanryo,0)/stats.length,
+        puTot: stats.reduce((s,x)=>s+x.puTot,0)/stats.length,
+        yakan: stats.reduce((s,x)=>s+x.yakan,0)/stats.length,
+        modoRate: stats.reduce((s,x)=>s+x.modoRate,0)/stats.length,
+      };
+    } else cmpStat={days:0,kanryo:0,puTot:0,yakan:0,modoRate:0};
+    cmpLabel='全体平均';
+  } else if(cmpTarget==='__office__'){
+    const st=(D.staff||[]).find(s=>s.name===name);
+    const same=(D.staff||[]).filter(s=>s.office===st?.office && s.name!==name);
+    const stats=same.map(s=>_calcStaffMonthStats(s.name, mon)).filter(x=>x.days>0);
+    if(stats.length){
+      cmpStat={
+        days: stats.reduce((s,x)=>s+x.days,0)/stats.length,
+        kanryo: stats.reduce((s,x)=>s+x.kanryo,0)/stats.length,
+        puTot: stats.reduce((s,x)=>s+x.puTot,0)/stats.length,
+        yakan: stats.reduce((s,x)=>s+x.yakan,0)/stats.length,
+        modoRate: stats.reduce((s,x)=>s+x.modoRate,0)/stats.length,
+      };
+      cmpLabel=st?.office+' 平均';
+    } else { cmpStat={days:0,kanryo:0,puTot:0,yakan:0,modoRate:0}; cmpLabel='営業所平均'; }
+  } else {
+    cmpStat=_calcStaffMonthStats(cmpTarget, mon);
+    cmpLabel=cmpTarget;
+  }
+
+  // 6ヶ月分の推移
+  const trend=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const mine=_calcStaffMonthStats(name, m);
+    let cmp;
+    if(cmpTarget==='__avg__'){
+      const stats=(D.staff||[]).filter(s=>s.name!==name).map(s=>_calcStaffMonthStats(s.name, m)).filter(x=>x.days>0);
+      cmp=stats.length?stats.reduce((s,x)=>s+x.kanryo,0)/stats.length:0;
+    } else if(cmpTarget==='__office__'){
+      const st=(D.staff||[]).find(s=>s.name===name);
+      const same=(D.staff||[]).filter(s=>s.office===st?.office && s.name!==name);
+      const stats=same.map(s=>_calcStaffMonthStats(s.name, m)).filter(x=>x.days>0);
+      cmp=stats.length?stats.reduce((s,x)=>s+x.kanryo,0)/stats.length:0;
+    } else {
+      cmp=_calcStaffMonthStats(cmpTarget, m).kanryo;
+    }
+    trend.push({m, mine:mine.kanryo, cmp:Math.round(cmp)});
+  }
+
+  // 他の従事員選択肢
+  const otherStaff=(D.staff||[]).filter(s=>s.name!==name).map(s=>`<option value="${esc(s.name)}" ${cmpTarget===s.name?'selected':''}>${esc(s.name)}</option>`).join('');
+
+  const starEmoji=n=>'★'.repeat(Math.min(5,Math.floor(n/20)))+'☆'.repeat(Math.max(0,5-Math.floor(n/20)));
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-anl-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('analysis')"></div>
+      <div class="fg" style="min-width:200px;"><label>比較対象</label>
+        <select class="fi" id="fs-anl-cmp" onchange="renderStaffFSTab('analysis')">
+          <option value="__avg__" ${cmpTarget==='__avg__'?'selected':''}>全体平均</option>
+          <option value="__office__" ${cmpTarget==='__office__'?'selected':''}>営業所平均</option>
+          ${otherStaff}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <!-- 左カラム -->
+    <div>
+      <div class="fs-card">
+        <div class="ct mb12"><div class="cbar"></div>今月の実績サマリー</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><div class="kl">稼働日</div><div class="kv">${me.days}</div><div class="ks">日</div></div>
+          <div><div class="kl">配達完了</div><div class="kv" style="color:var(--blu2)">${me.kanryo.toLocaleString()}</div><div class="ks">件</div></div>
+          <div><div class="kl">集荷</div><div class="kv" style="color:var(--tel2)">${me.puTot.toLocaleString()}</div><div class="ks">個</div></div>
+          <div><div class="kl">夜間配達</div><div class="kv" style="color:var(--y60)">${me.yakan}</div><div class="ks">件</div></div>
+          <div><div class="kl">持戻り率</div><div class="kv" style="color:${me.modoRate>5?'var(--red2)':'var(--grn2)'}">${me.modoRate.toFixed(1)}</div><div class="ks">%</div></div>
+          <div><div class="kl">完了率</div><div class="kv" style="color:var(--grn2)">${me.kanryoRate.toFixed(1)}</div><div class="ks">%</div></div>
+        </div>
+      </div>
+
+      <div class="fs-card">
+        <div class="ct mb12"><div class="cbar"></div>📈 評価スコア</div>
+        <div style="text-align:center;padding:10px 0;">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--amb2);line-height:1;">${score.total}<span style="font-size:22px;color:var(--txt2);">/100</span></div>
+          <div style="font-size:20px;color:var(--amb2);letter-spacing:4px;margin-top:6px;">${starEmoji(score.total)}</div>
+        </div>
+        <div style="margin-top:14px;">`;
+  Object.values(score.breakdown).forEach(b=>{
+    const pct=b.score/b.max*100;
+    html+=`<div style="margin-bottom:10px;">
+      <div class="flbc" style="margin-bottom:4px;"><span class="sm fw7">${b.label}</span><span class="mono xs">${b.score}/${b.max}</span></div>
+      <div style="background:var(--bg3);border-radius:3px;height:6px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${pct>=70?'var(--grn2)':pct>=40?'var(--amb2)':'var(--red2)'};border-radius:3px;"></div></div>
+    </div>`;
+  });
+  html+=`</div></div>
+    </div>
+
+    <!-- 右カラム -->
+    <div>
+      <div class="fs-card">
+        <div class="ct mb12"><div class="cbar"></div>🏆 順位（稼働者中）</div>
+        <div class="tw"><table><thead><tr><th>項目</th><th class="tr">順位</th><th class="tr">数値</th><th class="tr">${esc(cmpLabel)}</th></tr></thead><tbody>
+          <tr><td class="fw7">配達完了</td><td class="tr mono fw7" style="color:var(--blu2)">${rankings.kanryo.rank[name]||'-'}/${rankings.kanryo.total}</td><td class="tr mono">${me.kanryo.toLocaleString()}</td><td class="tr mono muted">${Math.round(cmpStat.kanryo).toLocaleString()}</td></tr>
+          <tr><td class="fw7">集荷個数</td><td class="tr mono fw7" style="color:var(--tel2)">${rankings.puTot.rank[name]||'-'}/${rankings.puTot.total}</td><td class="tr mono">${me.puTot.toLocaleString()}</td><td class="tr mono muted">${Math.round(cmpStat.puTot).toLocaleString()}</td></tr>
+          <tr><td class="fw7">稼働日数</td><td class="tr mono fw7">${rankings.days.rank[name]||'-'}/${rankings.days.total}</td><td class="tr mono">${me.days}</td><td class="tr mono muted">${cmpStat.days.toFixed(1)}</td></tr>
+          <tr><td class="fw7">夜間配達</td><td class="tr mono fw7" style="color:var(--y60)">${rankings.yakan.rank[name]||'-'}/${rankings.yakan.total}</td><td class="tr mono">${me.yakan}</td><td class="tr mono muted">${Math.round(cmpStat.yakan)}</td></tr>
+        </tbody></table></div>
+      </div>
+
+      <div class="fs-card">
+        <div class="ct mb12"><div class="cbar"></div>配達完了 推移（6ヶ月）</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding:10px 0;">`;
+  const maxT=Math.max(...trend.map(t=>Math.max(t.mine,t.cmp)),1);
+  trend.forEach(t=>{
+    const hM=Math.max(2,t.mine/maxT*110);
+    const hC=Math.max(2,t.cmp/maxT*110);
+    html+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <div style="display:flex;gap:2px;align-items:flex-end;height:120px;">
+        <div title="本人:${t.mine}" style="width:14px;height:${hM}px;background:var(--blu2);border-radius:2px 2px 0 0;"></div>
+        <div title="比較:${t.cmp}" style="width:14px;height:${hC}px;background:var(--txt3);border-radius:2px 2px 0 0;"></div>
+      </div>
+      <span style="font-size:9px;color:var(--txt3);">${t.m.slice(5)}</span>
+    </div>`;
+  });
+  html+=`</div>
+        <div class="xs muted" style="display:flex;gap:14px;justify-content:center;margin-top:8px;">
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--blu2);vertical-align:middle;margin-right:4px;"></span>${esc(name)}</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--txt3);vertical-align:middle;margin-right:4px;"></span>${esc(cmpLabel)}</span>
+        </div>
+      </div>
+
+      <div class="fs-card">
+        <div class="ct mb12"><div class="cbar"></div>月別詳細比較</div>
+        <div class="tw"><table><thead><tr><th>月</th><th class="tr">本人</th><th class="tr">比較</th><th class="tr">差</th></tr></thead><tbody>`;
+  trend.forEach(t=>{
+    const diff=t.mine-t.cmp;
+    const color=diff>0?'var(--grn2)':diff<0?'var(--red2)':'var(--txt2)';
+    html+=`<tr><td class="fw7 mono">${t.m}</td><td class="tr mono">${t.mine}</td><td class="tr mono muted">${t.cmp}</td><td class="tr mono fw7" style="color:${color}">${diff>0?'+':''}${diff}</td></tr>`;
+  });
+  html+=`</tbody></table></div>
+      </div>
+    </div>
+  </div>`;
+  el.innerHTML=html;
+}
+
 function saveStaffFromFS(){/* 既存モーダルの保存で対応 */}
 
 // ═══════════════════════════════════════════════
@@ -10920,7 +11152,9 @@ function renderCustFSTab(key){
   if(key==='daily') renderCustDaily(body, name);
   else if(key==='monthly') renderCustMonthly(body, name);
   else if(key==='ledger') renderCustLedger(body, name);
-  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>${key==='sales'?'売上分析':key==='docs'?'書類':key==='mail'?'メール':key}</div><div class="xs muted mt8">次回実装予定</div></div>`;
+  else if(key==='docs') renderCustDocs(body, name);
+  else if(key==='mail') renderCustMail(body, name);
+  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>売上分析</div><div class="xs muted mt8">Phase 3で対応予定</div></div>`;
 }
 
 function renderCustDaily(el, name){
@@ -11115,7 +11349,8 @@ function renderCompanyFSTab(key){
   else if(key==='daily') renderCompanyDaily(body, name);
   else if(key==='monthly') renderCompanyMonthly(body, name);
   else if(key==='ledger') renderCompanyLedger(body, name);
-  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>${key==='docs'?'明細・書類':'メール'}</div><div class="xs muted mt8">次回実装予定</div></div>`;
+  else if(key==='docs') renderCompanyDocs(body, name);
+  else if(key==='mail') renderCompanyMail(body, name);
 }
 
 function _companyDrivers(coName){
@@ -11225,6 +11460,448 @@ function saveCompanyFromFS(){
   $('fs-title').textContent=co.name;
   syncToSheet();
   showAlert('保存しました');
+}
+
+// ═══════════════════════════════════════════════
+// ─── 明細・書類タブ ───
+// ═══════════════════════════════════════════════
+function _getIssuedDocs(type, targetName){
+  try{
+    const all=JSON.parse(localStorage.getItem('issued_docs')||'[]');
+    return all.filter(d=>d.type===type&&d.target===targetName).sort((a,b)=>(b.issuedAt||'').localeCompare(a.issuedAt||''));
+  }catch(e){ return []; }
+}
+function _saveIssuedDoc(rec){
+  try{
+    const all=JSON.parse(localStorage.getItem('issued_docs')||'[]');
+    all.push(rec);
+    localStorage.setItem('issued_docs', JSON.stringify(all));
+  }catch(e){}
+}
+
+function _calcStaffPayment(name, monStr){
+  // 宅配：完了数×単価＋夜間＋転送手当
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st) return {total:0,breakdown:[]};
+  const del=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
+  const pu=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
+  const breakdown=[];
+  let total=0;
+
+  if(st.kyuyo==='月給'){
+    total=st.tanka||0;
+    breakdown.push({label:'月給', amount:total});
+  } else if(st.kyuyo==='個数制（歩合）'){
+    const dp=st.fixedPrices?.del||{};
+    const delSum={kanryo:0,tenso:0,yakan:0};
+    del.forEach(r=>{
+      delSum.kanryo+=r.kanryo||0;
+      delSum.tenso+=r.tenso||0;
+      delSum.yakan+=r.yakan||0;
+    });
+    if(delSum.kanryo>0&&dp.kanryo){
+      const amt=delSum.kanryo*dp.kanryo;
+      breakdown.push({label:`完了 ${delSum.kanryo}件×¥${dp.kanryo}`, amount:amt});
+      total+=amt;
+    }
+    if(delSum.tenso>0&&dp.tenso){
+      const amt=delSum.tenso*dp.tenso;
+      breakdown.push({label:`転送 ${delSum.tenso}件×¥${dp.tenso}`, amount:amt});
+      total+=amt;
+    }
+    if(delSum.yakan>0&&dp.night){
+      const amt=delSum.yakan*dp.night;
+      breakdown.push({label:`夜間 ${delSum.yakan}件×¥${dp.night}`, amount:amt});
+      total+=amt;
+    }
+    // 集荷：品目別
+    const cp=st.fixedPrices?.col||{};
+    const puSum={};
+    pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+    Object.entries(puSum).forEach(([k,q])=>{
+      if(q>0&&cp[k]){
+        const amt=q*cp[k];
+        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${cp[k]}`, amount:amt});
+        total+=amt;
+      }
+    });
+  } else {
+    total=st.tanka||0;
+    breakdown.push({label:st.kyuyo||'基本給', amount:total});
+  }
+  return {total, breakdown, staff:st};
+}
+
+function _calcCustBilling(custName, monStr){
+  const cu=(D.customers||[]).find(c=>c.name===custName);
+  if(!cu) return {total:0, breakdown:[]};
+  const rows=(D.pickup||[]).filter(r=>r.customerName===custName&&(r.date||'').startsWith(monStr));
+  const breakdown=[];
+  let total=0;
+  const itemSum={};
+  rows.forEach(r=>IK.forEach(k=>{ itemSum[k]=(itemSum[k]||0)+(iq(r,k)||0); }));
+  Object.entries(itemSum).forEach(([k,q])=>{
+    if(q>0){
+      const price=cu.prices?.[k]||0;
+      const amt=q*price;
+      breakdown.push({label:ITEMS[k]?.label||k, qty:q, unit:price, amount:amt});
+      total+=amt;
+    }
+  });
+  return {total, breakdown, customer:cu, rowCount:rows.length};
+}
+
+// ── PDF生成（簡易印刷ベース） ──
+function _printDocWindow(title, html){
+  const w=window.open('', '_blank', 'width=900,height=1100');
+  if(!w){ showAlert('ポップアップがブロックされました'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+    <style>
+      body{font-family:'Yu Gothic','Noto Sans JP',sans-serif;color:#1a1a2e;padding:40px;background:#fff;}
+      .doc-header{border-bottom:3px solid #1a2238;padding-bottom:16px;margin-bottom:24px;}
+      .doc-title{font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;}
+      .doc-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:12px;color:#555;}
+      .doc-to{font-size:20px;font-weight:700;margin-top:24px;border-bottom:1px solid #888;padding-bottom:4px;}
+      .doc-from{text-align:right;margin-top:16px;font-size:14px;line-height:1.8;}
+      .doc-amount-box{background:#f5f5f5;border:2px solid #1a2238;padding:16px;margin:24px 0;text-align:center;}
+      .doc-amount-label{font-size:12px;color:#555;letter-spacing:4px;}
+      .doc-amount{font-family:'Yu Gothic',serif;font-size:36px;font-weight:800;color:#1a2238;}
+      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px;}
+      th{background:#1a2238;color:#fff;padding:10px 8px;text-align:left;}
+      td{border-bottom:1px solid #ccc;padding:8px;}
+      td.tr{text-align:right;font-family:'DM Mono',monospace;}
+      .doc-footer{margin-top:40px;font-size:11px;color:#777;}
+      .stamp{display:inline-block;width:60px;height:60px;border:2px solid #c0392b;border-radius:50%;color:#c0392b;text-align:center;line-height:56px;font-weight:700;font-size:11px;letter-spacing:2px;position:relative;}
+      .stamp::after{content:'';position:absolute;inset:4px;border:1px solid #c0392b;border-radius:50%;}
+      @media print{body{padding:20px;} .no-print{display:none;}}
+      .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;}
+    </style></head><body>
+    <button class="print-btn no-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
+    ${html}
+    </body></html>`);
+  w.document.close();
+}
+
+function generatePaySlip(staffName, monStr){
+  const pay=_calcStaffPayment(staffName, monStr);
+  if(!pay.staff){ showAlert('従事員データなし'); return; }
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  const isExternal=pay.staff.kubun==='個人事業主'||pay.staff.kubun==='会社委託';
+  const title=isExternal?'支払明細書':'給与明細書';
+
+  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">${title}</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">${esc(pay.staff.name)} 様</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">支払金額</div>
+      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
+      <div>〒599-8247 大阪府堺市中区○○</div>
+      <div>TEL: 072-XXX-XXXX</div>
+      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
+    </div>
+    <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
+
+  _printDocWindow(title, html);
+  _saveIssuedDoc({type:'paySlip', target:staffName, month:monStr, amount:pay.total, issuedAt:new Date().toISOString()});
+  renderStaffFSTab('docs');
+}
+
+function generateInvoiceProxy(staffName, monStr){
+  // 請求書発行代行（個人事業主・委託会社向け）
+  const pay=_calcStaffPayment(staffName, monStr);
+  if(!pay.staff){ showAlert('従事員データなし'); return; }
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+
+  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">請 求 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">大阪急配株式会社 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">ご請求金額</div>
+      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">${esc(pay.staff.companyName||pay.staff.name)}</div>
+      ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
+      <div style="margin-top:12px;"><span class="stamp">${esc((pay.staff.companyName||pay.staff.name).slice(0,2))}</span></div>
+    </div>
+    <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
+
+  _printDocWindow('請求書（発行代行）', html);
+  _saveIssuedDoc({type:'invoiceProxy', target:staffName, month:monStr, amount:pay.total, issuedAt:new Date().toISOString()});
+  renderStaffFSTab('docs');
+}
+
+function generateCustInvoice(custName, monStr){
+  const bill=_calcCustBilling(custName, monStr);
+  if(!bill.customer){ showAlert('顧客データなし'); return; }
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+
+  let rows=bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">${b.qty.toLocaleString()}</td><td class="tr">¥${b.unit.toLocaleString()}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">請 求 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">${esc(bill.customer.name)} 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">ご請求金額（税抜）</div>
+      <div class="doc-amount">¥${bill.total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
+      <div>〒599-8247 大阪府堺市中区○○</div>
+      <div>TEL: 072-XXX-XXXX</div>
+      <div>インボイス登録番号：T○○○○○○○○○○○○○</div>
+      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
+    </div>
+    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。</div>`;
+
+  _printDocWindow('請求書', html);
+  _saveIssuedDoc({type:'custInvoice', target:custName, month:monStr, amount:bill.total, issuedAt:new Date().toISOString()});
+  renderCustFSTab('docs');
+}
+
+// ── 従事員 明細・書類タブ ──
+function renderStaffDocs(el, name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-doc-mon')?.value||ym;
+  const isExternal=st?.kubun==='個人事業主'||st?.kubun==='会社委託';
+
+  const pay=_calcStaffPayment(name, mon);
+  const history=_getIssuedDocs('paySlip', name).concat(_getIssuedDocs('invoiceProxy', name))
+    .sort((a,b)=>(b.issuedAt||'').localeCompare(a.issuedAt||''));
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-doc-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('docs')"></div>
+    </div>
+  </div>
+
+  <div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>${mon}分 ${isExternal?'支払明細':'給与明細'}プレビュー</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;">
+      <div>
+        <div class="xs muted">支払金額</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">📄 ${isExternal?'支払明細':'給与明細'}を発行</button>
+        ${isExternal?`<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">📑 請求書代行を発行</button>`:''}
+      </div>
+    </div>
+    ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
+  </div>
+
+  <div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>📋 発行履歴</div>`;
+  if(history.length){
+    html+=`<div class="tw"><table><thead><tr><th>発行日</th><th>種類</th><th>対象月</th><th class="tr">金額</th><th></th></tr></thead><tbody>`;
+    history.forEach(h=>{
+      const typeLabel=h.type==='paySlip'?(isExternal?'支払明細':'給与明細'):'請求書代行';
+      html+=`<tr>
+        <td class="mono xs">${(h.issuedAt||'').slice(0,10)}</td>
+        <td><span class="bdg">${typeLabel}</span></td>
+        <td class="mono">${h.month||''}</td>
+        <td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td>
+        <td><button class="btn b-gh btn-sm" onclick="${h.type==='paySlip'?'generatePaySlip':'generateInvoiceProxy'}('${esc(name)}','${h.month}')">📄再発行</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="xs muted">発行履歴はありません</div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+// ── 従事員 メールタブ ──
+function renderStaffMail(el, name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  const email=st?.email||'';
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+  let html=`<div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-mail-to" value="${esc(email)}" placeholder="メールアドレス"></div>
+    <div class="fg mb8"><label>件名</label><input class="fi" id="fs-mail-sub" value="${ym}分 明細書送付の件"></div>
+    <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-mail-body" rows="8" style="resize:vertical;">${esc(name)} 様
+
+お疲れ様です。
+${ym.replace('-','年')}月分の明細書をお送りいたします。
+ご確認のほどよろしくお願いいたします。
+
+大阪急配株式会社</textarea></div>
+    <div class="mb8">
+      <label class="xs muted">添付：</label>
+      <label style="margin-right:10px;"><input type="checkbox" id="fs-mail-att1" checked> 支払/給与明細</label>
+      <label><input type="checkbox" id="fs-mail-att2"> 請求書代行</label>
+    </div>
+    <button class="btn b-blu" onclick="sendStaffMail('${esc(name)}')">📨 メーラーで送信</button>
+    <div class="xs muted mt8">※ ブラウザの既定メーラーが起動します。明細PDF添付は別途印刷→PDF保存後に手動添付してください。</div>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function sendStaffMail(name){
+  const to=$('fs-mail-to').value;
+  const sub=$('fs-mail-sub').value;
+  const body=$('fs-mail-body').value;
+  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+}
+
+// ── 顧客 書類タブ ──
+function renderCustDocs(el, name){
+  const cu=(D.customers||[]).find(c=>c.name===name);
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-cu-doc-mon')?.value||ym;
+  const bill=_calcCustBilling(name, mon);
+  const history=_getIssuedDocs('custInvoice', name);
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-cu-doc-mon" class="fi" value="${mon}" onchange="renderCustFSTab('docs')"></div></div>
+  </div>
+  <div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>${mon}分 請求書プレビュー</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;">
+      <div>
+        <div class="xs muted">ご請求金額（税抜）</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--tel2);line-height:1;">¥${bill.total.toLocaleString()}</div>
+        <div class="xs muted mt8">集荷 ${bill.rowCount}件</div>
+      </div>
+      <button class="btn b-blu" onclick="generateCustInvoice('${esc(name)}','${mon}')">📄 請求書を発行</button>
+    </div>
+    ${bill.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>品目</th><th class="tr">数量</th><th class="tr">単価</th><th class="tr">金額</th></tr></thead><tbody>${bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">${b.qty}</td><td class="tr mono">¥${b.unit}</td><td class="tr mono fw7">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
+  </div>
+  <div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>📋 発行履歴</div>`;
+  if(history.length){
+    html+=`<div class="tw"><table><thead><tr><th>発行日</th><th>対象月</th><th class="tr">金額</th><th></th></tr></thead><tbody>`;
+    history.forEach(h=>{
+      html+=`<tr><td class="mono xs">${(h.issuedAt||'').slice(0,10)}</td><td class="mono">${h.month}</td><td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td><td><button class="btn b-gh btn-sm" onclick="generateCustInvoice('${esc(name)}','${h.month}')">📄再発行</button></td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  } else html+=`<div class="xs muted">発行履歴はありません</div>`;
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+function renderCustMail(el, name){
+  const cu=(D.customers||[]).find(c=>c.name===name);
+  const email=cu?.email||'';
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  let html=`<div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-cu-mail-to" value="${esc(email)}"></div>
+    <div class="fg mb8"><label>件名</label><input class="fi" id="fs-cu-mail-sub" value="${ym}分 請求書送付の件"></div>
+    <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-cu-mail-body" rows="8" style="resize:vertical;">${esc(name)} 御中
+
+いつもお世話になっております。
+${ym.replace('-','年')}月分の請求書をお送りいたします。
+お振込のほどよろしくお願い申し上げます。
+
+大阪急配株式会社</textarea></div>
+    <button class="btn b-blu" onclick="sendCustMail()">📨 メーラーで送信</button>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function sendCustMail(){
+  const to=$('fs-cu-mail-to').value;
+  const sub=$('fs-cu-mail-sub').value;
+  const body=$('fs-cu-mail-body').value;
+  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
+}
+
+// ── 委託会社 書類タブ ──
+function renderCompanyDocs(el, name){
+  const drivers=_companyDrivers(name);
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const mon=$('fs-co-doc-mon')?.value||ym;
+
+  let total=0;
+  const driverPays=drivers.map(d=>{
+    const pay=_calcStaffPayment(d.name, mon);
+    total+=pay.total;
+    return {name:d.name, amount:pay.total};
+  });
+
+  let html=`<div class="fs-card">
+    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-co-doc-mon" class="fi" value="${mon}" onchange="renderCompanyFSTab('docs')"></div></div>
+  </div>
+  <div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>${mon}分 会社合計支払</div>
+    <div style="padding:12px;background:var(--bg3);border-radius:6px;">
+      <div class="xs muted">合計支払金額</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${total.toLocaleString()}</div>
+    </div>
+    <div class="tw mt12"><table><thead><tr><th>所属ドライバー</th><th class="tr">支払額</th><th></th></tr></thead><tbody>`;
+  driverPays.forEach(dp=>{
+    html+=`<tr>
+      <td>${staffLink(dp.name)}</td>
+      <td class="tr mono fw7">¥${dp.amount.toLocaleString()}</td>
+      <td><button class="btn b-gh btn-sm" onclick="generatePaySlip('${esc(dp.name)}','${mon}')">📄明細</button></td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  el.innerHTML=html;
+}
+
+function renderCompanyMail(el, name){
+  const co=(D.companies||[]).find(c=>c.name===name);
+  const email=co?.email||'';
+  const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  let html=`<div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>📧 ${esc(name)} 宛メール送信</div>
+    <div class="fg mb8"><label>宛先</label><input class="fi" id="fs-comp-mail-to" value="${esc(email)}"></div>
+    <div class="fg mb8"><label>件名</label><input class="fi" id="fs-comp-mail-sub" value="${ym}分 支払明細送付の件"></div>
+    <div class="fg mb8"><label>本文</label><textarea class="fi" id="fs-comp-mail-body" rows="8" style="resize:vertical;">${esc(name)} 御中
+
+いつもお世話になっております。
+${ym.replace('-','年')}月分の支払明細および請求書代行をお送りいたします。
+ご確認のほどよろしくお願いいたします。
+
+大阪急配株式会社</textarea></div>
+    <button class="btn b-blu" onclick="sendCompMail()">📨 メーラーで送信</button>
+  </div>`;
+  el.innerHTML=html;
+}
+
+function sendCompMail(){
+  const to=$('fs-comp-mail-to').value;
+  const sub=$('fs-comp-mail-sub').value;
+  const body=$('fs-comp-mail-body').value;
+  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  window.location.href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(sub)}&body=${encodeURIComponent(body)}`;
 }
 
 // ─── 数量照合 ───
