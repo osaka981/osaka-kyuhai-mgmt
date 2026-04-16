@@ -1820,7 +1820,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="xs muted mb8">個人事業主・委託会社からの制作依頼時に請求書代行へ加算される手数料です。</div>
         <div class="fg" style="max-width:200px;">
           <label>電子印制作費（円）</label>
-          <input type="number" id="sys-stamp-fee" class="fi" value="0" placeholder="0">
+          <input type="number" id="sys-stamp-fee" class="fi" placeholder="0">
         </div>
         <button class="btn b-grn btn-sm mt12" onclick="saveStampFee()">保存</button>
       </div>
@@ -12530,6 +12530,8 @@ function saveStampFee(){
   const info=_getSystemInfo();
   info.stampFee=parseInt($('sys-stamp-fee')?.value)||0;
   _saveSystemInfoLS(info);
+  // 保存値で画面を再反映（正規化された数値を表示）
+  if($('sys-stamp-fee'))$('sys-stamp-fee').value=info.stampFee;
   showAlert('電子印制作費を保存しました');
 }
 
@@ -12550,6 +12552,7 @@ function saveOpSettings(){
   info.taxRate=parseInt($('sys-tax-rate')?.value)||10;
   info.notifyEmail=$('sys-notify-email')?.value||'';
   _saveSystemInfoLS(info);
+  if($('sys-tax-rate'))$('sys-tax-rate').value=info.taxRate;
   showAlert('運用設定を保存しました');
 }
 
