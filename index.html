@@ -1756,6 +1756,33 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
 
+    <!-- アーカイブ -->
+    <div id="s-archive" class="sec">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">アーカイブ</div>
+          <div style="font-size:10px;color:var(--txt2);">取引終了した顧客・従業員・委託会社・営業所の保管</div>
+        </div>
+      </div>
+      <div class="card mb12" style="background:#fff5f5;border:1px solid rgba(192,57,43,.2);">
+        <div class="xs" style="line-height:1.8;">
+          <strong style="color:var(--red2);">法的保管期間について</strong><br>
+          取引記録は法人税法・会社法により<strong>7年間の保管義務</strong>があります。<br>
+          アーカイブに移動したデータは一覧から非表示になりますが、過去の日報・請求書は保持されます。<br>
+          <strong>完全削除は慎重に行ってください</strong>（削除すると過去の日報・請求書・集計データが参照できなくなります）。
+        </div>
+      </div>
+      <div style="display:flex;gap:2px;margin-bottom:12px;background:var(--bg2);padding:0;border-radius:6px;">
+        <button type="button" class="arc-tab on" data-arc="cust" onclick="switchArcTab('cust')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;font-weight:700;">顧客</button>
+        <button type="button" class="arc-tab" data-arc="staff" onclick="switchArcTab('staff')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-weight:700;">従業員</button>
+        <button type="button" class="arc-tab" data-arc="company" onclick="switchArcTab('company')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-weight:700;">委託会社</button>
+        <button type="button" class="arc-tab" data-arc="office" onclick="switchArcTab('office')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-weight:700;">営業所</button>
+      </div>
+      <div class="card">
+        <div id="arc-content"></div>
+      </div>
+    </div>
+
     <!-- TS: 経営設定 -->
     <div id="s-ts-settings" class="sec">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
@@ -2379,6 +2406,27 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <label>備考（請求書に記載）</label>
       <input type="text" id="cu-invoice-note" class="fi" placeholder="例：振込手数料は貴社負担でお願いします">
     </div>
+  </div>
+
+  <!-- ■ 取引状態 -->
+  <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 取引状態</div>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:200px 1fr;gap:10px;align-items:end;">
+      <div class="fg">
+        <label>状態</label>
+        <select id="cu-status" class="fi" onchange="onCuStatusChange()">
+          <option value="稼働中">稼働中</option>
+          <option value="休止">休止</option>
+          <option value="終了">取引終了（アーカイブ）</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>状態変更理由（任意）</label>
+        <input type="text" id="cu-status-reason" class="fi" placeholder="例：契約満了、顧客事情により休止など">
+      </div>
+    </div>
+    <div class="xs muted mt8" id="cu-status-hint" style="line-height:1.6;"></div>
+    <div id="cu-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:var(--red3);border:1px solid rgba(192,57,43,.2);border-radius:4px;color:var(--red2);font-weight:600;"></div>
   </div>
 
   <div class="sep"></div>
@@ -3929,6 +3977,7 @@ const _TOP_TABS = {
   admin:    { subs: [
     { s:'offices',     label:'営業所管理' },
     { s:'import',      label:'CSVインポート' },
+    { s:'archive',     label:'アーカイブ' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -4016,6 +4065,7 @@ function navByS(s) {
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
   if (s==='offices')     _call('renderOffCards');
+  if (s==='archive')     _call('renderArchive');
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
@@ -4531,7 +4581,7 @@ function renderCmp(){
 function renderCustTbl(){
   const q=($('cust-search')?.value||'').trim().toLowerCase();
   const sort=$('cust-sort')?.value||'no-asc';
-  let list=[...(D.customers||[])];
+  let list=[...(D.customers||[])].filter(cu=>cu.status!=='終了'); // アーカイブ済は除外
   if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(cu.custNo||'').toString().toLowerCase().includes(q);});
   list.sort(function(a,b){
     if(sort==='no-asc')  return String(a.custNo||'').localeCompare(String(b.custNo||''));
@@ -4563,7 +4613,7 @@ function renderCustTbl(){
     html.push('<td class="tr mono">'+(cp.ke?'¥'+cp.ke:'-')+'</td>');
     html.push('<td class="tr mono">'+(cp.te?'¥'+cp.te:'-')+'</td>');
     html.push('<td>'+(active?'<span class="bdg" style="background:rgba(52,168,83,.15);color:var(--grn2);font-size:10px;padding:2px 6px;">稼働中</span>':'<span class="bdg" style="background:var(--bg3);color:var(--txt3);font-size:10px;padding:2px 6px;">停止</span>')+'</td>');
-    html.push('<td><button class="btn btn-sm" data-id="'+esc(String(cu.id||''))+'" onclick="deleteCust(parseInt(this.dataset.id))" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);">削除</button></td>');
+    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(String(cu.id||''))+'" onclick="editCust(parseInt(this.dataset.id))">編集</button></td>');
     html.push('</tr>');
   });
   tbody.innerHTML=html.join('');
@@ -5895,6 +5945,30 @@ function onCustNoManual(){
     if(!isEdit)disp.value=genCustNo();
   }
 }
+// 顧客モーダル: 取引状態変更時のヒント表示
+function onCuStatusChange(){
+  const sel=$('cu-status');
+  const hint=$('cu-status-hint');
+  const info=$('cu-status-info');
+  if(!sel||!hint) return;
+  const val=sel.value;
+  if(val==='稼働中'){
+    hint.textContent='通常の取引状態です。集荷データの入力、請求書発行が可能です。';
+    hint.style.color='var(--txt2)';
+    if(info) info.style.display='none';
+  } else if(val==='休止'){
+    hint.textContent='一時的に取引を休止します。集荷データ入力はできますが、請求書発行設定を手動でOFFにしておくと安全です。';
+    hint.style.color='var(--amb2)';
+    if(info) info.style.display='none';
+  } else if(val==='終了'){
+    hint.textContent='';
+    if(info){
+      info.style.display='block';
+      info.innerHTML='⚠ 取引終了として保存されます。<br>顧客情報は<strong>アーカイブ</strong>に移動され、一覧には表示されなくなります。<br>過去の集荷データ・請求書発行履歴は保持されます（法的保管期間：7年）。<br>アーカイブからの完全削除は管理タブ内「アーカイブ」から行えます。';
+    }
+  }
+}
+
 // 顧客モーダル: 支払条件プレビュー
 function updateCuPayPreview(){
   const cd=$('cu-close-day')?.value||'末';
@@ -6000,8 +6074,28 @@ function saveCust(){
     // 書類発行
     invoiceEnabled: !!$('cu-doc-invoice')?.checked,
     invoiceNote: $('cu-invoice-note')?.value||'',
+    // 取引状態
+    status: $('cu-status')?.value||'稼働中',
+    statusReason: $('cu-status-reason')?.value||'',
     colPrices,charter:charterRows,otherItems,offset
   };
+
+  // 状態変更の履歴記録
+  const prevCust = editId ? D.customers.find(c=>c.id===editId) : null;
+  if(prevCust && prevCust.status !== custData.status){
+    custData.statusChangedAt = new Date().toISOString().slice(0,10);
+  } else if(prevCust){
+    custData.statusChangedAt = prevCust.statusChangedAt || null;
+  }
+
+  // 取引終了の場合はアーカイブへ移動
+  if(custData.status === '終了'){
+    custData.archivedAt = new Date().toISOString().slice(0,10);
+    const retainYears = 7;
+    const expireDate = new Date();
+    expireDate.setFullYear(expireDate.getFullYear() + retainYears);
+    custData.archiveExpiresAt = expireDate.toISOString().slice(0,10);
+  }
   if(editId){
     // 編集
     const idx=D.customers.findIndex(c=>c.id===editId);
@@ -6034,17 +6128,179 @@ function saveCust(){
 function deleteCust(id){
   const cu=D.customers.find(c=>c.id===id);
   if(!cu) return;
-  showDialog(`「${cu.name}」を削除しますか？\n\n関連する集荷データは残りますが、顧客情報は復元できません。`, '削除', ()=>{
+  showDialog({icon:'⚠️', title:'削除の確認', msg:`「${cu.name}」を削除しますか？\n\n関連する集荷データは残りますが、顧客情報は復元できません。`, okText:'削除', cancelText:'キャンセル'}).then(ok=>{
+    if(!ok)return;
     D.customers=D.customers.filter(c=>c.id!==id);
     lsSet(LS_KEYS.CUSTOMERS, D.customers);
-    // Firebaseからも削除
     const fbCusts=(lsGet(LS_KEYS.CUSTOMERS,[])||[]).filter(c=>c.id!==id);
     try{ fbSet('customers', fbCusts); }catch(e){}
     renderCustTbl();
     updOffSels();
-    showAlert('削除しました');
-  }, 'キャンセル');
+    showAlert({msg:'削除しました'});
+  });
 }
+
+// ═══════════════════════════════════════════════
+// ─── アーカイブ管理 ───
+// ═══════════════════════════════════════════════
+let _arcTab = 'cust';
+
+function switchArcTab(tab){
+  _arcTab = tab;
+  document.querySelectorAll('.arc-tab').forEach(b=>{
+    const active = b.dataset.arc === tab;
+    b.style.background = active ? '#5c6bc0' : 'transparent';
+    b.style.color = active ? '#fff' : 'var(--txt2)';
+    b.classList.toggle('on', active);
+  });
+  renderArchive();
+}
+
+function renderArchive(){
+  const el = $('arc-content');
+  if(!el) return;
+  let list = [];
+  let labels = [];
+  if(_arcTab === 'cust'){
+    list = (D.customers||[]).filter(x=>x.status==='終了');
+    labels = ['顧客番号','顧客名','地域','取引開始','アーカイブ日','保管期限','理由'];
+  } else if(_arcTab === 'staff'){
+    list = (D.staff||[]).filter(x=>x.status==='退職'||x.status==='終了');
+    labels = ['社員番号','氏名','区分','営業所','入社','アーカイブ日','保管期限','理由'];
+  } else if(_arcTab === 'company'){
+    list = (D.companies||[]).filter(x=>x.status==='終了'||x.active===false);
+    labels = ['会社コード','会社名','TEL','アーカイブ日','保管期限','理由'];
+  } else if(_arcTab === 'office'){
+    list = (D.offices||[]).filter(x=>x.status==='廃止'||x.status==='終了');
+    labels = ['コード','営業所名','住所','アーカイブ日','保管期限','理由'];
+  }
+
+  if(!list.length){
+    el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--txt3);">アーカイブされたデータはありません</div>`;
+    return;
+  }
+
+  let html = `<div class="tw"><table><thead><tr>`;
+  labels.forEach(l=>html+=`<th>${l}</th>`);
+  html += `<th>操作</th></tr></thead><tbody>`;
+
+  list.forEach(x=>{
+    const archivedAt = x.archivedAt || x.statusChangedAt || '-';
+    const expiresAt = x.archiveExpiresAt || '-';
+    const reason = x.statusReason || '-';
+    const isExpired = x.archiveExpiresAt && new Date(x.archiveExpiresAt) < new Date();
+    html += '<tr>';
+    if(_arcTab === 'cust'){
+      html += `<td class="mono">${esc(x.custNo||'')}</td>`;
+      html += `<td>${esc(x.name||'')}</td>`;
+      html += `<td>${esc(x.region||'')}</td>`;
+      html += `<td class="mono">${esc(x.start||'-')}</td>`;
+    } else if(_arcTab === 'staff'){
+      html += `<td class="mono">${esc(x.empNo||'')}</td>`;
+      html += `<td>${esc(x.name||'')}</td>`;
+      html += `<td>${esc(x.kubun||'')}</td>`;
+      html += `<td>${esc(x.office||'')}</td>`;
+      html += `<td class="mono">${esc(x.start||'-')}</td>`;
+    } else if(_arcTab === 'company'){
+      html += `<td class="mono">${esc(x.companyCode||'')}</td>`;
+      html += `<td>${esc(x.name||'')}</td>`;
+      html += `<td>${esc(x.tel||'')}</td>`;
+    } else if(_arcTab === 'office'){
+      html += `<td class="mono">${esc(x.officeCode||'')}</td>`;
+      html += `<td>${esc(x.name||'')}</td>`;
+      html += `<td>${esc(x.addr||'')}</td>`;
+    }
+    html += `<td class="mono xs">${esc(archivedAt)}</td>`;
+    html += `<td class="mono xs" style="color:${isExpired?'var(--red2)':'var(--txt2)'};font-weight:${isExpired?'700':'normal'};">${esc(expiresAt)}${isExpired?' (期限切れ)':''}</td>`;
+    html += `<td class="xs">${esc(reason)}</td>`;
+    html += `<td style="white-space:nowrap;">
+      <button class="btn btn-sm b-blu" onclick="archiveRestore('${_arcTab}',${x.id})">復元</button>
+      <button class="btn btn-sm" onclick="archiveDelete('${_arcTab}',${x.id})" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);margin-left:4px;">完全削除</button>
+    </td>`;
+    html += '</tr>';
+  });
+
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+// アーカイブから復元
+function archiveRestore(kind, id){
+  let item, label;
+  if(kind==='cust'){ item = D.customers.find(c=>c.id===id); label = '顧客'; }
+  else if(kind==='staff'){ item = D.staff.find(s=>s.id===id); label = '従業員'; }
+  else if(kind==='company'){ item = D.companies.find(c=>c.id===id); label = '委託会社'; }
+  else if(kind==='office'){ item = D.offices.find(o=>o.id===id); label = '営業所'; }
+  if(!item) return;
+
+  showDialog({
+    icon:'ℹ️', title:'アーカイブから復元',
+    msg:`「${item.name}」を稼働中に戻しますか？\n\n復元後は通常の一覧に再表示されます。`,
+    okText:'復元する', cancelText:'キャンセル'
+  }).then(ok=>{
+    if(!ok) return;
+    item.status = (kind==='staff'?'在籍':kind==='office'?'稼働':'稼働中');
+    item.archivedAt = null;
+    item.archiveExpiresAt = null;
+    item.statusChangedAt = new Date().toISOString().slice(0,10);
+    if(kind==='company') item.active = true;
+    // 保存
+    if(kind==='cust'){ lsSet(LS_KEYS.CUSTOMERS, D.customers); renderCustTbl && renderCustTbl(); }
+    else if(kind==='staff'){ lsSet(LS_KEYS.DRIVERS, D.staff); renderStaff && renderStaff(); }
+    else if(kind==='company'){ lsSet(LS_KEYS.COMPANIES, D.companies); renderCompanyPage && renderCompanyPage(); }
+    else if(kind==='office'){ lsSet(LS_KEYS.OFFICES, D.offices); renderOffCards && renderOffCards(); }
+    renderArchive();
+    showAlert({msg:`${label}「${item.name}」を復元しました`});
+  });
+}
+
+// アーカイブから完全削除（警告レベル）
+function archiveDelete(kind, id){
+  let item, label, listKey, lsKey;
+  if(kind==='cust'){ item = D.customers.find(c=>c.id===id); label = '顧客'; listKey='customers'; lsKey=LS_KEYS.CUSTOMERS; }
+  else if(kind==='staff'){ item = D.staff.find(s=>s.id===id); label = '従業員'; listKey='staff'; lsKey=LS_KEYS.DRIVERS; }
+  else if(kind==='company'){ item = D.companies.find(c=>c.id===id); label = '委託会社'; listKey='companies'; lsKey=LS_KEYS.COMPANIES; }
+  else if(kind==='office'){ item = D.offices.find(o=>o.id===id); label = '営業所'; listKey='offices'; lsKey=LS_KEYS.OFFICES; }
+  if(!item) return;
+
+  const warning = `⚠️ 警告：完全削除はすべての関連データが失われます\n\n` +
+    `削除対象：${label}「${item.name}」\n` +
+    `アーカイブ日：${item.archivedAt||'-'}\n` +
+    `保管期限：${item.archiveExpiresAt||'-'}\n\n` +
+    `【失われるデータ】\n` +
+    `・マスタ情報（復元不可）\n` +
+    `・関連する過去の日報・請求書の参照情報\n` +
+    `・集計・レポートからの表示名\n\n` +
+    `【法的リスク】\n` +
+    `法人税法・会社法の7年保管義務期間中の削除は違反になる可能性があります。\n` +
+    `保管期限「${item.archiveExpiresAt||'-'}」を確認してください。\n\n` +
+    `本当に完全削除しますか？`;
+
+  showDialog({
+    icon:'⚠️', title:'【警告】完全削除の確認',
+    msg: warning,
+    okText:'完全削除する', cancelText:'キャンセル'
+  }).then(ok=>{
+    if(!ok) return;
+    // 2段階確認
+    showDialog({
+      icon:'⚠️', title:'最終確認',
+      msg:`本当に「${item.name}」を完全削除しますか？\n\nこの操作は取り消せません。\n関連データへの影響を再度ご確認ください。`,
+      okText:'はい、削除します', cancelText:'キャンセル'
+    }).then(ok2=>{
+      if(!ok2) return;
+      D[listKey] = D[listKey].filter(x=>x.id!==id);
+      lsSet(lsKey, D[listKey]);
+      try{
+        if(kind==='cust'){ const fb=(lsGet(lsKey,[])||[]).filter(x=>x.id!==id); fbSet('customers', fb); }
+      }catch(e){}
+      renderArchive();
+      showAlert({msg:`${label}「${item.name}」を完全削除しました`});
+    });
+  });
+}
+
+
 
 function editCust(id){
   const c=D.customers.find(x=>x.id===id);if(!c)return;
@@ -6075,8 +6331,11 @@ function editCust(id){
   if($('cu-pay-day'))$('cu-pay-day').value=c.payDay||'末';
   if($('cu-pay-method'))$('cu-pay-method').value=c.payMethod||'銀行振込';
   // 書類発行
-  if($('cu-doc-invoice'))$('cu-doc-invoice').checked=c.invoiceEnabled!==false; // デフォルトON
+  if($('cu-doc-invoice'))$('cu-doc-invoice').checked=c.invoiceEnabled!==false;
   if($('cu-invoice-note'))$('cu-invoice-note').value=c.invoiceNote||'';
+  if($('cu-status'))$('cu-status').value=c.status||'稼働中';
+  if($('cu-status-reason'))$('cu-status-reason').value=c.statusReason||'';
+  onCuStatusChange();
   updateCuPayPreview();
   // 集荷単価復元
   const cp=c.colPrices||c.prices||{};
@@ -11174,7 +11433,7 @@ function openStaffFS(nameOrId){
   const st = typeof nameOrId==='number'
     ? (D.staff||[]).find(s=>s.id===nameOrId)
     : (D.staff||[]).find(s=>s.name===nameOrId);
-  if(!st){ showAlert('従事員が見つかりません'); closeFS(); return; }
+  if(!st){ showAlert({msg:'従事員が見つかりません'}); closeFS(); return; }
   _fsId = st.name;
   $('fs-title').textContent = st.name;
   $('fs-subtitle').textContent = `${st.kubun||''} ─ ${st.office||''}`;
@@ -11555,7 +11814,7 @@ function openCustFS(nameOrId){
   const cu = typeof nameOrId==='number'
     ? (D.customers||[]).find(c=>c.id===nameOrId)
     : (D.customers||[]).find(c=>c.name===nameOrId);
-  if(!cu){ showAlert('顧客が見つかりません'); closeFS(); return; }
+  if(!cu){ showAlert({msg:'顧客が見つかりません'}); closeFS(); return; }
   _fsId=cu.name;
   $('fs-title').textContent=cu.name;
   $('fs-subtitle').textContent=cu.region||'';
@@ -11645,7 +11904,7 @@ function openOfficeFS(nameOrId){
   const of2 = typeof nameOrId==='number'
     ? (D.offices||[]).find(o=>o.id===nameOrId)
     : (D.offices||[]).find(o=>o.name===nameOrId);
-  if(!of2){ showAlert('営業所が見つかりません'); closeFS(); return; }
+  if(!of2){ showAlert({msg:'営業所が見つかりません'}); closeFS(); return; }
   _fsId=of2.name;
   $('fs-title').textContent=of2.name;
   $('fs-subtitle').textContent='営業所コード: '+(of2.officeCode?dispCode(of2.officeCode):'未設定');
@@ -11751,7 +12010,7 @@ function openCompanyFS(nameOrId){
   const co = typeof nameOrId==='number'
     ? (D.companies||[]).find(c=>c.id===nameOrId)
     : (D.companies||[]).find(c=>c.name===nameOrId);
-  if(!co){ showAlert('委託会社が見つかりません'); closeFS(); return; }
+  if(!co){ showAlert({msg:'委託会社が見つかりません'}); closeFS(); return; }
   _fsId=co.name;
   $('fs-title').textContent=co.name;
   $('fs-subtitle').textContent='委託会社';
@@ -11874,7 +12133,7 @@ function renderCompanyLedger(el, name){
 
 function saveCompanyFromFS(){
   const co=(D.companies||[]).find(c=>c.name===_fsId);
-  if(!co){showAlert('保存エラー');return;}
+  if(!co){showAlert({msg:'保存エラー'});return;}
   co.name=$('fs-co-name').value;
   co.tel=$('fs-co-tel').value;
   co.contact=$('fs-co-contact').value;
@@ -11882,7 +12141,7 @@ function saveCompanyFromFS(){
   _fsId=co.name;
   $('fs-title').textContent=co.name;
   syncToSheet();
-  showAlert('保存しました');
+  showAlert({msg:'保存しました'});
 }
 
 // ═══════════════════════════════════════════════
@@ -12224,7 +12483,7 @@ function _htmlToBase64(html, title){
 
 function _printDocWindow(title, html){
   const w=window.open('', '_blank', 'width=900,height=1100');
-  if(!w){ showAlert('ポップアップがブロックされました'); return; }
+  if(!w){ showAlert({msg:'ポップアップがブロックされました'}); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
       body{font-family:'Yu Gothic','Noto Sans JP',sans-serif;color:#1a1a2e;padding:40px;background:#fff;}
@@ -12254,7 +12513,7 @@ function _printDocWindow(title, html){
 
 function generatePaySlip(staffName, monStr){
   const pay=_calcStaffPayment(staffName, monStr);
-  if(!pay.staff){ showAlert('従事員データなし'); return; }
+  if(!pay.staff){ showAlert({msg:'従事員データなし'}); return; }
   const today=new Date().toISOString().slice(0,10);
   const mon=monStr.replace('-','年')+'月';
   const isExternal=pay.staff.kubun==='個人事業主'||pay.staff.kubun==='会社委託';
@@ -12292,7 +12551,7 @@ function generatePaySlip(staffName, monStr){
 function generateInvoiceProxy(staffName, monStr){
   // 請求書発行代行（個人事業主・委託会社向け）
   const doc=_buildInvoiceProxyHTML(staffName, monStr);
-  if(!doc){ showAlert('従事員データなし'); return; }
+  if(!doc){ showAlert({msg:'従事員データなし'}); return; }
 
   _printDocWindow('請求書（発行代行）', doc.html);
   _saveIssuedDoc({type:'invoiceProxy', target:staffName, month:monStr, amount:doc.amount, issuedAt:new Date().toISOString()});
@@ -12312,7 +12571,7 @@ function generateInvoiceProxy(staffName, monStr){
 
 function generateCustInvoice(custName, monStr){
   const bill=_calcCustBilling(custName, monStr);
-  if(!bill.customer){ showAlert('顧客データなし'); return; }
+  if(!bill.customer){ showAlert({msg:'顧客データなし'}); return; }
   const today=new Date().toISOString().slice(0,10);
   const mon=monStr.replace('-','年')+'月';
 
@@ -12444,7 +12703,7 @@ async function sendStaffMail(name){
   const btn=$('fs-mail-send-btn');
   const status=$('fs-mail-status');
 
-  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  if(!to){showAlert({msg:'宛先メールアドレスが未入力です'});return;}
 
   btn.disabled=true; btn.textContent='送信中...';
   status.textContent=''; status.style.color='';
@@ -12549,7 +12808,7 @@ async function sendCustMail(name){
   const btn=$('fs-cu-mail-send-btn');
   const status=$('fs-cu-mail-status');
 
-  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  if(!to){showAlert({msg:'宛先メールアドレスが未入力です'});return;}
 
   btn.disabled=true; btn.textContent='送信中...';
   status.textContent=''; status.style.color='';
@@ -12623,7 +12882,7 @@ function renderCompanyDocs(el, name){
 // 委託会社全体の支払明細（会社宛）
 function generateCompanyPaySlipSummary(coName, monStr){
   const co=(D.companies||[]).find(c=>c.name===coName);
-  if(!co){ showAlert('委託会社データなし'); return; }
+  if(!co){ showAlert({msg:'委託会社データなし'}); return; }
   const drivers=_companyDrivers(coName);
   let total=0, rows='';
   drivers.forEach(d=>{
@@ -12660,7 +12919,7 @@ function generateCompanyPaySlipSummary(coName, monStr){
 // 委託会社向け請求書代行（会社名義）
 function generateCompanyInvoiceProxy(coName, monStr){
   const co=(D.companies||[]).find(c=>c.name===coName);
-  if(!co){ showAlert('委託会社データなし'); return; }
+  if(!co){ showAlert({msg:'委託会社データなし'}); return; }
   const drivers=_companyDrivers(coName);
   let total=0, rows='';
   drivers.forEach(d=>{
@@ -12747,7 +13006,7 @@ async function sendCompMail(){
   const btn=$('fs-comp-mail-send-btn');
   const status=$('fs-comp-mail-status');
 
-  if(!to){showAlert('宛先メールアドレスが未入力です');return;}
+  if(!to){showAlert({msg:'宛先メールアドレスが未入力です'});return;}
 
   btn.disabled=true; btn.textContent='送信中...';
   status.textContent=''; status.style.color='';
@@ -12787,7 +13046,7 @@ function saveSystemInfo(){
   info.bankType=$('sys-bank-type')?.value||'普通';
   info.bankNo=$('sys-bank-no')?.value||'';
   _saveSystemInfoLS(info);
-  showAlert('自社情報を保存しました');
+  showAlert({msg:'自社情報を保存しました'});
 }
 
 function saveStampFee(){
@@ -12796,7 +13055,7 @@ function saveStampFee(){
   _saveSystemInfoLS(info);
   // 保存値で画面を再反映（正規化された数値を表示）
   if($('sys-stamp-fee'))$('sys-stamp-fee').value=info.stampFee;
-  showAlert('電子印制作費を保存しました');
+  showAlert({msg:'電子印制作費を保存しました'});
 }
 
 // フリート管理から印鑑設定を読み込んで表示（同Origin localStorageから）
@@ -12871,7 +13130,7 @@ function saveDocFooters(){
   info.docFooterPayslip=$('sys-doc-footer-payslip')?.value||'';
   info.docFooterInvproxy=$('sys-doc-footer-invproxy')?.value||'';
   _saveSystemInfoLS(info);
-  showAlert('書類フッターを保存しました');
+  showAlert({msg:'書類フッターを保存しました'});
 }
 
 // 運用設定保存
@@ -12882,7 +13141,7 @@ function saveOpSettings(){
   info.notifyEmail=$('sys-notify-email')?.value||'';
   _saveSystemInfoLS(info);
   if($('sys-tax-rate'))$('sys-tax-rate').value=info.taxRate;
-  showAlert('運用設定を保存しました');
+  showAlert({msg:'運用設定を保存しました'});
 }
 
 // 全データJSON書出
@@ -12918,23 +13177,23 @@ function importAllData(inputEl){
   reader.onload=e=>{
     try{
       const data=JSON.parse(e.target.result);
-      showDialog(
-        `バックアップデータを復元しますか？\n\n書出日時: ${data.exportedAt||'不明'}\n従業員: ${(data.staff||[]).length}名\n顧客: ${(data.customers||[]).length}件\n委託会社: ${(data.companies||[]).length}社\n\n※ 現在のデータは上書きされます`,
-        '復元する',
-        ()=>{
-          if(data.systemInfo) _saveSystemInfoLS(data.systemInfo);
-          if(data.staff){ D.staff=data.staff; lsSet(LS_KEYS.DRIVERS,D.staff); }
-          if(data.customers){ D.customers=data.customers; lsSet(LS_KEYS.CUSTOMERS,D.customers); }
-          if(data.companies){ D.companies=data.companies; lsSet(LS_KEYS.COMPANIES,D.companies); }
-          if(data.offices){ D.offices=data.offices; lsSet(LS_KEYS.OFFICES,D.offices); }
-          if(data.delLogs) lsSet(LS_KEYS.YP, data.delLogs);
-          if(data.colLogs) lsSet(LS_KEYS.COL, data.colLogs);
-          const s=$('sys-backup-status');
-          if(s){ s.textContent='復元完了。ページを再読込してください'; s.style.color='var(--grn2)'; }
-          showAlert('復元完了しました。ページを再読込してください');
-        },
-        'キャンセル'
-      );
+      showDialog({
+        icon:'⚠️', title:'復元の確認',
+        msg:`バックアップデータを復元しますか？\n\n書出日時: ${data.exportedAt||'不明'}\n従業員: ${(data.staff||[]).length}名\n顧客: ${(data.customers||[]).length}件\n委託会社: ${(data.companies||[]).length}社\n\n※ 現在のデータは上書きされます`,
+        okText:'復元する', cancelText:'キャンセル'
+      }).then(ok=>{
+        if(!ok)return;
+        if(data.systemInfo) _saveSystemInfoLS(data.systemInfo);
+        if(data.staff){ D.staff=data.staff; lsSet(LS_KEYS.DRIVERS,D.staff); }
+        if(data.customers){ D.customers=data.customers; lsSet(LS_KEYS.CUSTOMERS,D.customers); }
+        if(data.companies){ D.companies=data.companies; lsSet(LS_KEYS.COMPANIES,D.companies); }
+        if(data.offices){ D.offices=data.offices; lsSet(LS_KEYS.OFFICES,D.offices); }
+        if(data.delLogs) lsSet(LS_KEYS.YP, data.delLogs);
+        if(data.colLogs) lsSet(LS_KEYS.COL, data.colLogs);
+        const s=$('sys-backup-status');
+        if(s){ s.textContent='復元完了。ページを再読込してください'; s.style.color='var(--grn2)'; }
+        showAlert({msg:'復元完了しました。ページを再読込してください'});
+      });
     }catch(err){
       const s=$('sys-backup-status');
       if(s){ s.textContent='エラー: '+err.message; s.style.color='var(--red2)'; }
@@ -13092,36 +13351,36 @@ function updateStampFeeStatus(ctx){
 
 // 制作費請求フラグをリセット（再請求可能に）
 function resetStampFeeCharged(ctx){
-  showDialog(
-    '電子印制作費の請求フラグをリセットしますか？\n\n次回の請求書代行発行時に、再度制作費が加算されます。',
-    'リセット',
-    ()=>{
-      if(ctx==='staff'){
-        const editId=$('m-staff')?._editId;
-        const st=editId ? D.staff.find(x=>x.id===editId) : null;
-        if(st && st.docs){
-          st.docs.stampFeeCharged=false;
-          st.docs.stampFeeChargedAt=null;
-          st.docs.stampFeeChargedMonth=null;
-          lsSet(LS_KEYS.DRIVERS, D.staff);
-          updateStampFeeStatus('staff');
-          showAlert('リセットしました');
-        }
-      } else if(ctx==='company'){
-        const editId=_coEditId;
-        const co=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
-        if(co && co.docs){
-          co.docs.stampFeeCharged=false;
-          co.docs.stampFeeChargedAt=null;
-          co.docs.stampFeeChargedMonth=null;
-          lsSet(LS_KEYS.COMPANIES, D.companies);
-          updateStampFeeStatus('company');
-          showAlert('リセットしました');
-        }
+  showDialog({
+    icon:'⚠️', title:'請求フラグのリセット',
+    msg:'電子印制作費の請求フラグをリセットしますか？\n\n次回の請求書代行発行時に、再度制作費が加算されます。',
+    okText:'リセット', cancelText:'キャンセル'
+  }).then(ok=>{
+    if(!ok) return;
+    if(ctx==='staff'){
+      const editId=$('m-staff')?._editId;
+      const st=editId ? D.staff.find(x=>x.id===editId) : null;
+      if(st && st.docs){
+        st.docs.stampFeeCharged=false;
+        st.docs.stampFeeChargedAt=null;
+        st.docs.stampFeeChargedMonth=null;
+        lsSet(LS_KEYS.DRIVERS, D.staff);
+        updateStampFeeStatus('staff');
+        showAlert({msg:'リセットしました'});
       }
-    },
-    'キャンセル'
-  );
+    } else if(ctx==='company'){
+      const editId=_coEditId;
+      const co=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
+      if(co && co.docs){
+        co.docs.stampFeeCharged=false;
+        co.docs.stampFeeChargedAt=null;
+        co.docs.stampFeeChargedMonth=null;
+        lsSet(LS_KEYS.COMPANIES, D.companies);
+        updateStampFeeStatus('company');
+        showAlert({msg:'リセットしました'});
+      }
+    }
+  });
 }
 
 // 印鑑サンプルプレビュー更新
@@ -13305,7 +13564,8 @@ async function deleteStampImage(ctx){
 
   const fileId=$(fileIdFieldId)?.value;
   if(!fileId){ return; }
-  showDialog('印鑑画像を削除しますか？', '削除する', async ()=>{
+  showDialog({icon:'⚠️', title:'印鑑画像の削除', msg:'印鑑画像を削除しますか？', okText:'削除する', cancelText:'キャンセル'}).then(async ok=>{
+    if(!ok) return;
     const res=await _deleteStampFromGAS(fileId);
     if(res.ok){
       if($(urlFieldId))$(urlFieldId).value='';
@@ -13313,9 +13573,9 @@ async function deleteStampImage(ctx){
       const preview=$(previewId); if(preview) preview.innerHTML='未設定';
       const dbtn=$(delBtnId); if(dbtn) dbtn.style.display='none';
     } else {
-      showAlert('削除失敗: '+(res.error||''));
+      showAlert({msg:'削除失敗: '+(res.error||'')});
     }
-  }, 'キャンセル');
+  });
 }
 
 // ── 書類発行トグル（OFFは確認ダイアログ） ──
@@ -13342,16 +13602,16 @@ function onStDocToggle(kind){
     if(prev.enabled){
       const label=kind==='payslip'?'給与/支払明細':'請求書発行代行';
       cb.checked=true; // 一旦戻す
-      showDialog(
-        `${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
-        'はい、停止する',
-        ()=>{
-          cb.checked=false;
-          const today=new Date().toISOString().slice(0,10);
-          updateDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
-        },
-        'キャンセル'
-      );
+      showDialog({
+        icon:'⚠️', title:'書類発行停止の確認',
+        msg:`${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
+        okText:'はい、停止する', cancelText:'キャンセル'
+      }).then(ok=>{
+        if(!ok) return;
+        cb.checked=false;
+        const today=new Date().toISOString().slice(0,10);
+        updateDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
+      });
     } else {
       updateDocInfoDisplay(kind, {enabled:false});
     }
@@ -13436,16 +13696,16 @@ function onCoDocToggle(kind){
     if(prev.enabled){
       const label=kind==='payslip'?'支払明細':'請求書発行代行';
       cb.checked=true;
-      showDialog(
-        `${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
-        'はい、停止する',
-        ()=>{
-          cb.checked=false;
-          const today=new Date().toISOString().slice(0,10);
-          updateCoDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
-        },
-        'キャンセル'
-      );
+      showDialog({
+        icon:'⚠️', title:'書類発行停止の確認',
+        msg:`${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
+        okText:'はい、停止する', cancelText:'キャンセル'
+      }).then(ok=>{
+        if(!ok) return;
+        cb.checked=false;
+        const today=new Date().toISOString().slice(0,10);
+        updateCoDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
+      });
     } else {
       updateCoDocInfoDisplay(kind, {enabled:false});
     }
@@ -13606,7 +13866,7 @@ function updateRcQty(el){
 }
 
 function confirmReconcile(){
-  if(!_rcData.length){ showAlert('照合データがありません。先に月を選択して照合を実行してください。'); return; }
+  if(!_rcData.length){ showAlert({msg:'照合データがありません。先に月を選択して照合を実行してください。'}); return; }
   // 超過チェック
   const over = _rcData.filter(r => {
     const staffTotal = r.staffList.reduce((s,st) => s + st.qty, 0);
@@ -13614,19 +13874,17 @@ function confirmReconcile(){
   });
   if(over.length){
     const names = over.map(o => o.customer).join('、');
-    showDialog(
-      `⚠️ ${names} で申告数量が確定数量を超過しています。\n\n超過分は確定数量に自動修正されます。確定しますか？`,
-      'はい、確定する',
-      () => { finalizeReconcile(); },
-      'キャンセル'
-    );
+    showDialog({
+      icon:'⚠️', title:'数量照合の確認',
+      msg:`${names} で申告数量が確定数量を超過しています。\n\n超過分は確定数量に自動修正されます。確定しますか？`,
+      okText:'はい、確定する', cancelText:'キャンセル'
+    }).then(ok=>{ if(ok) finalizeReconcile(); });
   } else {
-    showDialog(
-      '全顧客の数量が一致しています。確定して書類生成に進みますか？',
-      '確定する',
-      () => { finalizeReconcile(); },
-      'キャンセル'
-    );
+    showDialog({
+      icon:'✅', title:'数量照合の確認',
+      msg:'全顧客の数量が一致しています。確定して書類生成に進みますか？',
+      okText:'確定する', cancelText:'キャンセル'
+    }).then(ok=>{ if(ok) finalizeReconcile(); });
   }
 }
 
@@ -13644,7 +13902,7 @@ function finalizeReconcile(){
   }));
   // localStorage に保存
   try { localStorage.setItem('rc_confirmed_' + mon, JSON.stringify(result)); } catch(e){}
-  showAlert(`${mon} の数量照合を確定しました。\n\n※ 書類自動生成機能は次回実装予定です。`);
+  showAlert({msg:`${mon} の数量照合を確定しました。\n\n※ 書類自動生成機能は次回実装予定です。`});
 }
 
 // ─── CSVインポート ───
