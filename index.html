@@ -3299,14 +3299,15 @@ function dispCode(code) {
 function genEmpNo(officeName) {
   const off = D.offices.find(o => o.name === officeName);
   if (!off || !off.officeCode) return '';
-  const disp = dispCode(off.officeCode); // 先頭0なし: '1', '10'
-  // 同営業所の既存empNoから最大連番を取得（先頭がdispCodeで始まるもの）
+  const disp = dispCode(off.officeCode);
+  // 現役（在籍）のみから最大連番+1を採番
   const existing = D.staff
     .filter(s => s.office === officeName && s.empNo && s.empNo.startsWith(disp))
+    .filter(s => s.status!=='退職' && s.status!=='終了') // 退職・終了は除外
     .map(s => parseInt(s.empNo.slice(disp.length)) || 0);
   const next = existing.length ? Math.max(...existing) + 1 : 1;
   if (next > 999) { alert('この営業所の連番が上限（999）に達しています'); return ''; }
-  return disp + String(next).padStart(3, '0'); // 例: '1001', '1002', '10001'
+  return disp + String(next).padStart(3, '0');
 }
 
 // officeCode から営業所名を引く
@@ -5925,10 +5926,38 @@ function addCuCharterRow(){
 }
 
 function genCustNo(){
-  const existing=D.customers.map(c=>parseInt(c.custNo)||0).filter(n=>n>0);
-  const next=existing.length?Math.max(...existing)+1:1;
+  // 現役のみから最大値+1を採番（アーカイブ済みの番号は空きとして再利用可能）
+  const active = D.customers.filter(c=>c.status!=='終了');
+  const existing = active.map(c=>parseInt(c.custNo)||0).filter(n=>n>0);
+  const next = existing.length?Math.max(...existing)+1:1;
   return String(next).padStart(4,'0');
 }
+
+// ※ 削除番号レジストリは廃止（アーカイブ済み番号の再利用を許可するため）
+// 手動入力時のみ、現役データとの重複チェックを実施
+function _getDeletedNos(kind){ return []; }
+function _addDeletedNo(kind, no){ /* no-op */ }
+// 委託会社コード手入力切替
+function onCoCodeManual(){
+  const manual=$('co-code-manual')?.checked;
+  const disp=$('co-code');
+  if(!disp)return;
+  if(manual){
+    disp.readOnly=false;
+    disp.style.background='var(--bg2)';
+    disp.style.color='var(--txt)';
+    disp.placeholder='会社コードを入力（アーカイブ済番号も可）';
+    if(!_coEditId) disp.value='';
+    disp.focus();
+  } else {
+    disp.readOnly=true;
+    disp.style.background='var(--bg3)';
+    disp.style.color='var(--amb2)';
+    disp.placeholder='自動採番';
+    if(!_coEditId) disp.value='（保存時に自動採番）';
+  }
+}
+
 function onCustNoManual(){
   const manual=$('cu-no-manual')?.checked;
   const disp=$('cu-no');
@@ -5937,7 +5966,6 @@ function onCustNoManual(){
   if(manual){
     disp.readOnly=false;disp.style.background='var(--bg2)';disp.style.color='var(--txt)';
     disp.placeholder='顧客番号を入力';
-    // 編集時は既存番号を保持、新規時のみクリア
     if(!isEdit)disp.value='';
   } else {
     disp.readOnly=true;disp.style.background='var(--bg3)';disp.style.color='var(--amb2)';
@@ -6007,7 +6035,9 @@ function saveCust(){
   let custNo=$('cu-no')?.value.trim()||genCustNo();
   // 重複チェック（編集中のID除外）
   const editId=$('m-cust')?._editId;
-  if(D.customers.find(c=>c.custNo===custNo&&c.id!==editId)){alert(`顧客番号 ${custNo} はすでに使用されています`);return;}
+  if(D.customers.find(c=>c.custNo===custNo && c.id!==editId && c.status!=='終了')){
+    alert(`顧客番号 ${custNo} は現役の顧客で使用されています`);return;
+  }
   const tt=$('cu-tax-type')?.value||'ex';
   const tc=v=>taxConv(v,tt);
   // 集荷単価
@@ -6165,6 +6195,7 @@ function switchArcTab(tab){
 function renderArchive(){
   const el = $('arc-content');
   if(!el) return;
+  const q = ($('arc-search')?.value||'').trim().toLowerCase();
   let list = [];
   let labels = [];
   if(_arcTab === 'cust'){
@@ -6181,12 +6212,31 @@ function renderArchive(){
     labels = ['コード','営業所名','住所','アーカイブ日','保管期限','理由'];
   }
 
+  // 検索フィルタ（番号 or 氏名/会社名）
+  if(q){
+    list = list.filter(x=>{
+      const no = String(x.custNo || x.empNo || x.companyCode || x.officeCode || '').toLowerCase();
+      const name = String(x.name || '').toLowerCase();
+      return no.includes(q) || name.includes(q);
+    });
+  }
+
+  // 検索UIは常に表示
+  const searchUI = `
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:5px;">
+      <input type="text" id="arc-search" class="fi" placeholder="番号・氏名/会社名で検索" style="max-width:300px;" value="${esc(q)}" oninput="renderArchive()">
+      <span class="xs muted">${list.length}件${q?' (絞り込み中)':''}</span>
+      ${q?'<button class="btn btn-sm b-gh" onclick="document.getElementById(\'arc-search\').value=\'\';renderArchive()">クリア</button>':''}
+    </div>`;
+
   if(!list.length){
-    el.innerHTML = `<div style="padding:40px;text-align:center;color:var(--txt3);">アーカイブされたデータはありません</div>`;
+    el.innerHTML = searchUI + `<div style="padding:40px;text-align:center;color:var(--txt3);">${q?'該当するアーカイブデータがありません':'アーカイブされたデータはありません'}</div>`;
+    // 検索入力にフォーカス維持
+    setTimeout(()=>{const si=$('arc-search');if(si && q){si.focus();si.setSelectionRange(q.length,q.length);}},0);
     return;
   }
 
-  let html = `<div class="tw"><table><thead><tr>`;
+  let html = searchUI + `<div class="tw"><table><thead><tr>`;
   labels.forEach(l=>html+=`<th>${l}</th>`);
   html += `<th>操作</th></tr></thead><tbody>`;
 
@@ -6228,6 +6278,8 @@ function renderArchive(){
 
   html += `</tbody></table></div>`;
   el.innerHTML = html;
+  // 検索入力のフォーカスと末尾カーソル維持
+  setTimeout(()=>{const si=$('arc-search');if(si && q){si.focus();si.setSelectionRange(q.length,q.length);}},0);
 }
 
 // アーカイブから復元
@@ -6295,6 +6347,24 @@ function archiveDelete(kind, id){
       okText:'はい、削除します', cancelText:'キャンセル'
     }).then(ok2=>{
       if(!ok2) return;
+      // 番号リサイクル防止のため、削除番号を記録
+      if(kind==='cust' && item.custNo){
+        _addDeletedNo('custNo', item.custNo);
+      } else if(kind==='staff' && item.empNo){
+        const off=D.offices.find(o=>o.name===item.office);
+        if(off){
+          const disp=dispCode(off.officeCode);
+          if(item.empNo.startsWith(disp)){
+            const seq=parseInt(item.empNo.slice(disp.length));
+            _addDeletedNo('empNo_'+disp, seq);
+          }
+        }
+      } else if(kind==='company' && item.companyCode){
+        _addDeletedNo('companyCode', item.companyCode);
+      } else if(kind==='office' && item.officeCode){
+        _addDeletedNo('officeCode', item.officeCode);
+      }
+
       D[listKey] = D[listKey].filter(x=>x.id!==id);
       lsSet(lsKey, D[listKey]);
       try{
@@ -10398,12 +10468,26 @@ function saveCompany(){
   const invoiceName=$('co-invoice-name')?.value.trim()||'';
   if(!name){alert('会社名を入力してください');return;}
   if(!D.companies)D.companies=[];
-  const dup=D.companies.find(c=>c.name===name&&c.id!==_coEditId);
-  if(dup){alert(`「${name}」は既に登録されています`);return;}
+  const dup=D.companies.find(c=>c.name===name && c.id!==_coEditId && c.status!=='終了' && c.active!==false);
+  if(dup){alert(`「${name}」は現役の委託会社として登録されています`);return;}
   const offices=[...document.querySelectorAll('.co-off-chk:checked')].map(el=>parseInt(el.dataset.id));
   let code,id;
   if(_coEditId){const co=D.companies.find(x=>x.id===_coEditId);code=co.companyCode;id=_coEditId;}
-  else{const mx=D.companies.reduce((m,c)=>Math.max(m,parseInt(c.companyCode)||0),10000);code=String(mx+1);id=parseInt(code);}
+  else{
+    // 手入力チェック
+    const manualCode = $('co-code-manual')?.checked ? $('co-code')?.value.trim() : '';
+    if(manualCode){
+      // 手入力: 現役の委託会社と重複チェック
+      const dup = D.companies.find(c=>c.companyCode===manualCode && c.status!=='終了' && c.active!==false);
+      if(dup){ alert(`会社コード ${manualCode} は現役の委託会社で使用されています`); return; }
+      code = manualCode;
+      id = parseInt(manualCode) || Date.now();
+    } else {
+      const existing=D.companies.filter(c=>c.status!=='終了'&&c.active!==false).map(c=>parseInt(c.companyCode)||0).filter(n=>n>10000);
+      const mx=existing.length?Math.max(...existing):10000;
+      code=String(mx+1);id=parseInt(code);
+    }
+  }
   const prices=collectCoPrices();
   prices.custRoutes=collectCoCustRoutes();
   const memo={
@@ -11257,9 +11341,9 @@ function addOffice(){
   const code = ofRaw.padStart(2,'0');
   if(!code||code==='00'){alert('営業所コード（01〜99）を入力してください');return;}
 
-  // 重複チェック：自分自身（editId）は除外
-  if(D.offices.find(o=>o.name===name && o.id!==editId)){alert('同名の営業所が既に存在します');return;}
-  if(D.offices.find(o=>o.officeCode===code && o.id!==editId)){alert(`コード${code}はすでに使用されています`);return;}
+  // 重複チェック：自分自身（editId）は除外、廃止/終了は除外
+  if(D.offices.find(o=>o.name===name && o.id!==editId && o.status!=='廃止' && o.status!=='終了')){alert('同名の営業所が現役で存在します');return;}
+  if(D.offices.find(o=>o.officeCode===code && o.id!==editId && o.status!=='廃止' && o.status!=='終了')){alert(`コード${code}は現役の営業所で使用されています`);return;}
 
   // 郵便局単価
   const ofTaxType=$('of-tax-type')?.value||'ex';
@@ -13161,6 +13245,10 @@ function exportAllData(){
     offices: D.offices||[],
     delLogs: lsGet(LS_KEYS.YP)||[],
     colLogs: lsGet(LS_KEYS.COL)||[],
+    // 削除番号履歴（リサイクル防止）
+    deletedNosRegistry: (function(){
+      try{ return JSON.parse(localStorage.getItem(_DELETED_NOS_KEY)||'{}'); }catch(e){ return {}; }
+    })(),
   };
   const blob=new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -13196,6 +13284,10 @@ function importAllData(inputEl){
         if(data.offices){ D.offices=data.offices; lsSet(LS_KEYS.OFFICES,D.offices); }
         if(data.delLogs) lsSet(LS_KEYS.YP, data.delLogs);
         if(data.colLogs) lsSet(LS_KEYS.COL, data.colLogs);
+        // 削除番号履歴の復元
+        if(data.deletedNosRegistry){
+          try{ localStorage.setItem(_DELETED_NOS_KEY, JSON.stringify(data.deletedNosRegistry)); }catch(e){}
+        }
         const s=$('sys-backup-status');
         if(s){ s.textContent='復元完了。ページを再読込してください'; s.style.color='var(--grn2)'; }
         showAlert({msg:'復元完了しました。ページを再読込してください'});
@@ -15261,7 +15353,8 @@ function openM(id){
     // 新規追加時：コードを自動採番・削除ボタン非表示
     const editId=$('m-office')?._editId;
     if(!editId){
-      const maxCode=D.offices.reduce((m,o)=>Math.max(m,parseInt(o.officeCode)||0),0);
+      const existing=D.offices.filter(o=>o.status!=='廃止'&&o.status!=='終了').map(o=>parseInt(o.officeCode)||0).filter(n=>n>0);
+      const maxCode=existing.length?Math.max(...existing):0;
       const nextCode=String(maxCode+1).padStart(2,'0');
       if($('of-code'))$('of-code').value=nextCode;
       const hint=$('of-code-auto-hint');if(hint)hint.style.display='';
@@ -15523,7 +15616,11 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
         <input type="text" id="co-name" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;" placeholder="例：株式会社UP">
       </div>
       <div class="fg">
-        <label style="font-size:12px;">会社コード（ID）</label>
+        <label style="font-size:12px;">会社コード（ID）
+          <label style="font-size:9px;color:var(--amb2);margin-left:6px;cursor:pointer;">
+            <input type="checkbox" id="co-code-manual" onchange="onCoCodeManual()" style="margin-right:2px;">手入力
+          </label>
+        </label>
         <input type="text" id="co-code" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;font-family:monospace;background:var(--bg3);" placeholder="自動採番" readonly>
       </div>
       <div class="fg">
