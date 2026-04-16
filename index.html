@@ -1790,13 +1790,61 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-gh btn-sm" style="margin-left:6px;" onclick="renderItemGroupList()">リセット</button>
       </div>
 
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>自社情報（書類発行用）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div class="fg"><label>会社名</label><input type="text" id="sys-company-name" class="fi" value="大阪急配株式会社"></div>
+          <div class="fg"><label>代表者名</label><input type="text" id="sys-rep-name" class="fi" value="川村 知弘"></div>
+          <div class="fg"><label>郵便番号</label><input type="text" id="sys-zip" class="fi" placeholder="599-8247"></div>
+          <div class="fg"><label>住所</label><input type="text" id="sys-addr" class="fi" placeholder="大阪府堺市北区常磐町3-12-5"></div>
+          <div class="fg"><label>TEL</label><input type="text" id="sys-tel" class="fi" placeholder="072-258-9811"></div>
+          <div class="fg"><label>インボイス登録番号</label><input type="text" id="sys-invoice-no" class="fi" placeholder="T○○○○○○○○○○○○○"></div>
+        </div>
+        <div class="xs fw7 mb8 mt12">振込先（請求書記載用）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;">
+          <div class="fg"><label>銀行名</label><input type="text" id="sys-bank-name" class="fi"></div>
+          <div class="fg"><label>支店名</label><input type="text" id="sys-bank-branch" class="fi"></div>
+          <div class="fg"><label>口座種別</label><select id="sys-bank-type" class="fi"><option>普通</option><option>当座</option></select></div>
+          <div class="fg"><label>口座番号・名義</label><input type="text" id="sys-bank-no" class="fi" placeholder="1234567 オオサカキュウハイ(カ"></div>
+        </div>
+        <button class="btn b-grn btn-sm mt12" onclick="saveSystemInfo()">保存</button>
+      </div>
+
+      <div class="card mb12" style="max-width:500px;">
+        <div class="ct mb12"><div class="cbar"></div>自社代表印（書類発行用・フリート共通）</div>
+        <div class="xs muted mb8">300×300px 透過PNG推奨。請求書・明細書・請求書発行代行に自動挿入されます。</div>
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div id="sys-stamp-preview" style="width:100px;height:100px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:10px;color:var(--txt3);text-align:center;padding:4px;">未設定</div>
+          <div style="flex:1;">
+            <input type="file" id="sys-stamp-file" accept="image/png" style="display:none;" onchange="onStampFileSelected(this,'system')">
+            <div style="display:flex;gap:6px;">
+              <button class="btn b-blu btn-sm" onclick="document.getElementById('sys-stamp-file').click()">画像選択</button>
+              <button class="btn btn-sm" id="sys-stamp-del-btn" onclick="deleteStampImage('system')" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;">削除</button>
+            </div>
+            <div id="sys-stamp-status" class="xs muted mt8"></div>
+            <input type="hidden" id="sys-stamp-url" value="">
+            <input type="hidden" id="sys-stamp-fileid" value="">
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb12" style="max-width:500px;">
+        <div class="ct mb12"><div class="cbar"></div>電子印制作サービス</div>
+        <div class="xs muted mb8">個人事業主・委託会社からの制作依頼時に請求書代行へ加算される手数料です。</div>
+        <div class="fg" style="max-width:200px;">
+          <label>電子印制作費（円）</label>
+          <input type="number" id="sys-stamp-fee" class="fi" value="0" placeholder="0">
+        </div>
+        <button class="btn b-grn btn-sm mt12" onclick="saveStampFee()">保存</button>
+      </div>
+
       <div class="card" style="max-width:400px;">
         <div class="ct mb12"><div class="cbar"></div>管理者PIN変更</div>
         <div class="f2 mb8">
           <div class="fg"><label>新しいPIN（6桁）</label><input type="password" id="ts-new-pin1" class="fi" maxlength="6" placeholder="●●●●●●"></div>
           <div class="fg"><label>確認入力</label><input type="password" id="ts-new-pin2" class="fi" maxlength="6" placeholder="●●●●●●"></div>
         </div>
-        <button class="btn b-red btn-sm" onclick="changeTSPin()">🔑 PINを変更</button>
+        <button class="btn b-red btn-sm" onclick="changeTSPin()">PIN変更</button>
       </div>
     </div>
 
@@ -2638,6 +2686,50 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <input type="hidden" id="st-add-del" value="false">
   <input type="hidden" id="st-add-col" value="false">
+
+  <!-- ■ 書類発行設定 -->
+  <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 書類発行設定</div>
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="st-doc-payslip" onchange="onStDocToggle('payslip')">
+        <span style="font-size:12px;font-weight:600;">給与/支払明細を発行</span>
+      </label>
+      <div id="st-doc-payslip-info" class="xs muted" style="font-family:'DM Mono',monospace;"></div>
+
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="st-doc-invproxy" onchange="onStDocToggle('invproxy')">
+        <span style="font-size:12px;font-weight:600;">請求書発行代行</span>
+      </label>
+      <div id="st-doc-invproxy-info" class="xs muted" style="font-family:'DM Mono',monospace;"></div>
+    </div>
+
+    <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:8px;">
+      <div class="xs fw7 mb8">個人印画像（300×300px 透過PNG推奨）</div>
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div id="st-stamp-preview" style="width:90px;height:90px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:9px;color:var(--txt3);text-align:center;padding:4px;">未設定</div>
+        <div style="flex:1;">
+          <input type="file" id="st-stamp-file" accept="image/png" style="display:none;" onchange="onStampFileSelected(this,'staff')">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="btn b-blu btn-sm" onclick="document.getElementById('st-stamp-file').click()">画像選択</button>
+            <button type="button" class="btn btn-sm" id="st-stamp-del-btn" onclick="deleteStampImage('staff')" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;">削除</button>
+          </div>
+          <div id="st-stamp-status" class="xs muted mt8"></div>
+          <input type="hidden" id="st-stamp-url" value="">
+          <input type="hidden" id="st-stamp-fileid" value="">
+        </div>
+      </div>
+    </div>
+
+    <!-- 電子印制作依頼状態 -->
+    <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:10px;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="st-stamp-request">
+        <span style="font-size:12px;font-weight:600;">電子印制作を依頼中</span>
+      </label>
+      <div class="xs muted mt4" style="margin-left:22px;">チェックすると制作依頼リストに追加されます</div>
+    </div>
+  </div>
 
 
   <!-- 宅配単価 -->
@@ -3506,9 +3598,16 @@ function resetStaffModal(){
    'st-tk','st-empno-disp'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   // チェックボックス
-  ['st-empno-manual','st-hosho-b-on','st-hosho-c-on'].forEach(id=>{
+  ['st-empno-manual','st-hosho-b-on','st-hosho-c-on','st-doc-payslip','st-doc-invproxy','st-stamp-request'].forEach(id=>{
     const e=$(id);if(e)e.checked=false;
   });
+  // 印鑑プレビュー・隠しフィールド
+  ['st-stamp-url','st-stamp-fileid'].forEach(id=>{const e=$(id);if(e)e.value='';});
+  if($('st-stamp-preview'))$('st-stamp-preview').innerHTML='未設定';
+  if($('st-stamp-del-btn'))$('st-stamp-del-btn').style.display='none';
+  if($('st-stamp-status'))$('st-stamp-status').textContent='';
+  if($('st-doc-payslip-info'))$('st-doc-payslip-info').textContent='';
+  if($('st-doc-invproxy-info'))$('st-doc-invproxy-info').textContent='';
   // 選択リセット
   if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
   if($('st-ky'))$('st-ky').value='個数制（歩合）';
@@ -8477,6 +8576,7 @@ function saveStaff(continueAdd=false){
     },
     colRoutes:($('m-staff')?._editId?(D.staff.find(x=>x.id===$('m-staff')._editId)?.colRoutes||[]):[]),
     invoiceNo, bizName, bankInfo,
+    docs: collectStaffDocsField(),
     repairRows:collectRepairRows(),
     areaPrices:collectAreaPrices(),
     otherItems,
@@ -9705,6 +9805,39 @@ function openCompanyModal(coId){
     ].forEach(id=>{const e=$(id);if(e)e.value='';});
     restoreCoCustRoutes([]);
   }
+  // 書類発行設定・印鑑画像復元
+  const docs=co?.docs||{};
+  ['co-doc-payslip','co-doc-invproxy','co-stamp-request'].forEach(id=>{const e=$(id);if(e)e.checked=false;});
+  ['co-seal-url','co-seal-fileid','co-rep-url','co-rep-fileid'].forEach(id=>{const e=$(id);if(e)e.value='';});
+  if($('co-seal-preview'))$('co-seal-preview').innerHTML='未設定';
+  if($('co-rep-preview'))$('co-rep-preview').innerHTML='未設定';
+  if($('co-seal-del-btn'))$('co-seal-del-btn').style.display='none';
+  if($('co-rep-del-btn'))$('co-rep-del-btn').style.display='none';
+  if($('co-doc-payslip-info'))$('co-doc-payslip-info').textContent='';
+  if($('co-doc-invproxy-info'))$('co-doc-invproxy-info').textContent='';
+  if($('co-seal-status'))$('co-seal-status').textContent='';
+  if($('co-rep-status'))$('co-rep-status').textContent='';
+  if($('co-doc-payslip')){
+    $('co-doc-payslip').checked=!!docs.paySlip?.enabled;
+    updateCoDocInfoDisplay('payslip', docs.paySlip);
+  }
+  if($('co-doc-invproxy')){
+    $('co-doc-invproxy').checked=!!docs.invoiceProxy?.enabled;
+    updateCoDocInfoDisplay('invproxy', docs.invoiceProxy);
+  }
+  if(docs.companyStampUrl){
+    if($('co-seal-url'))$('co-seal-url').value=docs.companyStampUrl;
+    if($('co-seal-fileid'))$('co-seal-fileid').value=docs.companyStampFileId||'';
+    if($('co-seal-preview'))$('co-seal-preview').innerHTML=`<img src="${docs.companyStampUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+    if($('co-seal-del-btn'))$('co-seal-del-btn').style.display='';
+  }
+  if(docs.repStampUrl){
+    if($('co-rep-url'))$('co-rep-url').value=docs.repStampUrl;
+    if($('co-rep-fileid'))$('co-rep-fileid').value=docs.repStampFileId||'';
+    if($('co-rep-preview'))$('co-rep-preview').innerHTML=`<img src="${docs.repStampUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+    if($('co-rep-del-btn'))$('co-rep-del-btn').style.display='';
+  }
+  if($('co-stamp-request'))$('co-stamp-request').checked=!!docs.stampRequest;
   openM('m-company');
 }
 
@@ -9740,6 +9873,7 @@ function saveCompany(){
     fax:toHankaku($('co-fax')?.value||''),addr:$('co-addr')?.value||'',note:$('co-note')?.value||'',
     invoiceNo, invoiceName,
     offices,prices,bankInfo,gasCards,yosha,charges,memo,otherItems:coOtherItems,
+    docs: collectCompanyDocsField(),
     colRoutes:(_coEditId?D.companies.find(x=>x.id===_coEditId)?.colRoutes:null)||[],active:true};
   if(_coEditId){
     const idx=D.companies.findIndex(x=>x.id===_coEditId);
@@ -11556,6 +11690,45 @@ function _calcCustBilling(custName, monStr){
 
 // ── PDF生成（簡易印刷ベース） ──
 // ─── 書類HTMLビルダー（メール送信でも再利用） ───
+
+// 自社情報ブロック生成
+function _buildCompanyFromBlock(includeStamp, includeInvoiceNo){
+  const info=_getSystemInfo();
+  const name=info.companyName||'大阪急配株式会社';
+  const zip=info.zip||'';
+  const addr=info.addr||'';
+  const tel=info.tel||'';
+  const invoiceNo=info.invoiceNo||'';
+  let html=`<div class="doc-from">
+    <div style="font-size:16px;font-weight:700;">${esc(name)}</div>`;
+  if(zip||addr) html+=`<div>${zip?'〒'+esc(zip)+' ':''}${esc(addr)}</div>`;
+  if(tel) html+=`<div>TEL: ${esc(tel)}</div>`;
+  if(includeInvoiceNo && invoiceNo) html+=`<div>インボイス登録番号：${esc(invoiceNo)}</div>`;
+  if(includeStamp){
+    html+=`<div style="margin-top:12px;">${_buildStampHTML(info.companyStampUrl, '大阪急配')}</div>`;
+  }
+  html+=`</div>`;
+  return html;
+}
+
+// 印鑑HTML生成（画像URLがあれば画像、なければCSS赤丸フォールバック）
+function _buildStampHTML(imageUrl, fallbackText){
+  if(imageUrl){
+    return `<img src="${imageUrl}" style="width:70px;height:70px;object-fit:contain;" alt="印">`;
+  }
+  return `<span class="stamp">${esc(fallbackText||'印')}</span>`;
+}
+
+// 振込先情報ブロック
+function _buildBankInfoBlock(){
+  const info=_getSystemInfo();
+  if(!info.bankName) return '';
+  return `<div style="margin-top:14px;padding:10px;border:1px solid #ccc;background:#fafafa;font-size:11px;">
+    <div style="font-weight:700;margin-bottom:4px;">お振込先</div>
+    <div>${esc(info.bankName)} ${esc(info.bankBranch||'')} ${esc(info.bankType||'普通')} ${esc(info.bankNo||'')}</div>
+  </div>`;
+}
+
 function _buildPaySlipHTML(staffName, monStr){
   const pay=_calcStaffPayment(staffName, monStr);
   if(!pay.staff) return null;
@@ -11578,12 +11751,7 @@ function _buildPaySlipHTML(staffName, monStr){
       <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
       <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
     </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
-      <div>〒599-8247 大阪府堺市中区○○</div>
-      <div>TEL: 072-XXX-XXXX</div>
-      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
-    </div>
+    ${_buildCompanyFromBlock(true)}
     <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
   return {title, html, amount:pay.total};
 }
@@ -11594,6 +11762,24 @@ function _buildInvoiceProxyHTML(staffName, monStr){
   const today=new Date().toISOString().slice(0,10);
   const mon=monStr.replace('-','年')+'月';
   let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+
+  // 委託会社所属の場合は会社印＋代表印を使う
+  let stampUrl = pay.staff.docs?.stampUrl;
+  let issuerName = pay.staff.name;
+  if(pay.staff.kubun==='会社委託' && pay.staff.companyName){
+    const co=(D.companies||[]).find(c=>c.name===pay.staff.companyName);
+    if(co?.docs?.repStampUrl) stampUrl=co.docs.repStampUrl;
+    else if(co?.docs?.companyStampUrl) stampUrl=co.docs.companyStampUrl;
+    issuerName=pay.staff.companyName;
+  }
+
+  // 電子印制作費加算
+  let displayTotal=pay.total;
+  const sysInfo=_getSystemInfo();
+  if(pay.staff.docs?.stampRequest && sysInfo.stampFee){
+    displayTotal+=sysInfo.stampFee;
+    rows+=`<tr><td>電子印制作費</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+  }
   const html=`
     <div class="doc-header">
       <div class="doc-title">請 求 書</div>
@@ -11602,19 +11788,19 @@ function _buildInvoiceProxyHTML(staffName, monStr){
     <div class="doc-to">大阪急配株式会社 御中</div>
     <div class="doc-amount-box">
       <div class="doc-amount-label">ご請求金額</div>
-      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
+      <div class="doc-amount">¥${displayTotal.toLocaleString()}</div>
     </div>
     <table>
       <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${displayTotal.toLocaleString()}</td></tr></tbody>
     </table>
     <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">${esc(pay.staff.companyName||pay.staff.name)}</div>
+      <div style="font-size:16px;font-weight:700;">${esc(issuerName)}</div>
       ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
-      <div style="margin-top:12px;"><span class="stamp">${esc((pay.staff.companyName||pay.staff.name).slice(0,2))}</span></div>
+      <div style="margin-top:12px;">${_buildStampHTML(stampUrl, issuerName.slice(0,2))}</div>
     </div>
     <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
-  return {title:'請求書（発行代行）', html, amount:pay.total};
+  return {title:'請求書（発行代行）', html, amount:displayTotal};
 }
 
 function _buildCustInvoiceHTML(custName, monStr){
@@ -11637,14 +11823,8 @@ function _buildCustInvoiceHTML(custName, monStr){
       <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
       <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
     </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
-      <div>〒599-8247 大阪府堺市中区○○</div>
-      <div>TEL: 072-XXX-XXXX</div>
-      <div>インボイス登録番号：T○○○○○○○○○○○○○</div>
-      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
-    </div>
-    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。</div>`;
+    ${_buildCompanyFromBlock(true, true)}
+    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。${_buildBankInfoBlock()}</div>`;
   return {title:'請求書', html, amount:bill.total};
 }
 
@@ -11788,9 +11968,9 @@ function generateInvoiceProxy(staffName, monStr){
       <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
     </table>
     <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">${esc(pay.staff.companyName||pay.staff.name)}</div>
+      <div style="font-size:16px;font-weight:700;">${esc(issuerName)}</div>
       ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
-      <div style="margin-top:12px;"><span class="stamp">${esc((pay.staff.companyName||pay.staff.name).slice(0,2))}</span></div>
+      <div style="margin-top:12px;">${_buildStampHTML(stampUrl, issuerName.slice(0,2))}</div>
     </div>
     <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
 
@@ -11821,14 +12001,8 @@ function generateCustInvoice(custName, monStr){
       <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
       <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
     </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
-      <div>〒599-8247 大阪府堺市中区○○</div>
-      <div>TEL: 072-XXX-XXXX</div>
-      <div>インボイス登録番号：T○○○○○○○○○○○○○</div>
-      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
-    </div>
-    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。</div>`;
+    ${_buildCompanyFromBlock(true, true)}
+    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。${_buildBankInfoBlock()}</div>`;
 
   _printDocWindow('請求書', html);
   _saveIssuedDoc({type:'custInvoice', target:custName, month:monStr, amount:bill.total, issuedAt:new Date().toISOString()});
@@ -11841,27 +12015,39 @@ function renderStaffDocs(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const mon=$('fs-doc-mon')?.value||ym;
   const isExternal=st?.kubun==='個人事業主'||st?.kubun==='会社委託';
+  const docs=st?.docs||{};
+  const paySlipOn=!!docs.paySlip?.enabled;
+  const invProxyOn=!!docs.invoiceProxy?.enabled;
 
   const pay=_calcStaffPayment(name, mon);
   const history=_getIssuedDocs('paySlip', name).concat(_getIssuedDocs('invoiceProxy', name))
     .sort((a,b)=>(b.issuedAt||'').localeCompare(a.issuedAt||''));
 
+  const payLabel=isExternal?'支払明細':'給与明細';
+  const paySlipBtn=paySlipOn
+    ? `<button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">${payLabel}を発行</button>`
+    : `<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">${payLabel} 発行対象外</span>`;
+  const invProxyBtn=!isExternal?'':(invProxyOn
+    ? `<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">請求書代行を発行</button>`
+    : `<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">請求書代行 発行対象外</span>`);
+
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
       <div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-doc-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('docs')"></div>
     </div>
+    <div class="xs muted">書類発行設定: ${paySlipOn?`<span style="color:var(--grn2)">${payLabel} ON</span>`:`<span style="color:var(--txt3)">${payLabel} OFF</span>`} / ${isExternal?(invProxyOn?'<span style="color:var(--grn2)">請求書代行 ON</span>':'<span style="color:var(--txt3)">請求書代行 OFF</span>'):''}</div>
   </div>
 
   <div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>${mon}分 ${isExternal?'支払明細':'給与明細'}プレビュー</div>
+    <div class="ct mb12"><div class="cbar"></div>${mon}分 ${payLabel}プレビュー</div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;">
       <div>
         <div class="xs muted">支払金額</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">${isExternal?'支払明細':'給与明細'}を発行</button>
-        ${isExternal?`<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">請求書代行を発行</button>`:''}
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        ${paySlipBtn}
+        ${invProxyBtn}
       </div>
     </div>
     ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
@@ -12060,9 +12246,13 @@ async function sendCustMail(name){
 
 // ── 委託会社 書類タブ ──
 function renderCompanyDocs(el, name){
+  const co=(D.companies||[]).find(c=>c.name===name);
   const drivers=_companyDrivers(name);
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const mon=$('fs-co-doc-mon')?.value||ym;
+  const docs=co?.docs||{};
+  const payOn=!!docs.paySlip?.enabled;
+  const invOn=!!docs.invoiceProxy?.enabled;
 
   let total=0;
   const driverPays=drivers.map(d=>{
@@ -12073,23 +12263,117 @@ function renderCompanyDocs(el, name){
 
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-co-doc-mon" class="fi" value="${mon}" onchange="renderCompanyFSTab('docs')"></div></div>
+    <div class="xs muted">書類発行設定: ${payOn?'<span style="color:var(--grn2)">支払明細 ON</span>':'<span style="color:var(--txt3)">支払明細 OFF</span>'} / ${invOn?'<span style="color:var(--grn2)">請求書代行 ON</span>':'<span style="color:var(--txt3)">請求書代行 OFF</span>'}</div>
   </div>
   <div class="fs-card">
     <div class="ct mb12"><div class="cbar"></div>${mon}分 会社合計支払</div>
-    <div style="padding:12px;background:var(--bg3);border-radius:6px;">
-      <div class="xs muted">合計支払金額</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${total.toLocaleString()}</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;">
+      <div>
+        <div class="xs muted">合計支払金額</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${total.toLocaleString()}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+        ${payOn?`<button class="btn b-blu btn-sm" onclick="generateCompanyPaySlipSummary('${esc(name)}','${mon}')">会社向け支払明細を発行</button>`:'<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">支払明細 発行対象外</span>'}
+        ${invOn?`<button class="btn b-grn btn-sm" onclick="generateCompanyInvoiceProxy('${esc(name)}','${mon}')">請求書代行を発行</button>`:'<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">請求書代行 発行対象外</span>'}
+      </div>
     </div>
     <div class="tw mt12"><table><thead><tr><th>所属ドライバー</th><th class="tr">支払額</th><th></th></tr></thead><tbody>`;
   driverPays.forEach(dp=>{
     html+=`<tr>
       <td>${staffLink(dp.name)}</td>
       <td class="tr mono fw7">¥${dp.amount.toLocaleString()}</td>
-      <td><button class="btn b-gh btn-sm" onclick="generatePaySlip('${esc(dp.name)}','${mon}')">明細</button></td>
+      <td><button class="btn b-gh btn-sm" onclick="openFS('staff','${esc(dp.name)}')">個別表示</button></td>
     </tr>`;
   });
   html+=`</tbody></table></div></div>`;
   el.innerHTML=html;
+}
+
+// 委託会社全体の支払明細（会社宛）
+function generateCompanyPaySlipSummary(coName, monStr){
+  const co=(D.companies||[]).find(c=>c.name===coName);
+  if(!co){ showAlert('委託会社データなし'); return; }
+  const drivers=_companyDrivers(coName);
+  let total=0, rows='';
+  drivers.forEach(d=>{
+    const pay=_calcStaffPayment(d.name, monStr);
+    total+=pay.total;
+    rows+=`<tr><td>${esc(d.name)}</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr>`;
+  });
+
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">支 払 明 細 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">${esc(coName)} 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">お支払金額</div>
+      <div class="doc-amount">¥${total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>所属ドライバー</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${total.toLocaleString()}</td></tr></tbody>
+    </table>
+    ${_buildCompanyFromBlock(true)}
+    ${_buildBankInfoBlock()}
+    <div class="doc-footer">※ 本明細書は会社全体の支払合計です。ドライバー個別の内訳は別途発行します。</div>`;
+
+  _printDocWindow('支払明細書（会社）', html);
+  _saveIssuedDoc({type:'companyPaySlip', target:coName, month:monStr, amount:total, issuedAt:new Date().toISOString()});
+  renderCompanyFSTab('docs');
+}
+
+// 委託会社向け請求書代行（会社名義）
+function generateCompanyInvoiceProxy(coName, monStr){
+  const co=(D.companies||[]).find(c=>c.name===coName);
+  if(!co){ showAlert('委託会社データなし'); return; }
+  const drivers=_companyDrivers(coName);
+  let total=0, rows='';
+  drivers.forEach(d=>{
+    const pay=_calcStaffPayment(d.name, monStr);
+    total+=pay.total;
+    rows+=`<tr><td>${esc(d.name)} 業務委託料</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr>`;
+  });
+  // 電子印制作費加算（依頼中の場合）
+  const sysInfo=_getSystemInfo();
+  if(co.docs?.stampRequest && sysInfo.stampFee){
+    total+=sysInfo.stampFee;
+    rows+=`<tr><td>電子印制作費</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+  }
+
+  const today=new Date().toISOString().slice(0,10);
+  const mon=monStr.replace('-','年')+'月';
+  const stampUrl=co.docs?.repStampUrl||co.docs?.companyStampUrl;
+
+  const html=`
+    <div class="doc-header">
+      <div class="doc-title">請 求 書</div>
+      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+    </div>
+    <div class="doc-to">大阪急配株式会社 御中</div>
+    <div class="doc-amount-box">
+      <div class="doc-amount-label">ご請求金額</div>
+      <div class="doc-amount">¥${total.toLocaleString()}</div>
+    </div>
+    <table>
+      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${total.toLocaleString()}</td></tr></tbody>
+    </table>
+    <div class="doc-from">
+      <div style="font-size:16px;font-weight:700;">${esc(coName)}</div>
+      ${co.tel?`<div>TEL: ${esc(co.tel)}</div>`:''}
+      ${co.addr?`<div>${esc(co.addr)}</div>`:''}
+      ${co.invoiceNo?`<div>インボイス登録番号：${esc(co.invoiceNo)}</div>`:''}
+      <div style="margin-top:12px;">${_buildStampHTML(stampUrl, coName.slice(0,2))}</div>
+    </div>
+    <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
+
+  _printDocWindow('請求書（会社代行）', html);
+  _saveIssuedDoc({type:'companyInvoiceProxy', target:coName, month:monStr, amount:total, issuedAt:new Date().toISOString()});
+  renderCompanyFSTab('docs');
 }
 
 function renderCompanyMail(el, name){
@@ -12137,6 +12421,405 @@ async function sendCompMail(){
     status.textContent='送信失敗: '+(res.error||'');
     status.style.color='var(--red2)';
   }
+}
+
+// ═══════════════════════════════════════════════
+// ─── システム設定（自社情報・電子印制作費・代表印） ───
+// ═══════════════════════════════════════════════
+function _getSystemInfo(){
+  try{ return JSON.parse(localStorage.getItem('systemInfo')||'{}'); }catch(e){ return {}; }
+}
+function _saveSystemInfoLS(info){
+  try{ localStorage.setItem('systemInfo', JSON.stringify(info)); }catch(e){}
+}
+
+function saveSystemInfo(){
+  const info=_getSystemInfo();
+  info.companyName=$('sys-company-name')?.value||'';
+  info.repName=$('sys-rep-name')?.value||'';
+  info.zip=$('sys-zip')?.value||'';
+  info.addr=$('sys-addr')?.value||'';
+  info.tel=$('sys-tel')?.value||'';
+  info.invoiceNo=$('sys-invoice-no')?.value||'';
+  info.bankName=$('sys-bank-name')?.value||'';
+  info.bankBranch=$('sys-bank-branch')?.value||'';
+  info.bankType=$('sys-bank-type')?.value||'普通';
+  info.bankNo=$('sys-bank-no')?.value||'';
+  _saveSystemInfoLS(info);
+  showAlert('自社情報を保存しました');
+}
+
+function saveStampFee(){
+  const info=_getSystemInfo();
+  info.stampFee=parseInt($('sys-stamp-fee')?.value)||0;
+  _saveSystemInfoLS(info);
+  showAlert('電子印制作費を保存しました');
+}
+
+function loadSystemInfoToForm(){
+  const info=_getSystemInfo();
+  if($('sys-company-name'))$('sys-company-name').value=info.companyName||'大阪急配株式会社';
+  if($('sys-rep-name'))$('sys-rep-name').value=info.repName||'川村 知弘';
+  if($('sys-zip'))$('sys-zip').value=info.zip||'';
+  if($('sys-addr'))$('sys-addr').value=info.addr||'';
+  if($('sys-tel'))$('sys-tel').value=info.tel||'';
+  if($('sys-invoice-no'))$('sys-invoice-no').value=info.invoiceNo||'';
+  if($('sys-bank-name'))$('sys-bank-name').value=info.bankName||'';
+  if($('sys-bank-branch'))$('sys-bank-branch').value=info.bankBranch||'';
+  if($('sys-bank-type'))$('sys-bank-type').value=info.bankType||'普通';
+  if($('sys-bank-no'))$('sys-bank-no').value=info.bankNo||'';
+  if($('sys-stamp-fee'))$('sys-stamp-fee').value=info.stampFee||0;
+  // 代表印
+  if(info.companyStampUrl){
+    if($('sys-stamp-url'))$('sys-stamp-url').value=info.companyStampUrl;
+    if($('sys-stamp-fileid'))$('sys-stamp-fileid').value=info.companyStampFileId||'';
+    const p=$('sys-stamp-preview');
+    if(p) p.innerHTML=`<img src="${info.companyStampUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">`;
+    const db=$('sys-stamp-del-btn'); if(db) db.style.display='';
+  }
+}
+
+// onStampFileSelected の system ハンドラー完了後に呼ぶラッパー（自社代表印の場合はsystemInfoにも保存）
+// ※ onStampFileSelected 内で直接処理するので、ここでは不要
+
+// ─── 電子印鑑・書類発行管理 ───
+// ═══════════════════════════════════════════════
+
+// 画像を300x300に自動リサイズしてbase64化（透過PNG対応）
+function _resizeImageTo300PNG(file){
+  return new Promise((resolve,reject)=>{
+    if(file.type!=='image/png'){
+      reject(new Error('透過PNG形式のみ対応しています（.png）'));
+      return;
+    }
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        canvas.width=300; canvas.height=300;
+        const ctx=canvas.getContext('2d');
+        ctx.clearRect(0,0,300,300);
+        // アスペクト維持で中央配置
+        const scale=Math.min(300/img.width, 300/img.height);
+        const w=img.width*scale, h=img.height*scale;
+        const x=(300-w)/2, y=(300-h)/2;
+        ctx.imageSmoothingQuality='high';
+        ctx.drawImage(img, x, y, w, h);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror=()=>reject(new Error('画像の読み込みに失敗しました'));
+      img.src=e.target.result;
+    };
+    reader.onerror=()=>reject(new Error('ファイル読込エラー'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// GAS経由で印鑑画像をアップロード
+async function _uploadStampToGAS(imageName, imageBase64, category){
+  try{
+    const res=await fetch(FLEET_GAS_URL,{
+      method:'POST', redirect:'follow',
+      body: JSON.stringify({
+        action:'uploadStampImage',
+        imageName, imageBase64, category: category||'other'
+      })
+    });
+    return await res.json();
+  }catch(err){ return {ok:false,error:err.message}; }
+}
+
+// GAS経由で印鑑画像を削除
+async function _deleteStampFromGAS(fileId){
+  try{
+    const res=await fetch(FLEET_GAS_URL,{
+      method:'POST', redirect:'follow',
+      body: JSON.stringify({ action:'deleteStampImage', fileId })
+    });
+    return await res.json();
+  }catch(err){ return {ok:false,error:err.message}; }
+}
+
+// 印鑑画像をbase64で取得（PDF埋込用）
+async function _fetchStampBase64(fileId){
+  try{
+    const res=await fetch(FLEET_GAS_URL,{
+      method:'POST', redirect:'follow',
+      body: JSON.stringify({ action:'getStampImage', fileId })
+    });
+    return await res.json();
+  }catch(err){ return {ok:false,error:err.message}; }
+}
+
+// ── ファイル選択時のハンドラ ──
+async function onStampFileSelected(inputEl, ctx){
+  const file=inputEl.files?.[0];
+  if(!file) return;
+  const statusId = ctx==='staff' ? 'st-stamp-status' : ctx==='comp-seal' ? 'co-seal-status' : ctx==='comp-rep' ? 'co-rep-status' : ctx==='system' ? 'sys-stamp-status' : 'st-stamp-status';
+  const previewId = ctx==='staff' ? 'st-stamp-preview' : ctx==='comp-seal' ? 'co-seal-preview' : ctx==='comp-rep' ? 'co-rep-preview' : ctx==='system' ? 'sys-stamp-preview' : 'st-stamp-preview';
+  const urlFieldId = ctx==='staff' ? 'st-stamp-url' : ctx==='comp-seal' ? 'co-seal-url' : ctx==='comp-rep' ? 'co-rep-url' : ctx==='system' ? 'sys-stamp-url' : 'st-stamp-url';
+  const fileIdFieldId = ctx==='staff' ? 'st-stamp-fileid' : ctx==='comp-seal' ? 'co-seal-fileid' : ctx==='comp-rep' ? 'co-rep-fileid' : ctx==='system' ? 'sys-stamp-fileid' : 'st-stamp-fileid';
+  const delBtnId = ctx==='staff' ? 'st-stamp-del-btn' : ctx==='comp-seal' ? 'co-seal-del-btn' : ctx==='comp-rep' ? 'co-rep-del-btn' : ctx==='system' ? 'sys-stamp-del-btn' : 'st-stamp-del-btn';
+
+  const status=$(statusId);
+  if(status){ status.textContent='リサイズ中...'; status.style.color='var(--txt2)'; }
+
+  try{
+    const base64=await _resizeImageTo300PNG(file);
+
+    // カテゴリとファイル名
+    let imageName, category;
+    if(ctx==='staff'){
+      const name=$('st-name')?.value.trim()||'unknown_'+Date.now();
+      imageName=`staff_${name}.png`;
+      category='staff';
+    } else if(ctx==='comp-seal'){
+      const name=$('co-name')?.value.trim()||'unknown';
+      imageName=`company_seal_${name}.png`;
+      category='company_seal';
+    } else if(ctx==='comp-rep'){
+      const name=$('co-name')?.value.trim()||'unknown';
+      imageName=`company_rep_${name}.png`;
+      category='company_rep_stamp';
+    } else if(ctx==='system'){
+      imageName='company_rep.png';
+      category='company_rep';
+    }
+
+    if(status){ status.textContent='アップロード中...'; }
+    const res=await _uploadStampToGAS(imageName, base64, category);
+    if(!res.ok){
+      if(status){ status.textContent='エラー: '+(res.error||'不明'); status.style.color='var(--red2)'; }
+      return;
+    }
+
+    // プレビュー更新
+    const preview=$(previewId);
+    if(preview){ preview.innerHTML=`<img src="${base64}" style="max-width:100%;max-height:100%;object-fit:contain;">`; }
+    if($(urlFieldId))$(urlFieldId).value=res.downloadUrl;
+    if($(fileIdFieldId))$(fileIdFieldId).value=res.fileId;
+    const dbtn=$(delBtnId); if(dbtn)dbtn.style.display='';
+    if(status){ status.textContent='アップロード完了'; status.style.color='var(--grn2)'; }
+
+    // 自社代表印の場合は systemInfo にも保存
+    if(ctx==='system'){
+      const info=_getSystemInfo();
+      info.companyStampUrl=res.downloadUrl;
+      info.companyStampFileId=res.fileId;
+      _saveSystemInfoLS(info);
+    }
+  }catch(err){
+    if(status){ status.textContent='エラー: '+err.message; status.style.color='var(--red2)'; }
+  }
+  inputEl.value=''; // 再選択のためリセット
+}
+
+// 印鑑画像削除
+async function deleteStampImage(ctx){
+  const fileIdFieldId = ctx==='staff' ? 'st-stamp-fileid' : ctx==='comp-seal' ? 'co-seal-fileid' : ctx==='comp-rep' ? 'co-rep-fileid' : ctx==='system' ? 'sys-stamp-fileid' : 'st-stamp-fileid';
+  const urlFieldId = ctx==='staff' ? 'st-stamp-url' : ctx==='comp-seal' ? 'co-seal-url' : ctx==='comp-rep' ? 'co-rep-url' : ctx==='system' ? 'sys-stamp-url' : 'st-stamp-url';
+  const previewId = ctx==='staff' ? 'st-stamp-preview' : ctx==='comp-seal' ? 'co-seal-preview' : ctx==='comp-rep' ? 'co-rep-preview' : ctx==='system' ? 'sys-stamp-preview' : 'st-stamp-preview';
+  const delBtnId = ctx==='staff' ? 'st-stamp-del-btn' : ctx==='comp-seal' ? 'co-seal-del-btn' : ctx==='comp-rep' ? 'co-rep-del-btn' : ctx==='system' ? 'sys-stamp-del-btn' : 'st-stamp-del-btn';
+
+  const fileId=$(fileIdFieldId)?.value;
+  if(!fileId){ return; }
+  showDialog('印鑑画像を削除しますか？', '削除する', async ()=>{
+    const res=await _deleteStampFromGAS(fileId);
+    if(res.ok){
+      if($(urlFieldId))$(urlFieldId).value='';
+      if($(fileIdFieldId))$(fileIdFieldId).value='';
+      const preview=$(previewId); if(preview) preview.innerHTML='未設定';
+      const dbtn=$(delBtnId); if(dbtn) dbtn.style.display='none';
+    } else {
+      showAlert('削除失敗: '+(res.error||''));
+    }
+  }, 'キャンセル');
+}
+
+// ── 書類発行トグル（OFFは確認ダイアログ） ──
+function onStDocToggle(kind){
+  const cb=$(kind==='payslip'?'st-doc-payslip':'st-doc-invproxy');
+  if(!cb) return;
+  const infoId=kind==='payslip'?'st-doc-payslip-info':'st-doc-invproxy-info';
+  const editId=$('m-staff')?._editId;
+  const current=editId ? D.staff.find(x=>x.id===editId) : null;
+  const currentDocs=current?.docs||{};
+  const key=kind==='payslip'?'paySlip':'invoiceProxy';
+  const prev=currentDocs[key]||{};
+
+  if(cb.checked){
+    // ON: 発行開始日を記録
+    const today=new Date().toISOString().slice(0,10);
+    if(!prev.startDate){
+      updateDocInfoDisplay(kind, {enabled:true, startDate:today});
+    } else {
+      updateDocInfoDisplay(kind, {enabled:true, startDate:prev.startDate});
+    }
+  } else {
+    // OFF: 確認ダイアログ
+    if(prev.enabled){
+      const label=kind==='payslip'?'給与/支払明細':'請求書発行代行';
+      cb.checked=true; // 一旦戻す
+      showDialog(
+        `${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
+        'はい、停止する',
+        ()=>{
+          cb.checked=false;
+          const today=new Date().toISOString().slice(0,10);
+          updateDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
+        },
+        'キャンセル'
+      );
+    } else {
+      updateDocInfoDisplay(kind, {enabled:false});
+    }
+  }
+}
+
+function updateDocInfoDisplay(kind, doc){
+  const infoId=kind==='payslip'?'st-doc-payslip-info':'st-doc-invproxy-info';
+  const el=$(infoId); if(!el) return;
+  if(!doc || !doc.enabled){
+    el.textContent=doc?.stopDate?`停止: ${doc.stopDate}`:'';
+    el.style.color='var(--txt3)';
+  } else {
+    el.textContent=`発行開始: ${doc.startDate||'-'}`;
+    el.style.color='var(--grn2)';
+  }
+}
+
+function collectStaffDocsField(){
+  const editId=$('m-staff')?._editId;
+  const current=editId ? D.staff.find(x=>x.id===editId) : null;
+  const existing=current?.docs||{};
+  const today=new Date().toISOString().slice(0,10);
+
+  const payslipOn=$('st-doc-payslip')?.checked;
+  const invproxyOn=$('st-doc-invproxy')?.checked;
+
+  const paySlip={...existing.paySlip};
+  if(payslipOn){
+    paySlip.enabled=true;
+    if(!paySlip.startDate) paySlip.startDate=today;
+    paySlip.stopDate=null;
+  } else if(existing.paySlip?.enabled){
+    paySlip.enabled=false;
+    paySlip.stopDate=today;
+  } else {
+    paySlip.enabled=false;
+  }
+
+  const invoiceProxy={...existing.invoiceProxy};
+  if(invproxyOn){
+    invoiceProxy.enabled=true;
+    if(!invoiceProxy.startDate) invoiceProxy.startDate=today;
+    invoiceProxy.stopDate=null;
+  } else if(existing.invoiceProxy?.enabled){
+    invoiceProxy.enabled=false;
+    invoiceProxy.stopDate=today;
+  } else {
+    invoiceProxy.enabled=false;
+  }
+
+  return {
+    paySlip, invoiceProxy,
+    stampUrl: $('st-stamp-url')?.value || existing.stampUrl || '',
+    stampFileId: $('st-stamp-fileid')?.value || existing.stampFileId || '',
+    stampRequest: !!$('st-stamp-request')?.checked,
+  };
+}
+
+// ── 委託会社版 ──
+function onCoDocToggle(kind){
+  const cb=$(kind==='payslip'?'co-doc-payslip':'co-doc-invproxy');
+  if(!cb) return;
+  const editId=_coEditId;
+  const current=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
+  const currentDocs=current?.docs||{};
+  const key=kind==='payslip'?'paySlip':'invoiceProxy';
+  const prev=currentDocs[key]||{};
+
+  if(cb.checked){
+    const today=new Date().toISOString().slice(0,10);
+    if(!prev.startDate){
+      updateCoDocInfoDisplay(kind, {enabled:true, startDate:today});
+    } else {
+      updateCoDocInfoDisplay(kind, {enabled:true, startDate:prev.startDate});
+    }
+  } else {
+    if(prev.enabled){
+      const label=kind==='payslip'?'支払明細':'請求書発行代行';
+      cb.checked=true;
+      showDialog(
+        `${label}の発行を停止しますか？\n\n発行開始日: ${prev.startDate||'未記録'}`,
+        'はい、停止する',
+        ()=>{
+          cb.checked=false;
+          const today=new Date().toISOString().slice(0,10);
+          updateCoDocInfoDisplay(kind, {enabled:false, startDate:prev.startDate, stopDate:today});
+        },
+        'キャンセル'
+      );
+    } else {
+      updateCoDocInfoDisplay(kind, {enabled:false});
+    }
+  }
+}
+
+function updateCoDocInfoDisplay(kind, doc){
+  const infoId=kind==='payslip'?'co-doc-payslip-info':'co-doc-invproxy-info';
+  const el=$(infoId); if(!el) return;
+  if(!doc || !doc.enabled){
+    el.textContent=doc?.stopDate?`停止: ${doc.stopDate}`:'';
+    el.style.color='var(--txt3)';
+  } else {
+    el.textContent=`発行開始: ${doc.startDate||'-'}`;
+    el.style.color='var(--grn2)';
+  }
+}
+
+function collectCompanyDocsField(){
+  const editId=_coEditId;
+  const current=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
+  const existing=current?.docs||{};
+  const today=new Date().toISOString().slice(0,10);
+
+  const payslipOn=$('co-doc-payslip')?.checked;
+  const invproxyOn=$('co-doc-invproxy')?.checked;
+
+  const paySlip={...existing.paySlip};
+  if(payslipOn){
+    paySlip.enabled=true;
+    if(!paySlip.startDate) paySlip.startDate=today;
+    paySlip.stopDate=null;
+  } else if(existing.paySlip?.enabled){
+    paySlip.enabled=false;
+    paySlip.stopDate=today;
+  } else {
+    paySlip.enabled=false;
+  }
+
+  const invoiceProxy={...existing.invoiceProxy};
+  if(invproxyOn){
+    invoiceProxy.enabled=true;
+    if(!invoiceProxy.startDate) invoiceProxy.startDate=today;
+    invoiceProxy.stopDate=null;
+  } else if(existing.invoiceProxy?.enabled){
+    invoiceProxy.enabled=false;
+    invoiceProxy.stopDate=today;
+  } else {
+    invoiceProxy.enabled=false;
+  }
+
+  return {
+    paySlip, invoiceProxy,
+    companyStampUrl: $('co-seal-url')?.value || existing.companyStampUrl || '',
+    companyStampFileId: $('co-seal-fileid')?.value || existing.companyStampFileId || '',
+    repStampUrl: $('co-rep-url')?.value || existing.repStampUrl || '',
+    repStampFileId: $('co-rep-fileid')?.value || existing.repStampFileId || '',
+    stampRequest: !!$('co-stamp-request')?.checked,
+  };
 }
 
 // ─── 数量照合 ───
@@ -13000,7 +13683,7 @@ function requireTS(section, navEl){
   if(isTSAuthenticated()){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
-    if(section==='ts-settings') setTimeout(()=>renderItemGroupList(),100);
+    if(section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
     return;
   }
   tsPendingAction = {type:'nav', section, navEl};
@@ -13079,7 +13762,7 @@ function executeTSAction(){
   tsPendingAction=null;
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
-    if(a.section==='ts-settings') setTimeout(()=>renderItemGroupList(),100);
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
@@ -13739,6 +14422,25 @@ function editStaff(id){
   if($('st-bank-type'))$('st-bank-type').value=s.bankInfo?.type||'普通';
   if($('st-bank-no'))$('st-bank-no').value=s.bankInfo?.no||'';
   if($('st-bank-holder'))$('st-bank-holder').value=s.bankInfo?.holder||'';
+  // 書類発行設定
+  const docs=s.docs||{};
+  if($('st-doc-payslip')){
+    $('st-doc-payslip').checked=!!docs.paySlip?.enabled;
+    updateDocInfoDisplay('payslip', docs.paySlip);
+  }
+  if($('st-doc-invproxy')){
+    $('st-doc-invproxy').checked=!!docs.invoiceProxy?.enabled;
+    updateDocInfoDisplay('invproxy', docs.invoiceProxy);
+  }
+  // 個人印画像
+  if(docs.stampUrl){
+    const prev=$('st-stamp-preview');
+    if(prev){ prev.innerHTML=`<img src="${docs.stampUrl}" style="max-width:100%;max-height:100%;object-fit:contain;">`; }
+    if($('st-stamp-url'))$('st-stamp-url').value=docs.stampUrl;
+    if($('st-stamp-fileid'))$('st-stamp-fileid').value=docs.stampFileId||'';
+    const dbtn=$('st-stamp-del-btn'); if(dbtn)dbtn.style.display='';
+  }
+  if($('st-stamp-request'))$('st-stamp-request').checked=!!docs.stampRequest;
   onKyuChange();
 }
 function closeM(id){
@@ -13895,6 +14597,66 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
       <div class="fg">
         <label style="font-size:12px;">適格請求書発行事業者名</label>
         <input type="text" id="co-invoice-name" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;" placeholder="登録証の名称（法人名・屋号）">
+      </div>
+    </div>
+
+    <!-- ■ 書類発行設定 -->
+    <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 書類発行設定</div>
+    <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="co-doc-payslip" onchange="onCoDocToggle('payslip')">
+          <span style="font-size:12px;font-weight:600;">支払明細を発行</span>
+        </label>
+        <div id="co-doc-payslip-info" class="xs muted" style="font-family:'DM Mono',monospace;"></div>
+
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="co-doc-invproxy" onchange="onCoDocToggle('invproxy')">
+          <span style="font-size:12px;font-weight:600;">請求書発行代行</span>
+        </label>
+        <div id="co-doc-invproxy-info" class="xs muted" style="font-family:'DM Mono',monospace;"></div>
+      </div>
+
+      <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <div class="xs fw7 mb8">会社印画像</div>
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div id="co-seal-preview" style="width:80px;height:80px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:9px;color:var(--txt3);text-align:center;padding:3px;">未設定</div>
+            <div style="flex:1;">
+              <input type="file" id="co-seal-file" accept="image/png" style="display:none;" onchange="onStampFileSelected(this,'comp-seal')">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn b-blu btn-sm" onclick="document.getElementById('co-seal-file').click()">選択</button>
+                <button type="button" class="btn btn-sm" id="co-seal-del-btn" onclick="deleteStampImage('comp-seal')" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;">削除</button>
+              </div>
+              <div id="co-seal-status" class="xs muted mt4"></div>
+              <input type="hidden" id="co-seal-url" value="">
+              <input type="hidden" id="co-seal-fileid" value="">
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="xs fw7 mb8">代表印画像</div>
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div id="co-rep-preview" style="width:80px;height:80px;border:1px dashed var(--brd2);border-radius:4px;display:flex;align-items:center;justify-content:center;background:#fff;font-size:9px;color:var(--txt3);text-align:center;padding:3px;">未設定</div>
+            <div style="flex:1;">
+              <input type="file" id="co-rep-file" accept="image/png" style="display:none;" onchange="onStampFileSelected(this,'comp-rep')">
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn b-blu btn-sm" onclick="document.getElementById('co-rep-file').click()">選択</button>
+                <button type="button" class="btn btn-sm" id="co-rep-del-btn" onclick="deleteStampImage('comp-rep')" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;">削除</button>
+              </div>
+              <div id="co-rep-status" class="xs muted mt4"></div>
+              <input type="hidden" id="co-rep-url" value="">
+              <input type="hidden" id="co-rep-fileid" value="">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:10px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="co-stamp-request">
+          <span style="font-size:12px;font-weight:600;">電子印制作を依頼中</span>
+        </label>
       </div>
     </div>
 
