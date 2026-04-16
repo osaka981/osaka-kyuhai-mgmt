@@ -2786,6 +2786,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </label>
       <div class="xs muted mt4" style="margin-left:22px;">チェックすると制作依頼リストに追加され、書類に印が自動で入ります</div>
 
+      <!-- 制作費請求状態 -->
+      <div id="st-stamp-fee-status" style="display:none;margin-top:8px;margin-left:22px;padding:8px 10px;background:#fff5f5;border:1px solid rgba(192,57,43,.2);border-radius:5px;font-size:11px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <strong style="color:var(--red2);">電子印制作費</strong>
+            <span id="st-stamp-fee-status-text"></span>
+          </div>
+          <button type="button" id="st-stamp-fee-reset-btn" onclick="resetStampFeeCharged('staff')" style="padding:3px 8px;border:1px solid var(--red);background:#fff;color:var(--red2);border-radius:3px;font-size:10px;cursor:pointer;display:none;">請求フラグをリセット</button>
+        </div>
+      </div>
+
       <!-- サンプル印鑑プレビュー -->
       <div id="st-stamp-sample-area" style="display:none;margin-top:12px;padding:14px;background:#fff5f5;border:1px solid rgba(192,57,43,.25);border-radius:6px;">
         <div class="xs muted mb8" style="font-weight:700;">制作サンプル（このようなデザインで制作されます）</div>
@@ -11842,12 +11853,13 @@ function _buildInvoiceProxyHTML(staffName, monStr){
     issuerName=pay.staff.companyName;
   }
 
-  // 電子印制作費加算
+  // 電子印制作費加算（初回のみ）
   let displayTotal=pay.total;
   const sysInfo=_getSystemInfo();
-  if(pay.staff.docs?.stampRequest && sysInfo.stampFee){
+  const alreadyCharged = !!pay.staff.docs?.stampFeeCharged;
+  if(pay.staff.docs?.stampRequest && sysInfo.stampFee && !alreadyCharged){
     displayTotal+=sysInfo.stampFee;
-    rows+=`<tr><td>電子印制作費</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+    rows+=`<tr><td>電子印制作費（初回のみ）</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
   }
   const html=`
     <div class="doc-header">
@@ -12015,36 +12027,22 @@ function generatePaySlip(staffName, monStr){
 
 function generateInvoiceProxy(staffName, monStr){
   // 請求書発行代行（個人事業主・委託会社向け）
-  const pay=_calcStaffPayment(staffName, monStr);
-  if(!pay.staff){ showAlert('従事員データなし'); return; }
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
+  const doc=_buildInvoiceProxyHTML(staffName, monStr);
+  if(!doc){ showAlert('従事員データなし'); return; }
 
-  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+  _printDocWindow('請求書（発行代行）', doc.html);
+  _saveIssuedDoc({type:'invoiceProxy', target:staffName, month:monStr, amount:doc.amount, issuedAt:new Date().toISOString()});
 
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">請 求 書</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
-    </div>
-    <div class="doc-to">大阪急配株式会社 御中</div>
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">ご請求金額</div>
-      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
-    </div>
-    <table>
-      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
-    </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">${esc(issuerName)}</div>
-      ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
-      <div style="margin-top:12px;">${_buildStampHTML(stampUrl, issuerName.slice(0,2))}</div>
-    </div>
-    <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
+  // 電子印制作費を初回請求後にフラグ立て（2回目以降は加算しない）
+  const sysInfo=_getSystemInfo();
+  const st=(D.staff||[]).find(s=>s.name===staffName);
+  if(st && st.docs?.stampRequest && sysInfo.stampFee && !st.docs.stampFeeCharged){
+    st.docs.stampFeeCharged=true;
+    st.docs.stampFeeChargedAt=new Date().toISOString();
+    st.docs.stampFeeChargedMonth=monStr;
+    lsSet(LS_KEYS.DRIVERS, D.staff);
+  }
 
-  _printDocWindow('請求書（発行代行）', html);
-  _saveIssuedDoc({type:'invoiceProxy', target:staffName, month:monStr, amount:pay.total, issuedAt:new Date().toISOString()});
   renderStaffFSTab('docs');
 }
 
@@ -12406,11 +12404,12 @@ function generateCompanyInvoiceProxy(coName, monStr){
     total+=pay.total;
     rows+=`<tr><td>${esc(d.name)} 業務委託料</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr>`;
   });
-  // 電子印制作費加算（依頼中の場合）
+  // 電子印制作費加算（初回のみ）
   const sysInfo=_getSystemInfo();
-  if(co.docs?.stampRequest && sysInfo.stampFee){
+  const alreadyCharged = !!co.docs?.stampFeeCharged;
+  if(co.docs?.stampRequest && sysInfo.stampFee && !alreadyCharged){
     total+=sysInfo.stampFee;
-    rows+=`<tr><td>電子印制作費</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+    rows+=`<tr><td>電子印制作費（初回のみ）</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
   }
 
   const today=new Date().toISOString().slice(0,10);
@@ -12442,6 +12441,15 @@ function generateCompanyInvoiceProxy(coName, monStr){
 
   _printDocWindow('請求書（会社代行）', html);
   _saveIssuedDoc({type:'companyInvoiceProxy', target:coName, month:monStr, amount:total, issuedAt:new Date().toISOString()});
+
+  // 電子印制作費を初回請求後にフラグ立て
+  if(co.docs?.stampRequest && sysInfo.stampFee && !co.docs.stampFeeCharged){
+    co.docs.stampFeeCharged=true;
+    co.docs.stampFeeChargedAt=new Date().toISOString();
+    co.docs.stampFeeChargedMonth=monStr;
+    lsSet(LS_KEYS.COMPANIES, D.companies);
+  }
+
   renderCompanyFSTab('docs');
 }
 
@@ -12703,8 +12711,89 @@ function _generateStampSampleSVG(text, size){
   </svg>`;
 }
 
+// 制作費請求状態の表示更新
+function updateStampFeeStatus(ctx){
+  if(ctx === 'staff'){
+    const editId=$('m-staff')?._editId;
+    const st=editId ? D.staff.find(x=>x.id===editId) : null;
+    const docs=st?.docs||{};
+    const area=$('st-stamp-fee-status');
+    const txt=$('st-stamp-fee-status-text');
+    const btn=$('st-stamp-fee-reset-btn');
+    if(!area||!txt||!btn) return;
+    if(!docs.stampRequest){
+      area.style.display='none';
+      return;
+    }
+    area.style.display='block';
+    if(docs.stampFeeCharged){
+      txt.textContent=`：請求済み（${(docs.stampFeeChargedMonth||'').replace('-','/') }分の請求書代行で計上、以降は加算されません）`;
+      btn.style.display='inline-block';
+    } else {
+      txt.textContent='：未請求（次回の請求書代行発行時に加算されます）';
+      btn.style.display='none';
+    }
+  } else if(ctx === 'company'){
+    const editId=_coEditId;
+    const co=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
+    const docs=co?.docs||{};
+    const area=$('co-stamp-fee-status');
+    const txt=$('co-stamp-fee-status-text');
+    const btn=$('co-stamp-fee-reset-btn');
+    if(!area||!txt||!btn) return;
+    if(!docs.stampRequest){
+      area.style.display='none';
+      return;
+    }
+    area.style.display='block';
+    if(docs.stampFeeCharged){
+      txt.textContent=`：請求済み（${(docs.stampFeeChargedMonth||'').replace('-','/') }分の請求書代行で計上、以降は加算されません）`;
+      btn.style.display='inline-block';
+    } else {
+      txt.textContent='：未請求（次回の請求書代行発行時に加算されます）';
+      btn.style.display='none';
+    }
+  }
+}
+
+// 制作費請求フラグをリセット（再請求可能に）
+function resetStampFeeCharged(ctx){
+  showDialog(
+    '電子印制作費の請求フラグをリセットしますか？\n\n次回の請求書代行発行時に、再度制作費が加算されます。',
+    'リセット',
+    ()=>{
+      if(ctx==='staff'){
+        const editId=$('m-staff')?._editId;
+        const st=editId ? D.staff.find(x=>x.id===editId) : null;
+        if(st && st.docs){
+          st.docs.stampFeeCharged=false;
+          st.docs.stampFeeChargedAt=null;
+          st.docs.stampFeeChargedMonth=null;
+          lsSet(LS_KEYS.DRIVERS, D.staff);
+          updateStampFeeStatus('staff');
+          showAlert('リセットしました');
+        }
+      } else if(ctx==='company'){
+        const editId=_coEditId;
+        const co=editId ? (D.companies||[]).find(x=>x.id===editId) : null;
+        if(co && co.docs){
+          co.docs.stampFeeCharged=false;
+          co.docs.stampFeeChargedAt=null;
+          co.docs.stampFeeChargedMonth=null;
+          lsSet(LS_KEYS.COMPANIES, D.companies);
+          updateStampFeeStatus('company');
+          showAlert('リセットしました');
+        }
+      }
+    },
+    'キャンセル'
+  );
+}
+
 // 印鑑サンプルプレビュー更新
 function updateStampSamplePreview(ctx){
+  // 制作費請求状態も同期更新
+  updateStampFeeStatus(ctx);
   if(ctx === 'staff'){
     const cb = $('st-stamp-request');
     const area = $('st-stamp-sample-area');
@@ -12985,6 +13074,10 @@ function collectStaffDocsField(){
     stampUrl: $('st-stamp-url')?.value || existing.stampUrl || '',
     stampFileId: $('st-stamp-fileid')?.value || existing.stampFileId || '',
     stampRequest: !!$('st-stamp-request')?.checked,
+    // 制作費請求済みフラグは保持
+    stampFeeCharged: !!existing.stampFeeCharged,
+    stampFeeChargedAt: existing.stampFeeChargedAt || null,
+    stampFeeChargedMonth: existing.stampFeeChargedMonth || null,
   };
 }
 
@@ -13077,6 +13170,10 @@ function collectCompanyDocsField(){
     repStampUrl: $('co-rep-url')?.value || existing.repStampUrl || '',
     repStampFileId: $('co-rep-fileid')?.value || existing.repStampFileId || '',
     stampRequest: !!$('co-stamp-request')?.checked,
+    // 制作費請求済みフラグは保持
+    stampFeeCharged: !!existing.stampFeeCharged,
+    stampFeeChargedAt: existing.stampFeeChargedAt || null,
+    stampFeeChargedMonth: existing.stampFeeChargedMonth || null,
   };
 }
 
@@ -14916,6 +15013,17 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
           <input type="checkbox" id="co-stamp-request" onchange="updateStampSamplePreview('company')">
           <span style="font-size:12px;font-weight:600;">書類生成時に電子印を捺印する（制作依頼）</span>
         </label>
+
+        <!-- 制作費請求状態 -->
+        <div id="co-stamp-fee-status" style="display:none;margin-top:8px;padding:8px 10px;background:#fff5f5;border:1px solid rgba(192,57,43,.2);border-radius:5px;font-size:11px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div>
+              <strong style="color:var(--red2);">電子印制作費</strong>
+              <span id="co-stamp-fee-status-text"></span>
+            </div>
+            <button type="button" id="co-stamp-fee-reset-btn" onclick="resetStampFeeCharged('company')" style="padding:3px 8px;border:1px solid var(--red);background:#fff;color:var(--red2);border-radius:3px;font-size:10px;cursor:pointer;display:none;">請求フラグをリセット</button>
+          </div>
+        </div>
 
         <!-- サンプル印鑑プレビュー -->
         <div id="co-stamp-sample-area" style="display:none;margin-top:12px;padding:14px;background:#fff5f5;border:1px solid rgba(192,57,43,.25);border-radius:6px;">
