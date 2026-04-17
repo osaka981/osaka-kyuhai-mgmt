@@ -1801,7 +1801,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div style="font-size:13px;font-weight:700;">業務委託契約書・関連書類</div>
           <div style="font-size:10px;color:var(--txt2);">面接時・契約締結時の一括印刷。ページ単位で書き損じ再発行も可能</div>
         </div>
-        <button class="btn b-gh btn-sm" onclick="openContractTemplateFolder()" title="Driveの雛形フォルダを開く">🗂 雛形フォルダ</button>
+        <button class="btn b-gh btn-sm" onclick="openContractTemplateFolder()" title="Driveのひな形編集フォルダを開く (PIN認証必須)">🗂 ひな形編集フォルダ</button>
       </div>
 
       <!-- 雛形状態バッジ -->
@@ -16355,6 +16355,9 @@ function executeTSAction(){
   } else if(a.type==='postinv'){
     if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
     if($('delinv-post-content'))$('delinv-post-content').style.display='block';
+  } else if(a.type==='contract-template'){
+    // PIN認証成功後、Driveの契約書雛形フォルダを開く
+    _doOpenContractTemplateFolder();
   }
 }
 
@@ -17342,8 +17345,20 @@ function buildCtMergeData(driverId){
   return data;
 }
 
-// Drive雛形フォルダを開く
-async function openContractTemplateFolder(){
+// Drive雛形フォルダを開く (PIN認証必須)
+function openContractTemplateFolder(){
+  // 未認証ならPINダイアログ、認証済みなら即実行
+  if(typeof isTSAuthenticated === 'function' && isTSAuthenticated()){
+    _doOpenContractTemplateFolder();
+    return;
+  }
+  tsPendingAction = { type: 'contract-template' };
+  if(typeof openTSOverlay === 'function') openTSOverlay();
+  else showAlert({msg:'PIN認証システムが利用できません', type:'error'});
+}
+
+// 実際にDriveフォルダを開く処理(PIN認証後に実行される)
+async function _doOpenContractTemplateFolder(){
   showAlert({msg:'雛形フォルダIDを取得中...'});
   try{
     const res = await fetch(FLEET_GAS_URL, {
