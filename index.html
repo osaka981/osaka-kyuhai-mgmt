@@ -2564,6 +2564,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <!-- 従業員台帳登録モーダル -->
 <div id="m-staff" class="mbg">
 <div class="modal" id="m-staff-modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:row;position:relative;transition:max-width .3s;">
+
+  <!-- 書類PDFプレビュー（左サイドパネル） -->
+  <div id="st-doc-side-panel" style="display:none;width:50%;border-right:2px solid #5c6bc0;flex-shrink:0;overflow:hidden;flex-direction:column;">
+    <div style="padding:6px 10px;background:#5c6bc0;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+      <span style="font-size:12px;font-weight:700;">書類プレビュー</span>
+      <button type="button" onclick="closeStDocSidePanel()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px;">✕</button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;">
+      <div style="width:160px;background:var(--bg3);padding:8px;overflow-y:auto;flex-shrink:0;border-right:1px solid var(--brd);">
+        <div id="st-doc-side-list" style="display:flex;flex-direction:column;gap:3px;"></div>
+      </div>
+      <div id="st-doc-side-preview" style="flex:1;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">
+        <div style="text-align:center;color:var(--txt3);font-size:12px;">書類を選択してください</div>
+      </div>
+    </div>
+  </div>
+
   <div id="m-staff-main" style="flex:1;min-width:0;display:flex;flex-direction:column;">
   <div class="mhd" style="padding-bottom:0;">
     <div class="mtt">従業員台帳</div>
@@ -3207,22 +3224,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button class="btn b-grn" onclick="saveStaff(false)">💾 保存して閉じる</button>
   </div>
   </div><!-- end m-staff-main -->
-
-  <!-- 書類PDFプレビュー（モーダル横並びパネル） -->
-  <div id="st-doc-side-panel" style="display:none;width:50%;border-left:2px solid #5c6bc0;flex-shrink:0;overflow:hidden;flex-direction:column;">
-    <div style="padding:6px 10px;background:#5c6bc0;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-      <span style="font-size:12px;font-weight:700;">書類プレビュー</span>
-      <button type="button" onclick="closeStDocSidePanel()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px;">✕</button>
-    </div>
-    <div style="display:flex;flex:1;min-height:0;">
-      <div style="width:180px;background:var(--bg3);padding:8px;overflow-y:auto;flex-shrink:0;border-right:1px solid var(--brd);">
-        <div id="st-doc-side-list" style="display:flex;flex-direction:column;gap:3px;"></div>
-      </div>
-      <div id="st-doc-side-preview" style="flex:1;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">
-        <div style="text-align:center;color:var(--txt3);font-size:12px;">書類を選択してください</div>
-      </div>
-    </div>
-  </div>
 
 </div>
 </div>
