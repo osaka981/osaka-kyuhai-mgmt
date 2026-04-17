@@ -2963,6 +2963,28 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
+  <!-- ■ 取引状態 -->
+  <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:10px;">
+    <div class="xs fw7 mb8" style="letter-spacing:.4px;">■ 取引状態</div>
+    <div id="st-status-card" style="border-radius:6px;padding:12px;background:rgba(52,168,83,.08);border:1px solid rgba(52,168,83,.35);transition:background .2s,border-color .2s;">
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;align-items:end;">
+        <div class="fg">
+          <label>状態</label>
+          <select id="st-status" class="fi" onchange="onStStatusChange()">
+            <option value="在籍">在籍</option>
+            <option value="終了">退職（アーカイブ）</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>理由（任意）</label>
+          <input type="text" id="st-status-reason" class="fi" placeholder="例：自己都合、契約満了など">
+        </div>
+      </div>
+      <div class="xs mt8" id="st-status-hint" style="line-height:1.6;color:var(--grn2);font-weight:600;">通常の在籍状態です。</div>
+      <div id="st-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:4px;color:var(--red2);font-weight:600;line-height:1.6;"></div>
+    </div>
+  </div>
+
   <!-- 書類閲覧・記入PDF（フリート連動） -->
   <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:10px;">
     <div class="xs fw7 mb8" style="letter-spacing:.4px;">■ 書類閲覧・記入PDF</div>
@@ -3285,6 +3307,29 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div id="of-confirm-area" style="display:none;padding:0 16px 10px;">
     <div id="office-confirm-body" class="reg-confirm-panel" style="position:static;display:block;width:auto;max-height:200px;"></div>
   </div>
+
+  <!-- ■ 取引状態 -->
+  <div style="padding:0 16px 10px;">
+    <div class="xs fw7 mb8" style="letter-spacing:.4px;">■ 取引状態</div>
+    <div id="of-status-card" style="border-radius:6px;padding:12px;background:rgba(52,168,83,.08);border:1px solid rgba(52,168,83,.35);transition:background .2s,border-color .2s;">
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;align-items:end;">
+        <div class="fg">
+          <label>状態</label>
+          <select id="of-status" class="fi" onchange="onOfStatusChange()">
+            <option value="稼働">稼働中</option>
+            <option value="廃止">廃止（アーカイブ）</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>理由（任意）</label>
+          <input type="text" id="of-status-reason" class="fi" placeholder="例：統合、閉鎖など">
+        </div>
+      </div>
+      <div class="xs mt8" id="of-status-hint" style="line-height:1.6;color:var(--grn2);font-weight:600;">通常の稼働状態です。</div>
+      <div id="of-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:4px;color:var(--red2);font-weight:600;line-height:1.6;"></div>
+    </div>
+  </div>
+
   <!-- 登録確認フローティングパネル -->
   <div id="of-confirm-panel" class="reg-confirm-panel">
     <h4>📋 登録内容確認</h4>
@@ -6030,6 +6075,75 @@ function onCustNoManual(){
     if(!isEdit)disp.value=genCustNo();
   }
 }
+// 営業所: 取引状態変更
+function onOfStatusChange(){
+  const sel=$('of-status');
+  const card=$('of-status-card');
+  const hint=$('of-status-hint');
+  const info=$('of-status-info');
+  if(!sel||!card) return;
+  if(sel.value==='稼働'){
+    card.style.background='rgba(52,168,83,.08)';
+    card.style.borderColor='rgba(52,168,83,.35)';
+    if(hint){hint.textContent='通常の稼働状態です。';hint.style.color='var(--grn2)';hint.style.fontWeight='600';}
+    if(info) info.style.display='none';
+  } else {
+    card.style.background='rgba(192,57,43,.08)';
+    card.style.borderColor='rgba(192,57,43,.35)';
+    if(hint){hint.textContent='';hint.style.fontWeight='normal';}
+    if(info){
+      info.style.display='block';
+      info.innerHTML='⚠ <strong>廃止として保存されます</strong><br>アーカイブに移動され、通常の一覧には表示されなくなります。<br>所属ドライバー・過去データは保持されます（法的保管期間：7年）。<br>再開はアーカイブ画面から行えます。';
+    }
+  }
+}
+
+// 委託会社: 取引状態変更
+function onCoStatusChange(){
+  const sel=$('co-status');
+  const card=$('co-status-card');
+  const hint=$('co-status-hint');
+  const info=$('co-status-info');
+  if(!sel||!card) return;
+  if(sel.value==='稼働中'){
+    card.style.background='rgba(52,168,83,.08)';
+    card.style.borderColor='rgba(52,168,83,.35)';
+    if(hint){hint.textContent='通常の取引状態です。';hint.style.color='var(--grn2)';hint.style.fontWeight='600';}
+    if(info) info.style.display='none';
+  } else {
+    card.style.background='rgba(192,57,43,.08)';
+    card.style.borderColor='rgba(192,57,43,.35)';
+    if(hint){hint.textContent='';hint.style.fontWeight='normal';}
+    if(info){
+      info.style.display='block';
+      info.innerHTML='⚠ <strong>取引終了として保存されます</strong><br>アーカイブに移動され、通常の一覧には表示されなくなります。<br>所属ドライバー・過去データは保持されます（法的保管期間：7年）。<br>取引再開はアーカイブ画面から行えます。';
+    }
+  }
+}
+
+// 従事員: 取引状態変更
+function onStStatusChange(){
+  const sel=$('st-status');
+  const card=$('st-status-card');
+  const hint=$('st-status-hint');
+  const info=$('st-status-info');
+  if(!sel||!card) return;
+  if(sel.value==='在籍'){
+    card.style.background='rgba(52,168,83,.08)';
+    card.style.borderColor='rgba(52,168,83,.35)';
+    if(hint){hint.textContent='通常の在籍状態です。';hint.style.color='var(--grn2)';hint.style.fontWeight='600';}
+    if(info) info.style.display='none';
+  } else {
+    card.style.background='rgba(192,57,43,.08)';
+    card.style.borderColor='rgba(192,57,43,.35)';
+    if(hint){hint.textContent='';hint.style.fontWeight='normal';}
+    if(info){
+      info.style.display='block';
+      info.innerHTML='⚠ <strong>退職として保存されます</strong><br>アーカイブに移動され、通常の一覧には表示されなくなります。<br>過去の日報・給与データは保持されます（法的保管期間：7年）。<br>取引再開はアーカイブ画面から行えます。';
+    }
+  }
+}
+
 // 顧客モーダル: 取引状態変更時のヒント表示＋カード背景色変更
 function onCuStatusChange(){
   const sel=$('cu-status');
@@ -6718,7 +6832,7 @@ function renderStaff(flt){
   const searchEl=$('staff-search');
   const q=(searchEl?.value||'').trim().toLowerCase();
   if(searchEl) searchEl._flt=flt;
-  let rows=D.staff.filter(s=>!flt||s.kubun.includes(flt));
+  let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||s.kubun.includes(flt));
   if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
   let h='';
   rows.forEach(s=>{
@@ -9322,8 +9436,8 @@ function saveStaff(continueAdd=false){
   let empNo=$('st-empno-disp')?.value.trim();
   if(!manual){empNo=genEmpNo(officeName);}
   if(!empNo){alert('社員番号を入力または営業所を選択してください');return;}
-  // 重複チェック
-  if(D.staff.find(s=>s.empNo===empNo)){alert(`社員番号 ${empNo} はすでに登録されています`);return;}
+  // 重複チェック（現役のみ）
+  if(D.staff.find(s=>s.empNo===empNo && s.status!=='終了')){alert(`社員番号 ${empNo} は現役の従事員で使用されています`);return;}
   const kbn=$('st-kbn')?.value;
   const officeType=kbn==='集荷担当'?'collection':'delivery';
 
@@ -9463,7 +9577,18 @@ function saveStaff(continueAdd=false){
     penalties:penaltyRows,
     note:$('st-note')?.value||'',
     company:companyName,
+    // 取引状態
+    status:$('st-status')?.value||'在籍',
+    statusReason:$('st-status-reason')?.value||'',
   };
+
+  // 退職の場合はアーカイブ情報を自動設定
+  if(newDrv.status==='終了'){
+    newDrv.archivedAt=new Date().toISOString().slice(0,10);
+    const exp=new Date(); exp.setFullYear(exp.getFullYear()+7);
+    newDrv.archiveExpiresAt=exp.toISOString().slice(0,10);
+  }
+
   D.staff.push(newDrv);
 
   // Firebaseのnikki_driversにも追加
@@ -9830,7 +9955,7 @@ function renderCompanyPage(){
     // file://の場合はD.companiesのサンプルデータをそのまま使用
   }
   const q=toHankaku(($('company-search')?.value||'').trim().toLowerCase());
-  const list=D.companies.filter(c=>!q||matchZenHan(c.name,q)||matchZenHan(String(c.companyCode||''),q));
+  const list=D.companies.filter(c=>c.status!=='終了'&&c.active!==false).filter(c=>!q||matchZenHan(c.name,q)||matchZenHan(String(c.companyCode||''),q));
   const kpi=$('company-kpi');
   if(kpi){
     const drvCount=D.staff.filter(s=>s.kubun==='委託ドライバー').length;
@@ -10709,6 +10834,10 @@ function openCompanyModal(coId){
   }
   if($('co-stamp-request'))$('co-stamp-request').checked=!!docs.stampRequest;
   updateStampSamplePreview('company');
+  // 取引状態復元
+  if($('co-status'))$('co-status').value=co?.status||'稼働中';
+  if($('co-status-reason'))$('co-status-reason').value=co?.statusReason||'';
+  onCoStatusChange();
   openM('m-company');
 }
 
@@ -10759,7 +10888,17 @@ function saveCompany(){
     invoiceNo, invoiceName,
     offices,prices,bankInfo,gasCards,yosha,charges,memo,otherItems:coOtherItems,
     docs: collectCompanyDocsField(),
-    colRoutes:(_coEditId?D.companies.find(x=>x.id===_coEditId)?.colRoutes:null)||[],active:true};
+    colRoutes:(_coEditId?D.companies.find(x=>x.id===_coEditId)?.colRoutes:null)||[],active:true,
+    status:$('co-status')?.value||'稼働中',
+    statusReason:$('co-status-reason')?.value||'',
+  };
+  // 取引終了の場合はアーカイブ情報を設定
+  if(newCo.status==='終了'){
+    newCo.active=false;
+    newCo.archivedAt=new Date().toISOString().slice(0,10);
+    const exp=new Date(); exp.setFullYear(exp.getFullYear()+7);
+    newCo.archiveExpiresAt=exp.toISOString().slice(0,10);
+  }
   if(_coEditId){
     const idx=D.companies.findIndex(x=>x.id===_coEditId);
     if(idx>=0)D.companies[idx]=newCo;else D.companies.push(newCo);
@@ -11538,6 +11677,10 @@ function editOffice(id){
   if($('of-type-del'))$('of-type-del').checked=o.typesDel||false;
   if($('of-type-col'))$('of-type-col').checked=o.typesCol||false;
   onOfTypeChange();
+  // 取引状態復元
+  if($('of-status'))$('of-status').value=o.status||'稼働';
+  if($('of-status-reason'))$('of-status-reason').value=o.statusReason||'';
+  onOfStatusChange();
   // 郵便局単価: 必ず一旦クリアしてから当営業所の値をセット（他営業所の値が残らないよう）
   ['of-p60','of-p80','of-p100','of-p120','of-p140','of-p160',
    'of-pkanryo','of-ptenso','of-pnight','of-pogata','of-pshukka',
@@ -11619,7 +11762,16 @@ function addOffice(){
     head: $('of-head')?.value.trim()||'未設定',
     typesDel: $('of-type-del')?.checked||false,
     typesCol: $('of-type-col')?.checked||false,
+    status: $('of-status')?.value||'稼働',
+    statusReason: $('of-status-reason')?.value||'',
   };
+
+  // 廃止の場合はアーカイブ情報を設定
+  if(offData.status==='廃止'){
+    offData.archivedAt=new Date().toISOString().slice(0,10);
+    const exp=new Date(); exp.setFullYear(exp.getFullYear()+7);
+    offData.archiveExpiresAt=exp.toISOString().slice(0,10);
+  }
 
   if(editId){
     // ── 編集：既存レコードを上書き ──
@@ -11699,7 +11851,7 @@ function deleteOffice(){
 }
 
 function renderOffCards(){
-  $('off-cards').innerHTML=D.offices.map(o=>{
+  $('off-cards').innerHTML=D.offices.filter(o=>o.status!=='廃止'&&o.status!=='終了').map(o=>{
     return `<div class="card" style="display:flex;flex-direction:column;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div style="display:flex;align-items:center;gap:6px;">
@@ -13001,24 +13153,29 @@ function renderStaffDocs(el, name){
   } else html+=`<div class="xs muted">発行履歴はありません</div>`;
   html+=`</div>`;
 
-  // ── フリート連動書類（2カラム・PDF大きく表示） ──
+  // ── フリート連動書類（折りたたみ・デフォルト閉じ） ──
   html+=`<div class="fs-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;" onclick="toggleFSFleetDocs()">
       <div class="ct"><div class="cbar"></div>フリート連動書類</div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn b-gh btn-sm" onclick="renderFSFleetDocs('${esc(name)}')">再読込</button>
-        <a href="https://osaka981.github.io/fleet-mgmt/" target="_blank" class="btn b-gh btn-sm" style="text-decoration:none;">フリートを開く →</a>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span id="fs-fleet-docs-toggle-icon" style="font-size:11px;color:var(--txt2);transition:transform .2s;">▶</span>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:220px 1fr;gap:12px;min-height:600px;">
-      <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;overflow-y:auto;max-height:700px;">
-        <div id="fs-fleet-docs-list" style="display:flex;flex-direction:column;gap:4px;">読込中...</div>
+    <div id="fs-fleet-docs-body" style="display:none;margin-top:10px;">
+      <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px;">
+        <button class="btn b-gh btn-sm" onclick="event.stopPropagation();renderFSFleetDocs('${esc(name)}')">再読込</button>
+        <a href="https://osaka981.github.io/fleet-mgmt/" target="_blank" class="btn b-gh btn-sm" style="text-decoration:none;" onclick="event.stopPropagation();">フリートを開く →</a>
       </div>
-      <div style="background:#fff;border:1px solid var(--brd);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
-        <div id="fs-fleet-docs-preview" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:600px;">
-          <div style="text-align:center;color:var(--txt3);">
-            <div style="font-size:40px;margin-bottom:8px;">📄</div>
-            <div style="font-size:12px;">左の書類をクリックしてプレビュー</div>
+      <div style="display:grid;grid-template-columns:220px 1fr;gap:12px;min-height:600px;">
+        <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;overflow-y:auto;max-height:700px;">
+          <div id="fs-fleet-docs-list" style="display:flex;flex-direction:column;gap:4px;">読込中...</div>
+        </div>
+        <div style="background:#fff;border:1px solid var(--brd);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
+          <div id="fs-fleet-docs-preview" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:600px;">
+            <div style="text-align:center;color:var(--txt3);">
+              <div style="font-size:40px;margin-bottom:8px;">📄</div>
+              <div style="font-size:12px;">左の書類をクリックしてプレビュー</div>
+            </div>
           </div>
         </div>
       </div>
@@ -13026,7 +13183,21 @@ function renderStaffDocs(el, name){
   </div>`;
 
   el.innerHTML=html;
-  setTimeout(()=>renderFSFleetDocs(name), 100);
+  // フリート書類は折りたたみなので開いた時に読み込む（ここでは呼ばない）
+}
+
+// FSページ: フリート連動書類の折りたたみ切替
+function toggleFSFleetDocs(){
+  const body=$('fs-fleet-docs-body');
+  const icon=$('fs-fleet-docs-toggle-icon');
+  if(!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  if(icon) icon.textContent = isOpen ? '▶' : '▼';
+  // 開いた時にデータを読み込む
+  if(!isOpen){
+    renderFSFleetDocs(_fsId);
+  }
 }
 
 // ── フルスクリーン：フリート書類読込＆プレビュー ──
@@ -15913,6 +16084,10 @@ function openM(id){
       const hint=$('of-code-auto-hint');if(hint)hint.style.display='';
       const delBtn=$('of-del-btn');if(delBtn)delBtn.style.display='none';
       const saveBtn=$('of-save-btn');if(saveBtn)saveBtn.textContent='＋ 追加';
+      // 取引状態リセット
+      if($('of-status'))$('of-status').value='稼働';
+      if($('of-status-reason'))$('of-status-reason').value='';
+      onOfStatusChange();
     }
     // 新規時: 単価フィールドをクリア
     ['of-p60','of-p80','of-p100','of-p120','of-p140','of-p160',
@@ -15930,6 +16105,7 @@ function editStaff(id){
   const s=D.staff.find(x=>x.id===id);if(!s)return;
   resetStaffModal();
   openM('m-staff');
+  $('m-staff')._editId = id;
   // 基本情報をセット
   if($('st-kbn'))$('st-kbn').value=s.kubun||'個人事業主（歩合）';
   if($('st-off'))$('st-off').value=s.office||'';
@@ -16044,6 +16220,10 @@ function editStaff(id){
   if($('st-stamp-request'))$('st-stamp-request').checked=!!docs.stampRequest;
   updateStampSamplePreview('staff');
   onKyuChange();
+  // 取引状態復元
+  if($('st-status'))$('st-status').value=s.status||'在籍';
+  if($('st-status-reason'))$('st-status-reason').value=s.statusReason||'';
+  onStStatusChange();
   // 書類リンクを読み込み
   setTimeout(()=>renderStDocLinks(), 200);
 }
@@ -16295,6 +16475,28 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ■ 取引状態 -->
+    <div style="border-top:1px dashed var(--brd);padding-top:10px;margin-top:10px;">
+      <div class="xs fw7 mb8" style="letter-spacing:.4px;">■ 取引状態</div>
+      <div id="co-status-card" style="border-radius:6px;padding:12px;background:rgba(52,168,83,.08);border:1px solid rgba(52,168,83,.35);transition:background .2s,border-color .2s;">
+        <div style="display:grid;grid-template-columns:180px 1fr;gap:10px;align-items:end;">
+          <div class="fg">
+            <label>状態</label>
+            <select id="co-status" class="fi" onchange="onCoStatusChange()">
+              <option value="稼働中">稼働中</option>
+              <option value="終了">取引終了（アーカイブ）</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>理由（任意）</label>
+            <input type="text" id="co-status-reason" class="fi" placeholder="例：契約終了、会社廃業など">
+          </div>
+        </div>
+        <div class="xs mt8" id="co-status-hint" style="line-height:1.6;color:var(--grn2);font-weight:600;">通常の取引状態です。</div>
+        <div id="co-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:4px;color:var(--red2);font-weight:600;line-height:1.6;"></div>
       </div>
     </div>
 
