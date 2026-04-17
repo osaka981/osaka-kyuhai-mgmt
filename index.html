@@ -610,6 +610,9 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .sn-badge-ts{font-size:9px;background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
 </style>
 
+<!-- PDF-lib (契約書ページ抽出用) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -696,6 +699,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="company" onclick="nav(this)"><span class="ni-ico">🏭</span>委託会社管理</div>
       <div class="ni" data-s="salary" onclick="nav(this)"><span class="ni-ico">💴</span>給与計算</div>
       <div class="ni" data-s="pay-history" onclick="nav(this)"><span class="ni-ico">📅</span>給与履歴管理</div>
+      <div class="ni" data-s="contract" onclick="nav(this)"><span class="ni-ico"></span>契約書</div>
     </div>
   </div>
 
@@ -1787,6 +1791,132 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-grn btn-sm" onclick="saveOfficePrices()">💾 保存</button></div>
           <div id="office-price-tables"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- 業務委託契約書 -->
+    <div id="s-contract" class="sec">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;">業務委託契約書・関連書類</div>
+          <div style="font-size:10px;color:var(--txt2);">面接時・契約締結時の一括印刷。ページ単位で書き損じ再発行も可能</div>
+        </div>
+        <button class="btn b-gh btn-sm" onclick="openContractTemplateFolder()" title="Driveの雛形フォルダを開く">🗂 雛形フォルダ</button>
+      </div>
+
+      <!-- 雛形状態バッジ -->
+      <div class="card mb12" style="background:#fff8e7;border:1px solid rgba(220,170,30,.3);">
+        <div class="xs" style="line-height:1.7;">
+          <strong style="color:#7a5a00;">📋 雛形の設置について</strong><br>
+          Google Drive の <strong>契約書雛形</strong> フォルダに以下4ファイルを配置してください:<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">業務委託契約書.docx</code> (16ページ統合版、差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">念書.docx</code>(差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">契約内容確認書.docx</code>(差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">従業員台帳.docx</code>(差し込みあり)<br>
+          差し込み項目(乙情報・単価のみ): <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{乙_氏名}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{乙_住所}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{配達完了単価}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{集荷単価}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{大型加算額}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{夜間加算額}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{契約開始日}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{契約終了日}}</code> など<br>
+          <span style="color:var(--txt2);font-size:10px;">※甲(大阪急配・代表取締役・印影)はマスタdocxにハードコード済みのため差し込み不要</span>
+        </div>
+      </div>
+
+      <!-- メイン操作カード -->
+      <div class="card">
+
+        <!-- ① 業務委託契約書 -->
+        <div class="ct mb12"><div class="cbar"></div>業務委託契約書 <span style="font-size:10px;color:var(--txt2);margin-left:6px;font-weight:normal;">(全16ページ / 差し込み対応)</span></div>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="ct-main-on" checked onchange="updateContractUI()" style="width:16px;height:16px;cursor:pointer;">
+            <span style="font-size:13px;font-weight:700;">発行する</span>
+          </label>
+          <div style="flex:1;"></div>
+          <label style="font-size:11px;color:var(--txt2);">部数:</label>
+          <select id="ct-main-copies" class="fi" style="width:80px;padding:4px 6px;">
+            <option value="1">1部</option>
+            <option value="2" selected>2部</option>
+            <option value="3">3部</option>
+          </select>
+        </div>
+
+        <div id="ct-main-detail" style="padding:10px 12px;background:#fafbfc;border:1px solid var(--brd);border-radius:6px;margin-bottom:12px;">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center;">
+            <span style="font-size:10px;color:var(--txt2);font-weight:700;margin-right:4px;">プリセット:</span>
+            <button type="button" class="btn b-gh btn-sm" onclick="ctPagePreset('all')" style="padding:3px 10px;font-size:10px;">全ページ (1-16)</button>
+            <button type="button" class="btn b-gh btn-sm" onclick="ctPagePreset('body')" style="padding:3px 10px;font-size:10px;">本体のみ (1-5)</button>
+            <button type="button" class="btn b-gh btn-sm" onclick="ctPagePreset('annex')" style="padding:3px 10px;font-size:10px;">別紙のみ (6-9)</button>
+            <button type="button" class="btn b-gh btn-sm" onclick="ctPagePreset('spec')" style="padding:3px 10px;font-size:10px;">業務関連 (10-16)</button>
+            <button type="button" class="btn b-gh btn-sm" onclick="ctPagePreset('none')" style="padding:3px 10px;font-size:10px;color:var(--red);">全解除</button>
+          </div>
+          <div style="font-size:10px;color:var(--txt2);margin-bottom:6px;">ページ選択 (書き損じ再発行: 該当ページのみ選択してください)</div>
+          <div id="ct-pages-grid" style="display:grid;grid-template-columns:repeat(8,1fr);gap:4px;"></div>
+          <div style="font-size:10px;color:var(--txt2);margin-top:8px;line-height:1.7;">
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#e3f2fd;border:1px solid #90caf9;border-radius:3px;padding:1px 5px;">1-5</span> 本体(条項・署名)</span>
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#fff3e0;border:1px solid #ffb74d;border-radius:3px;padding:1px 5px;">6</span> 別紙1 郵便法</span>
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#fff3e0;border:1px solid #ffb74d;border-radius:3px;padding:1px 5px;">7-8</span> 別紙2 個人情報</span>
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#fff3e0;border:1px solid #ffb74d;border-radius:3px;padding:1px 5px;">9</span> 別紙3 暴排</span>
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#e8f5e9;border:1px solid #81c784;border-radius:3px;padding:1px 5px;">10</span> 仕様書</span>
+            <span style="display:inline-block;margin-right:10px;"><span style="background:#e8f5e9;border:1px solid #81c784;border-radius:3px;padding:1px 5px;">11-13</span> 配達業務</span>
+            <span style="display:inline-block;"><span style="background:#e8f5e9;border:1px solid #81c784;border-radius:3px;padding:1px 5px;">14-16</span> 集荷業務</span>
+          </div>
+        </div>
+
+        <!-- ② ③ ④ 他の書類 -->
+        <div class="ct mb12"><div class="cbar"></div>関連書類</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:1;">
+              <input type="checkbox" id="ct-nensho-on" style="width:16px;height:16px;cursor:pointer;">
+              <span style="font-size:12px;font-weight:600;">念書</span>
+              <span style="font-size:10px;color:var(--txt2);">(免責¥50,000・喫煙禁止等)</span>
+            </label>
+            <label style="font-size:11px;color:var(--txt2);">部数:</label>
+            <select id="ct-nensho-copies" class="fi" style="width:70px;padding:3px 6px;">
+              <option value="1" selected>1部</option><option value="2">2部</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:1;">
+              <input type="checkbox" id="ct-kakunin-on" style="width:16px;height:16px;cursor:pointer;">
+              <span style="font-size:12px;font-weight:600;">契約内容確認書</span>
+              <span style="font-size:10px;color:var(--txt2);">(チェックリスト形式)</span>
+            </label>
+            <label style="font-size:11px;color:var(--txt2);">部数:</label>
+            <select id="ct-kakunin-copies" class="fi" style="width:70px;padding:3px 6px;">
+              <option value="1" selected>1部</option><option value="2">2部</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:1;">
+              <input type="checkbox" id="ct-daicho-on" style="width:16px;height:16px;cursor:pointer;">
+              <span style="font-size:12px;font-weight:600;">従業員台帳</span>
+              <span style="font-size:10px;color:var(--txt2);">(氏名・住所・振込口座等)</span>
+            </label>
+            <label style="font-size:11px;color:var(--txt2);">部数:</label>
+            <select id="ct-daicho-copies" class="fi" style="width:70px;padding:3px 6px;">
+              <option value="1" selected>1部</option><option value="2">2部</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- オプション: ドライバー差し込み -->
+        <div class="ct mb12"><div class="cbar"></div>オプション：ドライバー情報を差し込む <span style="font-size:10px;color:var(--txt2);margin-left:6px;font-weight:normal;">(未選択ならテンプレート印刷)</span></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fafbfc;border:1px solid var(--brd);border-radius:6px;margin-bottom:16px;">
+          <label style="font-size:11px;color:var(--txt2);min-width:80px;">ドライバー:</label>
+          <select id="ct-driver" class="fi" style="flex:1;padding:5px 8px;" onchange="onCtDriverChange()">
+            <option value="">選択なし (空欄テンプレート印刷)</option>
+          </select>
+          <div id="ct-driver-preview" style="font-size:10px;color:var(--txt2);min-width:200px;"></div>
+        </div>
+
+        <!-- 生成ボタン -->
+        <div style="display:flex;gap:10px;align-items:center;padding:10px;background:var(--sur);border:1px solid var(--brd);border-radius:6px;">
+          <div style="flex:1;font-size:11px;color:var(--txt2);" id="ct-summary">
+            業務委託契約書 16ページ × 2部
+          </div>
+          <button class="btn b-blu" onclick="generateContractPDF(false)" style="padding:8px 16px;">PDF生成</button>
+          <button class="btn b-grn" onclick="generateContractPDF(true)" style="padding:8px 16px;">生成して印刷</button>
+        </div>
+
       </div>
     </div>
 
@@ -16980,6 +17110,416 @@ function closeM(id){
   }
 }
 document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('on');}));
+
+// ══════════════════════════════════════════════
+// 📄 業務委託契約書 一括印刷 (セッション5)
+// ══════════════════════════════════════════════
+const CT_TEMPLATE_FOLDER_NAME = '契約書雛形';
+
+// ページ分類(色分け用)
+const CT_PAGE_CATEGORIES = {
+  body:   [1,2,3,4,5],           // 契約書本体
+  annex:  [6,7,8,9],             // 別紙1-3
+  spec:   [10,11,12,13,14,15,16] // 仕様書・取扱手続
+};
+
+function getCtPageCategory(pageNum){
+  if(CT_PAGE_CATEGORIES.body.includes(pageNum)) return 'body';
+  if(CT_PAGE_CATEGORIES.annex.includes(pageNum)) return 'annex';
+  if(CT_PAGE_CATEGORIES.spec.includes(pageNum)) return 'spec';
+  return '';
+}
+
+// ページ選択UI描画
+function renderCtPagesGrid(){
+  const grid = document.getElementById('ct-pages-grid');
+  if(!grid) return;
+  const html = [];
+  for(let p=1; p<=16; p++){
+    const cat = getCtPageCategory(p);
+    const colors = {
+      body:  {bg:'#e3f2fd', bgActive:'#1976d2', border:'#90caf9'},
+      annex: {bg:'#fff3e0', bgActive:'#f57c00', border:'#ffb74d'},
+      spec:  {bg:'#e8f5e9', bgActive:'#388e3c', border:'#81c784'}
+    };
+    const c = colors[cat];
+    html.push(`<button type="button" class="ct-page-btn" data-page="${p}" data-on="1"
+      onclick="toggleCtPage(${p})"
+      style="padding:8px 4px;border:1px solid ${c.border};background:${c.bgActive};color:#fff;font-weight:700;border-radius:4px;cursor:pointer;font-size:12px;font-family:'DM Mono',monospace;transition:all .15s;"
+      data-bg="${c.bg}" data-bg-active="${c.bgActive}" data-border="${c.border}">
+      ${p}
+    </button>`);
+  }
+  grid.innerHTML = html.join('');
+}
+
+function toggleCtPage(p){
+  const btn = document.querySelector(`.ct-page-btn[data-page="${p}"]`);
+  if(!btn) return;
+  const on = btn.dataset.on === '1';
+  setCtPage(p, !on);
+  updateContractUI();
+}
+
+function setCtPage(p, on){
+  const btn = document.querySelector(`.ct-page-btn[data-page="${p}"]`);
+  if(!btn) return;
+  btn.dataset.on = on ? '1' : '0';
+  if(on){
+    btn.style.background = btn.dataset.bgActive;
+    btn.style.color = '#fff';
+    btn.style.opacity = '1';
+  } else {
+    btn.style.background = btn.dataset.bg;
+    btn.style.color = '#999';
+    btn.style.opacity = '0.5';
+  }
+}
+
+function ctPagePreset(preset){
+  let pages = [];
+  if(preset === 'all')   pages = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
+  if(preset === 'body')  pages = CT_PAGE_CATEGORIES.body;
+  if(preset === 'annex') pages = CT_PAGE_CATEGORIES.annex;
+  if(preset === 'spec')  pages = CT_PAGE_CATEGORIES.spec;
+  if(preset === 'none')  pages = [];
+  for(let p=1; p<=16; p++){
+    setCtPage(p, pages.includes(p));
+  }
+  updateContractUI();
+}
+
+function getCtSelectedPages(){
+  const pages = [];
+  document.querySelectorAll('.ct-page-btn').forEach(btn=>{
+    if(btn.dataset.on === '1') pages.push(parseInt(btn.dataset.page));
+  });
+  return pages.sort((a,b)=>a-b);
+}
+
+// ドライバー選択肢の描画
+function renderCtDriverOptions(){
+  const sel = document.getElementById('ct-driver');
+  if(!sel) return;
+  const cur = sel.value;
+  const staffList = (D.staff||[]).filter(s=>s.status!=='終了'&&s.status!=='退職');
+  let html = '<option value="">選択なし (空欄テンプレート印刷)</option>';
+  staffList.forEach(s=>{
+    const kb = s.kubun ? ` [${s.kubun}]` : '';
+    html += `<option value="${s.id}">${esc(s.name)}${esc(kb)}</option>`;
+  });
+  sel.innerHTML = html;
+  if(cur) sel.value = cur;
+}
+
+function onCtDriverChange(){
+  const sel = document.getElementById('ct-driver');
+  const prev = document.getElementById('ct-driver-preview');
+  if(!sel || !prev){ return; }
+  const id = parseInt(sel.value);
+  if(!id){ prev.innerHTML = '<span style="color:var(--txt3);">テンプレート印刷モード</span>'; return; }
+  const s = (D.staff||[]).find(x=>x.id===id);
+  if(!s){ prev.innerHTML = ''; return; }
+  const parts = [];
+  if(s.addr) parts.push(`📍 ${esc(s.addr)}`);
+  const fp = s.fixedPrices?.del || {};
+  const prices = [];
+  if(fp.kanryo) prices.push(`完了¥${fp.kanryo}`);
+  if(fp.ogata)  prices.push(`大型+¥${fp.ogata}`);
+  if(fp.night)  prices.push(`夜間+¥${fp.night}`);
+  if(prices.length) parts.push(`💰 ${prices.join(' / ')}`);
+  prev.innerHTML = parts.length ? parts.join('<br>') : '<span style="color:var(--txt3);">単価情報なし</span>';
+}
+
+// UI更新(サマリ表示・各書類の有効/無効)
+function updateContractUI(){
+  const mainOn = document.getElementById('ct-main-on')?.checked;
+  const detail = document.getElementById('ct-main-detail');
+  if(detail) detail.style.opacity = mainOn ? '1' : '0.4';
+  if(detail) detail.style.pointerEvents = mainOn ? 'auto' : 'none';
+
+  const parts = [];
+  if(mainOn){
+    const pages = getCtSelectedPages();
+    const copies = parseInt(document.getElementById('ct-main-copies')?.value)||1;
+    if(pages.length){
+      const pageStr = pages.length === 16 ? '全16ページ' : `${pages.length}ページ(P${pages.join(',P')})`;
+      parts.push(`業務委託契約書 ${pageStr} × ${copies}部`);
+    }
+  }
+  ['nensho','kakunin','daicho'].forEach(k=>{
+    const labels = {nensho:'念書', kakunin:'契約内容確認書', daicho:'従業員台帳'};
+    const on = document.getElementById(`ct-${k}-on`)?.checked;
+    if(on){
+      const copies = parseInt(document.getElementById(`ct-${k}-copies`)?.value)||1;
+      parts.push(`${labels[k]} × ${copies}部`);
+    }
+  });
+
+  const sum = document.getElementById('ct-summary');
+  if(sum) sum.textContent = parts.length ? parts.join(' / ') : '書類が選択されていません';
+}
+
+// ドライバー情報を差し込み用オブジェクトに変換
+// ※甲情報(大阪急配、川村知弘、印影等)・契約日はマスタdocxにハードコードされているので差し込み不要
+function buildCtMergeData(driverId){
+  const data = {
+    '乙_氏名': '',
+    '乙_住所': '',
+    '乙_フリガナ': '',
+    '乙_生年月日': '',
+    '乙_年齢': '',
+    '乙_性別': '',
+    '乙_携帯': '',
+    '乙_固定電話': '',
+    '乙_銀行名': '',
+    '乙_口座番号': '',
+    '乙_口座名義': '',
+    '配達完了単価': '',
+    '集荷単価': '',
+    '大型加算額': '',
+    '夜間加算額': '',
+    '契約開始日': '',
+    '契約終了日': '',
+    '採用日': '',
+    '従業員コード': '',
+    '緊急連絡先1_氏名': '',
+    '緊急連絡先1_TEL': '',
+    '緊急連絡先2_氏名': '',
+    '緊急連絡先2_TEL': '',
+  };
+  if(!driverId) return data;
+  const s = (D.staff||[]).find(x=>x.id===parseInt(driverId));
+  if(!s) return data;
+  data['乙_氏名'] = s.name || '';
+  data['乙_住所'] = s.addr || '';
+  data['乙_フリガナ'] = s.kana || [s.kanaSei, s.kanaMei].filter(Boolean).join(' ');
+  data['乙_生年月日'] = s.birth || '';
+  data['乙_携帯'] = s.tel || '';
+  data['採用日'] = s.startDate || '';
+  data['契約開始日'] = s.startDate || '';
+  data['契約終了日'] = s.endDate || '';
+  data['従業員コード'] = s.empNo || '';
+  data['緊急連絡先1_氏名'] = s.emerName || '';
+  data['緊急連絡先1_TEL'] = s.emerTel || '';
+  // 年齢自動計算
+  if(s.birth){
+    try{
+      const b = new Date(s.birth), now = new Date();
+      let age = now.getFullYear() - b.getFullYear();
+      const m = now.getMonth() - b.getMonth();
+      if(m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+      if(age >= 0 && age < 150) data['乙_年齢'] = String(age) + '歳';
+    }catch(e){}
+  }
+  // 契約開始日を「YYYY年MM月DD日」形式に
+  if(s.startDate){
+    try{
+      const sd = new Date(s.startDate);
+      data['契約開始日'] = `${sd.getFullYear()}年${sd.getMonth()+1}月${sd.getDate()}日`;
+    }catch(e){}
+  }
+  if(s.endDate){
+    try{
+      const ed = new Date(s.endDate);
+      data['契約終了日'] = `${ed.getFullYear()}年${ed.getMonth()+1}月${ed.getDate()}日`;
+    }catch(e){}
+  }
+  // 単価
+  const fp = s.fixedPrices?.del || {};
+  if(fp.kanryo) data['配達完了単価'] = String(fp.kanryo);
+  if(fp.shukka) data['集荷単価']     = String(fp.shukka);
+  if(fp.ogata)  data['大型加算額']   = String(fp.ogata);
+  if(fp.night)  data['夜間加算額']   = String(fp.night);
+  // 振込口座
+  if(s.bankInfo){
+    data['乙_銀行名'] = [s.bankInfo.name, s.bankInfo.branch].filter(Boolean).join(' ');
+    data['乙_口座番号'] = [s.bankInfo.type, s.bankInfo.no].filter(Boolean).join(' ');
+    data['乙_口座名義'] = s.bankInfo.holder || '';
+  }
+  return data;
+}
+
+// Drive雛形フォルダを開く
+async function openContractTemplateFolder(){
+  showAlert({msg:'雛形フォルダIDを取得中...'});
+  try{
+    const res = await fetch(FLEET_GAS_URL, {
+      method:'POST', redirect:'follow',
+      body: JSON.stringify({ action:'getContractTemplateFolder' })
+    });
+    const json = await res.json();
+    if(json.ok && json.folderId){
+      window.open(`https://drive.google.com/drive/folders/${json.folderId}`, '_blank');
+    } else {
+      showAlert({msg:'雛形フォルダが見つかりません。GAS側のgetContractTemplateFolderハンドラーを実装してください。', type:'warning'});
+    }
+  }catch(e){
+    showAlert({msg:'エラー: '+e.message, type:'error'});
+  }
+}
+
+// メイン: PDF生成
+async function generateContractPDF(autoPrint){
+  // 選択された書類を収集
+  const docs = [];
+  const mainOn = document.getElementById('ct-main-on')?.checked;
+  if(mainOn){
+    const pages = getCtSelectedPages();
+    const copies = parseInt(document.getElementById('ct-main-copies')?.value)||1;
+    if(pages.length === 0){
+      showAlert({msg:'業務委託契約書のページが1つも選択されていません', type:'warning'});
+      return;
+    }
+    docs.push({ key:'main', name:'業務委託契約書', pages, copies });
+  }
+  ['nensho','kakunin','daicho'].forEach(k=>{
+    const on = document.getElementById(`ct-${k}-on`)?.checked;
+    if(on){
+      const labels = {nensho:'念書', kakunin:'契約内容確認書', daicho:'従業員台帳'};
+      const copies = parseInt(document.getElementById(`ct-${k}-copies`)?.value)||1;
+      docs.push({ key:k, name:labels[k], pages:null, copies });
+    }
+  });
+
+  if(docs.length === 0){
+    showAlert({msg:'書類が1つも選択されていません', type:'warning'});
+    return;
+  }
+
+  if(typeof PDFLib === 'undefined'){
+    showAlert({msg:'PDFライブラリの読み込みに失敗しました。ページを再読み込みしてください。', type:'error'});
+    return;
+  }
+
+  const driverId = document.getElementById('ct-driver')?.value || '';
+  const mergeData = buildCtMergeData(driverId);
+
+  // 進捗表示
+  const btn = document.activeElement;
+  const origText = btn ? btn.textContent : '';
+  if(btn) btn.textContent = '⏳ 生成中...';
+  if(btn) btn.disabled = true;
+
+  try{
+    // GAS呼び出し(各書類のPDFをBase64で取得)
+    const res = await fetch(FLEET_GAS_URL, {
+      method:'POST', redirect:'follow',
+      body: JSON.stringify({
+        action: 'generateContract',
+        docs: docs.map(d => ({ key:d.key, name:d.name })),
+        mergeData
+      })
+    });
+    const json = await res.json();
+    if(!json.ok){
+      throw new Error(json.error || 'GASから失敗レスポンス');
+    }
+
+    // pdf-libで結合
+    const { PDFDocument } = PDFLib;
+    const merged = await PDFDocument.create();
+
+    for(const doc of docs){
+      const b64 = json.pdfs?.[doc.key];
+      if(!b64){
+        console.warn(`PDFデータが見つかりません: ${doc.key}`);
+        continue;
+      }
+      const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+      const srcPdf = await PDFDocument.load(bytes);
+      const total = srcPdf.getPageCount();
+      let targetPages;
+      if(doc.pages){
+        // ページ抽出: 範囲外チェック
+        targetPages = doc.pages.filter(p => p>=1 && p<=total).map(p=>p-1);
+        if(targetPages.length === 0){
+          console.warn(`${doc.name}: 有効なページがありません (総${total}ページ)`);
+          continue;
+        }
+      } else {
+        // 全ページ
+        targetPages = Array.from({length:total}, (_,i)=>i);
+      }
+      // 部数分繰り返し
+      for(let c=0; c<doc.copies; c++){
+        const copied = await merged.copyPages(srcPdf, targetPages);
+        copied.forEach(pg => merged.addPage(pg));
+      }
+    }
+
+    const pdfBytes = await merged.save();
+    const blob = new Blob([pdfBytes], { type:'application/pdf' });
+    const url = URL.createObjectURL(blob);
+
+    // ファイル名: 日付_ドライバー名 or テンプレート
+    const d = new Date();
+    const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    const driverName = mergeData['乙_氏名'] ? `_${mergeData['乙_氏名'].replace(/\s+/g,'')}` : '_テンプレート';
+    const fileName = `業務委託契約書一式_${ds}${driverName}.pdf`;
+
+    if(autoPrint){
+      // 新規タブで開いて印刷ダイアログ
+      const w = window.open(url, '_blank');
+      if(w){
+        w.addEventListener('load', () => { try{ w.print(); }catch(e){} });
+      } else {
+        showAlert({msg:'ポップアップがブロックされました。ダウンロードします。', type:'warning'});
+        _ctDownload(url, fileName);
+      }
+    } else {
+      _ctDownload(url, fileName);
+    }
+
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+    showAlert({msg:`PDF生成完了: ${fileName}`});
+  }catch(e){
+    console.error('契約書PDF生成エラー', e);
+    showAlert({msg:'PDF生成に失敗しました: '+e.message, type:'error'});
+  }finally{
+    if(btn){ btn.textContent = origText; btn.disabled = false; }
+  }
+}
+
+function _ctDownload(url, fileName){
+  const a = document.createElement('a');
+  a.href = url; a.download = fileName;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>a.remove(), 1000);
+}
+
+// 初期化: ページ選択UIを描画(契約書セクション表示時)
+function initContractSection(){
+  renderCtPagesGrid();
+  ctPagePreset('all');   // 全ページ選択
+  renderCtDriverOptions();
+  onCtDriverChange();
+  updateContractUI();
+  // チェックボックス・部数セレクトの変更を監視
+  ['ct-main-on','ct-main-copies','ct-nensho-on','ct-nensho-copies',
+   'ct-kakunin-on','ct-kakunin-copies','ct-daicho-on','ct-daicho-copies'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && !el._ctInit){
+      el.addEventListener('change', updateContractUI);
+      el._ctInit = true;
+    }
+  });
+}
+
+// nav('contract')時に初期化
+(function(){
+  const origNav = window.nav;
+  if(typeof origNav === 'function'){
+    window.nav = function(el){
+      const r = origNav.apply(this, arguments);
+      const s = el?.dataset?.s;
+      if(s === 'contract'){
+        setTimeout(initContractSection, 50);
+      }
+      return r;
+    };
+  }
+})();
 </script>
 
 <!-- 日報レポート詳細フルスクリーンモーダル -->
