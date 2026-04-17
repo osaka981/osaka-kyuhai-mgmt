@@ -1809,10 +1809,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="xs" style="line-height:1.7;">
           <strong style="color:#7a5a00;">📋 雛形の設置について</strong><br>
           Google Drive の <strong>契約書雛形</strong> フォルダに以下4ファイルを配置してください:<br>
-          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">業務委託契約書.docx</code> (16ページ統合版、差し込みあり)<br>
-          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">念書.docx</code>(差し込みあり)<br>
-          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">契約内容確認書.docx</code>(差し込みあり)<br>
-          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">従業員台帳.docx</code>(差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">業務委託契約書_マスタ.docx</code> (16ページ統合版、差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">念書_マスタ.docx</code>(差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">契約内容確認書_マスタ.docx</code>(差し込みあり)<br>
+          ・ <code style="background:#fff;padding:1px 4px;border-radius:3px;">従業員台帳_マスタ.docx</code>(差し込みあり)<br>
           差し込み項目(乙情報・単価のみ): <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{乙_氏名}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{乙_住所}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{配達完了単価}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{集荷単価}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{大型加算額}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{夜間加算額}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{契約開始日}}</code> <code style="background:#fff;padding:1px 4px;border-radius:3px;">{{契約終了日}}</code> など<br>
           <span style="color:var(--txt2);font-size:10px;">※甲(大阪急配・代表取締役・印影)はマスタdocxにハードコード済みのため差し込み不要</span>
         </div>
@@ -4338,6 +4338,7 @@ const _TOP_TABS = {
     { s:'company',     label:'委託会社管理' },
     { s:'salary',      label:'給与計算' },
     { s:'pay-history', label:'給与履歴' },
+    { s:'contract',    label:'契約書' },
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
@@ -4439,6 +4440,7 @@ function navByS(s) {
   if (s==='cost-analysis')   _call('renderCostAnalysis');
   if (s==='offices')     _call('renderOffCards');
   if (s==='archive')     _call('renderArchive');
+  if (s==='contract')    { if(typeof initContractSection==='function') setTimeout(initContractSection, 50); }
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
