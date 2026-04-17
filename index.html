@@ -1858,6 +1858,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-grn btn-sm mt12" onclick="saveSystemInfo()">保存</button>
       </div>
 
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>給与・社保設定</div>
+        <div class="xs muted mb8">給与明細の自動計算に使用される料率を設定します。</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+          <div class="fg"><label>雇用保険料率（労働者負担 %）</label><input type="number" id="sys-emp-ins-rate" class="fi" step="0.01" placeholder="0.6" oninput="previewEmpInsRate()"></div>
+          <div class="fg"><label>雇用保険料率（事業主負担 %）</label><input type="number" id="sys-emp-ins-rate-biz" class="fi" step="0.01" placeholder="0.95"></div>
+          <div class="fg"><label>計算プレビュー</label><div class="xs mono" id="sys-emp-ins-preview" style="padding:6px 0;color:var(--blu2);">−</div></div>
+        </div>
+        <button class="btn b-grn btn-sm mt12" onclick="saveEmpInsSettings()">保存</button>
+      </div>
+
       <div class="card mb12" style="max-width:700px;">
         <div class="ct mb12"><div class="cbar"></div>自社電子印（フリート管理から自動同期）</div>
         <div class="xs muted mb12">フリート管理アプリで設定された会社印・代表印が自動的に表示されます。変更はフリート管理から行ってください。</div>
@@ -2212,10 +2223,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <div id="dd-penalty-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
 
-  <!-- ガソリン代 -->
+  <!-- 燃料費 -->
   <div class="sep mt8"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ ガソリン代</div>
+    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ 燃料費</div>
     <button type="button" class="btn b-gh btn-sm" onclick="addDelGasRow()">＋ 追加</button>
   </div>
   <div id="dd-gas-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
@@ -2315,10 +2326,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <div id="pu-penalty-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
 
-  <!-- ガソリン代 -->
+  <!-- 燃料費 -->
   <div class="sep mt8"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ ガソリン代</div>
+    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ 燃料費</div>
     <button type="button" class="btn b-gh btn-sm" onclick="addPUGasRow()">＋ 追加</button>
   </div>
   <div id="pu-gas-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
@@ -2527,9 +2538,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fg"><label style="font-size:9px;">その他手当（円/月）</label><input type="number" id="cu-teate-other" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
       </div>
     </div>
-    <!-- ⛽ ガソリン代 -->
+    <!-- ⛽ 燃料費 -->
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ ガソリン代</div>
+      <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ 燃料費</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">支給形態</label>
           <select id="cu-gas-type" class="fi" style="font-size:11px;padding:4px 6px;">
@@ -2540,9 +2551,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fg"><label style="font-size:9px;">月額上限/固定額（円）</label><input type="number" id="cu-gas-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
       </div>
     </div>
-    <!-- 🚐 庸車代 -->
+    <!-- 🚐 庸車両 -->
     <div style="border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車代</div>
+      <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車両</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">算定方式</label>
           <select id="cu-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;">
@@ -3118,9 +3129,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 相殺・手当 -->
   <div id="ptab-content-offset" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
-    <!-- ガソリン代 -->
+    <!-- 燃料費 -->
     <div style="margin-bottom:10px;">
-      <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ ガソリン代</div>
+      <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ 燃料費</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">支給形態</label>
           <select id="st-gas-type" class="fi" style="font-size:11px;padding:4px 6px;">
@@ -3131,9 +3142,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fg"><label style="font-size:9px;">月額上限/固定額（円）</label><input type="number" id="st-gas-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
       </div>
     </div>
-    <!-- 庸車代 -->
+    <!-- 庸車両 -->
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車代</div>
+      <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車両</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">算定方式</label>
           <select id="st-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onYoshaChange()">
@@ -3148,9 +3159,45 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
       <div class="xs fw7 mb6" style="color:var(--grn2);">💰 手当</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+        <div class="fg"><label style="font-size:9px;">通勤手当（円/月）</label><input type="number" id="st-commute" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">経歴手当（円/月）</label><input type="number" id="st-career" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">役職手当（円/月）</label><input type="number" id="st-position" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         <div class="fg"><label style="font-size:9px;">横乗手当（円/回）</label><input type="number" id="st-yokonori-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         <div class="fg"><label style="font-size:9px;">特別手当（円/回）</label><input type="number" id="st-tokubetsu-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         <div class="fg"><label style="font-size:9px;">その他手当（円/月）</label><input type="number" id="st-teate-other" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+      </div>
+    </div>
+    <!-- 社保・税（社員・パートのみ） -->
+    <div id="st-social-ins-section" style="margin-bottom:10px;border-top:2px solid var(--blu2);padding-top:10px;display:none;">
+      <div class="xs fw7 mb6" style="color:var(--blu2);">🏛 社保・税（社員・パートのみ）</div>
+      <div class="xs muted mb8">月額を入力してください。等級変更時（年1〜2回）に更新します。</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
+        <div class="fg"><label style="font-size:9px;">健康保険（円/月）</label><input type="number" id="st-si-health" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">介護保険（円/月）</label><input type="number" id="st-si-care" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">厚生年金（円/月）</label><input type="number" id="st-si-pension" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">年金基金（円/月）</label><input type="number" id="st-si-fund" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
+        <div class="fg">
+          <label style="font-size:9px;">雇用保険</label>
+          <select id="st-si-emp-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStEmpInsTypeChange()">
+            <option value="rate">料率自動</option><option value="fixed">月額入力</option>
+          </select>
+        </div>
+        <div class="fg" id="st-si-emp-fixed-wrap" style="display:none;"><label style="font-size:9px;">雇用保険（円/月）</label><input type="number" id="st-si-emp-fixed" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg" id="st-si-emp-rate-wrap"><label style="font-size:9px;">料率計算</label><div class="xs muted" id="st-si-emp-rate-label" style="padding:4px 0;">総支給額×料率</div></div>
+        <div class="fg"><label style="font-size:9px;">所得税（円/月）</label><input type="number" id="st-tax-income" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg">
+          <label style="font-size:9px;">住民税</label>
+          <select id="st-tax-res-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStResTaxTypeChange()">
+            <option value="yearly">年額→12分割</option><option value="monthly">月額入力</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div class="fg" id="st-tax-res-yearly-wrap"><label style="font-size:9px;">住民税（円/年）</label><input type="number" id="st-tax-res-yearly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" oninput="calcResidentTaxMonthly()"></div>
+        <div class="fg" id="st-tax-res-monthly-wrap" style="display:none;"><label style="font-size:9px;">住民税（円/月）</label><input type="number" id="st-tax-res-monthly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">月額（自動計算）</label><div class="xs mono fw7" id="st-tax-res-calc" style="padding:4px 0;color:var(--blu2);">−</div></div>
       </div>
     </div>
     <!-- 違約金 -->
@@ -3208,7 +3255,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="xs fw7" style="color:var(--amb2);">📅 給与条件の履歴（適用開始日順）</div>
       <button type="button" class="btn b-gh btn-sm" onclick="addPayHistoryRow()">＋ 条件追加</button>
     </div>
-    <div style="font-size:9px;color:var(--txt2);margin-bottom:8px;">給与計算は「表示月」に有効な最新条件を自動適用します。庸車代（日額）は宅配日報の稼働日数×日額で自動計算します。</div>
+    <div style="font-size:9px;color:var(--txt2);margin-bottom:8px;">給与計算は「表示月」に有効な最新条件を自動適用します。庸車両（日額）は宅配日報の稼働日数×日額で自動計算します。</div>
     <div id="st-pay-history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
   </div>
 
@@ -3874,6 +3921,52 @@ function onStKbnChange(){
   // 委託会社エリア
   const compArea=$('st-company-area');
   if(compArea) compArea.style.display=(kbn==='委託会社所属')?'block':'none';
+  // 社保・税エリア（社員・パートのみ表示）
+  const siArea=$('st-social-ins-section');
+  const showSI=(kbn==='社員・役員'||kbn==='パート（事務）');
+  if(siArea) siArea.style.display=showSI?'block':'none';
+}
+
+// ── 社保・税 ヘルパー ──
+function onStEmpInsTypeChange(){
+  const t=$('st-si-emp-type')?.value||'rate';
+  const fw=$('st-si-emp-fixed-wrap');
+  const rw=$('st-si-emp-rate-wrap');
+  if(fw) fw.style.display=t==='fixed'?'':'none';
+  if(rw) rw.style.display=t==='rate'?'':'none';
+}
+function onStResTaxTypeChange(){
+  const t=$('st-tax-res-type')?.value||'yearly';
+  const yw=$('st-tax-res-yearly-wrap');
+  const mw=$('st-tax-res-monthly-wrap');
+  if(yw) yw.style.display=t==='yearly'?'':'none';
+  if(mw) mw.style.display=t==='monthly'?'':'none';
+  calcResidentTaxMonthly();
+}
+function calcResidentTaxMonthly(){
+  const t=$('st-tax-res-type')?.value||'yearly';
+  const el=$('st-tax-res-calc');
+  if(!el) return;
+  if(t==='monthly'){
+    const m=parseInt($('st-tax-res-monthly')?.value)||0;
+    el.textContent='¥'+fmt(m)+'/月';
+  } else {
+    const y=parseInt($('st-tax-res-yearly')?.value)||0;
+    const m=y>0?Math.ceil(y/12):0;
+    el.textContent=y>0?'¥'+fmt(m)+'/月（年額¥'+fmt(y)+'÷12）':'−';
+  }
+}
+function getResidentTaxMonthly(st){
+  const si=st?.socialIns||{};
+  if(si.resTaxType==='monthly') return si.resTaxMonthly||0;
+  const y=si.resTaxYearly||0;
+  return y>0?Math.ceil(y/12):0;
+}
+function getEmploymentIns(st, totalPay){
+  const si=st?.socialIns||{};
+  if(si.empInsType==='fixed') return si.empInsFixed||0;
+  const rate=parseFloat(lsGet('sys_emp_ins_rate','0.006'))||0.006;
+  return Math.round(totalPay*rate);
 }
 
 // 役員報酬 PIN認証
@@ -3965,7 +4058,10 @@ function resetStaffModal(){
    'st-bank-name','st-bank-branch','st-bank-no','st-bank-holder',
    'st-company-name','st-company-tel','st-company-fax','st-company-email',
    'st-company-contact','st-company-addr',
-   'st-tk','st-empno-disp'
+   'st-tk','st-empno-disp',
+   'st-commute','st-career','st-position',
+   'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
+   'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   // チェックボックス
   ['st-empno-manual','st-hosho-b-on','st-hosho-c-on','st-doc-payslip','st-doc-invproxy','st-stamp-request'].forEach(id=>{
@@ -3983,6 +4079,9 @@ function resetStaffModal(){
   if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
   if($('st-ky'))$('st-ky').value='個数制（歩合）';
   if($('st-bank-type'))$('st-bank-type').value='普通';
+  if($('st-si-emp-type'))$('st-si-emp-type').value='rate';
+  if($('st-tax-res-type'))$('st-tax-res-type').value='yearly';
+  if($('st-tax-res-calc'))$('st-tax-res-calc').textContent='−';
   // エリア非表示
   if($('st-exec-pay-area'))$('st-exec-pay-area').style.display='none';
   if($('st-exec-pay-locked'))$('st-exec-pay-locked').style.display='flex';
@@ -7200,7 +7299,7 @@ function renderCharters(){
 
 
 
-// ── 日報内 ガソリン代行追加 ──
+// ── 日報内 燃料費行追加 ──
 function addDelGasRow(){
   const list=$('dd-gas-rows');if(!list)return;
   _addGasRow(list);
@@ -9647,7 +9746,7 @@ function payHistoryRowHtml(h){
         <span style="color:var(--tel2);">📦 集荷</span>
       </label>
       <span style="color:var(--brd2);margin:0 4px;">│</span>
-      <label style="font-size:9px;color:var(--txt2);font-weight:700;">🚐 庸車代：</label>
+      <label style="font-size:9px;color:var(--txt2);font-weight:700;">🚐 庸車両：</label>
       <select class="fi ph-yosha-type" style="font-size:10px;padding:2px 5px;width:70px;" onchange="onPhYoshaChange(this)">
         <option ${h.yoshaType==='なし'?'selected':''}>なし</option>
         <option ${h.yoshaType==='日額'||!h.yoshaType?'selected':''}>日額</option>
@@ -9747,7 +9846,7 @@ function onLicenseImg(input){
   reader.readAsDataURL(file);
 }
 
-// ── 庸車代算定方式変更 ──
+// ── 庸車両算定方式変更 ──
 function onYoshaChange(){
   const t=$('st-yosha-type')?.value;
   const lbl=$('st-yosha-label');
@@ -9987,6 +10086,21 @@ function saveStaff(continueAdd=false){
       yokonoriUnit:parseInt($('st-yokonori-unit')?.value)||0,
       tokubetsuUnit:parseInt($('st-tokubetsu-unit')?.value)||0,
       teateOther:parseInt($('st-teate-other')?.value)||0,
+      commute:parseInt($('st-commute')?.value)||0,
+      career:parseInt($('st-career')?.value)||0,
+      position:parseInt($('st-position')?.value)||0,
+    },
+    socialIns:{
+      health:parseInt($('st-si-health')?.value)||0,
+      care:parseInt($('st-si-care')?.value)||0,
+      pension:parseInt($('st-si-pension')?.value)||0,
+      fund:parseInt($('st-si-fund')?.value)||0,
+      empInsType:$('st-si-emp-type')?.value||'rate',
+      empInsFixed:parseInt($('st-si-emp-fixed')?.value)||0,
+      income:parseInt($('st-tax-income')?.value)||0,
+      resTaxType:$('st-tax-res-type')?.value||'yearly',
+      resTaxYearly:parseInt($('st-tax-res-yearly')?.value)||0,
+      resTaxMonthly:parseInt($('st-tax-res-monthly')?.value)||0,
     },
     penalties:penaltyRows,
     note:$('st-note')?.value||'',
@@ -10489,7 +10603,7 @@ function initCoAccordions(){
 
 function onCoYoshaChange(){}  // 旧シングル行方式は廃止
 
-// 庸車代行追加（ガソリンカードと同パターン）
+// 庸車両行追加（ガソリンカードと同パターン）
 function addCoYosha(d){
   d=d||{};
   const list=$('co-yosha-rows');if(!list)return;
@@ -10727,7 +10841,7 @@ function buildCoConfirm(){
   const kanryo=$('co-pkanryo')?.value||'0';
   // ガソリンカード
   const gasRows=document.querySelectorAll('#co-gas-cards > div').length;
-  // 庸車代
+  // 庸車両
   const yoshaRows=document.querySelectorAll('#co-yosha-rows > div').length;
   // 営業所
   const offices=[...document.querySelectorAll('.co-off-chk:checked')].map(el=>{
@@ -10760,7 +10874,7 @@ function buildCoConfirm(){
     section('💳 支払い・経費',
       row('銀行名', $('co-bank-name')?.value||'') +
       `<div class="reg-preview-row"><span class="reg-preview-label">ガソリンカード</span><span class="reg-preview-val">${gasRows>0?`<span class="reg-ok">✔ ${gasRows}枚`:'<span class="reg-empty">0枚</span>'}</span></div>` +
-      `<div class="reg-preview-row"><span class="reg-preview-label">庸車代</span><span class="reg-preview-val">${yoshaRows>0?`<span class="reg-ok">✔ ${yoshaRows}件`:'<span class="reg-empty">0件</span>'}</span></div>`
+      `<div class="reg-preview-row"><span class="reg-preview-label">庸車両</span><span class="reg-preview-val">${yoshaRows>0?`<span class="reg-ok">✔ ${yoshaRows}件`:'<span class="reg-empty">0件</span>'}</span></div>`
     ) +
     section('⚠️ 違約金・修理',
       `<div class="reg-preview-row"><span class="reg-preview-label">登録件数</span><span class="reg-preview-val">${charges>0?`<span class="reg-ok">✔ ${charges}件`:'<span class="reg-empty">0件</span>'}</span></div>`
@@ -10818,7 +10932,7 @@ function buildConfirmContent(key, el){
     html+=section('🏢 営業所', `<div class="reg-row"><span class="reg-lbl">担当営業所</span><span class="${offices.length?'reg-ok':'reg-empty'}">${offices.length?offices.join('・'):'未選択'}</span></div>`);
     html+=section('宅配単価', row('完了単価',kanryo?kanryo+'円':''));
     html+=section('📦 集荷顧客別', `<div class="reg-row"><span class="reg-lbl">登録顧客数</span><span class="${custN>0?'reg-ok':'reg-empty'}">${custN}社</span></div>`);
-    html+=section('💳 支払い経費', row('銀行名',$('co-bank-name')?.value)+`<div class="reg-row"><span class="reg-lbl">ガソリンカード</span><span class="${gasN>0?'reg-ok':'reg-empty'}">${gasN}枚</span></div>`+`<div class="reg-row"><span class="reg-lbl">庸車代</span><span class="${yoshaN>0?'reg-ok':'reg-empty'}">${yoshaN}件</span></div>`);
+    html+=section('💳 支払い経費', row('銀行名',$('co-bank-name')?.value)+`<div class="reg-row"><span class="reg-lbl">ガソリンカード</span><span class="${gasN>0?'reg-ok':'reg-empty'}">${gasN}枚</span></div>`+`<div class="reg-row"><span class="reg-lbl">庸車両</span><span class="${yoshaN>0?'reg-ok':'reg-empty'}">${yoshaN}件</span></div>`);
     html+=section('⚠️ 違約金修理', `<div class="reg-row"><span class="reg-lbl">登録件数</span><span class="${chargeN>0?'reg-ok':'reg-empty'}">${chargeN}件</span></div>`);
     html+=section('📋 その他立替', `<div class="reg-row"><span class="reg-lbl">登録件数</span><span class="${otherN>0?'reg-ok':'reg-empty'}">${otherN}件</span></div>`);
   } else if(key==='cu'){
@@ -11194,7 +11308,7 @@ function openCompanyModal(coId){
   if($('co-bank-holder'))$('co-bank-holder').value=co?.bankInfo?.holder||'';
   // ガソリンカード
   restoreCoGasCards(co?.gasCards||[]);
-  // 庸車代
+  // 庸車両
   restoreCoYoshaRows(Array.isArray(co?.yosha)?co.yosha:[]);
   // 違約金・修理代
   restoreCoCharges(co?.charges||[]);
@@ -11574,7 +11688,7 @@ function renderPhHistArea(){
           <div style="font-size:12px;font-weight:700;margin-top:2px;">${addStr}</div>
         </div>
         <div style="background:var(--bg3);border-radius:5px;padding:8px 12px;">
-          <div style="font-size:8.5px;color:var(--txt2);">庸車代</div>
+          <div style="font-size:8.5px;color:var(--txt2);">庸車両</div>
           <div style="font-size:12px;font-weight:700;margin-top:2px;">${yoshaStr}</div>
           ${h.yoshaType==='日額'?'<div style="font-size:9px;color:var(--txt2);">宅配日報の稼働日×自動計算</div>':''}
         </div>
@@ -11712,7 +11826,7 @@ function renderPayHistory(){
             <div style="font-size:11px;font-weight:700;">${addLabel||'なし'}</div>
           </div>
           <div style="background:var(--bg3);border-radius:5px;padding:6px 10px;">
-            <div style="font-size:8.5px;color:var(--txt2);">庸車代</div>
+            <div style="font-size:8.5px;color:var(--txt2);">庸車両</div>
             <div style="font-size:11px;font-weight:700;">${yoshaLabel||'なし'}</div>
             ${h.yoshaType==='日額'?'<div style="font-size:9px;color:var(--txt2);">×稼働日数で自動計算</div>':''}
           </div>
@@ -11790,7 +11904,7 @@ function openPayHistModal(sid, editFrom){
         </div>
       </div>
       <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:10px 12px;margin-bottom:10px;">
-        <div class="xs muted fw7 mb8">🚐 庸車代</div>
+        <div class="xs muted fw7 mb8">🚐 庸車両</div>
         <div class="f3">
           <div class="fg"><label style="font-size:9px;">算定方式</label>
             <select id="mph-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onMphYoshaChange()">
@@ -11944,7 +12058,7 @@ function renderSalary(){
     });
     if(areaAmt>0) colAmt+=areaAmt;
 
-    // ── 庸車代計算 ──
+    // ── 庸車両計算 ──
     const yt=cond.yoshaType||s.offset?.yoshaType||'なし';
     const ya=cond.yoshaAmt||s.offset?.yoshaAmt||0;
     if(yt==='日額'&&ya>0){
@@ -14283,6 +14397,27 @@ function saveSystemInfo(){
   showAlert({msg:'自社情報を保存しました'});
 }
 
+// 雇用保険料率 保存・読込・プレビュー
+function saveEmpInsSettings(){
+  const rate = parseFloat($('sys-emp-ins-rate')?.value)||0.6;
+  const rateBiz = parseFloat($('sys-emp-ins-rate-biz')?.value)||0.95;
+  localStorage.setItem('sys_emp_ins_rate', String(rate/100));
+  localStorage.setItem('sys_emp_ins_rate_biz', String(rateBiz/100));
+  showAlert({msg:`雇用保険料率を保存しました（労働者 ${rate}% / 事業主 ${rateBiz}%）`});
+}
+function loadEmpInsSettings(){
+  const r = parseFloat(localStorage.getItem('sys_emp_ins_rate')||'0.006');
+  const rb = parseFloat(localStorage.getItem('sys_emp_ins_rate_biz')||'0.0095');
+  if($('sys-emp-ins-rate'))$('sys-emp-ins-rate').value=(r*100).toFixed(2);
+  if($('sys-emp-ins-rate-biz'))$('sys-emp-ins-rate-biz').value=(rb*100).toFixed(2);
+  previewEmpInsRate();
+}
+function previewEmpInsRate(){
+  const rate = parseFloat($('sys-emp-ins-rate')?.value)||0.6;
+  const el=$('sys-emp-ins-preview');
+  if(el) el.textContent=`月給30万の場合: ¥${Math.round(300000*rate/100).toLocaleString()}/月`;
+}
+
 function saveStampFee(){
   const info=_getSystemInfo();
   info.stampFee=parseInt($('sys-stamp-fee')?.value)||0;
@@ -14507,6 +14642,8 @@ function loadSystemInfoToForm(){
   }
   // フリートから印鑑設定を自動読込
   if(typeof loadFleetStampSettings==='function') loadFleetStampSettings();
+  // 雇用保険料率を読込
+  if(typeof loadEmpInsSettings==='function') loadEmpInsSettings();
 }
 
 // onStampFileSelected の system ハンドラー完了後に呼ぶラッパー（自社代表印の場合はsystemInfoにも保存）
@@ -16640,6 +16777,35 @@ function editStaff(id){
   if($('st-stamp-request'))$('st-stamp-request').checked=!!docs.stampRequest;
   updateStampSamplePreview('staff');
   onKyuChange();
+  // 控除・手当 復元
+  const off=s.offset||{};
+  if($('st-gas-type'))$('st-gas-type').value=off.gasType||'カード貸出';
+  if($('st-gas-card'))$('st-gas-card').value=off.gasCard||'';
+  if($('st-gas-amt'))$('st-gas-amt').value=off.gasAmt||'';
+  if($('st-yosha-type'))$('st-yosha-type').value=off.yoshaType||'日額';
+  if($('st-yosha-amt'))$('st-yosha-amt').value=off.yoshaAmt||'';
+  if($('st-yosha-note'))$('st-yosha-note').value=off.yoshaNote||'';
+  if($('st-yokonori-unit'))$('st-yokonori-unit').value=off.yokonoriUnit||'';
+  if($('st-tokubetsu-unit'))$('st-tokubetsu-unit').value=off.tokubetsuUnit||'';
+  if($('st-teate-other'))$('st-teate-other').value=off.teateOther||'';
+  if($('st-commute'))$('st-commute').value=off.commute||'';
+  if($('st-career'))$('st-career').value=off.career||'';
+  if($('st-position'))$('st-position').value=off.position||'';
+  // 社保・税 復元
+  const si=s.socialIns||{};
+  if($('st-si-health'))$('st-si-health').value=si.health||'';
+  if($('st-si-care'))$('st-si-care').value=si.care||'';
+  if($('st-si-pension'))$('st-si-pension').value=si.pension||'';
+  if($('st-si-fund'))$('st-si-fund').value=si.fund||'';
+  if($('st-si-emp-type'))$('st-si-emp-type').value=si.empInsType||'rate';
+  if($('st-si-emp-fixed'))$('st-si-emp-fixed').value=si.empInsFixed||'';
+  if($('st-tax-income'))$('st-tax-income').value=si.income||'';
+  if($('st-tax-res-type'))$('st-tax-res-type').value=si.resTaxType||'yearly';
+  if($('st-tax-res-yearly'))$('st-tax-res-yearly').value=si.resTaxYearly||'';
+  if($('st-tax-res-monthly'))$('st-tax-res-monthly').value=si.resTaxMonthly||'';
+  onStEmpInsTypeChange();
+  onStResTaxTypeChange();
+  calcResidentTaxMonthly();
   // 取引状態復元
   if($('st-status'))$('st-status').value=s.status||'在籍';
   if($('st-status-reason'))$('st-status-reason').value=s.statusReason||'';
@@ -17069,10 +17235,10 @@ document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if
       </div>
       <div id="co-gas-cards" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
-    <!-- 庸車代 -->
+    <!-- 庸車両 -->
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:700;color:var(--blu2);">🚐 庸車代</div>
+        <div style="font-size:12px;font-weight:700;color:var(--blu2);">🚐 庸車両</div>
         <button type="button" class="btn b-gh btn-sm" onclick="addCoYosha()">＋ 庸車追加</button>
       </div>
       <div id="co-yosha-rows" style="display:flex;flex-direction:column;gap:6px;"></div>
