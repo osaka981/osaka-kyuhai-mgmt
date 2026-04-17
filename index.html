@@ -13182,40 +13182,42 @@ function _saveIssuedDoc(rec){
 }
 
 function _calcStaffPayment(name, monStr){
-  // 宅配：完了数×単価＋夜間＋転送手当
   const st=(D.staff||[]).find(s=>s.name===name);
   if(!st) return {total:0,breakdown:[]};
   const del=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
   const pu=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
   const breakdown=[];
   let total=0;
+  const off=st.offset||{};
+  const workDays=new Set(del.map(r=>r.date)).size;
 
+  // ── 基本給・委託料 ──
   if(st.kyuyo==='月給'){
     total=st.tanka||0;
-    breakdown.push({label:'月給', amount:total});
+    breakdown.push({label:'基本給（月給）', amount:total});
   } else if(st.kyuyo==='個数制（歩合）'){
     const dp=st.fixedPrices?.del||{};
-    const delSum={kanryo:0,tenso:0,yakan:0};
+    const delSum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
     del.forEach(r=>{
-      delSum.kanryo+=r.kanryo||0;
-      delSum.tenso+=r.tenso||0;
-      delSum.yakan+=r.yakan||0;
+      delSum.kanryo+=r.kanryo||0; delSum.tenso+=r.tenso||0;
+      delSum.yakan+=r.yakan||0; delSum.ogata+=r.ogata||0;
+      delSum.shukka+=r.shukka||0;
+      delSum.s1+=r.s1||0; delSum.s2+=r.s2||0; delSum.s3+=r.s3||0; delSum.s4+=r.s4||0;
     });
-    if(delSum.kanryo>0&&dp.kanryo){
-      const amt=delSum.kanryo*dp.kanryo;
-      breakdown.push({label:`完了 ${delSum.kanryo}件×¥${dp.kanryo}`, amount:amt});
-      total+=amt;
-    }
-    if(delSum.tenso>0&&dp.tenso){
-      const amt=delSum.tenso*dp.tenso;
-      breakdown.push({label:`転送 ${delSum.tenso}件×¥${dp.tenso}`, amount:amt});
-      total+=amt;
-    }
-    if(delSum.yakan>0&&dp.night){
-      const amt=delSum.yakan*dp.night;
-      breakdown.push({label:`夜間 ${delSum.yakan}件×¥${dp.night}`, amount:amt});
-      total+=amt;
-    }
+    const delItems=[
+      {key:'kanryo',label:'完了',price:dp.kanryo},{key:'tenso',label:'転送',price:dp.tenso},
+      {key:'yakan',label:'夜間',price:dp.night},{key:'ogata',label:'大型',price:dp.ogata},
+      {key:'shukka',label:'集荷',price:dp.shukka},
+      {key:'s1',label:'その他1',price:dp.s1},{key:'s2',label:'その他2',price:dp.s2},
+      {key:'s3',label:'その他3',price:dp.s3},{key:'s4',label:'その他4',price:dp.s4},
+    ];
+    delItems.forEach(({key,label,price})=>{
+      if(delSum[key]>0&&price){
+        const amt=delSum[key]*price;
+        breakdown.push({label:`${label} ${delSum[key]}件×¥${price}`, amount:amt});
+        total+=amt;
+      }
+    });
     // 集荷：品目別
     const cp=st.fixedPrices?.col||{};
     const puSum={};
@@ -13227,11 +13229,60 @@ function _calcStaffPayment(name, monStr){
         total+=amt;
       }
     });
+    // 日額保証チェック
+    if(st.hoshoB?.on&&st.hoshoB.amt&&workDays>=st.hoshoB.days){
+      const hoshoTotal=st.hoshoB.amt*workDays;
+      if(hoshoTotal>total){
+        breakdown.length=0;
+        breakdown.push({label:`日額保証 ${workDays}日×¥${st.hoshoB.amt}`, amount:hoshoTotal});
+        total=hoshoTotal;
+      }
+    }
+    // 日額手当
+    if(st.hoshoC?.on&&st.hoshoC.amt&&workDays>=st.hoshoC.days){
+      const cAmt=st.hoshoC.amt*workDays;
+      breakdown.push({label:`日額手当 ${workDays}日×¥${st.hoshoC.amt}`, amount:cAmt});
+      total+=cAmt;
+    }
+  } else if(st.kyuyo==='時間給'){
+    total=st.tanka||0;
+    breakdown.push({label:'時間給', amount:total});
   } else {
     total=st.tanka||0;
     breakdown.push({label:st.kyuyo||'基本給', amount:total});
   }
-  return {total, breakdown, staff:st};
+
+  // ── 手当（加算） ──
+  const yokonoriCnt=del.reduce((a,r)=>a+(r.yokonori||0),0);
+  const tokubetsuCnt=del.reduce((a,r)=>a+(r.tokubetsu||0),0);
+  if(off.commute>0){breakdown.push({label:'通勤手当', amount:off.commute}); total+=off.commute;}
+  if(off.career>0){breakdown.push({label:'経歴手当', amount:off.career}); total+=off.career;}
+  if(off.position>0){breakdown.push({label:'役職手当', amount:off.position}); total+=off.position;}
+  if(yokonoriCnt>0&&off.yokonoriUnit){
+    const amt=yokonoriCnt*off.yokonoriUnit;
+    breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${off.yokonoriUnit}`, amount:amt}); total+=amt;
+  }
+  if(tokubetsuCnt>0&&off.tokubetsuUnit){
+    const amt=tokubetsuCnt*off.tokubetsuUnit;
+    breakdown.push({label:`特別手当 ${tokubetsuCnt}回×¥${off.tokubetsuUnit}`, amount:amt}); total+=amt;
+  }
+  if(off.teateOther>0){breakdown.push({label:'その他手当', amount:off.teateOther}); total+=off.teateOther;}
+
+  // ── 控除（減算） ──
+  if(off.gasAmt>0){breakdown.push({label:'燃料費', amount:-off.gasAmt}); total-=off.gasAmt;}
+  if(off.yoshaAmt>0){
+    const yoshaTotal=off.yoshaType==='月額'?off.yoshaAmt:off.yoshaAmt*workDays;
+    const yoshaLabel=off.yoshaType==='月額'?'庸車両（月額）':`庸車両 ${workDays}日×¥${off.yoshaAmt}`;
+    breakdown.push({label:yoshaLabel, amount:-yoshaTotal}); total-=yoshaTotal;
+  }
+  // 前払い相殺
+  const unsettled=(st.advances||[]).filter(a=>!a.settled);
+  if(unsettled.length>0){
+    const advTotal=unsettled.reduce((a,v)=>a+v.amount,0);
+    breakdown.push({label:`前払い相殺（${unsettled.length}件）`, amount:-advTotal}); total-=advTotal;
+  }
+
+  return {total:Math.max(total,0), breakdown, staff:st};
 }
 
 function _calcCustBilling(custName, monStr){
