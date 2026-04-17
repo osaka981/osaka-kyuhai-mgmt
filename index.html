@@ -12973,7 +12973,201 @@ function renderStaffDocs(el, name){
     html+=`</tbody></table></div>`;
   } else html+=`<div class="xs muted">発行履歴はありません</div>`;
   html+=`</div>`;
+
+  // ── フリート連動書類（2カラム） ──
+  html+=`<div class="fs-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <div class="ct"><div class="cbar"></div>フリート連動書類</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn b-gh btn-sm" onclick="renderFSFleetDocs('${esc(name)}')">再読込</button>
+        <a href="https://osaka981.github.io/fleet-mgmt/" target="_blank" class="btn b-gh btn-sm" style="text-decoration:none;">フリートを開く →</a>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:12px;min-height:300px;">
+      <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;overflow-y:auto;max-height:450px;">
+        <div id="fs-fleet-docs-list" style="display:flex;flex-direction:column;gap:4px;">読込中...</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--brd);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
+        <div id="fs-fleet-docs-preview" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:300px;">
+          <div style="text-align:center;color:var(--txt3);">
+            <div style="font-size:40px;margin-bottom:8px;">📄</div>
+            <div style="font-size:12px;">左の書類をクリックしてプレビュー</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── 台帳情報（インライン編集） ──
+  html+=`<div class="fs-card">
+    <div class="ct mb12"><div class="cbar"></div>台帳情報（インライン編集）</div>
+    <div id="fs-ledger-edit" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="fg"><label>区分</label><select id="fsl-kubun" class="fi">
+        <option value="社員"${st?.kubun==='社員'?' selected':''}>社員</option>
+        <option value="個人事業主"${st?.kubun==='個人事業主'?' selected':''}>個人事業主</option>
+        <option value="会社委託"${st?.kubun==='会社委託'?' selected':''}>会社委託</option>
+        <option value="パート"${st?.kubun==='パート'?' selected':''}>パート</option>
+      </select></div>
+      <div class="fg"><label>連絡先</label><input type="tel" id="fsl-tel" class="fi" value="${esc(st?.tel||'')}" placeholder="090-XXXX-XXXX"></div>
+      <div class="fg"><label>メール</label><input type="email" id="fsl-email" class="fi" value="${esc(st?.email||'')}" placeholder="xxx@example.com"></div>
+      <div class="fg"><label>生年月日</label><input type="date" id="fsl-birth" class="fi" value="${esc(st?.birth||'')}"></div>
+      <div class="fg" style="grid-column:1/-1;"><label>住所</label><input type="text" id="fsl-addr" class="fi" value="${esc(st?.addr||'')}" placeholder="大阪府○○市..."></div>
+      <div class="fg" style="grid-column:1/-1;"><label>備考</label><input type="text" id="fsl-note" class="fi" value="${esc(st?.note||'')}" placeholder="特記事項"></div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+      <button class="btn b-grn btn-sm" onclick="saveFSLedgerEdit('${esc(name)}')">台帳を保存</button>
+      <button class="btn b-gh btn-sm" onclick="openEditStaffModal('${esc(name)}')">詳細な台帳編集（モーダル）</button>
+      <span id="fsl-save-status" class="xs muted"></span>
+    </div>
+  </div>`;
+
   el.innerHTML=html;
+  setTimeout(()=>renderFSFleetDocs(name), 100);
+}
+
+// ── フルスクリーン：フリート書類読込＆プレビュー ──
+function _findFleetDriverByName(staffName){
+  const normalized = (staffName||'').replace(/\s+/g,'');
+  try{
+    const fleetDrivers = JSON.parse(localStorage.getItem('fleet_drivers')||'[]');
+    let md = fleetDrivers.find(d => (d.name||'').replace(/\s+/g,'') === normalized);
+    if(md) return md;
+    // 委託会社ドライバーも検索
+    const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
+    for(const c of fleetCompanies){
+      for(const d of (c.drivers||[])){
+        if((d.name||'').replace(/\s+/g,'')===normalized){
+          d._companyName = c.name;
+          return d;
+        }
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+function renderFSFleetDocs(staffName){
+  const listEl=$('fs-fleet-docs-list');
+  if(!listEl) return;
+
+  const matchedDriver = _findFleetDriverByName(staffName);
+  if(!matchedDriver){
+    listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">
+      <div style="font-size:24px;margin-bottom:8px;">🔍</div>
+      <div>フリート管理に「${esc(staffName)}」が見つかりませんでした</div>
+      <div style="margin-top:6px;font-size:10px;">フリート管理で同名のドライバーを登録してください</div>
+    </div>`;
+    return;
+  }
+
+  const fleetFiles = matchedDriver.attachedFiles || [];
+  if(!fleetFiles.length){
+    listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">
+      <div style="font-size:24px;margin-bottom:8px;">📂</div>
+      <div>書類未登録</div>
+      ${matchedDriver._companyName?'<div style="font-size:10px;margin-top:4px;">(委託: '+esc(matchedDriver._companyName)+')</div>':''}
+    </div>`;
+    return;
+  }
+
+  const categoryIcons={'免許':'🪪','車検':'🚗','自賠':'🛡','任意':'📋','健診':'🏥','契約':'📝','念書':'📝','誓約':'📝','履歴':'📄','default':'📄'};
+  function getIcon(name,cat){
+    for(const [k,v] of Object.entries(categoryIcons)) if(k!=='default'&&((cat||'').includes(k)||(name||'').includes(k))) return v;
+    return categoryIcons.default;
+  }
+
+  let html='';
+  if(matchedDriver._companyName) html+=`<div style="font-size:10px;color:var(--blu2);margin-bottom:6px;padding:4px 8px;background:rgba(66,133,244,.1);border-radius:4px;">委託: ${esc(matchedDriver._companyName)}</div>`;
+  html+=`<div style="font-size:10px;color:var(--txt3);margin-bottom:6px;">${fleetFiles.length}件の書類</div>`;
+
+  fleetFiles.forEach((f,i)=>{
+    const icon=getIcon(f.name,f.category);
+    const dateStr=f.uploadedAt?new Date(f.uploadedAt).toLocaleDateString('ja-JP'):'';
+    html+=`<div class="fs-doc-item" data-idx="${i}" onclick="previewFSFleetDoc(${i},'${esc(staffName)}')"
+      style="padding:8px 10px;border:1px solid var(--brd);border-radius:5px;cursor:pointer;transition:background .15s;display:flex;gap:8px;align-items:flex-start;"
+      onmouseover="this.style.background='rgba(92,107,192,.08)'" onmouseout="if(!this.classList.contains('active'))this.style.background=''">
+      <div style="font-size:18px;flex-shrink:0;line-height:1;">${icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'未名')}</div>
+        <div style="font-size:10px;color:var(--txt3);margin-top:2px;">
+          ${f.category?'<span style="background:var(--bg3);padding:1px 5px;border-radius:3px;margin-right:4px;">'+esc(f.category)+'</span>':''}
+          ${dateStr}
+        </div>
+      </div>
+    </div>`;
+  });
+
+  listEl.innerHTML=html;
+  if(fleetFiles.length>0) previewFSFleetDoc(0, staffName);
+}
+
+function previewFSFleetDoc(idx, staffName){
+  const previewEl=$('fs-fleet-docs-preview');
+  if(!previewEl) return;
+
+  const md=_findFleetDriverByName(staffName);
+  if(!md) return;
+  const fleetFiles=md.attachedFiles||[];
+  const f=fleetFiles[idx];
+  if(!f) return;
+
+  // ハイライト
+  document.querySelectorAll('.fs-doc-item').forEach((el,i)=>{
+    if(parseInt(el.dataset.idx)===idx){
+      el.style.background='rgba(92,107,192,.12)';
+      el.style.borderColor='#5c6bc0';
+      el.classList.add('active');
+    } else {
+      el.style.background='';
+      el.style.borderColor='';
+      el.classList.remove('active');
+    }
+  });
+
+  const fileId=f.fileId||'';
+  if(fileId){
+    const previewUrl=`https://drive.google.com/file/d/${fileId}/preview`;
+    previewEl.innerHTML=`
+      <div style="width:100%;height:100%;display:flex;flex-direction:column;">
+        <div style="padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'')}</span>
+          <div style="display:flex;gap:6px;">
+            <a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" class="btn b-gh btn-sm" style="font-size:10px;text-decoration:none;">Driveで開く</a>
+            <a href="https://drive.google.com/uc?export=download&id=${fileId}" class="btn b-blu btn-sm" style="font-size:10px;text-decoration:none;">DL</a>
+          </div>
+        </div>
+        <iframe src="${previewUrl}" style="flex:1;border:none;min-height:300px;" allow="autoplay"></iframe>
+      </div>`;
+  } else {
+    previewEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);"><div style="font-size:24px;margin-bottom:8px;">⚠</div><div style="font-size:12px;">プレビュー不可（fileId無し）</div></div>`;
+  }
+}
+
+// ── フルスクリーン：台帳インライン保存 ──
+function saveFSLedgerEdit(name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st) return;
+  st.kubun=$('fsl-kubun')?.value||st.kubun;
+  st.tel=$('fsl-tel')?.value||'';
+  st.email=$('fsl-email')?.value||'';
+  st.birth=$('fsl-birth')?.value||'';
+  st.addr=$('fsl-addr')?.value||'';
+  st.note=$('fsl-note')?.value||'';
+  lsSet(LS_KEYS.DRIVERS, D.staff);
+  const s=$('fsl-save-status');
+  if(s){s.textContent='保存しました ('+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})+')'; s.style.color='var(--grn2)';}
+}
+
+// ── フルスクリーン：詳細台帳モーダルを開く ──
+function openEditStaffModal(name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st) return;
+  // フルスクリーンを閉じてからモーダルを開く
+  closeFS();
+  setTimeout(()=>{
+    const editFn = typeof editStaff === 'function' ? editStaff : null;
+    if(editFn) editFn(st.id);
+  }, 200);
 }
 
 // ── 従事員 メールタブ ──
