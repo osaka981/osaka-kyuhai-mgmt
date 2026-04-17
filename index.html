@@ -1589,6 +1589,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
       </div>
+      <!-- フリート未登録ドライバー通知カード -->
+      <div id="unregistered-fleet-card" class="card mb12" style="display:none;background:#fffbf0;border:1px solid rgba(230,126,34,.3);"></div>
       <div class="card">
         <div class="tw"><table>
           <thead><tr><th>社員番号</th><th>氏名</th><th>区分</th><th>委託会社</th><th>営業所</th><th>連絡先</th><th>給与形態</th><th class="tr">単価/基本給</th><th class="tr">今月完了</th><th class="tr">今月給与(概算)</th><th></th></tr></thead>
@@ -2561,7 +2563,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 従業員台帳登録モーダル -->
 <div id="m-staff" class="mbg">
-<div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
+<div class="modal" id="m-staff-modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:row;position:relative;transition:max-width .3s;">
+  <div id="m-staff-main" style="flex:1;min-width:0;display:flex;flex-direction:column;">
   <div class="mhd" style="padding-bottom:0;">
     <div class="mtt">従業員台帳</div>
     <div style="display:flex;align-items:center;gap:4px;">
@@ -2994,23 +2997,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <!-- 書類PDFプレビュー（2カラム・モーダル内オーバーレイ） -->
-  <div id="st-doc-overlay" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:100;padding:10px;">
-    <div style="height:100%;display:grid;grid-template-columns:220px 1fr;gap:10px;background:var(--sur);border-radius:8px;overflow:hidden;border:1px solid var(--brd);">
-      <!-- 左カラム：書類リスト -->
-      <div style="background:var(--bg3);padding:10px;overflow-y:auto;display:flex;flex-direction:column;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <span class="xs fw7" style="color:var(--amb2);">書類一覧</span>
-          <button type="button" class="btn b-gh btn-sm" onclick="$('st-doc-overlay').style.display='none'" style="font-size:10px;padding:3px 8px;">✕ 閉じる</button>
-        </div>
-        <div id="st-doc-overlay-list" style="flex:1;display:flex;flex-direction:column;gap:4px;"></div>
-      </div>
-      <!-- 右カラム：PDFプレビュー -->
-      <div id="st-doc-overlay-preview" style="display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">
-        <div style="text-align:center;color:var(--txt3);font-size:12px;">左の書類を選択してください</div>
-      </div>
-    </div>
-  </div>
 
 
   <!-- 宅配単価 -->
@@ -3220,6 +3206,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button class="btn b-blu" onclick="saveStaff(true)">💾 保存して続けて登録</button>
     <button class="btn b-grn" onclick="saveStaff(false)">💾 保存して閉じる</button>
   </div>
+  </div><!-- end m-staff-main -->
+
+  <!-- 書類PDFプレビュー（モーダル横並びパネル） -->
+  <div id="st-doc-side-panel" style="display:none;width:50%;border-left:2px solid #5c6bc0;flex-shrink:0;overflow:hidden;flex-direction:column;">
+    <div style="padding:6px 10px;background:#5c6bc0;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+      <span style="font-size:12px;font-weight:700;">書類プレビュー</span>
+      <button type="button" onclick="closeStDocSidePanel()" style="background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 4px;">✕</button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;">
+      <div style="width:180px;background:var(--bg3);padding:8px;overflow-y:auto;flex-shrink:0;border-right:1px solid var(--brd);">
+        <div id="st-doc-side-list" style="display:flex;flex-direction:column;gap:3px;"></div>
+      </div>
+      <div id="st-doc-side-preview" style="flex:1;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden;">
+        <div style="text-align:center;color:var(--txt3);font-size:12px;">書類を選択してください</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 </div>
 
@@ -4906,6 +4910,9 @@ function renderDash() {
   const als=[];
   if(diffCnt)als.push(`<div class="al al-w"><span>⚠️</span><span>郵便局データとの<strong>差異が${diffCnt}件</strong>あります</span></div>`);
   if(unCnt)als.push(`<div class="al al-i"><span>ℹ️</span><span>未照合の日報が<strong>${unCnt}件</strong>あります</span></div>`);
+  // フリート未登録ドライバー通知
+  const unregFleet = getUnregisteredFleetDrivers();
+  if(unregFleet.length) als.push(`<div class="al al-w" style="cursor:pointer" onclick="navByS('staff');renderSubNav('hr','staff');setTimeout(()=>{const el=$('unregistered-fleet-card');if(el)el.scrollIntoView({behavior:'smooth'});},300);"><span>🔗</span><span>フリートに<strong>未登録ドライバーが${unregFleet.length}名</strong>います → クリックして確認</span></div>`);
   const alHtml=als.join('')||'<div class="al al-ok"><span>✅</span><span>アラートなし</span></div>';
   $('d-alerts').innerHTML=als.length?als.join(''):'';
   $('d-alert').innerHTML=alHtml;
@@ -6540,6 +6547,139 @@ function previewFleetDoc(idx){
 
 
 // ═══════════════════════════════════════════════
+// ─── フリート未登録ドライバー検出・登録 ───
+// ═══════════════════════════════════════════════
+const _FLEET_IGNORE_KEY = 'mgmt_fleet_ignore_list';
+
+function getUnregisteredFleetDrivers(){
+  try{
+    const fleetDrivers = JSON.parse(localStorage.getItem('fleet_drivers')||'[]');
+    const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
+    const ignoreList = JSON.parse(localStorage.getItem(_FLEET_IGNORE_KEY)||'[]');
+    const mgmtNames = new Set((D.staff||[]).map(s=>(s.name||'').replace(/\s+/g,'')));
+    const ignoreSet = new Set(ignoreList.map(n=>n.replace(/\s+/g,'')));
+
+    const unregistered = [];
+    // 自社ドライバー
+    fleetDrivers.filter(d=>!d.status||d.status==='在籍').forEach(d=>{
+      const norm = (d.name||'').replace(/\s+/g,'');
+      if(norm && !mgmtNames.has(norm) && !ignoreSet.has(norm)){
+        unregistered.push({...d, _source:'自社'});
+      }
+    });
+    // 委託会社ドライバー
+    fleetCompanies.forEach(c=>{
+      (c.drivers||[]).forEach(d=>{
+        if(d.status && d.status!=='在籍') return;
+        const norm = (d.name||'').replace(/\s+/g,'');
+        if(norm && !mgmtNames.has(norm) && !ignoreSet.has(norm)){
+          unregistered.push({...d, _source:'委託', _companyName:c.name});
+        }
+      });
+    });
+    return unregistered;
+  }catch(e){ return []; }
+}
+
+function renderUnregisteredFleetCard(){
+  const container = $('unregistered-fleet-card');
+  if(!container) return;
+  const list = getUnregisteredFleetDrivers();
+  if(!list.length){
+    container.style.display='none';
+    return;
+  }
+  container.style.display='block';
+  let html=`<div class="ch"><div class="ct"><div class="cbar" style="background:var(--amb2)"></div>フリート未登録ドライバー（${list.length}名）</div></div>
+    <div class="xs muted mb8">フリート管理に登録済みだが経営管理に未登録のドライバーです。「登録」で台帳に追加できます。</div>`;
+
+  list.forEach(d=>{
+    const offices = (Array.isArray(d.offices)?d.offices:[d.office||'']).filter(Boolean).join('・')||'未設定';
+    const fileCount = (d.attachedFiles||[]).length;
+    html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;margin-bottom:4px;background:var(--sur);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;">${esc(d.name)}</div>
+        <div style="font-size:10px;color:var(--txt3);">
+          ${esc(d._source)}　${esc(offices)}
+          ${d._companyName?'　<span style="color:var(--blu2);">'+esc(d._companyName)+'</span>':''}
+          ${fileCount?'　📎'+fileCount+'件':''}
+        </div>
+      </div>
+      <button class="btn b-grn btn-sm" onclick="registerFromFleet('${esc(d.name)}')" style="font-weight:700;">登録</button>
+      <button class="btn b-gh btn-sm" onclick="ignoreFleetDriver('${esc(d.name)}')" style="font-size:10px;">無視</button>
+    </div>`;
+  });
+
+  container.innerHTML=html;
+}
+
+// フリートドライバーを台帳モーダルに自動入力して開く
+function registerFromFleet(fleetName){
+  const md = _findFleetDriverByName(fleetName);
+  if(!md){ showAlert({msg:'フリートデータが見つかりません'}); return; }
+
+  // モーダルを新規登録モードで開く
+  resetStaffModal();
+  openM('m-staff');
+
+  // フリートデータから自動入力
+  const nameParts = (md.name||'').split(/\s+/);
+  if($('st-sei'))$('st-sei').value=nameParts[0]||'';
+  if($('st-mei'))$('st-mei').value=nameParts.slice(1).join(' ')||'';
+  if($('st-name'))$('st-name').value=md.name||'';
+
+  const kanaParts = (md.kana||'').split(/\s+/);
+  if($('st-kana-sei'))$('st-kana-sei').value=kanaParts[0]||'';
+  if($('st-kana-mei'))$('st-kana-mei').value=kanaParts.slice(1).join(' ')||'';
+  if($('st-kana'))$('st-kana').value=md.kana||'';
+
+  if($('st-tel'))$('st-tel').value=md.tel||'';
+  if($('st-birth'))$('st-birth').value=md.birth||'';
+  if($('st-addr'))$('st-addr').value=md.addr||'';
+  if($('st-zip'))$('st-zip').value=md.zip||'';
+
+  // 営業所
+  const firstOffice = (Array.isArray(md.offices)?md.offices[0]:md.office)||'';
+  if(firstOffice && $('st-off')){
+    $('st-off').value=firstOffice;
+    // 社員番号を自動採番
+    const empNo = genEmpNo(firstOffice);
+    if($('st-empno-disp') && empNo) $('st-empno-disp').value=empNo;
+  }
+
+  // 区分を推定
+  if(md.type==='外注'||md.type==='外注（個人）'){
+    if($('st-kbn'))$('st-kbn').value='個人事業主';
+  } else if(md._companyName){
+    if($('st-kbn'))$('st-kbn').value='会社委託';
+  }
+  if(typeof onStKbnChange==='function') onStKbnChange();
+  if(typeof onKyuChange==='function') onKyuChange();
+
+  // 書類PDFリンクを表示（_editId未設定でも表示できるようフリート名を一時保存）
+  window._pendingFleetName = md.name;
+  setTimeout(()=>renderStDocLinks(), 200);
+}
+
+// 無視リストに追加
+function ignoreFleetDriver(name){
+  showDialog({
+    icon:'ℹ️', title:'無視リストに追加',
+    msg:`「${name}」を未登録通知から除外しますか？\n\nこのドライバーは経営管理に登録不要と判断されます。\n後から設定で解除できます。`,
+    okText:'無視する', cancelText:'キャンセル'
+  }).then(ok=>{
+    if(!ok) return;
+    try{
+      const list = JSON.parse(localStorage.getItem(_FLEET_IGNORE_KEY)||'[]');
+      if(!list.includes(name)) list.push(name);
+      localStorage.setItem(_FLEET_IGNORE_KEY, JSON.stringify(list));
+    }catch(e){}
+    renderUnregisteredFleetCard();
+    renderDash();
+  });
+}
+
+// ═══════════════════════════════════════════════
 // ─── アーカイブ管理 ───
 // ═══════════════════════════════════════════════
 let _arcTab = 'cust';
@@ -6868,6 +7008,8 @@ function renderStaff(flt){
     </tr>`;
   });
   $('tb-staff').innerHTML=h;
+  // フリート未登録ドライバー通知カード
+  if(typeof renderUnregisteredFleetCard==='function') renderUnregisteredFleetCard();
 }
 
 function prevEmpNo(){
@@ -13153,37 +13295,93 @@ function renderStaffDocs(el, name){
   } else html+=`<div class="xs muted">発行履歴はありません</div>`;
   html+=`</div>`;
 
-  // ── フリート連動書類（折りたたみ・デフォルト閉じ） ──
+  // ── フリート連動書類（折りたたみ・クリックで中央プレビュー） ──
   html+=`<div class="fs-card">
     <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;" onclick="toggleFSFleetDocs()">
       <div class="ct"><div class="cbar"></div>フリート連動書類</div>
-      <div style="display:flex;gap:6px;align-items:center;">
-        <span id="fs-fleet-docs-toggle-icon" style="font-size:11px;color:var(--txt2);transition:transform .2s;">▶</span>
-      </div>
+      <span id="fs-fleet-docs-toggle-icon" style="font-size:11px;color:var(--txt2);">▶</span>
     </div>
     <div id="fs-fleet-docs-body" style="display:none;margin-top:10px;">
       <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:8px;">
         <button class="btn b-gh btn-sm" onclick="event.stopPropagation();renderFSFleetDocs('${esc(name)}')">再読込</button>
         <a href="https://osaka981.github.io/fleet-mgmt/" target="_blank" class="btn b-gh btn-sm" style="text-decoration:none;" onclick="event.stopPropagation();">フリートを開く →</a>
       </div>
-      <div style="display:grid;grid-template-columns:220px 1fr;gap:12px;min-height:600px;">
-        <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;overflow-y:auto;max-height:700px;">
-          <div id="fs-fleet-docs-list" style="display:flex;flex-direction:column;gap:4px;">読込中...</div>
-        </div>
-        <div style="background:#fff;border:1px solid var(--brd);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;">
-          <div id="fs-fleet-docs-preview" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:600px;">
-            <div style="text-align:center;color:var(--txt3);">
-              <div style="font-size:40px;margin-bottom:8px;">📄</div>
-              <div style="font-size:12px;">左の書類をクリックしてプレビュー</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div id="fs-fleet-docs-list" style="display:flex;flex-wrap:wrap;gap:6px;">読込中...</div>
     </div>
   </div>`;
 
   el.innerHTML=html;
-  // フリート書類は折りたたみなので開いた時に読み込む（ここでは呼ばない）
+  // 中央プレビューオーバーレイを1回だけ作成
+  _ensureFSDocOverlay();
+}
+
+// 中央プレビューオーバーレイDOM（1回だけ生成）
+function _ensureFSDocOverlay(){
+  if($('fs-doc-center-overlay')) return;
+  const ov=document.createElement('div');
+  ov.id='fs-doc-center-overlay';
+  ov.style.cssText='display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,.7);justify-content:center;align-items:center;padding:20px;';
+  ov.innerHTML=`
+    <div style="width:min(900px,90vw);height:min(85vh,90%);background:var(--sur,#fff);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.4);">
+      <div style="padding:8px 14px;background:#5c6bc0;color:#fff;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+        <span id="fs-doc-center-title" style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button onclick="fsCenterDocNav(-1)" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">← 前</button>
+          <button onclick="fsCenterDocNav(1)" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">次 →</button>
+          <a id="fs-doc-center-drive" href="#" target="_blank" style="background:rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;text-decoration:none;">Drive</a>
+          <a id="fs-doc-center-dl" href="#" style="background:#fff;color:#5c6bc0;padding:4px 10px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:700;">DL</a>
+          <button onclick="closeFSCenterDoc()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 6px;line-height:1;">✕</button>
+        </div>
+      </div>
+      <div id="fs-doc-center-body" style="flex:1;display:flex;align-items:center;justify-content:center;background:#f5f5f5;overflow:hidden;">
+        <div style="color:#999;font-size:14px;">読込中...</div>
+      </div>
+    </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)closeFSCenterDoc();});
+  document.body.appendChild(ov);
+}
+
+let _fsCenterDocIdx=0;
+
+function openFSCenterDoc(idx){
+  _ensureFSDocOverlay();
+  const md=_findFleetDriverByName(_fsId);
+  if(!md) return;
+  const files=md.attachedFiles||[];
+  if(!files[idx]) return;
+  _fsCenterDocIdx=idx;
+  const f=files[idx];
+  const fileId=f.fileId||'';
+  const ov=$('fs-doc-center-overlay');
+  if(ov) ov.style.display='flex';
+  const title=$('fs-doc-center-title');
+  if(title) title.textContent=`${idx+1}/${files.length}　${f.name||''}`;
+  const driveLink=$('fs-doc-center-drive');
+  const dlLink=$('fs-doc-center-dl');
+  if(driveLink) driveLink.href=fileId?`https://drive.google.com/file/d/${fileId}/view`:'#';
+  if(dlLink) dlLink.href=fileId?`https://drive.google.com/uc?export=download&id=${fileId}`:'#';
+  const body=$('fs-doc-center-body');
+  if(!body) return;
+  if(fileId){
+    body.innerHTML=`<iframe src="https://drive.google.com/file/d/${fileId}/preview" style="width:100%;height:100%;border:none;" allow="autoplay"></iframe>`;
+  } else {
+    body.innerHTML='<div style="color:#999;font-size:14px;">プレビュー不可（fileId無し）</div>';
+  }
+}
+
+function fsCenterDocNav(dir){
+  const md=_findFleetDriverByName(_fsId);
+  if(!md) return;
+  const files=md.attachedFiles||[];
+  let next=_fsCenterDocIdx+dir;
+  if(next<0) next=files.length-1;
+  if(next>=files.length) next=0;
+  openFSCenterDoc(next);
+}
+
+function closeFSCenterDoc(){
+  const ov=$('fs-doc-center-overlay');
+  if(ov) ov.style.display='none';
 }
 
 // FSページ: フリート連動書類の折りたたみ切替
@@ -13209,7 +13407,8 @@ function renderStDocLinks(){
 
   const editId=$('m-staff')?._editId;
   const st=editId ? D.staff.find(s=>s.id===editId) : null;
-  const staffName = st?.name || '';
+  // _editId未設定でもフリートからの新規登録時は名前を使う
+  const staffName = st?.name || window._pendingFleetName || '';
   if(!staffName){
     linkEl.innerHTML='<div class="xs muted" style="padding:8px;text-align:center;">保存後に書類が表示されます</div>';
     return;
@@ -13238,7 +13437,7 @@ function renderStDocLinks(){
     const dateStr=f.uploadedAt?new Date(f.uploadedAt).toLocaleDateString('ja-JP'):'';
     html+=`<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;transition:background .15s;"
       onmouseover="this.style.background='rgba(92,107,192,.08)'" onmouseout="this.style.background=''"
-      onclick="openStDocOverlay(${i})">
+      onclick="openStDocSidePanel(${i})">
       <span style="font-size:14px;">${icon}</span>
       <span style="font-size:12px;color:var(--blu2);text-decoration:underline;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'未名')}</span>
       <span style="font-size:9px;color:var(--txt3);">${dateStr}</span>
@@ -13248,60 +13447,61 @@ function renderStDocLinks(){
   linkEl.innerHTML=html;
 }
 
-// ── モーダル内：オーバーレイで書類2カラム表示 ──
-function openStDocOverlay(initialIdx){
-  const overlay=$('st-doc-overlay');
-  if(!overlay) return;
+// ── モーダル内：サイドパネルで書類PDF表示（横並び） ──
+function openStDocSidePanel(initialIdx){
+  const panel=$('st-doc-side-panel');
+  const modal=$('m-staff-modal');
+  if(!panel||!modal) return;
 
   const editId=$('m-staff')?._editId;
   const st=editId ? D.staff.find(s=>s.id===editId) : null;
-  const staffName = st?.name || '';
+  const staffName = st?.name || window._pendingFleetName || '';
   const md=_findFleetDriverByName(staffName);
   if(!md) return;
   const files=md.attachedFiles||[];
   if(!files.length) return;
 
-  // 左カラム：書類リスト
-  const listEl=$('st-doc-overlay-list');
+  // モーダルを広げてサイドパネルを表示
+  modal.style.maxWidth='97vw';
+  modal.style.width='min(1800px,97vw)';
+  panel.style.display='flex';
+
+  // 書類リスト描画
+  const listEl=$('st-doc-side-list');
   const categoryIcons={'免許':'🪪','車検':'🚗','自賠':'🛡','任意':'📋','健診':'🏥','契約':'📝','念書':'📝','誓約':'📝','履歴':'📄','default':'📄'};
   function getIcon(n,c){
     for(const [k,v] of Object.entries(categoryIcons)) if(k!=='default'&&((c||'').includes(k)||(n||'').includes(k))) return v;
     return categoryIcons.default;
   }
 
-  let listHtml=`<div class="xs muted mb8">${files.length}件</div>`;
+  let listHtml=`<div class="xs muted mb6">${files.length}件</div>`;
   files.forEach((f,i)=>{
     const icon=getIcon(f.name,f.category);
-    listHtml+=`<div class="st-ov-doc-item" data-idx="${i}" onclick="previewStDocOverlay(${i})"
-      style="padding:7px 8px;border:1px solid var(--brd);border-radius:5px;cursor:pointer;transition:background .15s;display:flex;gap:6px;align-items:center;"
+    listHtml+=`<div class="st-side-doc-item" data-idx="${i}" onclick="previewStDocSide(${i})"
+      style="padding:6px 7px;border:1px solid var(--brd);border-radius:4px;cursor:pointer;transition:background .15s;display:flex;gap:5px;align-items:center;font-size:11px;"
       onmouseover="this.style.background='rgba(92,107,192,.08)'" onmouseout="if(!this.classList.contains('active'))this.style.background=''">
-      <span style="font-size:15px;">${icon}</span>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'未名')}</div>
-        ${f.category?'<div style="font-size:9px;color:var(--txt3);">'+esc(f.category)+'</div>':''}
-      </div>
+      <span style="font-size:14px;">${icon}</span>
+      <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">${esc(f.name||'未名')}</div>
     </div>`;
   });
   if(listEl) listEl.innerHTML=listHtml;
 
-  overlay.style.display='block';
-  previewStDocOverlay(initialIdx||0);
+  previewStDocSide(initialIdx||0);
 }
 
-function previewStDocOverlay(idx){
-  const previewEl=$('st-doc-overlay-preview');
+function previewStDocSide(idx){
+  const previewEl=$('st-doc-side-preview');
   if(!previewEl) return;
 
   const editId=$('m-staff')?._editId;
   const st=editId ? D.staff.find(s=>s.id===editId) : null;
-  const md=_findFleetDriverByName(st?.name||'');
+  const md=_findFleetDriverByName(st?.name||window._pendingFleetName||'');
   if(!md) return;
   const files=md.attachedFiles||[];
   const f=files[idx];
   if(!f) return;
 
-  // ハイライト
-  document.querySelectorAll('.st-ov-doc-item').forEach(el=>{
+  document.querySelectorAll('.st-side-doc-item').forEach(el=>{
     const i=parseInt(el.dataset.idx);
     if(i===idx){
       el.style.background='rgba(92,107,192,.12)';
@@ -13318,9 +13518,9 @@ function previewStDocOverlay(idx){
   if(fileId){
     previewEl.innerHTML=`
       <div style="width:100%;height:100%;display:flex;flex-direction:column;">
-        <div style="padding:5px 10px;background:var(--bg3);border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-          <span style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'')}</span>
-          <div style="display:flex;gap:4px;">
+        <div style="padding:4px 8px;background:var(--bg3);border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+          <span style="font-size:10px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${esc(f.name||'')}</span>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
             <a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" class="btn b-gh btn-sm" style="font-size:9px;text-decoration:none;">Drive</a>
             <a href="https://drive.google.com/uc?export=download&id=${fileId}" class="btn b-blu btn-sm" style="font-size:9px;text-decoration:none;">DL</a>
           </div>
@@ -13330,6 +13530,13 @@ function previewStDocOverlay(idx){
   } else {
     previewEl.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">プレビュー不可</div>';
   }
+}
+
+function closeStDocSidePanel(){
+  const panel=$('st-doc-side-panel');
+  const modal=$('m-staff-modal');
+  if(panel) panel.style.display='none';
+  if(modal){ modal.style.maxWidth='97vw'; modal.style.width='min(1100px,97vw)'; }
 }
 
 // ── フルスクリーン：フリート書類読込＆プレビュー ──
@@ -13359,21 +13566,13 @@ function renderFSFleetDocs(staffName){
 
   const matchedDriver = _findFleetDriverByName(staffName);
   if(!matchedDriver){
-    listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">
-      <div style="font-size:24px;margin-bottom:8px;">🔍</div>
-      <div>フリート管理に「${esc(staffName)}」が見つかりませんでした</div>
-      <div style="margin-top:6px;font-size:10px;">フリート管理で同名のドライバーを登録してください</div>
-    </div>`;
+    listEl.innerHTML=`<div style="padding:12px;text-align:center;color:var(--txt3);font-size:12px;">フリートに「${esc(staffName)}」が見つかりません</div>`;
     return;
   }
 
   const fleetFiles = matchedDriver.attachedFiles || [];
   if(!fleetFiles.length){
-    listEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">
-      <div style="font-size:24px;margin-bottom:8px;">📂</div>
-      <div>書類未登録</div>
-      ${matchedDriver._companyName?'<div style="font-size:10px;margin-top:4px;">(委託: '+esc(matchedDriver._companyName)+')</div>':''}
-    </div>`;
+    listEl.innerHTML=`<div style="padding:12px;text-align:center;color:var(--txt3);font-size:12px;">書類未登録${matchedDriver._companyName?' (委託: '+esc(matchedDriver._companyName)+')':''}</div>`;
     return;
   }
 
@@ -13384,70 +13583,19 @@ function renderFSFleetDocs(staffName){
   }
 
   let html='';
-  if(matchedDriver._companyName) html+=`<div style="font-size:10px;color:var(--blu2);margin-bottom:6px;padding:4px 8px;background:rgba(66,133,244,.1);border-radius:4px;">委託: ${esc(matchedDriver._companyName)}</div>`;
-  html+=`<div style="font-size:10px;color:var(--txt3);margin-bottom:6px;">${fleetFiles.length}件の書類</div>`;
+  if(matchedDriver._companyName) html+=`<span style="font-size:10px;color:var(--blu2);padding:3px 8px;background:rgba(66,133,244,.1);border-radius:4px;">委託: ${esc(matchedDriver._companyName)}</span>`;
 
   fleetFiles.forEach((f,i)=>{
     const icon=getIcon(f.name,f.category);
-    const dateStr=f.uploadedAt?new Date(f.uploadedAt).toLocaleDateString('ja-JP'):'';
-    html+=`<div class="fs-doc-item" data-idx="${i}" onclick="previewFSFleetDoc(${i},'${esc(staffName)}')"
-      style="padding:8px 10px;border:1px solid var(--brd);border-radius:5px;cursor:pointer;transition:background .15s;display:flex;gap:8px;align-items:flex-start;"
-      onmouseover="this.style.background='rgba(92,107,192,.08)'" onmouseout="if(!this.classList.contains('active'))this.style.background=''">
-      <div style="font-size:18px;flex-shrink:0;line-height:1;">${icon}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'未名')}</div>
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px;">
-          ${f.category?'<span style="background:var(--bg3);padding:1px 5px;border-radius:3px;margin-right:4px;">'+esc(f.category)+'</span>':''}
-          ${dateStr}
-        </div>
-      </div>
+    html+=`<div onclick="openFSCenterDoc(${i})"
+      style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border:1px solid var(--brd);border-radius:6px;cursor:pointer;background:var(--sur);transition:all .15s;font-size:12px;font-weight:600;"
+      onmouseover="this.style.background='rgba(92,107,192,.1)';this.style.borderColor='#5c6bc0'" onmouseout="this.style.background='var(--sur)';this.style.borderColor=''">
+      <span style="font-size:15px;">${icon}</span>
+      <span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'未名')}</span>
     </div>`;
   });
 
   listEl.innerHTML=html;
-  if(fleetFiles.length>0) previewFSFleetDoc(0, staffName);
-}
-
-function previewFSFleetDoc(idx, staffName){
-  const previewEl=$('fs-fleet-docs-preview');
-  if(!previewEl) return;
-
-  const md=_findFleetDriverByName(staffName);
-  if(!md) return;
-  const fleetFiles=md.attachedFiles||[];
-  const f=fleetFiles[idx];
-  if(!f) return;
-
-  // ハイライト
-  document.querySelectorAll('.fs-doc-item').forEach((el,i)=>{
-    if(parseInt(el.dataset.idx)===idx){
-      el.style.background='rgba(92,107,192,.12)';
-      el.style.borderColor='#5c6bc0';
-      el.classList.add('active');
-    } else {
-      el.style.background='';
-      el.style.borderColor='';
-      el.classList.remove('active');
-    }
-  });
-
-  const fileId=f.fileId||'';
-  if(fileId){
-    const previewUrl=`https://drive.google.com/file/d/${fileId}/preview`;
-    previewEl.innerHTML=`
-      <div style="width:100%;height:100%;display:flex;flex-direction:column;">
-        <div style="padding:6px 10px;background:var(--bg3);border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name||'')}</span>
-          <div style="display:flex;gap:6px;">
-            <a href="https://drive.google.com/file/d/${fileId}/view" target="_blank" class="btn b-gh btn-sm" style="font-size:10px;text-decoration:none;">Driveで開く</a>
-            <a href="https://drive.google.com/uc?export=download&id=${fileId}" class="btn b-blu btn-sm" style="font-size:10px;text-decoration:none;">DL</a>
-          </div>
-        </div>
-        <iframe src="${previewUrl}" style="flex:1;border:none;min-height:300px;" allow="autoplay"></iframe>
-      </div>`;
-  } else {
-    previewEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--txt3);"><div style="font-size:24px;margin-bottom:8px;">⚠</div><div style="font-size:12px;">プレビュー不可（fileId無し）</div></div>`;
-  }
 }
 
 // ── フルスクリーン：台帳インライン保存 ──
@@ -16229,9 +16377,10 @@ function editStaff(id){
 }
 function closeM(id){
   $(id)?.classList.remove('on');
-  // 書類オーバーレイを閉じる
+  // 書類サイドパネルを閉じる
   if(id==='m-staff'){
-    const ov=$('st-doc-overlay'); if(ov) ov.style.display='none';
+    closeStDocSidePanel();
+    window._pendingFleetName = null;
   }
   // 宅配日報モーダルを閉じたら編集フラグとフォームをリセット
   if(id==='m-del'){
