@@ -7123,7 +7123,7 @@ function renderStaff(flt){
     } else {
       est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
     }
-    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='会社委託'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
+    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='委託会社所属'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
     const compBadge=s.companyName?`<span class="xs" style="color:var(--tel2);cursor:pointer;" onclick="event.stopPropagation();openFS('company','${esc(s.companyName)}')">${esc(s.companyName)}</span>`:'<span class="xs muted">−</span>';
     h+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
@@ -9396,8 +9396,8 @@ function renderMonthlySummary(){
     const cost = pay.total;
     totalPay += cost;
     const isInHouse = s.kubun==='社員'||s.kubun==='パート';
-    const isIndividual = s.kubun==='個人事業主';
-    const isCompany = s.kubun==='会社委託'||s.kubun==='委託ドライバー';
+    const isIndividual = (s.kubun||'').includes('個人事業主');
+    const isCompany = s.kubun==='委託会社所属'||s.kubun==='委託ドライバー';
     if(isInHouse) inHousePay+=cost;
     else outsourcePay+=cost;
     if(isIndividual) individualPay+=cost;
@@ -9502,10 +9502,10 @@ function renderCostAnalysis(){
     const kanryo = delRows.reduce((a,r)=>a+(r.kanryo||0),0);
     const days = new Set(delRows.map(r=>r.date)).size;
 
-    if(s.kubun==='個人事業主'){
+    if((s.kubun||'').includes('個人事業主')){
       individuals.push({name:s.name, office:s.office, kanryo, days, cost});
       totalIndividual+=cost;
-    } else if(s.kubun==='会社委託'||s.kubun==='委託ドライバー'){
+    } else if(s.kubun==='委託会社所属'||s.kubun==='委託ドライバー'){
       companies.push({name:s.name, company:s.companyName||s.company||'', office:s.office, kanryo, days, cost});
       totalCompany+=cost;
     } else {
@@ -9565,8 +9565,8 @@ function renderCostAnalysis(){
     let mInd=0, mCo=0, mHouse=0;
     activeStaff.forEach(s=>{
       const pay=_calcStaffPayment(s.name,ym);
-      if(s.kubun==='個人事業主') mInd+=pay.total;
-      else if(s.kubun==='会社委託'||s.kubun==='委託ドライバー') mCo+=pay.total;
+      if((s.kubun||'').includes('個人事業主')) mInd+=pay.total;
+      else if(s.kubun==='委託会社所属'||s.kubun==='委託ドライバー') mCo+=pay.total;
       else mHouse+=pay.total;
     });
     trendData.push({label:ym.replace('/','/'),inHouse:mHouse,individual:mInd,company:mCo});
@@ -11595,7 +11595,7 @@ function renderPhStaffList(){
     const histCount = (s.payHistory||[]).length;
     const isActive = s.id === _phSelStaffId;
     const kb = s.kubun==='社員'?'<span class="bdg bb" style="font-size:7.5px;">社員</span>'
-              :s.kubun==='会社委託'?'<span class="bdg ba" style="font-size:7.5px;">委託</span>'
+              :s.kubun==='委託会社所属'?'<span class="bdg ba" style="font-size:7.5px;">委託</span>'
               :'<span class="bdg bz" style="font-size:7.5px;">個人</span>';
     return `<div class="ph-staff-item${isActive?' active':''}" onclick="selectPhStaff(${s.id})"
       style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s;
@@ -12168,7 +12168,7 @@ function renderSalary(){
     const pay=Math.max(0,base-repairDeduct);
     tot+=pay;
     const isPaid=i%2===0;if(isPaid)paid++;else unpaid++;
-    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='会社委託'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
+    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='委託会社所属'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const kn=delRows.reduce((a,r)=>a+r.kanryo,0);
     const puTot=puRows.reduce((a,r)=>a+Object.values(r.items||{}).reduce((x,v)=>x+v,0),0);
     h+=`<tr>
@@ -13348,14 +13348,118 @@ function _buildBankInfoBlock(){
 function _buildPaySlipHTML(staffName, monStr){
   const pay=_calcStaffPayment(staffName, monStr);
   if(!pay.staff) return null;
+  const isExternal=pay.staff.kubun!=='社員・役員'&&pay.staff.kubun!=='パート（事務）';
+  if(isExternal) return _buildPaySlipHTMLContractor(pay, monStr);
+  return _buildPaySlipHTMLEmployee(pay, monStr);
+}
+
+// ── 社員・パート用 給与明細書（JDLレイアウト準拠） ──
+function _buildPaySlipHTMLEmployee(pay, monStr){
+  const st=pay.staff;
+  const today=new Date().toISOString().slice(0,10);
+  const sysInfo=_getSystemInfo();
+  const off=st.offset||{};
+  const si=st.socialIns||{};
+
+  // 和暦変換
+  const [y,m]=(monStr||'').split('/');
+  const reiwa=parseInt(y)-2018;
+  const monLabel=`令和${reiwa}年　${parseInt(m)}月分`;
+
+  // 支給項目
+  const basePay=st.tanka||0;
+  const commute=off.commute||0;
+  const career=off.career||0;
+  const position=off.position||0;
+  const teateOther=off.teateOther||0;
+  const overtimePay=st._monthlyPay?.overtimePay||0;
+  const absenceDeduct=st._monthlyPay?.absenceDeduct||0;
+  const totalPay=basePay+overtimePay+commute+career+position+teateOther-absenceDeduct;
+
+  // 控除項目
+  const health=si.health||0;
+  const care=si.care||0;
+  const pension=si.pension||0;
+  const fund=si.fund||0;
+  const empIns=getEmploymentIns(st, totalPay);
+  const incomeTax=si.income||0;
+  const resTax=getResidentTaxMonthly(st);
+  const totalDeduct=health+care+pension+fund+empIns+incomeTax+resTax;
+
+  // 調整・差引
+  const adjustment=st._monthlyPay?.adjustment||0;
+  const netPay=totalPay-totalDeduct+adjustment;
+
+  // 勤怠
+  const del=(D.delivery||[]).filter(r=>r.staff===st.name&&(r.date||'').startsWith(monStr));
+  const workDays=new Set(del.map(r=>r.date)).size;
+
+  const offCode=D.offices.find(o=>o.name===st.office)?.officeCode||'';
+  const deptCode=offCode?'0001-'+offCode.padStart(4,'0'):'';
+
+  const f=v=>v?v.toLocaleString():'';
+  const td=(v,cls)=>`<td class="${cls||''}" style="border:1px solid #aaa;padding:3px 6px;font-size:11px;font-family:'MS Gothic',monospace;">${v}</td>`;
+  const th=(v,span)=>`<th ${span?'colspan="'+span+'"':''} style="border:1px solid #aaa;padding:3px 6px;font-size:10px;background:#f0f0f0;font-weight:normal;text-align:center;">${v}</th>`;
+
+  const html=`
+    <div style="font-family:'MS Gothic','Hiragino Kaku Gothic','sans-serif';max-width:720px;margin:0 auto;padding:20px;">
+      <table style="width:100%;border-collapse:collapse;border:2px solid #333;">
+        <tr>
+          <td colspan="4" style="border:1px solid #aaa;padding:8px;font-size:16px;font-weight:bold;text-align:center;letter-spacing:8px;">給 料 明 細 書</td>
+          ${td('会 社 名')} ${td(esc(sysInfo.companyName||'大阪急配 株式会社'),'',3)}
+        </tr>
+        <tr>
+          <td colspan="4" style="border:1px solid #aaa;padding:4px 8px;font-size:12px;">(${monLabel})</td>
+          ${th('部門・所属')} ${td(deptCode)} ${th('社　員')} ${td(st.empNo||'')} ${th('氏　名')} ${td(esc(st.name)+' 殿','',2)}
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
+        <tr>
+          <td rowspan="2" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">支<br>給<br>額</td>
+          ${th('基 本 給')} ${td(f(basePay),'tr')} ${th('経歴手当')} ${td(f(career),'tr')} ${th('役職手当')} ${td(f(position),'tr')} ${th('')} ${td('')}
+        </tr>
+        <tr>
+          ${th('')} ${td('')} ${th('')} ${td('')} ${th('時間外手当')} ${td(f(overtimePay),'tr')} ${th('通 勤 手 当')} ${td(f(commute),'tr')} ${th('不就労控除')} ${td(f(absenceDeduct),'tr')} ${th('総 支 給 額')} ${td('<b>'+f(totalPay)+'</b>','tr')}
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
+        <tr>
+          <td rowspan="2" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">控<br>除<br>額</td>
+          ${th('健 康 保 険')} ${td(f(health),'tr')} ${th('介 護 保 険')} ${td(f(care),'tr')} ${th('厚 生 年 金')} ${td(f(pension),'tr')} ${th('年 金 基 金')} ${td(f(fund),'tr')} ${th('雇 用 保 険')} ${td(f(empIns),'tr')} ${th('所 得 税')} ${td(f(incomeTax),'tr')} ${th('住　民　税')} ${td(f(resTax),'tr')}
+        </tr>
+        <tr>
+          ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('控 除 計')} ${td('<b>'+f(totalDeduct)+'</b>','tr')}
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
+        <tr>
+          ${th('')} ${td('')} ${th('調　整　額')} ${td(f(adjustment),'tr')} ${th('差引支給額')} ${td('<b>'+f(netPay)+'</b>','tr')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('現　　　金')} ${td('<b>'+f(netPay)+'</b>','tr')}
+        </tr>
+      </table>
+
+      <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
+        <tr>
+          <td rowspan="1" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">勤<br>怠</td>
+          ${th('出勤日数')} ${td(workDays+'日','tr')} ${th('出勤時数')} ${td('','tr')} ${th('欠　勤')} ${td('','tr')} ${th('勤 不 就 労')} ${td('','tr')} ${th('平日普通')} ${td('','tr')} ${th('平日深夜')} ${td('','tr')} ${th('休日普通')} ${td('','tr')} ${th('休日深夜')} ${td('','tr')} ${th('時 間 外')} ${td('','tr')}
+        </tr>
+      </table>
+    </div>`;
+
+  return {title:'給与明細書', html, amount:netPay, isEmployee:true,
+    breakdown:pay.breakdown, totalPay, totalDeduct, netPay, adjustment};
+}
+
+// ── 外注（個人事業主・委託会社）用 支払明細書 ──
+function _buildPaySlipHTMLContractor(pay, monStr){
   const today=new Date().toISOString().slice(0,10);
   const mon=monStr.replace('-','年')+'月';
-  const isExternal=pay.staff.kubun==='個人事業主'||pay.staff.kubun==='会社委託';
-  const title=isExternal?'支払明細書':'給与明細書';
   let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
   const html=`
     <div class="doc-header">
-      <div class="doc-title">${title}</div>
+      <div class="doc-title">支払明細書</div>
       <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
     </div>
     <div class="doc-to">${esc(pay.staff.name)} 様</div>
@@ -13369,7 +13473,7 @@ function _buildPaySlipHTML(staffName, monStr){
     </table>
     ${_buildCompanyFromBlock(true)}
     <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
-  return {title, html, amount:pay.total};
+  return {title:'支払明細書', html, amount:pay.total};
 }
 
 function _buildInvoiceProxyHTML(staffName, monStr){
@@ -13583,39 +13687,10 @@ function _printDocWindow(title, html){
 }
 
 function generatePaySlip(staffName, monStr){
-  const pay=_calcStaffPayment(staffName, monStr);
-  if(!pay.staff){ showAlert({msg:'従事員データなし'}); return; }
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
-  const isExternal=pay.staff.kubun==='個人事業主'||pay.staff.kubun==='会社委託';
-  const title=isExternal?'支払明細書':'給与明細書';
-
-  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
-
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">${title}</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
-    </div>
-    <div class="doc-to">${esc(pay.staff.name)} 様</div>
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">支払金額</div>
-      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
-    </div>
-    <table>
-      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
-    </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">大阪急配株式会社</div>
-      <div>〒599-8247 大阪府堺市中区○○</div>
-      <div>TEL: 072-XXX-XXXX</div>
-      <div style="margin-top:12px;"><span class="stamp">大阪急配</span></div>
-    </div>
-    <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
-
-  _printDocWindow(title, html);
-  _saveIssuedDoc({type:'paySlip', target:staffName, month:monStr, amount:pay.total, issuedAt:new Date().toISOString()});
+  const doc=_buildPaySlipHTML(staffName, monStr);
+  if(!doc){ showAlert({msg:'従事員データなし'}); return; }
+  _printDocWindow(doc.title, doc.html);
+  _saveIssuedDoc({type:'paySlip', target:staffName, month:monStr, amount:doc.amount, issuedAt:new Date().toISOString()});
   renderStaffFSTab('docs');
 }
 
@@ -13675,7 +13750,7 @@ function renderStaffDocs(el, name){
   const st=(D.staff||[]).find(s=>s.name===name);
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const mon=$('fs-doc-mon')?.value||ym;
-  const isExternal=st?.kubun==='個人事業主'||st?.kubun==='会社委託';
+  const isExternal=st?.kubun!=='社員・役員'&&st?.kubun!=='パート（事務）';
   const docs=st?.docs||{};
   const paySlipOn=!!docs.paySlip?.enabled;
   const invProxyOn=!!docs.invoiceProxy?.enabled;
@@ -16791,7 +16866,7 @@ function editStaff(id){
   }
   // 委託会社
   onStKbnChange();
-  if(s.kubun==='会社委託'&&s.companyName){
+  if(s.kubun==='委託会社所属'&&s.companyName){
     if($('st-company-name'))$('st-company-name').value=s.companyName;
     if($('st-company-tel'))$('st-company-tel').value=s.companyTel||'';
     if($('st-company-contact'))$('st-company-contact').value=s.companyContact||'';
