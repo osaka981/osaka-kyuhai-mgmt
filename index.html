@@ -1158,6 +1158,38 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     </div>
 
+    <!-- 月次サマリー -->
+    <div id="s-monthly-summary" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="min-width:130px;"><label>月</label><input type="month" id="ms-mon" class="fi" onchange="renderMonthlySummary()"></div>
+          <button class="btn b-gh btn-sm" onclick="renderMonthlySummary()">更新</button>
+        </div>
+      </div>
+      <div id="ms-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="card"><div class="ct mb8"><div class="cbar"></div>社内・外注 コスト比率</div><div id="ms-ratio-chart"></div></div>
+        <div class="card"><div class="ct mb8"><div class="cbar"></div>営業所別 実績</div><div id="ms-office-tbl"></div></div>
+      </div>
+      <div class="card mt12"><div class="ct mb8"><div class="cbar"></div>ドライバー別 実績ランキング</div><div id="ms-driver-rank"></div></div>
+    </div>
+
+    <!-- 外注費分析 -->
+    <div id="s-cost-analysis" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="min-width:130px;"><label>月</label><input type="month" id="ca-mon" class="fi" onchange="renderCostAnalysis()"></div>
+          <button class="btn b-gh btn-sm" onclick="renderCostAnalysis()">更新</button>
+        </div>
+      </div>
+      <div id="ca-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:14px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="card"><div class="ct mb8"><div class="cbar"></div>個人事業主 支払一覧</div><div id="ca-individual"></div></div>
+        <div class="card"><div class="ct mb8"><div class="cbar"></div>委託会社 支払一覧</div><div id="ca-company"></div></div>
+      </div>
+      <div class="card mt12"><div class="ct mb8"><div class="cbar"></div>外注コスト推移（直近6ヶ月）</div><div id="ca-trend"></div></div>
+    </div>
+
     <!-- 数量照合 -->
     <div id="s-reconcile" class="sec">
       <div class="card mb12">
@@ -4080,6 +4112,8 @@ const _TOP_TABS = {
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
+    { s:'monthly-summary', label:'月次サマリー' },
+    { s:'cost-analysis', label:'外注費分析' },
     { s:'reconcile', label:'数量照合' },
   ]},
   admin:    { subs: [
@@ -4172,6 +4206,8 @@ function navByS(s) {
   if (s==='salary')      _call('renderSalary');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
+  if (s==='monthly-summary') _call('renderMonthlySummary');
+  if (s==='cost-analysis')   _call('renderCostAnalysis');
   if (s==='offices')     _call('renderOffCards');
   if (s==='archive')     _call('renderArchive');
 }
@@ -9225,6 +9261,241 @@ function expBillingCSV(){
     const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
     a.download=`支払明細_${mon}.csv`; a.click();
   }
+}
+
+// ══════════════════════════════════════════
+// 月次サマリー
+// ══════════════════════════════════════════
+function _getMonDefault(elId){
+  const el=$(elId);
+  if(!el?.value){
+    const d=new Date();
+    const def=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if(el)el.value=def;
+  }
+  return ($(elId)?.value||'').replace('-','/');
+}
+
+function _calcStaffCost(staffName, monStr){
+  const st = D.staff.find(s=>s.name===staffName);
+  if(!st) return {total:0, kubun:'不明'};
+  const pay = _calcStaffPayment(staffName, monStr);
+  return {total:pay.total, kubun:st.kubun||'不明', office:st.office||'', name:staffName};
+}
+
+function renderMonthlySummary(){
+  const monStr=_getMonDefault('ms-mon');
+  const monLabel=(monStr||'').replace('/','-').replace('-','年')+'月';
+
+  // 全ドライバーの支払データ集計
+  const activeStaff = D.staff.filter(s=>s.status!=='終了');
+  let totalPay=0, inHousePay=0, outsourcePay=0, individualPay=0, companyPay=0;
+  const driverStats=[];
+
+  activeStaff.forEach(s=>{
+    const pay = _calcStaffPayment(s.name, monStr);
+    const cost = pay.total;
+    totalPay += cost;
+    const isInHouse = s.kubun==='社員'||s.kubun==='パート';
+    const isIndividual = s.kubun==='個人事業主';
+    const isCompany = s.kubun==='会社委託'||s.kubun==='委託ドライバー';
+    if(isInHouse) inHousePay+=cost;
+    else outsourcePay+=cost;
+    if(isIndividual) individualPay+=cost;
+    if(isCompany) companyPay+=cost;
+
+    // 宅配実績
+    const delRows = D.delivery.filter(r=>r.staff===s.name && (r.date||'').startsWith(monStr));
+    const kanryo = delRows.reduce((a,r)=>a+(r.kanryo||0),0);
+    const days = new Set(delRows.map(r=>r.date)).size;
+    driverStats.push({name:s.name, kubun:s.kubun, office:s.office, kanryo, days, cost, isInHouse});
+  });
+
+  // 売上
+  const puRows = D.pickup.filter(r=>(r.date||'').startsWith(monStr));
+  let totalSales=0;
+  puRows.forEach(r=>{
+    const cu=D.customers.find(c=>c.id===r.customerId);
+    Object.entries(r.items||{}).forEach(([item,qty])=>{ totalSales+=getCustPrice(cu,item)*qty; });
+  });
+
+  const profit = totalSales - totalPay;
+  const inRatio = totalPay>0 ? Math.round(inHousePay/totalPay*100) : 0;
+  const outRatio = totalPay>0 ? 100-inRatio : 0;
+
+  // KPI
+  $('ms-kpi').innerHTML=[
+    {l:'売上（集荷）',v:'¥'+fmt(totalSales),c:'--blu'},
+    {l:'総支払コスト',v:'¥'+fmt(totalPay),c:'--red'},
+    {l:'粗利（概算）',v:'¥'+fmt(profit),c:profit>=0?'--grn':'--red'},
+    {l:'社内人件費',v:'¥'+fmt(inHousePay),c:'--tel'},
+    {l:'外注費合計',v:'¥'+fmt(outsourcePay),c:'--amb'},
+    {l:'社内比率',v:inRatio+'%',c:'--blu'},
+  ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}</div></div>`).join('');
+
+  // 比率チャート（CSSバー）
+  $('ms-ratio-chart').innerHTML=`
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;height:36px;border-radius:6px;overflow:hidden;border:1px solid var(--brd);">
+        <div style="width:${inRatio}%;background:var(--blu2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;min-width:${inRatio>5?'0':'40px'};">${inRatio>5?'社内 '+inRatio+'%':''}</div>
+        <div style="width:${outRatio}%;background:var(--amb2);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;min-width:${outRatio>5?'0':'40px'};">${outRatio>5?'外注 '+outRatio+'%':''}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+      <div style="padding:8px;background:rgba(66,133,244,.1);border-radius:5px;">
+        <div class="fw7" style="color:var(--blu2);">社内（社員・パート）</div>
+        <div class="mono fw7">¥${fmt(inHousePay)}</div>
+        <div class="xs muted">${activeStaff.filter(s=>s.kubun==='社員'||s.kubun==='パート').length}名</div>
+      </div>
+      <div style="padding:8px;background:rgba(230,126,34,.1);border-radius:5px;">
+        <div class="fw7" style="color:var(--amb2);">外注（個人+委託）</div>
+        <div class="mono fw7">¥${fmt(outsourcePay)}</div>
+        <div class="xs muted">個人¥${fmt(individualPay)} / 委託¥${fmt(companyPay)}</div>
+      </div>
+    </div>`;
+
+  // 営業所別
+  const officeMap={};
+  D.offices.filter(o=>o.status!=='廃止').forEach(o=>{officeMap[o.name]={name:o.name,kanryo:0,days:0,cost:0,drivers:0};});
+  driverStats.forEach(d=>{
+    const off=officeMap[d.office];
+    if(off){off.kanryo+=d.kanryo;off.days+=d.days;off.cost+=d.cost;off.drivers++;}
+  });
+  let offHtml=`<div class="tw"><table><thead><tr><th>営業所</th><th class="tr">ドライバー</th><th class="tr">完了個数</th><th class="tr">稼働日</th><th class="tr">コスト</th></tr></thead><tbody>`;
+  Object.values(officeMap).forEach(o=>{
+    offHtml+=`<tr><td class="fw7">${esc(o.name)}</td><td class="tr">${o.drivers}名</td><td class="tr mono">${fmt(o.kanryo)}</td><td class="tr">${o.days}</td><td class="tr mono">¥${fmt(o.cost)}</td></tr>`;
+  });
+  offHtml+=`</tbody></table></div>`;
+  $('ms-office-tbl').innerHTML=offHtml;
+
+  // ドライバーランキング（完了個数順）
+  const ranked=[...driverStats].sort((a,b)=>b.kanryo-a.kanryo).slice(0,15);
+  const maxK=ranked[0]?.kanryo||1;
+  let rkHtml='';
+  ranked.forEach((d,i)=>{
+    const pct=Math.round(d.kanryo/maxK*100);
+    const color=d.isInHouse?'var(--blu2)':'var(--amb2)';
+    rkHtml+=`<div style="display:grid;grid-template-columns:30px 120px 1fr 80px 100px;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--brd);font-size:12px;">
+      <span class="mono fw7" style="color:var(--txt3);">${i+1}</span>
+      <span class="fw7">${esc(d.name)}</span>
+      <div style="background:var(--bg3);border-radius:3px;height:18px;overflow:hidden;"><div style="width:${pct}%;background:${color};height:100%;border-radius:3px;"></div></div>
+      <span class="tr mono fw7">${fmt(d.kanryo)}個</span>
+      <span class="tr mono" style="color:var(--txt2);">¥${fmt(d.cost)}</span>
+    </div>`;
+  });
+  $('ms-driver-rank').innerHTML=rkHtml||'<div class="xs muted" style="padding:10px;">データなし</div>';
+}
+
+// ══════════════════════════════════════════
+// 外注費分析
+// ══════════════════════════════════════════
+function renderCostAnalysis(){
+  const monStr=_getMonDefault('ca-mon');
+
+  const activeStaff = D.staff.filter(s=>s.status!=='終了');
+  const individuals=[], companies=[];
+  let totalIndividual=0, totalCompany=0, totalInHouse=0;
+
+  activeStaff.forEach(s=>{
+    const pay = _calcStaffPayment(s.name, monStr);
+    const cost = pay.total;
+    const delRows = D.delivery.filter(r=>r.staff===s.name && (r.date||'').startsWith(monStr));
+    const kanryo = delRows.reduce((a,r)=>a+(r.kanryo||0),0);
+    const days = new Set(delRows.map(r=>r.date)).size;
+
+    if(s.kubun==='個人事業主'){
+      individuals.push({name:s.name, office:s.office, kanryo, days, cost});
+      totalIndividual+=cost;
+    } else if(s.kubun==='会社委託'||s.kubun==='委託ドライバー'){
+      companies.push({name:s.name, company:s.companyName||s.company||'', office:s.office, kanryo, days, cost});
+      totalCompany+=cost;
+    } else {
+      totalInHouse+=cost;
+    }
+  });
+
+  const totalOutsource = totalIndividual + totalCompany;
+  const totalAll = totalOutsource + totalInHouse;
+  const outPct = totalAll>0 ? Math.round(totalOutsource/totalAll*100) : 0;
+  const indPct = totalOutsource>0 ? Math.round(totalIndividual/totalOutsource*100) : 0;
+
+  // KPI
+  $('ca-kpi').innerHTML=[
+    {l:'外注費合計',v:'¥'+fmt(totalOutsource),c:'--amb'},
+    {l:'個人事業主',v:'¥'+fmt(totalIndividual),c:'--tel'},
+    {l:'委託会社',v:'¥'+fmt(totalCompany),c:'--red'},
+    {l:'社内人件費',v:'¥'+fmt(totalInHouse),c:'--blu'},
+    {l:'外注比率',v:outPct+'%',c:'--amb'},
+    {l:'個人/委託比',v:indPct+':'+String(100-indPct),c:'--tel'},
+  ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}</div></div>`).join('');
+
+  // 個人事業主リスト
+  individuals.sort((a,b)=>b.cost-a.cost);
+  let indHtml=`<div class="tw"><table><thead><tr><th>氏名</th><th>営業所</th><th class="tr">完了</th><th class="tr">稼働日</th><th class="tr" style="color:var(--amb2)">支払額</th></tr></thead><tbody>`;
+  individuals.forEach(d=>{
+    indHtml+=`<tr><td class="fw7">${esc(d.name)}</td><td>${esc(d.office)}</td><td class="tr mono">${fmt(d.kanryo)}</td><td class="tr">${d.days}</td><td class="tr mono fw7">¥${fmt(d.cost)}</td></tr>`;
+  });
+  const indTotal=individuals.reduce((a,d)=>a+d.cost,0);
+  indHtml+=`<tr style="background:var(--bg3);font-weight:700;"><td colspan="4">合計（${individuals.length}名）</td><td class="tr mono">¥${fmt(indTotal)}</td></tr>`;
+  indHtml+=`</tbody></table></div>`;
+  $('ca-individual').innerHTML=indHtml;
+
+  // 委託会社リスト
+  const coMap={};
+  companies.forEach(d=>{
+    const key=d.company||'未設定';
+    if(!coMap[key])coMap[key]={company:key,drivers:[],totalCost:0};
+    coMap[key].drivers.push(d);
+    coMap[key].totalCost+=d.cost;
+  });
+  let coHtml=`<div class="tw"><table><thead><tr><th>委託会社</th><th>ドライバー</th><th class="tr">完了</th><th class="tr">稼働日</th><th class="tr" style="color:var(--red2)">支払額</th></tr></thead><tbody>`;
+  Object.values(coMap).sort((a,b)=>b.totalCost-a.totalCost).forEach(co=>{
+    coHtml+=`<tr style="background:var(--bg3);"><td class="fw7" colspan="2">${esc(co.company)}（${co.drivers.length}名）</td><td class="tr mono">${fmt(co.drivers.reduce((a,d)=>a+d.kanryo,0))}</td><td></td><td class="tr mono fw7">¥${fmt(co.totalCost)}</td></tr>`;
+    co.drivers.sort((a,b)=>b.cost-a.cost).forEach(d=>{
+      coHtml+=`<tr><td></td><td>${esc(d.name)}</td><td class="tr mono">${fmt(d.kanryo)}</td><td class="tr">${d.days}</td><td class="tr mono">¥${fmt(d.cost)}</td></tr>`;
+    });
+  });
+  coHtml+=`</tbody></table></div>`;
+  $('ca-company').innerHTML=coHtml;
+
+  // 6ヶ月トレンド
+  const trendData=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const ym=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0');
+    let mInd=0, mCo=0, mHouse=0;
+    activeStaff.forEach(s=>{
+      const pay=_calcStaffPayment(s.name,ym);
+      if(s.kubun==='個人事業主') mInd+=pay.total;
+      else if(s.kubun==='会社委託'||s.kubun==='委託ドライバー') mCo+=pay.total;
+      else mHouse+=pay.total;
+    });
+    trendData.push({label:ym.replace('/','/'),inHouse:mHouse,individual:mInd,company:mCo});
+  }
+  const maxTrend=Math.max(...trendData.map(t=>t.inHouse+t.individual+t.company),1);
+  let trendHtml=`<div style="display:flex;gap:8px;align-items:flex-end;height:160px;padding:10px 0;">`;
+  trendData.forEach(t=>{
+    const total=t.inHouse+t.individual+t.company;
+    const hPct=Math.round(t.inHouse/maxTrend*100);
+    const iPct=Math.round(t.individual/maxTrend*100);
+    const cPct=Math.round(t.company/maxTrend*100);
+    trendHtml+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="font-size:9px;color:var(--txt3);font-weight:700;">¥${total>0?(total/10000).toFixed(0)+'万':'0'}</div>
+      <div style="width:100%;display:flex;flex-direction:column-reverse;gap:1px;flex:1;">
+        <div style="height:${hPct}%;background:var(--blu2);border-radius:2px;min-height:${t.inHouse>0?'2px':'0'};"></div>
+        <div style="height:${iPct}%;background:var(--tel2);border-radius:2px;min-height:${t.individual>0?'2px':'0'};"></div>
+        <div style="height:${cPct}%;background:var(--red2);border-radius:2px;min-height:${t.company>0?'2px':'0'};"></div>
+      </div>
+      <div style="font-size:9px;color:var(--txt3);">${t.label.slice(5)+'月'}</div>
+    </div>`;
+  });
+  trendHtml+=`</div>
+    <div style="display:flex;gap:14px;justify-content:center;font-size:10px;margin-top:6px;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--blu2);border-radius:2px;vertical-align:middle;margin-right:3px;"></span>社内</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--tel2);border-radius:2px;vertical-align:middle;margin-right:3px;"></span>個人事業主</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--red2);border-radius:2px;vertical-align:middle;margin-right:3px;"></span>委託会社</span>
+    </div>`;
+  $('ca-trend').innerHTML=trendHtml;
 }
 
 // ── 単価タブ切替 ──
