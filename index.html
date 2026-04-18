@@ -687,7 +687,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="pu-report" onclick="nav(this)"><span class="ni-ico">📊</span>日報レポート</div>
       <div class="ni" data-s="pu-sum" onclick="nav(this)"><span class="ni-ico">📊</span>品目別集計</div>
       <div class="ni" data-s="pu-cust" onclick="nav(this)"><span class="ni-ico">🤝</span>顧客・契約管理</div>
-      <div class="ni" data-s="pu-inv" onclick="nav(this)"><span class="ni-ico">💰</span>集荷請求管理</div>
+      <div class="ni" data-s="pu-inv" onclick="nav(this)"><span class="ni-ico">💰</span>請求書</div>
     </div>
   </div>
 
@@ -1516,18 +1516,30 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <input type="month" id="pinv-mon" class="fi" onchange="renderPUInv()">
+          <select id="pinv-filter" class="fi" onchange="renderPUInv()" style="font-size:11px;">
+            <option value="all">全顧客</option>
+            <option value="tax_included">税込単価のみ</option>
+            <option value="tax_excluded">税抜単価のみ</option>
+            <option value="issued">発行済みのみ</option>
+            <option value="unissued">未発行のみ</option>
+          </select>
         </div>
-        <button class="btn b-grn btn-sm" onclick="renderPUInv()">🔄 請求書自動生成</button>
+        <div class="fla gap6">
+          <button class="btn b-gh btn-sm" onclick="renderPUInv()">🔄 再集計</button>
+          <button class="btn b-blu btn-sm" onclick="bulkGenInvoices()">📄 一括発行 (選択した顧客)</button>
+        </div>
       </div>
       <div class="card">
-        <div class="ch"><div class="ct"><div class="cbar"></div>集荷 請求書一覧</div></div>
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>顧客別 請求書一覧</div>
+          <span id="pinv-count" class="xs muted"></span>
+        </div>
         <div class="tw"><table>
           <thead><tr>
-            <th>番号</th><th>顧客名</th><th>期間</th>
-            <th class="tr">ゆうパック計</th><th class="tr">PKT計</th>
-            <th class="tr ccp">CP</th><th class="tr cke">ケース</th>
-            <th class="tr cte">定形外</th><th class="tr cch">チャーター</th>
-            <th class="tr">請求合計</th><th>状態</th><th></th>
+            <th style="width:36px;"><input type="checkbox" id="pinv-chk-all" onchange="togglePuInvAll(this.checked)"></th>
+            <th>No</th><th>顧客名</th><th>税区分</th>
+            <th class="tr">数量合計</th><th class="tr">税抜</th><th class="tr">税込</th>
+            <th>最終発行</th><th>版</th><th></th>
           </tr></thead>
           <tbody id="tb-pinv"></tbody>
         </table></div>
@@ -1978,13 +1990,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fg"><label>TEL</label><input type="text" id="sys-tel" class="fi" placeholder="072-258-9811"></div>
           <div class="fg"><label>インボイス登録番号</label><input type="text" id="sys-invoice-no" class="fi" placeholder="T○○○○○○○○○○○○○"></div>
         </div>
-        <div class="xs fw7 mb8 mt12">振込先（請求書記載用）</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:8px;">
-          <div class="fg"><label>銀行名</label><input type="text" id="sys-bank-name" class="fi"></div>
-          <div class="fg"><label>支店名</label><input type="text" id="sys-bank-branch" class="fi"></div>
-          <div class="fg"><label>口座種別</label><select id="sys-bank-type" class="fi"><option>普通</option><option>当座</option></select></div>
-          <div class="fg"><label>口座番号・名義</label><input type="text" id="sys-bank-no" class="fi" placeholder="1234567 オオサカキュウハイ(カ"></div>
-        </div>
+        <div class="xs fw7 mb8 mt12">振込先口座（請求書フッタに反映）<span class="xs muted" style="font-weight:400;margin-left:8px;">2セット登録可・顧客ごとに使用セットを指定可</span></div>
+        <div id="sys-bank-sets"></div>
         <button class="btn b-grn btn-sm mt12" onclick="saveSystemInfo()">保存</button>
       </div>
 
@@ -2580,6 +2587,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg mt8" style="max-width:400px;">
       <label>備考（請求書に記載）</label>
       <input type="text" id="cu-invoice-note" class="fi" placeholder="例：振込手数料は貴社負担でお願いします">
+    </div>
+    <div class="fg mt8" style="max-width:400px;">
+      <label>使用する振込口座セット</label>
+      <select id="cu-bank-set" class="fi">
+        <option value="">（システムデフォルト）</option>
+      </select>
+      <div class="xs muted mt4">引き落とし専用顧客など、別口座セットを使う場合のみ指定</div>
+    </div>
+    <div class="fg mt8" style="max-width:400px;">
+      <label>単価の税区分</label>
+      <select id="cu-price-type" class="fi">
+        <option value="tax_excluded">税抜単価（一般的）</option>
+        <option value="tax_included">税込単価（単価に消費税を含む）</option>
+      </select>
+      <div class="xs muted mt4">請求書での表示方法と消費税計算が切り替わります</div>
     </div>
   </div>
 
@@ -4331,7 +4353,7 @@ const _TOP_TABS = {
     { s:'pu-report',  label:'日報レポート' },
     { s:'pu-sum',     label:'品目別集計' },
     { s:'pu-cust',    label:'顧客・契約管理' },
-    { s:'pu-inv',     label:'集荷請求管理' },
+    { s:'pu-inv',     label:'請求書' },
   ]},
   hr:       { subs: [
     { s:'staff',       label:'従業員管理' },
@@ -4974,7 +4996,7 @@ function renderCustTbl(){
     const active=cu.invoiceEnabled!==false;
     html.push('<tr>');
     html.push('<td class="mono">'+esc(cu.custNo||'')+'</td>');
-    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(String(cu.id||''))+'" onclick="editCust(parseInt(this.dataset.id))" style="font-weight:700;">'+esc(cu.name||'')+'</button></td>');
+    html.push('<td>'+custLink(cu.name||'')+'</td>');
     html.push('<td>'+esc(cu.region||'')+'</td>');
     html.push('<td class="tr mono">'+(cp.p60?'¥'+cp.p60:'-')+'</td>');
     html.push('<td class="tr mono">'+(cp.p80?'¥'+cp.p80:'-')+'</td>');
@@ -4996,33 +5018,110 @@ function renderCustTbl(){
 
 function renderPUInv(){
   const mon=toYM($('pinv-mon')?.value||'');
+  const filter=$('pinv-filter')?.value||'all';
+  // 顧客ごとに集計
   const rows=(D.pickup||[]).filter(function(r){return !mon||r.date?.startsWith(mon);});
   const map={};
   rows.forEach(function(r){
     const k=r.customerName||'未設定';
-    if(!map[k]) map[k]={name:k,items:{},total:0};
+    if(!map[k]) map[k]={name:k,items:{},total:0,rowCount:0};
+    map[k].rowCount++;
     Object.entries(r.items||{}).forEach(function(pair){
       map[k].items[pair[0]]=(map[k].items[pair[0]]||0)+(pair[1]||0);
       map[k].total+=(pair[1]||0);
     });
   });
-  const list=Object.values(map).sort(function(a,b){return b.total-a.total;});
-  const tbody=$('tb-pinv'); if(!tbody) return;
-  if(!list.length){tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
-  const html=[];
-  list.forEach(function(cu,i){
-    const ypSum=Object.entries(cu.items).filter(function(e){return e[0].includes('ゆうパック');}).reduce(function(s,e){return s+e[1];},0);
-    const pkSum=Object.entries(cu.items).filter(function(e){return e[0].includes('ゆうパケット');}).reduce(function(s,e){return s+e[1];},0);
-    html.push('<tr>');
-    html.push('<td>'+(i+1)+'</td>');
-    html.push('<td>'+esc(cu.name)+'</td>');
-    html.push('<td>'+(mon||'全期間')+'</td>');
-    html.push('<td class="tr">'+fmt(ypSum)+'</td>');
-    html.push('<td class="tr">'+fmt(pkSum)+'</td>');
-    html.push('<td class="tr">'+fmt(cu.total)+'</td>');
-    html.push('</tr>');
+  let list=Object.keys(map).map(k=>{
+    const cu=(D.customers||[]).find(c=>c.name===k);
+    const isIncl = cu?.priceType==='tax_included';
+    // 金額算出
+    let taxEx=0, taxAmt=0, grand=0;
+    if(cu){
+      const bill=_calcCustBilling(k, mon);
+      if(isIncl){
+        grand=bill.total;
+        taxAmt=Math.floor(grand*10/110);
+        taxEx=grand-taxAmt;
+      } else {
+        taxEx=bill.total;
+        taxAmt=Math.floor(taxEx*0.1);
+        grand=taxEx+taxAmt;
+      }
+    }
+    // 発行履歴
+    const hist=(_getIssuedDocs('custInvoice', k)||[]).filter(h=>h.month===mon);
+    const maxVer=hist.length?Math.max(...hist.map(h=>h.version||1)):0;
+    const lastIssuedAt=hist.length?hist.sort((a,b)=>(b.issuedAt||'').localeCompare(a.issuedAt||''))[0].issuedAt:'';
+    return {
+      name:k, customer:cu, priceType:isIncl?'tax_included':'tax_excluded',
+      totalQty:map[k].total, taxEx, taxAmt, grand,
+      lastIssuedAt, version:maxVer, rowCount:map[k].rowCount
+    };
   });
-  tbody.innerHTML=html.join('');
+
+  // フィルタ
+  if(filter==='tax_included') list=list.filter(x=>x.priceType==='tax_included');
+  else if(filter==='tax_excluded') list=list.filter(x=>x.priceType==='tax_excluded');
+  else if(filter==='issued') list=list.filter(x=>x.version>0);
+  else if(filter==='unissued') list=list.filter(x=>x.version===0);
+
+  list.sort((a,b)=>b.grand-a.grand);
+  const cnt=$('pinv-count'); if(cnt) cnt.textContent=list.length+'件';
+
+  const tbody=$('tb-pinv'); if(!tbody) return;
+  if(!list.length){ tbody.innerHTML='<tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:20px;">データなし</td></tr>'; return; }
+  const html=list.map((x,i)=>{
+    const taxBadge=x.priceType==='tax_included'
+      ? '<span class="bdg" style="background:rgba(251,191,36,.15);color:#d97706;font-size:10px;padding:2px 6px;">税込</span>'
+      : '<span class="bdg" style="background:rgba(37,99,235,.15);color:#60a5fa;font-size:10px;padding:2px 6px;">税抜</span>';
+    const verBadge=x.version>0
+      ? `<span class="bdg" style="background:rgba(52,168,83,.15);color:var(--grn2);font-size:10px;padding:2px 6px;">v${x.version}</span>`
+      : '<span class="xs muted">−</span>';
+    const issuedDate=x.lastIssuedAt?x.lastIssuedAt.slice(0,10):'−';
+    const btnDisabled=!x.customer||!mon?'disabled':'';
+    return '<tr>'+
+      '<td><input type="checkbox" class="pinv-chk" data-name="'+esc(x.name)+'" '+(x.customer?'':'disabled')+'></td>'+
+      '<td>'+(i+1)+'</td>'+
+      '<td>'+(x.customer?custLink(x.name):esc(x.name)+' <span class="xs muted">(未登録)</span>')+'</td>'+
+      '<td>'+taxBadge+'</td>'+
+      '<td class="tr mono">'+x.totalQty.toLocaleString()+'</td>'+
+      '<td class="tr mono">'+x.taxEx.toLocaleString()+'</td>'+
+      '<td class="tr mono fw7">¥'+x.grand.toLocaleString()+'</td>'+
+      '<td class="xs mono">'+issuedDate+'</td>'+
+      '<td>'+verBadge+'</td>'+
+      '<td><button class="btn btn-sm b-blu" '+btnDisabled+' onclick="generateCustInvoice(\''+esc(x.name).replace(/\'/g,"\\'")+'\',\''+esc(mon)+'\')">📄 発行</button></td>'+
+      '</tr>';
+  }).join('');
+  tbody.innerHTML=html;
+}
+
+function togglePuInvAll(checked){
+  document.querySelectorAll('.pinv-chk:not(:disabled)').forEach(c=>{c.checked=checked;});
+}
+
+function bulkGenInvoices(){
+  const mon=toYM($('pinv-mon')?.value||'');
+  if(!mon){ showAlert({msg:'対象月を選択してください'}); return; }
+  const names=[...document.querySelectorAll('.pinv-chk:checked')].map(c=>c.dataset.name);
+  if(!names.length){ showAlert({msg:'発行対象の顧客を選択してください'}); return; }
+  const proceed=confirm(names.length+'件の請求書を一括発行します。\n（発行済みは新しい版として発行されます）\n\n続けますか？');
+  if(!proceed) return;
+  let done=0;
+  names.forEach(n=>{
+    const hist=(_getIssuedDocs('custInvoice', n)||[]).filter(h=>h.month===mon);
+    const nextVer=hist.length?Math.max(...hist.map(h=>h.version||1))+1:1;
+    const doc=_buildCustInvoiceHTML(n, mon, {version:nextVer});
+    if(!doc) return;
+    // 一括ではウィンドウ開かず、履歴だけ保存
+    _saveIssuedDoc({
+      type:'custInvoice', target:n, month:mon,
+      amount:doc.amount, taxEx:doc.taxEx, taxAmt:doc.taxAmt,
+      version:nextVer, issuedAt:new Date().toISOString()
+    });
+    done++;
+  });
+  showAlert({msg:done+'件の請求書を発行しました。個別に印刷/PDF化する場合は各行の「発行」ボタンから開いてください。'});
+  renderPUInv();
 }
 
 // ─── 営業所セレクト同期 ───
@@ -6556,6 +6655,8 @@ function saveCust(){
     // 書類発行
     invoiceEnabled: !!$('cu-doc-invoice')?.checked,
     invoiceNote: $('cu-invoice-note')?.value||'',
+    bankSetId: $('cu-bank-set')?.value||'',
+    priceType: $('cu-price-type')?.value||'tax_excluded',
     // 取引状態
     status: $('cu-status')?.value||'稼働中',
     statusReason: $('cu-status-reason')?.value||'',
@@ -7180,6 +7281,9 @@ function editCust(id){
   // 書類発行
   if($('cu-doc-invoice'))$('cu-doc-invoice').checked=c.invoiceEnabled!==false;
   if($('cu-invoice-note'))$('cu-invoice-note').value=c.invoiceNote||'';
+  // 口座セット選択肢
+  _populateCuBankSetOptions(c.bankSetId||'');
+  if($('cu-price-type'))$('cu-price-type').value=c.priceType||'tax_excluded';
   if($('cu-status'))$('cu-status').value=c.status||'稼働中';
   if($('cu-status-reason'))$('cu-status-reason').value=c.statusReason||'';
   onCuStatusChange();
@@ -13467,14 +13571,148 @@ function _buildStampHTML(imageUrl, fallbackText){
   return `<span class="stamp">${esc(fallbackText||'印')}</span>`;
 }
 
-// 振込先情報ブロック
-function _buildBankInfoBlock(){
+// 振込先情報ブロック（2セット対応 / 顧客指定のbankSetIdで切替）
+function _buildBankInfoBlock(bankSetId){
+  const sets=_getBankSets();
+  // bankSetId未指定ならデフォルトセット
+  let set=sets.find(s=>s.id===bankSetId);
+  if(!set) set=sets.find(s=>s.isDefault)||sets[0];
+  if(!set) return '';
+  const b1=set.bank1||{};
+  const b2=set.bank2||{};
+  const b1On=b1.enabled!==false && (b1.bankName||b1.ban||b1.kigo);
+  const b2On=b2.enabled!==false && (b2.bankName||b2.ban);
+  if(!b1On && !b2On) return '';
+  const cell=(b,label)=>{
+    if(!b||(b.enabled===false)) return '';
+    const parts=[];
+    if(b.bankName) parts.push(esc(b.bankName));
+    if(b.branch) parts.push(esc(b.branch));
+    if(b.code) parts.push('コード'+esc(b.code));
+    if(b.store) parts.push('店番'+esc(b.store));
+    if(b.type) parts.push(esc(b.type));
+    if(b.kigo) parts.push('記号'+esc(b.kigo));
+    if(b.ban) parts.push('番号'+esc(b.ban));
+    let html=`<div class="bank-cell"><div class="bank-hd">${esc(label||b.label||'')}</div><div class="bank-bd">${parts.join(' ')}${b.holder?'<br><span class="xs">名義: '+esc(b.holder)+'</span>':''}</div></div>`;
+    return html;
+  };
+  const cells=[];
+  if(b1On) cells.push(cell(b1,b1.label||'振込銀行'));
+  if(b2On) cells.push(cell(b2,b2.label||'ネットバンキング専用'));
+  const cols=cells.length===2?'1fr 1fr':'1fr';
+  return `<div class="doc-bank" style="display:grid;grid-template-columns:${cols};border:0.75px solid #000;margin-top:10px;font-size:11px;">${cells.join('')}</div>`;
+}
+
+// 銀行セット取得（旧フィールドからマイグレーション）
+function _getBankSets(){
   const info=_getSystemInfo();
-  if(!info.bankName) return '';
-  return `<div style="margin-top:14px;padding:10px;border:1px solid #ccc;background:#fafafa;font-size:11px;">
-    <div style="font-weight:700;margin-bottom:4px;">お振込先</div>
-    <div>${esc(info.bankName)} ${esc(info.bankBranch||'')} ${esc(info.bankType||'普通')} ${esc(info.bankNo||'')}</div>
-  </div>`;
+  if(Array.isArray(info.bankSets)&&info.bankSets.length) return info.bankSets;
+  // 旧データのマイグレーション（bankName等からセット1を自動生成）
+  const defaultSet={
+    id:'set1', label:'セット1: 通常振込口座', isDefault:true,
+    bank1:{enabled:true, label:'振込銀行', bankName:info.bankName||'', branch:info.bankBranch||'', type:info.bankType||'普通', kigo:'', ban:info.bankNo||'', code:'', store:'', holder:''},
+    bank2:{enabled:false, label:'ネットバンキング専用', bankName:'', branch:'', type:'普通', kigo:'', ban:'', code:'', store:'', holder:''}
+  };
+  const emptySet2={
+    id:'set2', label:'セット2: 引き落とし用口座', isDefault:false,
+    bank1:{enabled:false, label:'振込銀行', bankName:'', branch:'', type:'普通', kigo:'', ban:'', code:'', store:'', holder:''},
+    bank2:{enabled:false, label:'ネットバンキング専用', bankName:'', branch:'', type:'普通', kigo:'', ban:'', code:'', store:'', holder:''}
+  };
+  return [defaultSet, emptySet2];
+}
+
+function _saveBankSets(sets){
+  const info=_getSystemInfo();
+  info.bankSets=sets;
+  _saveSystemInfoLS(info);
+}
+
+// システム設定画面に2セットの銀行フォームをレンダリング
+function renderBankSets(){
+  const el=$('sys-bank-sets'); if(!el) return;
+  const sets=_getBankSets();
+  const html=sets.map((set,i)=>{
+    const b1=set.bank1||{}, b2=set.bank2||{};
+    const defaultBtn=set.isDefault
+      ? `<button class="btn btn-sm" style="background:#1e40af;color:#fff;border:1px solid #3b82f6;" disabled>デフォルトに設定中</button>`
+      : `<button class="btn btn-sm b-gh" onclick="setDefaultBankSet('${set.id}')">このセットをデフォルトに</button>`;
+    return `
+    <div class="card mb12" style="padding:12px;">
+      <div class="fla gap10 mb10" style="align-items:center;border-bottom:1px solid var(--brd);padding-bottom:8px;">
+        <input type="text" class="fi" id="bs-${set.id}-label" value="${esc(set.label||'')}" style="width:240px;font-weight:700;">
+        ${set.isDefault?'<span class="bdg" style="background:rgba(37,99,235,.15);color:#60a5fa;font-size:10px;padding:2px 8px;">デフォルト</span>':''}
+        <span style="margin-left:auto;">${defaultBtn}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        ${_bankColHTML(set.id, 'bank1', b1)}
+        ${_bankColHTML(set.id, 'bank2', b2)}
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML=html;
+}
+
+function _bankColHTML(setId, key, b){
+  const prefix=`bs-${setId}-${key}`;
+  return `
+    <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:4px;padding:10px 12px;">
+      <div class="xs fw7 mb6" style="color:var(--blu2);display:flex;justify-content:space-between;">
+        <input type="text" class="fi" id="${prefix}-label" value="${esc(b.label||(key==='bank1'?'振込銀行':'ネットバンキング専用'))}" style="width:180px;font-size:11px;font-weight:700;">
+      </div>
+      <label class="xs" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><input type="checkbox" id="${prefix}-on" ${b.enabled!==false?'checked':''}> 請求書に表示する</label>
+      <div style="display:grid;grid-template-columns:85px 1fr;gap:6px;font-size:11px;">
+        <label>銀行名</label><input type="text" class="fi" id="${prefix}-bankName" value="${esc(b.bankName||'')}" style="font-size:11px;">
+        <label>支店名</label><input type="text" class="fi" id="${prefix}-branch" value="${esc(b.branch||'')}" style="font-size:11px;">
+        <label>コード</label><input type="text" class="fi" id="${prefix}-code" value="${esc(b.code||'')}" style="font-size:11px;">
+        <label>店番</label><input type="text" class="fi" id="${prefix}-store" value="${esc(b.store||'')}" style="font-size:11px;">
+        <label>種別</label><input type="text" class="fi" id="${prefix}-type" value="${esc(b.type||'普通')}" style="font-size:11px;">
+        <label>記号</label><input type="text" class="fi" id="${prefix}-kigo" value="${esc(b.kigo||'')}" style="font-size:11px;">
+        <label>番号</label><input type="text" class="fi" id="${prefix}-ban" value="${esc(b.ban||'')}" style="font-size:11px;">
+        <label>口座名義</label><input type="text" class="fi" id="${prefix}-holder" value="${esc(b.holder||'')}" style="font-size:11px;">
+      </div>
+    </div>`;
+}
+
+function setDefaultBankSet(setId){
+  const sets=_getBankSets();
+  sets.forEach(s=>s.isDefault=(s.id===setId));
+  _saveBankSets(sets);
+  // 現在の入力値を先に保存
+  saveBankSetsFromUI();
+  renderBankSets();
+}
+
+// 画面の入力値をbankSetsに反映
+function saveBankSetsFromUI(){
+  const sets=_getBankSets();
+  sets.forEach(set=>{
+    const labelEl=$(`bs-${set.id}-label`);
+    if(labelEl) set.label=labelEl.value||set.label;
+    ['bank1','bank2'].forEach(key=>{
+      const prefix=`bs-${set.id}-${key}`;
+      const b=set[key]||{};
+      b.enabled=$(prefix+'-on')?.checked||false;
+      b.label=$(prefix+'-label')?.value||'';
+      b.bankName=$(prefix+'-bankName')?.value||'';
+      b.branch=$(prefix+'-branch')?.value||'';
+      b.code=$(prefix+'-code')?.value||'';
+      b.store=$(prefix+'-store')?.value||'';
+      b.type=$(prefix+'-type')?.value||'普通';
+      b.kigo=$(prefix+'-kigo')?.value||'';
+      b.ban=$(prefix+'-ban')?.value||'';
+      b.holder=$(prefix+'-holder')?.value||'';
+      set[key]=b;
+    });
+  });
+  _saveBankSets(sets);
+}
+
+// 顧客モーダルの口座セット選択肢を生成
+function _populateCuBankSetOptions(selectedId){
+  const sel=$('cu-bank-set'); if(!sel) return;
+  const sets=_getBankSets();
+  sel.innerHTML='<option value="">（システムデフォルト）</option>'+
+    sets.map(s=>`<option value="${esc(s.id)}"${selectedId===s.id?' selected':''}>${esc(s.label||s.id)}${s.isDefault?' ★':''}</option>`).join('');
 }
 
 function _buildPaySlipHTML(staffName, monStr){
@@ -13586,137 +13824,314 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
 
 // ── 外注（個人事業主・委託会社）用 支払明細書 ──
 function _buildPaySlipHTMLContractor(pay, monStr){
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
-  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">支払明細書</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+  const today=(new Date()).toISOString().slice(0,10);
+  const info=_getSystemInfo();
+  const st=pay.staff;
+
+  // 委託会社所属の場合、会社情報を宛先として使う（個人の場合は個人名）
+  const isCompany = st.kubun==='会社委託' && st.companyName;
+  const coInfo = isCompany?(D.companies||[]).find(c=>c.name===st.companyName):null;
+  const toName = isCompany?(coInfo?.name||st.companyName):st.name;
+  const toZip = (isCompany?coInfo?.zip:st.zip)||'';
+  const toAddr = (isCompany?coInfo?.addr:st.addr)||'';
+  const toHonor = isCompany?'御中':'様';
+
+  // 明細行
+  const itemRows = pay.breakdown.map((b,i)=>`
+    <tr><td class="code">${i+1}</td><td>${esc(b.label)}</td><td class="num">1</td><td class="num">${b.amount.toLocaleString()}</td><td class="num">${b.amount.toLocaleString()}</td></tr>`).join('');
+  const blankCount = Math.max(0, 6-pay.breakdown.length);
+  const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+  // 自社情報
+  const coName = esc(info.companyName||'大阪急配株式会社');
+  const coZip = info.zip?`〒 ${esc(info.zip)}`:'〒 591-8001';
+  const coAddr = esc(info.addr||'大阪府堺市北区常磐町3-12-5');
+  const coTel = info.tel||'TEL 072-258-9811';
+  const coFax = info.fax||'FAX 072-258-6000';
+  const invoiceNo = info.invoiceNo||'';
+  const stampImg = info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" class="fb-stamp-img">`:`<div class="fb-stamp-overlay">${esc(info.companyName||'大阪急配')}</div>`;
+  const bankHTML = _buildBankInfoBlock(''); // デフォルトセット
+
+  const html = `
+  <div class="fb-paper">
+    <div class="fb-top">
+      <div class="fb-left">
+        <div class="fb-addr-line">${toZip?'〒 '+esc(toZip):''}</div>
+        <div class="fb-addr-line">${esc(toAddr)}</div>
+        <div class="fb-cust"><span>${esc(toName)}</span><span class="mr">${toHonor}</span></div>
+        <div class="fb-subtxt">下記の通りお支払申し上げます。</div>
+      </div>
+      <div class="fb-center">
+        <h1 class="fb-title">支 払 明 細 書</h1>
+        <div class="fb-amt-box">
+          <div class="lbl">当　月　お　支　払　金　額</div>
+          <div class="val">¥${pay.total.toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="fb-right">
+        ${stampImg}
+        <div class="fb-issue">発行日：${today}</div>
+        <div class="fb-co-name">${coName}</div>
+        ${invoiceNo?`<div class="fb-inv-reg">登録番号: ${esc(invoiceNo)}</div>`:''}
+        <div>${coZip}</div>
+        <div>${coAddr}</div>
+        <div>${esc(coTel)} / ${esc(coFax)}</div>
+      </div>
     </div>
-    <div class="doc-to">${esc(pay.staff.name)} 様</div>
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">支払金額</div>
-      <div class="doc-amount">¥${pay.total.toLocaleString()}</div>
-    </div>
-    <table>
-      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr></tbody>
+    <table class="fb-items">
+      <thead>
+        <tr>
+          <th style="width:7%;">No</th>
+          <th style="width:45%;">内訳</th>
+          <th style="width:10%;">件数</th>
+          <th style="width:17%;">単価</th>
+          <th style="width:21%;">金額</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${blanks}
+        <tr class="total"><td colspan="4" style="text-align:right;">合計</td><td class="tot-val">${pay.total.toLocaleString()}</td></tr>
+      </tbody>
     </table>
-    ${_buildCompanyFromBlock(true)}
-    <div class="doc-footer">※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。</div>`;
+    ${bankHTML}
+    <div class="fb-remark">
+      <div class="hd">備考</div>
+      <div class="bd">${esc(info.docFooterPayslip||'※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。')}</div>
+    </div>
+  </div>`;
   return {title:'支払明細書', html, amount:pay.total};
 }
 
 function _buildInvoiceProxyHTML(staffName, monStr){
   const pay=_calcStaffPayment(staffName, monStr);
   if(!pay.staff) return null;
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
-  let rows=pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
+  const today=(new Date()).toISOString().slice(0,10);
+  const info=_getSystemInfo();
+  const st=pay.staff;
 
-  // 委託会社所属の場合は会社印＋代表印を使う
-  let stampUrl = pay.staff.docs?.stampUrl;
-  let issuerName = pay.staff.name;
-  if(pay.staff.kubun==='会社委託' && pay.staff.companyName){
-    const co=(D.companies||[]).find(c=>c.name===pay.staff.companyName);
-    if(co?.docs?.repStampUrl) stampUrl=co.docs.repStampUrl;
-    else if(co?.docs?.companyStampUrl) stampUrl=co.docs.companyStampUrl;
-    issuerName=pay.staff.companyName;
+  // 発行元（請求元）情報
+  const isCompany = st.kubun==='会社委託' && st.companyName;
+  const coInfo = isCompany?(D.companies||[]).find(c=>c.name===st.companyName):null;
+  const issuerName = isCompany?(coInfo?.name||st.companyName):st.name;
+  const issuerZip = (isCompany?coInfo?.zip:st.zip)||'';
+  const issuerAddr = (isCompany?coInfo?.addr:st.addr)||'';
+  const issuerTel = (isCompany?coInfo?.tel:st.tel)||'';
+  const issuerInvoiceNo = (isCompany?coInfo?.invoiceNo:st.invoiceNo)||'';
+
+  // 発行元の印影（会社印または個人印）
+  let stampUrl = st.docs?.stampUrl;
+  if(isCompany){
+    if(coInfo?.docs?.repStampUrl) stampUrl=coInfo.docs.repStampUrl;
+    else if(coInfo?.docs?.companyStampUrl) stampUrl=coInfo.docs.companyStampUrl;
   }
+  const stampImg = stampUrl?`<img src="${esc(stampUrl)}" class="fb-stamp-img">`:`<div class="fb-stamp-overlay">${esc((issuerName||'').slice(0,4))}</div>`;
 
-  // 電子印制作費加算（初回のみ）
+  // 明細
+  let breakdown=[...pay.breakdown];
   let displayTotal=pay.total;
-  const sysInfo=_getSystemInfo();
-  const alreadyCharged = !!pay.staff.docs?.stampFeeCharged;
-  if(pay.staff.docs?.stampRequest && sysInfo.stampFee && !alreadyCharged){
-    displayTotal+=sysInfo.stampFee;
-    rows+=`<tr><td>電子印制作費（初回のみ）</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+  const alreadyCharged = !!st.docs?.stampFeeCharged;
+  if(st.docs?.stampRequest && info.stampFee && !alreadyCharged){
+    breakdown.push({label:'電子印制作費（初回のみ）', qty:1, unit:info.stampFee, amount:info.stampFee});
+    displayTotal += info.stampFee;
   }
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">請 求 書</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+  const itemRows = breakdown.map((b,i)=>`
+    <tr><td class="code">${i+1}</td><td>${esc(b.label)}</td><td class="num">${(b.qty||1).toLocaleString()}</td><td class="num">${(b.unit||b.amount).toLocaleString()}</td><td class="num">${b.amount.toLocaleString()}</td></tr>`).join('');
+  const blankCount = Math.max(0, 6-breakdown.length);
+  const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+  // 宛先=自社
+  const toZip = info.zip?`〒 ${esc(info.zip)}`:'';
+  const toAddr = esc(info.addr||'');
+  const toName = esc(info.companyName||'大阪急配株式会社');
+  // 発行元の銀行は未対応（個人/委託会社マスタに銀行未登録のためフッタ銀行は省略）
+
+  const html = `
+  <div class="fb-paper">
+    <div class="fb-top">
+      <div class="fb-left">
+        <div class="fb-addr-line">${toZip}</div>
+        <div class="fb-addr-line">${toAddr}</div>
+        <div class="fb-cust"><span>${toName}</span><span class="mr">御中</span></div>
+        <div class="fb-subtxt">下記の通り御請求申し上げます。</div>
+      </div>
+      <div class="fb-center">
+        <h1 class="fb-title">請　求　書</h1>
+        <div class="fb-amt-box">
+          <div class="lbl">当　月　御　請　求　金　額</div>
+          <div class="val">¥${displayTotal.toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="fb-right">
+        ${stampImg}
+        <div class="fb-issue">発行日：${today}</div>
+        <div class="fb-co-name">${esc(issuerName)}</div>
+        ${issuerInvoiceNo?`<div class="fb-inv-reg">登録番号: ${esc(issuerInvoiceNo)}</div>`:''}
+        ${issuerZip?`<div>〒 ${esc(issuerZip)}</div>`:''}
+        ${issuerAddr?`<div>${esc(issuerAddr)}</div>`:''}
+        ${issuerTel?`<div>TEL ${esc(issuerTel)}</div>`:''}
+      </div>
     </div>
-    <div class="doc-to">大阪急配株式会社 御中</div>
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">ご請求金額</div>
-      <div class="doc-amount">¥${displayTotal.toLocaleString()}</div>
-    </div>
-    <table>
-      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${displayTotal.toLocaleString()}</td></tr></tbody>
+    <table class="fb-items">
+      <thead>
+        <tr>
+          <th style="width:7%;">No</th>
+          <th style="width:45%;">内訳</th>
+          <th style="width:10%;">件数</th>
+          <th style="width:17%;">単価</th>
+          <th style="width:21%;">金額</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${blanks}
+        <tr class="total"><td colspan="4" style="text-align:right;">合計</td><td class="tot-val">${displayTotal.toLocaleString()}</td></tr>
+      </tbody>
     </table>
-    <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">${esc(issuerName)}</div>
-      ${pay.staff.tel?`<div>TEL: ${esc(pay.staff.tel)}</div>`:''}
-      <div style="margin-top:12px;">${_buildStampHTML(stampUrl, issuerName.slice(0,2))}</div>
+    <div class="fb-remark">
+      <div class="hd">備考</div>
+      <div class="bd">${esc(info.docFooterInvproxy||'※ 本請求書は大阪急配株式会社による発行代行です。')}</div>
     </div>
-    <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
+  </div>`;
   return {title:'請求書（発行代行）', html, amount:displayTotal};
 }
 
-function _buildCustInvoiceHTML(custName, monStr){
+function _buildCustInvoiceHTML(custName, monStr, opts){
+  opts=opts||{};
   const bill=_calcCustBilling(custName, monStr);
   if(!bill.customer) return null;
   const cu=bill.customer;
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
-  let rows=bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">${b.qty.toLocaleString()}</td><td class="tr">¥${b.unit.toLocaleString()}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
-
-  // 支払期日計算（締め月と支払条件から算出）
-  const payDeadline = _calcPaymentDeadline(cu, monStr);
-
-  // 宛先ブロック（住所・部署・代表者あれば表示）
-  let toBlock = `<div class="doc-to">${esc(cu.name)} 御中</div>`;
-  if(cu.zip || cu.addr || cu.dept || cu.repName || cu.contact){
-    toBlock = `<div style="margin-top:24px;margin-bottom:8px;">`;
-    if(cu.zip || cu.addr){
-      toBlock += `<div style="font-size:11px;color:#555;">${cu.zip?'〒'+esc(cu.zip)+' ':''}${esc(cu.addr||'')}</div>`;
-    }
-    toBlock += `<div style="font-size:20px;font-weight:700;border-bottom:1px solid #888;padding-bottom:4px;padding-top:4px;">${esc(cu.name)} 御中</div>`;
-    if(cu.dept||cu.title||cu.repName||cu.contact){
-      const parts=[];
-      if(cu.dept) parts.push(esc(cu.dept));
-      if(cu.title) parts.push(esc(cu.title));
-      if(cu.repName) parts.push(esc(cu.repName)+' 様');
-      else if(cu.contact) parts.push(esc(cu.contact)+' 様');
-      toBlock += `<div style="font-size:13px;color:#555;margin-top:4px;">${parts.join('　')}</div>`;
-    }
-    toBlock += `</div>`;
-  }
-
-  // 支払条件・備考
-  let payInfo = '';
-  if(payDeadline || cu.payMethod){
-    payInfo = `<div style="margin-top:14px;padding:10px;border:2px solid #1a2238;background:#f5f5ff;font-size:13px;">
-      ${payDeadline?`<div><strong>お支払期日：</strong><span style="font-size:16px;font-weight:700;color:#c0392b;">${esc(payDeadline)}</span></div>`:''}
-      ${cu.payMethod?`<div style="margin-top:4px;"><strong>お支払方法：</strong>${esc(cu.payMethod)}</div>`:''}
-    </div>`;
-  }
-
+  const today=(new Date()).toISOString().slice(0,10);
   const info=_getSystemInfo();
-  const footerText = info.docFooterInvoice || '※ お振込は上記支払期日までにお願いいたします。';
 
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">請 求 書</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
+  // 税区分: 顧客のpriceTypeが指定されていれば従う、未指定なら税抜扱い
+  const isTaxIncl = (cu.priceType==='tax_included');
+  const taxLabel = isTaxIncl?'税込':'税抜';
+
+  // 金額計算（billは現状tax_excluded前提: total=税抜小計）
+  // 税込単価顧客の場合は _calcCustBilling が返すtotalを税込合計として扱い、税抜・消費税を逆算
+  let grand, taxEx, taxAmt;
+  if(isTaxIncl){
+    grand = bill.total;                       // 税込合計
+    taxAmt = Math.floor(grand*10/110);        // 消費税 切り捨て
+    taxEx = grand - taxAmt;                   // 税抜
+  } else {
+    taxEx = bill.total;                       // 税抜小計
+    taxAmt = Math.floor(taxEx*0.1);           // 消費税 切り捨て
+    grand = taxEx + taxAmt;                   // 税込合計
+  }
+
+  // 支払期日
+  const payDeadline = _calcPaymentDeadline(cu, monStr) || '';
+
+  // 明細行
+  const itemRows = bill.breakdown.map((b,i)=>`
+    <tr>
+      <td class="code">${i+1}</td>
+      <td>${esc(b.label)}</td>
+      <td class="num">${b.qty.toLocaleString()}</td>
+      <td class="num">${b.unit.toLocaleString()}</td>
+      <td class="num">${b.amount.toLocaleString()}</td>
+    </tr>`).join('');
+  // 空白行（最低6行埋める）
+  const blankCount = Math.max(0, 6-bill.breakdown.length);
+  const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+  // 宛先ブロック
+  const zip=cu.zip?`〒 ${esc(cu.zip)}`:'';
+  const addr=esc(cu.addr||'');
+  const custName2=esc(cu.name);
+
+  // 自社情報
+  const coName = esc(info.companyName||'大阪急配株式会社');
+  const coZip = info.zip?`〒 ${esc(info.zip)}`:'〒 591-8001';
+  const coAddr = esc(info.addr||'大阪府堺市北区常磐町3-12-5');
+  const coTel = info.tel||'TEL 072-258-9811';
+  const coFax = info.fax||'FAX 072-258-6000';
+  const invoiceNo = info.invoiceNo||'';
+  const stampImg = info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" class="fb-stamp-img">`:`<div class="fb-stamp-overlay">${esc(info.companyName||'大阪急配')}</div>`;
+
+  // 銀行情報（顧客のbankSetId優先、なければデフォルト）
+  const bankHTML = _buildBankInfoBlock(cu.bankSetId||'');
+
+  // 版数表示（再発行時のみ）
+  const version = opts.version||1;
+  const versionLabel = version>1?`<span class="fb-version">(第${version}版)</span>`:'';
+
+  // 備考
+  const noteExtra = cu.invoiceNote?`<br>${esc(cu.invoiceNote)}`:'';
+  const noteLine = `※ 単価・金額は${taxLabel}表示となっております。お振込は税込合計 ¥${grand.toLocaleString()} にてお願い申し上げます。${noteExtra}`;
+
+  const html = `
+  <div class="fb-paper">
+    <div class="fb-top">
+      <div class="fb-left">
+        <div class="fb-addr-line">${zip}</div>
+        <div class="fb-addr-line">${addr}</div>
+        <div class="fb-cust"><span>${custName2}</span><span class="mr">御中</span></div>
+        <div class="fb-subtxt">下記の通り御請求申し上げます。</div>
+      </div>
+      <div class="fb-center">
+        <h1 class="fb-title">請　求　書</h1>
+        <div class="fb-amt-box">
+          <div class="lbl">当　月　御　請　求　金　額</div>
+          <div class="val">¥${grand.toLocaleString()}</div>
+        </div>
+        ${payDeadline?`<div class="fb-due">支払期日：<strong>${esc(payDeadline)}</strong></div>`:''}
+      </div>
+      <div class="fb-right">
+        ${stampImg}
+        <div class="fb-issue">発行日：${today} ${versionLabel}</div>
+        <div class="fb-co-name">${coName}</div>
+        ${invoiceNo?`<div class="fb-inv-reg">登録番号: ${esc(invoiceNo)}</div>`:''}
+        <div>${coZip}</div>
+        <div>${coAddr}</div>
+        <div>${esc(coTel)} / ${esc(coFax)}</div>
+      </div>
     </div>
-    ${toBlock}
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">ご請求金額（税抜）</div>
-      <div class="doc-amount">¥${bill.total.toLocaleString()}</div>
+
+    <div class="fb-mid">
+      <div></div>
+      <div>
+        <table class="fb-sum">
+          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
+          <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
+          <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
+          <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">得意先コード</th></tr>
+          <tr><td style="text-align:center;">${esc(monStr.replace('-','/')+'/末')}</td><td style="text-align:center;">${esc(cu.custNo||cu.id||'')}</td></tr>
+        </table>
+      </div>
     </div>
-    ${payInfo}
-    <table>
-      <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
+
+    <table class="fb-items">
+      <thead>
+        <tr>
+          <th style="width:7%;">コード</th>
+          <th style="width:45%;">品目・備考</th>
+          <th style="width:10%;">数量</th>
+          <th style="width:17%;">売上単価(${taxLabel})</th>
+          <th style="width:21%;">売上金額(${taxLabel})</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${blanks}
+        <tr class="total">
+          <td colspan="4" style="text-align:right;">頁 計(${taxLabel})</td>
+          <td class="tot-val">${(isTaxIncl?grand:taxEx).toLocaleString()}</td>
+        </tr>
+      </tbody>
     </table>
-    ${_buildCompanyFromBlock(true, true)}
-    ${_buildBankInfoBlock()}
-    <div class="doc-footer">${esc(footerText)}${cu.invoiceNote?'<br>'+esc(cu.invoiceNote):''}</div>`;
-  return {title:'請求書', html, amount:bill.total};
+
+    ${bankHTML}
+
+    <div class="fb-remark">
+      <div class="hd">備考</div>
+      <div class="bd">${noteLine}</div>
+    </div>
+  </div>`;
+
+  return {title:'請求書', html, amount:grand, taxEx, taxAmt, version};
 }
 
 // 支払期日計算（締め月＋支払条件から）
@@ -13789,11 +14204,13 @@ function _htmlToBase64(html, title){
 }
 
 function _printDocWindow(title, html){
-  const w=window.open('', '_blank', 'width=900,height=1100');
+  const w=window.open('', '_blank', 'width=1100,height=800');
   if(!w){ showAlert({msg:'ポップアップがブロックされました'}); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
-      body{font-family:'Yu Gothic','Noto Sans JP',sans-serif;color:#1a1a2e;padding:40px;background:#fff;}
+      @page{size:A4 landscape;margin:10mm;}
+      body{font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;color:#000;padding:20px;background:#fff;margin:0;}
+      /* 旧フォーマット互換（給与明細などで使用） */
       .doc-header{border-bottom:3px solid #1a2238;padding-bottom:16px;margin-bottom:24px;}
       .doc-title{font-size:32px;font-weight:800;letter-spacing:8px;text-align:center;}
       .doc-meta{display:flex;justify-content:space-between;margin-top:12px;font-size:12px;color:#555;}
@@ -13802,15 +14219,57 @@ function _printDocWindow(title, html){
       .doc-amount-box{background:#f5f5f5;border:2px solid #1a2238;padding:16px;margin:24px 0;text-align:center;}
       .doc-amount-label{font-size:12px;color:#555;letter-spacing:4px;}
       .doc-amount{font-family:'Yu Gothic',serif;font-size:36px;font-weight:800;color:#1a2238;}
-      table{width:100%;border-collapse:collapse;margin-top:20px;font-size:12px;}
-      th{background:#1a2238;color:#fff;padding:10px 8px;text-align:left;}
-      td{border-bottom:1px solid #ccc;padding:8px;}
-      td.tr{text-align:right;font-family:'DM Mono',monospace;}
+      table{border-collapse:collapse;}
       .doc-footer{margin-top:40px;font-size:11px;color:#777;}
       .stamp{display:inline-block;width:60px;height:60px;border:2px solid #c0392b;border-radius:50%;color:#c0392b;text-align:center;line-height:56px;font-weight:700;font-size:11px;letter-spacing:2px;position:relative;}
       .stamp::after{content:'';position:absolute;inset:4px;border:1px solid #c0392b;border-radius:50%;}
-      @media print{body{padding:20px;} .no-print{display:none;}}
-      .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;}
+      /* v5請求書レイアウト */
+      .fb-paper{width:1020px;min-height:700px;padding:24px 32px;margin:0 auto;font-size:11px;line-height:1.5;color:#000;background:#fff;}
+      .fb-top{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:start;margin-bottom:14px;}
+      .fb-left .fb-addr-line{border-bottom:1px dotted #888;padding:2px 0;margin-bottom:3px;font-size:11px;}
+      .fb-cust{font-size:17px;border-bottom:1.5px solid #000;padding:10px 0 3px;display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;}
+      .fb-cust .mr{font-size:12px;padding-right:20px;}
+      .fb-subtxt{font-size:11px;margin-top:5px;color:#444;}
+      .fb-center{text-align:center;}
+      .fb-title{font-family:'MS Mincho','Yu Mincho',serif;font-size:28px;letter-spacing:0.7em;padding-left:0.7em;margin:0 0 12px;font-weight:400;}
+      .fb-amt-box{border:1.5px solid #000;padding:7px 22px;text-align:center;display:inline-block;}
+      .fb-amt-box .lbl{font-size:11px;letter-spacing:0.3em;margin-bottom:3px;}
+      .fb-amt-box .val{font-size:24px;font-weight:700;font-family:'Times New Roman',serif;line-height:1;}
+      .fb-due{font-size:11px;color:#444;margin-top:6px;}
+      .fb-due strong{font-weight:700;color:#000;}
+      .fb-right{text-align:right;font-size:11px;line-height:1.5;position:relative;}
+      .fb-issue{margin:0 0 2px;color:#666;}
+      .fb-co-name{font-size:15px;font-weight:700;margin:1px 0;}
+      .fb-inv-reg{font-size:10px;color:#444;margin:0;}
+      .fb-right > div{margin:0;}
+      .fb-stamp-overlay{position:absolute;right:78px;top:8px;width:62px;height:62px;border:2.2px double #c62828;color:#c62828;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'MS Mincho',serif;font-size:10px;font-weight:700;line-height:1.05;text-align:center;letter-spacing:0;padding:3px;opacity:0.75;z-index:5;}
+      .fb-stamp-img{position:absolute;right:70px;top:6px;width:70px;height:70px;object-fit:contain;opacity:0.85;z-index:5;pointer-events:none;}
+      .fb-mid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:14px;align-items:flex-start;}
+      .fb-sum{border-collapse:collapse;width:100%;font-size:11px;margin-left:auto;max-width:380px;}
+      .fb-sum th,.fb-sum td{border:0.75px solid #000;padding:5px 10px;}
+      .fb-sum th{background:#f4f4f4;text-align:center;font-weight:500;}
+      .fb-sum td.num{text-align:right;font-family:'Times New Roman',serif;}
+      .fb-sum .yel-h{background:#fff3b0;text-align:center;font-weight:700;}
+      .fb-sum .yel-v{background:#fff3b0;font-weight:700;text-align:right;font-family:'Times New Roman',serif;font-size:13px;}
+      .fb-items{border-collapse:collapse;width:100%;font-size:11px;margin-top:8px;}
+      .fb-items th,.fb-items td{border:0.75px solid #000;padding:6px 10px;}
+      .fb-items thead th{background:#f4f4f4;text-align:center;font-weight:500;font-size:11px;}
+      .fb-items td.code{text-align:center;}
+      .fb-items td.num{text-align:right;font-family:'Times New Roman',serif;}
+      .fb-items tr.blank td{height:22px;}
+      .fb-items tr.total td{font-weight:700;font-size:12px;background:#fafafa;}
+      .fb-items tr.total .tot-val{background:#fff3b0;font-family:'Times New Roman',serif;font-size:14px;text-align:right;}
+      .doc-bank{display:grid;grid-template-columns:1fr 1fr;border:0.75px solid #000;margin-top:10px;font-size:11px;}
+      .doc-bank .bank-cell{padding:0;}
+      .doc-bank .bank-cell:first-child{border-right:0.75px solid #000;}
+      .doc-bank .bank-hd{background:#f4f4f4;font-weight:500;padding:5px 12px;border-bottom:0.75px solid #000;}
+      .doc-bank .bank-bd{padding:8px 12px;}
+      .fb-remark{border:0.75px solid #000;margin-top:10px;font-size:11px;}
+      .fb-remark .hd{background:#f4f4f4;padding:5px 12px;font-weight:500;border-bottom:0.75px solid #000;}
+      .fb-remark .bd{padding:8px 12px;min-height:28px;}
+      .fb-version{display:inline-block;background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600;}
+      @media print{body{padding:0;} .no-print{display:none;}}
+      .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;z-index:1000;}
     </style></head><body>
     <button class="print-btn no-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
     ${html}
@@ -13848,33 +14307,29 @@ function generateInvoiceProxy(staffName, monStr){
 }
 
 function generateCustInvoice(custName, monStr){
-  const bill=_calcCustBilling(custName, monStr);
-  if(!bill.customer){ showAlert({msg:'顧客データなし'}); return; }
-  const today=new Date().toISOString().slice(0,10);
-  const mon=monStr.replace('-','年')+'月';
-
-  let rows=bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr">${b.qty.toLocaleString()}</td><td class="tr">¥${b.unit.toLocaleString()}</td><td class="tr">¥${b.amount.toLocaleString()}</td></tr>`).join('');
-
-  const html=`
-    <div class="doc-header">
-      <div class="doc-title">請 求 書</div>
-      <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
-    </div>
-    <div class="doc-to">${esc(bill.customer.name)} 御中</div>
-    <div class="doc-amount-box">
-      <div class="doc-amount-label">ご請求金額（税抜）</div>
-      <div class="doc-amount">¥${bill.total.toLocaleString()}</div>
-    </div>
-    <table>
-      <thead><tr><th>品目</th><th style="text-align:right;">数量</th><th style="text-align:right;">単価</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td colspan="3">合計</td><td class="tr">¥${bill.total.toLocaleString()}</td></tr></tbody>
-    </table>
-    ${_buildCompanyFromBlock(true, true)}
-    <div class="doc-footer">※ お振込は翌月末までにお願いいたします。${_buildBankInfoBlock()}</div>`;
-
-  _printDocWindow('請求書', html);
-  _saveIssuedDoc({type:'custInvoice', target:custName, month:monStr, amount:bill.total, issuedAt:new Date().toISOString()});
-  renderCustFSTab('docs');
+  // 既存発行履歴の最大版数を取得
+  const history=(_getIssuedDocs('custInvoice', custName)||[]).filter(h=>h.month===monStr);
+  let nextVersion=1;
+  if(history.length){
+    const maxVer=Math.max(...history.map(h=>h.version||1));
+    nextVersion=maxVer+1;
+    // 再発行確認
+    const proceed=confirm(
+      `${custName} ${monStr}分の請求書は既に発行済みです（最新: 第${maxVer}版）。\n\n`+
+      `第${nextVersion}版として再発行しますか？\n`+
+      `（履歴は残ります）`
+    );
+    if(!proceed) return;
+  }
+  const doc=_buildCustInvoiceHTML(custName, monStr, {version:nextVersion});
+  if(!doc){ showAlert({msg:'顧客データなし'}); return; }
+  _printDocWindow(doc.title, doc.html);
+  _saveIssuedDoc({
+    type:'custInvoice', target:custName, month:monStr,
+    amount:doc.amount, taxEx:doc.taxEx, taxAmt:doc.taxAmt,
+    version:nextVersion, issuedAt:new Date().toISOString()
+  });
+  try{ renderCustFSTab('docs'); }catch(e){}
 }
 
 // ── 従事員 明細・書類タブ ──
@@ -14647,12 +15102,10 @@ function saveSystemInfo(){
   info.addr=$('sys-addr')?.value||'';
   info.tel=$('sys-tel')?.value||'';
   info.invoiceNo=$('sys-invoice-no')?.value||'';
-  info.bankName=$('sys-bank-name')?.value||'';
-  info.bankBranch=$('sys-bank-branch')?.value||'';
-  info.bankType=$('sys-bank-type')?.value||'普通';
-  info.bankNo=$('sys-bank-no')?.value||'';
   _saveSystemInfoLS(info);
-  showAlert({msg:'自社情報を保存しました'});
+  // 銀行セットを保存
+  saveBankSetsFromUI();
+  showAlert({msg:'自社情報・振込先口座を保存しました'});
 }
 
 // 雇用保険料率 保存・読込・プレビュー
@@ -14864,10 +15317,8 @@ function loadSystemInfoToForm(){
   if($('sys-addr'))$('sys-addr').value=info.addr||'';
   if($('sys-tel'))$('sys-tel').value=info.tel||'';
   if($('sys-invoice-no'))$('sys-invoice-no').value=info.invoiceNo||'';
-  if($('sys-bank-name'))$('sys-bank-name').value=info.bankName||'';
-  if($('sys-bank-branch'))$('sys-bank-branch').value=info.bankBranch||'';
-  if($('sys-bank-type'))$('sys-bank-type').value=info.bankType||'普通';
-  if($('sys-bank-no'))$('sys-bank-no').value=info.bankNo||'';
+  // 銀行セット描画
+  renderBankSets();
   if($('sys-stamp-fee'))$('sys-stamp-fee').value=info.stampFee||0;
   // 新項目
   if($('sys-doc-footer-invoice'))$('sys-doc-footer-invoice').value=info.docFooterInvoice||'※ お振込は翌月末までにお願いいたします。';
@@ -16239,7 +16690,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合','del-inv':'宅配請求書',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'集荷請求管理',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合','del-inv':'宅配請求書',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
