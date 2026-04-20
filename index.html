@@ -6957,6 +6957,92 @@ function aggregateDelColByCompany(ym){
 // ══════════════════════════════════════════════════
 // 宅配事業内集荷 支払単価解決
 // ══════════════════════════════════════════════════
+
+// 従業員が担当する全郵便局名を返す
+//   - staff.office (メイン) かつ その郵便局が宅配事業対象
+//   - staff.subOffices[] の name (新形式、旧形式両対応)
+// returns: [{office: string, fromMain: bool}] の配列(重複排除済)
+function _getStaffDelOffices(staff){
+  if(!staff) return [];
+  const result = [];
+  const addedNames = new Set();
+  // メイン営業所
+  if(staff.office){
+    const mainOff = (D.offices||[]).find(o=>o.name===staff.office);
+    if(mainOff && mainOff.typesDel){
+      result.push({office: staff.office, fromMain: true});
+      addedNames.add(staff.office);
+    }
+  }
+  // サブ営業所
+  const subs = Array.isArray(staff.subOffices) ? staff.subOffices : [];
+  subs.forEach(s=>{
+    const name = (typeof s === 'string') ? s : (s && s.name);
+    if(!name || addedNames.has(name)) return;
+    const off = (D.offices||[]).find(o=>o.name===name);
+    if(!off || !off.typesDel) return;
+    result.push({office: name, fromMain: false});
+    addedNames.add(name);
+  });
+  return result;
+}
+
+// 担当営業所から定時集荷先マスタを展開
+//   returns: [{name, office, source:'office'}]
+function _getMasterColCompaniesForStaff(staff){
+  const offices = _getStaffDelOffices(staff);
+  const result = [];
+  const seen = new Set();
+  offices.forEach(o=>{
+    const off = (D.offices||[]).find(x=>x.name===o.office);
+    const list = off?.postPrices?.colCompanies || [];
+    list.forEach(c=>{
+      if(!c || !c.name) return;
+      const key = c.name + '__' + o.office;
+      if(seen.has(key)) return;
+      seen.add(key);
+      result.push({name: c.name, office: o.office, source:'office'});
+    });
+  });
+  return result;
+}
+
+// 委託会社が担当する全郵便局名を返す
+function _getCompanyDelOffices(company){
+  if(!company) return [];
+  const result = [];
+  const addedNames = new Set();
+  const subs = Array.isArray(company.subOffices) ? company.subOffices : [];
+  subs.forEach(s=>{
+    const name = (typeof s === 'string') ? s : (s && s.name);
+    if(!name || addedNames.has(name)) return;
+    const off = (D.offices||[]).find(o=>o.name===name);
+    if(!off || !off.typesDel) return;
+    result.push({office: name, fromMain: false});
+    addedNames.add(name);
+  });
+  return result;
+}
+
+// 委託会社側: 担当営業所から定時集荷先マスタを展開
+function _getMasterColCompaniesForCompany(company){
+  const offices = _getCompanyDelOffices(company);
+  const result = [];
+  const seen = new Set();
+  offices.forEach(o=>{
+    const off = (D.offices||[]).find(x=>x.name===o.office);
+    const list = off?.postPrices?.colCompanies || [];
+    list.forEach(c=>{
+      if(!c || !c.name) return;
+      const key = c.name + '__' + o.office;
+      if(seen.has(key)) return;
+      seen.add(key);
+      result.push({name: c.name, office: o.office, source:'office'});
+    });
+  });
+  return result;
+}
+
 // ドライバーが指定会社の宅配事業内集荷を行った場合の、大阪急配からの支払単価を解決する
 // 優先順位:
 //   1. ドライバー個別 fixedPrices.del.colCompanies[name].price  (個別・会社別)
@@ -6974,12 +7060,23 @@ function getDelColPayPrice(staff, companyName){
 // 会社名から {price, label, isDefault} を解決する
 // label: 単価入力時の項目名(例: "集荷②"). デフォルトshukkaの場合は "集荷"
 // isDefault: デフォルト集荷単価扱いか(true=集荷にまとめる)
-function getDelColPayEntry(staff, companyName){
+// officeName: 任意. 指定した場合は office+name で厳密一致、見つからない場合は name のみで検索
+function getDelColPayEntry(staff, companyName, officeName){
   if(!staff) return {price:0, label:'集荷', isDefault:true};
 
+  const matchEntry = (list, name, office)=>{
+    if(!Array.isArray(list)) return null;
+    // 優先: office+name完全一致
+    if(office){
+      const e = list.find(c=>c && c.name===name && c.office===office);
+      if(e) return e;
+    }
+    // フォールバック: name一致(officeが設定されていないエントリ含む)
+    return list.find(c=>c && c.name===name) || null;
+  };
+
   // 1. ドライバー個別の会社別単価
-  const driverColCmp = staff.fixedPrices?.del?.colCompanies || [];
-  const dEntry = driverColCmp.find(c=>c && c.name===companyName);
+  const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
   if(dEntry && dEntry.price != null && dEntry.price !== ''){
     return {price: Number(dEntry.price)||0, label: dEntry.label || '集荷②', isDefault:false};
   }
@@ -6994,8 +7091,7 @@ function getDelColPayEntry(staff, companyName){
   if(staff.companyId){
     const co = (D.companies||[]).find(c=>c.id===staff.companyId);
     if(co){
-      const coColCmp = co.prices?.del?.colCompanies || [];
-      const cEntry = coColCmp.find(c=>c && c.name===companyName);
+      const cEntry = matchEntry(co.prices?.del?.colCompanies, companyName, officeName);
       if(cEntry && cEntry.price != null && cEntry.price !== ''){
         return {price: Number(cEntry.price)||0, label: cEntry.label || '集荷②', isDefault:false};
       }
@@ -7020,7 +7116,7 @@ function calcStaffDelColPayment(staffName, monStr){
   const breakdown = [];
   let total = 0;
   entries.forEach(e=>{
-    const res = getDelColPayEntry(st, e.company);
+    const res = getDelColPayEntry(st, e.company, e.postOffice);
     const amount = (e.count||0) * res.price;
     total += amount;
     breakdown.push({
@@ -12622,7 +12718,7 @@ function collectCoPrices(){
   };
 }
 // 委託会社単価をフォームに復元
-function restoreCoPrices(prices){
+function restoreCoPrices(prices, company){
   if(!prices)return;
   const tt=(prices.del?._taxType||prices.col?._taxType||'ex');
   setCoPriceTax(tt);
@@ -12635,8 +12731,8 @@ function restoreCoPrices(prices){
   if($('co-pshukka'))$('co-pshukka').value=d.shukka||0;
   ['60','80','100','120','140','160'].forEach(s=>{const e=$('co-cp'+s);if(e)e.value=c['p'+s]||0;});
   ['pk1','pk2','cp','ke','te'].forEach(k=>{const e=$('co-c'+k);if(e)e.value=c[k]||0;});
-  // 集荷個別単価を復元
-  if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp(d.colCompanies||[]);
+  // 集荷個別単価を復元(営業所マスタと自動マージ)
+  if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp(d.colCompanies||[], company);
 }
 
 function openCompanyModal(coId){
@@ -12684,12 +12780,12 @@ function openCompanyModal(coId){
   // 単価タブ初期化
   switchCoTab('del');
   setCoTabTax('del','ex'); setCoTabTax('col','ex'); setCoTabTax('oth','ex');
-  if(co?.prices){ restoreCoPrices(co.prices); restoreCoCustRoutes(co.prices.custRoutes); }
+  if(co?.prices){ restoreCoPrices(co.prices, co); restoreCoCustRoutes(co.prices.custRoutes); }
   else {
     ['co-pkanryo','co-ptenso','co-pnight','co-pogata','co-pshukka',
      'co-cp60','co-cp80','co-cp100','co-cp120','co-cp140','co-cp160','co-cpk1','co-cpk2','co-ccp','co-cke','co-cte'
     ].forEach(id=>{const e=$(id);if(e)e.value='';});
-    if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp([]);
+    if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp([], co);
     restoreCoCustRoutes([]);
   }
   // 書類発行設定・印鑑画像復元
@@ -19222,25 +19318,32 @@ function restoreColCompanies(list){
 // ══════════════════════════════════════════════════
 // 従業員モーダル: 集荷個別単価
 // ══════════════════════════════════════════════════
-function addStDelColCmpRow(name, price, label){
+function addStDelColCmpRow(name, price, label, officeName, source){
   const list = document.getElementById('st-delcol-companies');
   if(!list) return;
   const row = document.createElement('div');
   row.className = 'st-delcol-cmp-row';
   row.style.cssText = 'display:grid;grid-template-columns:1fr 110px 110px 30px;gap:6px;align-items:end;';
   const escVal = v => (v==null?'':String(v).replace(/"/g,'&quot;'));
-  // 項目名のデフォルト(単価入力時): 既存行の数に応じて自動採番
   const priceFilledCount = list.querySelectorAll('.st-delcol-cmp-price').length > 0
     ? Array.from(list.querySelectorAll('.st-delcol-cmp-price')).filter(p=>p.value.trim()!=='').length
     : 0;
   const autoLabels = ['集荷②','集荷③','集荷④','集荷⑤','集荷⑥','集荷⑦','集荷⑧','集荷⑨','集荷⑩'];
   const defaultLabel = (price!=null && price!=='') ? (label || autoLabels[priceFilledCount] || '集荷'+(priceFilledCount+2)) : '集荷';
   const isPriceFilled = (price!=null && price!=='');
+  const src = source || 'manual'; // 'office' = 営業所マスタ由来, 'manual' = 手動追加
+  const officeAttr = escVal(officeName||'');
+  // 営業所由来は会社名をreadonly, 手動は入力可
+  const officeBadge = officeName ? `<span style="font-size:9px;color:var(--txt2);background:var(--bg3);border:1px solid var(--brd);border-radius:3px;padding:1px 5px;margin-left:4px;white-space:nowrap;">${escVal(officeName)}</span>` : '';
+  const nameReadonly = (src === 'office') ? 'readonly style="background:var(--bg3);"' : '';
   row.innerHTML = `
-    <div class="fg"><label style="font-size:9px;">会社名</label><input type="text" class="fi st-delcol-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}"></div>
+    <div class="fg" data-src="${src}" data-office="${officeAttr}">
+      <label style="font-size:9px;display:flex;align-items:center;">会社名${officeBadge}</label>
+      <input type="text" class="fi st-delcol-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}" ${nameReadonly}>
+    </div>
     <div class="fg"><label style="font-size:9px;">単価（空欄=集荷）</label><input type="number" class="fi st-delcol-cmp-price" style="font-size:10px;padding:3px 6px;" placeholder="集荷単価" value="${escVal(price)}" oninput="_onStDelColPriceChange(this)"></div>
     <div class="fg"><label style="font-size:9px;">項目名</label><input type="text" class="fi st-delcol-cmp-label" style="font-size:10px;padding:3px 6px;${isPriceFilled?'':'background:var(--bg3);color:var(--txt2);'}" value="${escVal(defaultLabel)}" ${isPriceFilled?'':'readonly'}></div>
-    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;" onclick="_removeStDelColRow(this)">✕</button>`;
+    <button type="button" style="background:none;border:none;color:${src==='office'?'var(--txt2)':'var(--red2)'};cursor:${src==='office'?'not-allowed':'pointer'};font-size:14px;" onclick="${src==='office'?'':'_removeStDelColRow(this)'}" ${src==='office'?'disabled title="営業所マスタ由来のため削除不可"':''}>${src==='office'?'🔒':'✕'}</button>`;
   list.appendChild(row);
 }
 
@@ -19309,25 +19412,58 @@ function collectStDelColCmp(){
     const name = row.querySelector('.st-delcol-cmp-name')?.value.trim() || '';
     const priceStr = row.querySelector('.st-delcol-cmp-price')?.value.trim() || '';
     const labelStr = row.querySelector('.st-delcol-cmp-label')?.value.trim() || '';
+    const srcDiv = row.querySelector('[data-src]');
+    const source = srcDiv?.dataset?.src || 'manual';
+    const office = srcDiv?.dataset?.office || '';
     if(!name) return;
+    // 営業所マスタ由来で単価空欄 → 保存しない(マスタから次回も自動展開されるので)
+    if(source === 'office' && priceStr === '') return;
     const price = priceStr === '' ? null : (parseInt(priceStr)||0);
-    const label = price === null ? null : (labelStr || null); // 単価空欄なら項目名保存しない
-    result.push({name, price, label});
+    const label = price === null ? null : (labelStr || null);
+    const entry = {name, price, label};
+    if(source === 'office' && office) entry.office = office;
+    result.push(entry);
   });
   return result;
 }
 
-function restoreStDelColCmp(list){
+// 従業員の集荷個別単価を復元:
+//   1. 担当営業所マスタ(colCompanies)からリスト展開
+//   2. 保存済みデータとマージ(単価・項目名の入力値を維持)
+//   3. マスタに無い手動登録会社も表示
+function restoreStDelColCmp(savedList, staff){
   const wrap = document.getElementById('st-delcol-companies');
   if(!wrap) return;
   wrap.innerHTML = '';
-  (list||[]).forEach(c=>addStDelColCmpRow(c.name, c.price, c.label));
+  const saved = Array.isArray(savedList) ? savedList : [];
+  // 担当営業所マスタから展開
+  const master = staff ? _getMasterColCompaniesForStaff(staff) : [];
+  // 保存データを name+office でインデックス化
+  const savedIdx = new Map();
+  saved.forEach(s=>{
+    const key = (s.name||'') + '__' + (s.office||'');
+    savedIdx.set(key, s);
+  });
+  const addedKeys = new Set();
+  // マスタ由来の行を先に追加
+  master.forEach(m=>{
+    const key = m.name + '__' + m.office;
+    const sv = savedIdx.get(key);
+    addStDelColCmpRow(m.name, sv?.price ?? null, sv?.label ?? null, m.office, 'office');
+    addedKeys.add(key);
+  });
+  // 手動追加の行(マスタに無いもの)
+  saved.forEach(s=>{
+    const key = (s.name||'') + '__' + (s.office||'');
+    if(addedKeys.has(key)) return;
+    addStDelColCmpRow(s.name, s.price, s.label, s.office||'', 'manual');
+  });
 }
 
 // ══════════════════════════════════════════════════
 // 委託会社モーダル: 集荷個別単価(宅配事業内集荷)
 // ══════════════════════════════════════════════════
-function addCoDelColCmpRow(name, price, label){
+function addCoDelColCmpRow(name, price, label, officeName, source){
   const list = document.getElementById('co-delcol-companies');
   if(!list) return;
   const row = document.createElement('div');
@@ -19340,11 +19476,18 @@ function addCoDelColCmpRow(name, price, label){
   const autoLabels = ['集荷②','集荷③','集荷④','集荷⑤','集荷⑥','集荷⑦','集荷⑧','集荷⑨','集荷⑩'];
   const defaultLabel = (price!=null && price!=='') ? (label || autoLabels[priceFilledCount] || '集荷'+(priceFilledCount+2)) : '集荷';
   const isPriceFilled = (price!=null && price!=='');
+  const src = source || 'manual';
+  const officeAttr = escVal(officeName||'');
+  const officeBadge = officeName ? `<span style="font-size:9px;color:var(--txt2);background:var(--bg3);border:1px solid var(--brd);border-radius:3px;padding:1px 5px;margin-left:4px;white-space:nowrap;">${escVal(officeName)}</span>` : '';
+  const nameReadonly = (src === 'office') ? 'readonly style="background:var(--bg3);"' : '';
   row.innerHTML = `
-    <div class="fg"><label style="font-size:9px;">会社名</label><input type="text" class="fi co-delcol-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}"></div>
+    <div class="fg" data-src="${src}" data-office="${officeAttr}">
+      <label style="font-size:9px;display:flex;align-items:center;">会社名${officeBadge}</label>
+      <input type="text" class="fi co-delcol-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}" ${nameReadonly}>
+    </div>
     <div class="fg"><label style="font-size:9px;">単価（空欄=集荷）</label><input type="number" class="fi co-delcol-cmp-price" style="font-size:10px;padding:3px 6px;" placeholder="集荷単価" value="${escVal(price)}" oninput="_onCoDelColPriceChange(this)"></div>
     <div class="fg"><label style="font-size:9px;">項目名</label><input type="text" class="fi co-delcol-cmp-label" style="font-size:10px;padding:3px 6px;${isPriceFilled?'':'background:var(--bg3);color:var(--txt2);'}" value="${escVal(defaultLabel)}" ${isPriceFilled?'':'readonly'}></div>
-    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;" onclick="_removeCoDelColRow(this)">✕</button>`;
+    <button type="button" style="background:none;border:none;color:${src==='office'?'var(--txt2)':'var(--red2)'};cursor:${src==='office'?'not-allowed':'pointer'};font-size:14px;" onclick="${src==='office'?'':'_removeCoDelColRow(this)'}" ${src==='office'?'disabled title="営業所マスタ由来のため削除不可"':''}>${src==='office'?'🔒':'✕'}</button>`;
   list.appendChild(row);
 }
 
@@ -19407,19 +19550,44 @@ function collectCoDelColCmp(){
     const name = row.querySelector('.co-delcol-cmp-name')?.value.trim() || '';
     const priceStr = row.querySelector('.co-delcol-cmp-price')?.value.trim() || '';
     const labelStr = row.querySelector('.co-delcol-cmp-label')?.value.trim() || '';
+    const srcDiv = row.querySelector('[data-src]');
+    const source = srcDiv?.dataset?.src || 'manual';
+    const office = srcDiv?.dataset?.office || '';
     if(!name) return;
+    if(source === 'office' && priceStr === '') return;
     const price = priceStr === '' ? null : (parseInt(priceStr)||0);
     const label = price === null ? null : (labelStr || null);
-    result.push({name, price, label});
+    const entry = {name, price, label};
+    if(source === 'office' && office) entry.office = office;
+    result.push(entry);
   });
   return result;
 }
 
-function restoreCoDelColCmp(list){
+// 委託会社の集荷個別単価を復元(営業所マスタとマージ)
+function restoreCoDelColCmp(savedList, company){
   const wrap = document.getElementById('co-delcol-companies');
   if(!wrap) return;
   wrap.innerHTML = '';
-  (list||[]).forEach(c=>addCoDelColCmpRow(c.name, c.price, c.label));
+  const saved = Array.isArray(savedList) ? savedList : [];
+  const master = company ? _getMasterColCompaniesForCompany(company) : [];
+  const savedIdx = new Map();
+  saved.forEach(s=>{
+    const key = (s.name||'') + '__' + (s.office||'');
+    savedIdx.set(key, s);
+  });
+  const addedKeys = new Set();
+  master.forEach(m=>{
+    const key = m.name + '__' + m.office;
+    const sv = savedIdx.get(key);
+    addCoDelColCmpRow(m.name, sv?.price ?? null, sv?.label ?? null, m.office, 'office');
+    addedKeys.add(key);
+  });
+  saved.forEach(s=>{
+    const key = (s.name||'') + '__' + (s.office||'');
+    if(addedKeys.has(key)) return;
+    addCoDelColCmpRow(s.name, s.price, s.label, s.office||'', 'manual');
+  });
 }
 
 // ── 宅配請求書タブ切替 ──
@@ -20005,13 +20173,13 @@ function editStaff(id){
       if($('st-ps3'))$('st-ps3').value=d.s3||0;
       if($('st-ps4'))$('st-ps4').value=d.s4||0;
       // 集荷個別単価
-      if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[]);
+      if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
     }
     if($('st-pnight'))$('st-pnight').value=s.fixedPrices.night||0;
     if($('st-pogata'))$('st-pogata').value=s.fixedPrices.ogata||0;
   } else {
     // 初期化時も空にしておく
-    if(typeof restoreStDelColCmp==='function') restoreStDelColCmp([]);
+    if(typeof restoreStDelColCmp==='function') restoreStDelColCmp([], s);
   }
   // 委託会社
   onStKbnChange();
