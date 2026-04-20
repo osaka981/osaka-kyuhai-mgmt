@@ -2611,11 +2611,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-cu-cke" data-tax="ex"><button onclick="setItemTax('cu-cke','in')" class="">税込</button><button onclick="setItemTax('cu-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cke" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="cte" style="font-size:9px;">定形外(ゆうメール)<span class="tax-tog" id="tt-cu-cte" data-tax="ex"><button onclick="setItemTax('cu-cte','in')" class="">税込</button><button onclick="setItemTax('cu-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cte" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
     </div>
-    <!-- チャーター -->
+    <!-- ルート（委託会社モーダルと同形式: B=日額連動 / C=都度チャーター） -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs muted fw7 mb6">集荷チャーター（件数・都度金額）</div>
-      <div id="cu-charter-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
-      <button type="button" class="btn b-gh btn-sm" onclick="addCuCharterRow()">＋ チャーター追加</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <div class="xs muted fw7">🗺️ ルート（B：日額連動 / C：チャーター都度）</div>
+          <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">顧客との日額契約(ルート)。稼働日数×日額で請求します。</div>
+        </div>
+        <button type="button" class="btn b-grn btn-sm" onclick="openCustRouteFromModal()">＋ ルート追加</button>
+      </div>
+      <div id="cu-route-list-inline" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
   </div>
 
@@ -3234,11 +3239,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-st-cke" data-tax="ex"><button onclick="setItemTax('st-cke','in')" class="">税込</button><button onclick="setItemTax('st-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cke" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="120"></div>
       <div class="fg"><label class="cte" style="font-size:9px;">定形外<span class="tax-tog" id="tt-st-cte" data-tax="ex"><button onclick="setItemTax('st-cte','in')" class="">税込</button><button onclick="setItemTax('st-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cte" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="50"></div>
     </div>
-    <!-- チャーター（都度金額・複数件） -->
+    <!-- ルート（委託会社モーダルと同形式: B=日額連動 / C=都度チャーター） -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs muted fw7 mb6">集荷チャーター（件数・都度金額）</div>
-      <div id="st-charter-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
-      <button type="button" class="btn b-gh btn-sm" onclick="addCharterRow()">＋ チャーター追加</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <div class="xs muted fw7">🗺️ ルート（B：日額連動 / C：チャーター都度）</div>
+          <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">委託会社への集荷支払いはルート単価で計算。</div>
+        </div>
+        <button type="button" class="btn b-grn btn-sm" onclick="openStaffRouteFromModal()">＋ ルート追加</button>
+      </div>
+      <div id="st-route-list-inline" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
   </div>
 
@@ -6234,6 +6244,7 @@ function switchCuTab(t){
     if(con) con.style.display = id===t ? '' : 'none';
   });
   setTimeout(()=>updateTabNavBtns('cust'),30);
+  if(t==='col' && typeof renderCustRouteInline==='function') renderCustRouteInline();
 }
 
 // ─── 税込・税別 切り替え（顧客） ───
@@ -7724,6 +7735,8 @@ function editCust(id){
   $('m-cust')._editId=id;
   resetCuTax();
   openM('m-cust');
+  // 集荷タブが選択されている場合に備えてルート一覧を描画
+  setTimeout(()=>{ if(typeof renderCustRouteInline==='function') renderCustRouteInline(); }, 50);
 }
 
 // ─── 従事員 ───
@@ -10327,6 +10340,7 @@ function switchPriceTab(t){
     if(con)con.style.display=id===t?'':'none';
   });
   if(t==='route') renderRouteList();
+  if(t==='col' && typeof renderStaffRouteInline==='function') renderStaffRouteInline();
 }
 
 // ─── 給与履歴 ───
@@ -10801,6 +10815,30 @@ function fltStaff(f){renderStaff(f);}
 let _rtSelCusts = []; // [{id, name}]
 let _rtEditId = null;
 let _rtStaffId = null;
+// オーナー種別 ('staff' | 'company' | 'customer')
+let _rtOwnerType = 'staff';
+let _rtCustOwnerId = null; // 顧客オーナーの場合の顧客ID
+// _rtCoId は既存 (委託会社モーダル側で使用)
+
+// オーナーから colRoutes配列を取得
+function _rtGetOwnerRoutes(){
+  if(_rtOwnerType==='staff' && _rtStaffId){
+    const s = D.staff.find(x=>x.id===_rtStaffId);
+    if(!s.colRoutes) s.colRoutes=[];
+    return s.colRoutes;
+  }
+  if(_rtOwnerType==='company' && _rtCoId){
+    const co = D.companies.find(x=>x.id===_rtCoId);
+    if(!co.colRoutes) co.colRoutes=[];
+    return co.colRoutes;
+  }
+  if(_rtOwnerType==='customer' && _rtCustOwnerId){
+    const cu = D.customers.find(x=>x.id===_rtCustOwnerId);
+    if(!cu.colRoutes) cu.colRoutes=[];
+    return cu.colRoutes;
+  }
+  return null;
+}
 
 // ─── パターン切り替え ───
 function onRtPatternChange(){
@@ -10840,6 +10878,9 @@ function renderRouteList(){
 function openRouteModal(routeId){
   const mStaff=$('m-staff');
   _rtStaffId=mStaff?._editId||null;
+  _rtCoId=null;
+  _rtCustOwnerId=null;
+  _rtOwnerType='staff';
   _rtEditId=routeId||null;
   _rtSelCusts=[];
 
@@ -10855,15 +10896,14 @@ function openRouteModal(routeId){
   renderRtCustChips();
   onRtPatternChange();
 
-  // 編集時：データ復元
-  if(routeId && _rtStaffId){
-    const s=D.staff.find(x=>x.id===_rtStaffId);
-    const rt=(s?.colRoutes||[]).find(r=>r.id===routeId);
+  // 編集時：データ復元（オーナー非依存）
+  if(routeId){
+    const routes = _rtGetOwnerRoutes();
+    const rt = routes?.find(r=>r.id===routeId);
     if(rt){
       if($('rt-name')) $('rt-name').value=rt.name||'';
       if($('rt-tax')) $('rt-tax').value=rt.taxType||'ex';
       if($('rt-note')) $('rt-note').value=rt.note||'';
-      // ルート単価復元（車建）
       if($('rt-route-price')) $('rt-route-price').value=rt.routePrice||rt.dailyAmt||0;
       _rtSelCusts=(rt.customers||[]).map(cid=>{
         const c=D.customers.find(x=>x.id===cid);
@@ -11005,46 +11045,53 @@ function renderRtStepPreview(){
   rowsEl.innerHTML=rows||'<div style="font-size:11px;color:var(--txt2);">ステップを入力してください</div>';
 }
 
-// ─── ルート保存 ───
+// ─── ルート保存 (staff/company/customer 共通) ───
 function saveRoute(){
   const name=($('rt-name')?.value||'').trim();
   if(!name){alert('ルート名を入力してください');return;}
   const routePrice=parseInt($('rt-route-price')?.value)||0;
   if(!routePrice){alert('ルート単価を入力してください');return;}
 
-  // 重複チェック（同じ従業員内で）
-  const s=_rtStaffId?D.staff.find(x=>x.id===_rtStaffId):null;
-  if(s){
-    const dup=(s.colRoutes||[]).find(r=>r.name===name && r.id!==_rtEditId);
-    if(dup){alert(`「${name}」は既に登録されています。別の名前にしてください。`);return;}
-  }
+  const routes = _rtGetOwnerRoutes();
+  if(!routes){ alert('オーナーが特定できません'); return; }
+
+  // 重複チェック
+  const dup = routes.find(r=>r.name===name && r.id!==_rtEditId);
+  if(dup){alert(`「${name}」は既に登録されています。別の名前にしてください。`);return;}
 
   const newRoute={
     id:_rtEditId||('rt_'+Date.now()),
     name,
     pattern:'D',       // 車建固定
-    routePrice,        // ルート単価
-    dailyAmt:routePrice, // 互換用
+    routePrice,
+    dailyAmt:routePrice,
     customers:_rtSelCusts.map(c=>c.id),
     taxType:$('rt-tax')?.value||'ex',
     itemPrices:null,
     steps:null,
     note:$('rt-note')?.value||'',
+    ownerType:_rtOwnerType,
   };
 
-  if(s){
-    if(!s.colRoutes) s.colRoutes=[];
-    if(_rtEditId){
-      const idx=s.colRoutes.findIndex(r=>r.id===_rtEditId);
-      if(idx>=0) s.colRoutes[idx]=newRoute; else s.colRoutes.push(newRoute);
-    } else {
-      s.colRoutes.push(newRoute);
-    }
+  if(_rtEditId){
+    const idx = routes.findIndex(r=>r.id===_rtEditId);
+    if(idx>=0) routes[idx]=newRoute; else routes.push(newRoute);
+  } else {
+    routes.push(newRoute);
   }
+
   closeM('m-route');
-  renderRouteList();
-  // Firebase nikki/col_routes を更新（日報アプリと同期）
-  syncColRoutesToFirebase();
+  // オーナー別の再描画
+  if(_rtOwnerType==='staff'){
+    renderRouteList();
+    if(typeof renderStaffRouteInline==='function') renderStaffRouteInline();
+    syncColRoutesToFirebase();
+  } else if(_rtOwnerType==='company'){
+    if(typeof renderCoRouteInline==='function') renderCoRouteInline();
+    if(typeof renderCompanyPage==='function') renderCompanyPage();
+  } else if(_rtOwnerType==='customer'){
+    if(typeof renderCustRouteInline==='function') renderCustRouteInline();
+  }
 }
 
 // 全スタッフのcolRoutesをFirebaseに同期
@@ -12142,9 +12189,141 @@ function deleteDriver(){
   });
 }
 
+// ══════════════════════════════════════════════════
+// 従業員モーダル内「ルート」インライン表示
+// ══════════════════════════════════════════════════
+function renderStaffRouteInline(){
+  const list = document.getElementById('st-route-list-inline');
+  if(!list) return;
+  const editId = document.getElementById('m-staff')?._editId;
+  const s = editId ? D.staff.find(x=>x.id===editId) : null;
+  const routes = (s?.colRoutes)||[];
+  if(!routes.length){
+    list.innerHTML = '<div style="text-align:center;padding:14px;color:var(--txt2);font-size:11px;">ルートが登録されていません</div>';
+    return;
+  }
+  list.innerHTML = routes.map(rt=>{
+    const custNames = (rt.customers||[]).map(cid=>{
+      const c = D.customers.find(x=>x.id===cid); return c?c.name:'?';
+    }).join('・');
+    const price = rt.routePrice || rt.dailyAmt || 0;
+    const taxLbl = rt.taxType==='in' ? '税込' : '税別';
+    return `<div style="background:var(--sur);border:1px solid var(--brd);border-radius:5px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <span style="font-size:12px;font-weight:700;">${esc(rt.name)}</span>
+        <span style="font-size:10px;color:var(--txt2);margin-left:8px;">¥${price.toLocaleString()}/日(${taxLbl})</span>
+        ${custNames?`<span style="font-size:10px;color:var(--txt2);margin-left:8px;">👥 ${esc(custNames)}</span>`:''}
+      </div>
+      <div style="display:flex;gap:5px;">
+        <button type="button" class="btn b-gh btn-sm" onclick="editStaffRouteFromModal('${rt.id}')">✏️</button>
+        <button type="button" class="btn btn-sm" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);" onclick="deleteStaffRouteFromModal('${rt.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.openStaffRouteFromModal = function(){
+  const editId = document.getElementById('m-staff')?._editId;
+  if(!editId){ alert('先に従業員を保存してからルートを追加してください'); return; }
+  openRouteModal();
+};
+window.editStaffRouteFromModal = function(rtId){
+  const editId = document.getElementById('m-staff')?._editId;
+  if(!editId) return;
+  openRouteModal(rtId);
+};
+window.deleteStaffRouteFromModal = function(rtId){
+  const editId = document.getElementById('m-staff')?._editId;
+  const s = D.staff.find(x=>x.id===editId); if(!s) return;
+  showConfirm('このルートを削除しますか？', ()=>{
+    s.colRoutes = (s.colRoutes||[]).filter(r=>r.id!==rtId);
+    renderStaffRouteInline();
+    if(typeof renderRouteList==='function') renderRouteList();
+    if(typeof syncColRoutesToFirebase==='function') syncColRoutesToFirebase();
+  });
+};
+
+// ══════════════════════════════════════════════════
+// 顧客モーダル内「ルート」インライン表示
+// ══════════════════════════════════════════════════
+function renderCustRouteInline(){
+  const list = document.getElementById('cu-route-list-inline');
+  if(!list) return;
+  const editId = document.getElementById('m-cust')?._editId;
+  const cu = editId ? D.customers.find(x=>x.id===editId) : null;
+  const routes = (cu?.colRoutes)||[];
+  if(!routes.length){
+    list.innerHTML = '<div style="text-align:center;padding:14px;color:var(--txt2);font-size:11px;">ルートが登録されていません</div>';
+    return;
+  }
+  list.innerHTML = routes.map(rt=>{
+    const price = rt.routePrice || rt.dailyAmt || 0;
+    const taxLbl = rt.taxType==='in' ? '税込' : '税別';
+    return `<div style="background:var(--sur);border:1px solid var(--brd);border-radius:5px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <span style="font-size:12px;font-weight:700;">${esc(rt.name)}</span>
+        <span style="font-size:10px;color:var(--txt2);margin-left:8px;">¥${price.toLocaleString()}/日(${taxLbl})</span>
+      </div>
+      <div style="display:flex;gap:5px;">
+        <button type="button" class="btn b-gh btn-sm" onclick="editCustRouteFromModal('${rt.id}')">✏️</button>
+        <button type="button" class="btn btn-sm" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);" onclick="deleteCustRouteFromModal('${rt.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.openCustRouteFromModal = function(){
+  const editId = document.getElementById('m-cust')?._editId;
+  if(!editId){ alert('先に顧客を保存してからルートを追加してください'); return; }
+  _rtOwnerType='customer'; _rtCustOwnerId=editId; _rtStaffId=null; _rtCoId=null;
+  _rtEditId=null; _rtSelCusts=[];
+  // フォームリセット
+  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value='ex';
+  const t = document.getElementById('m-route-title');
+  const cu = D.customers.find(x=>x.id===editId);
+  if(t) t.textContent = `🗺️ ルート追加（${cu?.name||''}）`;
+  // この顧客自身を対象にマーク
+  if(cu) _rtSelCusts = [{id:cu.id, name:cu.name}];
+  if(typeof renderRtCustChips==='function') renderRtCustChips();
+  if(typeof onRtPatternChange==='function') onRtPatternChange();
+  openM('m-route');
+};
+window.editCustRouteFromModal = function(rtId){
+  const editId = document.getElementById('m-cust')?._editId;
+  if(!editId) return;
+  _rtOwnerType='customer'; _rtCustOwnerId=editId; _rtStaffId=null; _rtCoId=null;
+  _rtEditId=rtId; _rtSelCusts=[];
+  const cu = D.customers.find(x=>x.id===editId);
+  const rt = (cu?.colRoutes||[]).find(r=>r.id===rtId);
+  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value='ex';
+  const t = document.getElementById('m-route-title');
+  if(t) t.textContent = `🗺️ ルート編集（${cu?.name||''}）`;
+  if(rt){
+    if(document.getElementById('rt-name')) document.getElementById('rt-name').value = rt.name||'';
+    if(document.getElementById('rt-route-price')) document.getElementById('rt-route-price').value = rt.routePrice||rt.dailyAmt||0;
+    if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value = rt.taxType||'ex';
+    if(document.getElementById('rt-note')) document.getElementById('rt-note').value = rt.note||'';
+    _rtSelCusts = (rt.customers||[]).map(cid=>{
+      const c = D.customers.find(x=>x.id===cid); return c?{id:cid,name:c.name}:null;
+    }).filter(Boolean);
+    if(_rtSelCusts.length===0 && cu) _rtSelCusts=[{id:cu.id,name:cu.name}];
+  }
+  if(typeof renderRtCustChips==='function') renderRtCustChips();
+  if(typeof onRtPatternChange==='function') onRtPatternChange();
+  openM('m-route');
+};
+window.deleteCustRouteFromModal = function(rtId){
+  const editId = document.getElementById('m-cust')?._editId;
+  const cu = D.customers.find(x=>x.id===editId); if(!cu) return;
+  showConfirm('このルートを削除しますか？', ()=>{
+    cu.colRoutes = (cu.colRoutes||[]).filter(r=>r.id!==rtId);
+    renderCustRouteInline();
+  });
+};
+
 let _rtCoId=null;
 function openCompanyRouteModal(coId,routeId){
-  _rtStaffId=null;_rtCoId=coId;_rtEditId=routeId||null;_rtSelCusts=[];
+  _rtStaffId=null;_rtCoId=coId;_rtCustOwnerId=null;_rtOwnerType='company';_rtEditId=routeId||null;_rtSelCusts=[];
   const co=D.companies.find(x=>x.id===coId);
   const t=$('m-route-title');if(t)t.textContent=routeId?`🗺️ ルート編集（${co?.name}）`:`🗺️ 集荷ルート追加（${co?.name}）`;
   ['rt-name','rt-daily','rt-p60','rt-p80','rt-p100','rt-p120','rt-p140','rt-p160','rt-pk1','rt-pk2','rt-cp','rt-ke','rt-te','rt-note','rt-cust-search'].forEach(id=>{const e=$(id);if(e)e.value='';});
@@ -18932,6 +19111,8 @@ function editStaff(id){
   onStStatusChange();
   // 書類リンクを読み込み
   setTimeout(()=>renderStDocLinks(), 200);
+  // 集荷タブが選択されている場合に備えてルート一覧を描画
+  setTimeout(()=>{ if(typeof renderStaffRouteInline==='function') renderStaffRouteInline(); }, 50);
 }
 function closeM(id){
   $(id)?.classList.remove('on');
@@ -19651,7 +19832,7 @@ function initContractSection(){
         <button type="button" class="otab on" id="co-ptab-del" onclick="switchCoTab('del')" style="flex:1;font-size:11px;">🚛 宅配</button>
         <button type="button" class="otab" id="co-ptab-col" onclick="switchCoTab('col')" style="flex:1;font-size:11px;">📦 集荷</button>
         <button type="button" class="otab" id="co-ptab-oth" onclick="switchCoTab('oth')" style="flex:1;font-size:11px;">その他</button>
-        <button type="button" class="otab" id="co-ptab-rt" onclick="switchCoTab('rt')" style="flex:1;font-size:11px;">🗺️ ルート・チャーター</button>
+        <button type="button" class="otab" id="co-ptab-rt" onclick="switchCoTab('rt')" style="flex:1;font-size:11px;">🗺️ ルート</button>
       </div>
       <!-- ① 宅配単価（固定5項目） -->
       <div id="co-ptab-content-del" style="display:grid;">
@@ -19744,7 +19925,7 @@ function initContractSection(){
           <div id="co-other-rows-price" style="display:flex;flex-direction:column;gap:5px;"></div>
         </div>
       </div>
-      <!-- ④ ルート・チャーター（B/Cのみ） -->
+      <!-- ④ ルート（B/Cのみ） -->
       <div id="co-ptab-content-rt" style="display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <div style="font-size:11px;color:var(--txt2);">B：日額/件数連動　C：チャーター（都度）</div>
