@@ -4438,7 +4438,7 @@ function navByS(s) {
   if (s==='pu-report')   _call('renderPUReport');
   if (s==='pu-sum')      _call('renderSum');
   if (s==='pu-cust')     {} /* onValue自動更新 */
-  if (s==='pu-inv')      { _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
+  if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
@@ -4449,7 +4449,8 @@ function navByS(s) {
   if (s==='offices')     _call('renderOffCards');
   if (s==='archive')     _call('renderArchive');
   if (s==='contract')    { if(typeof initContractSection==='function') setTimeout(initContractSection, 50); }
-  if (s==='invoice-bulk' || s==='invoice-bulk-admin') _call('renderInvoiceBulk');
+  if (s==='invoice-bulk') { _ivBulkState.context='hr'; if(!_ivBulkTabAllowed(_ivBulkState.tab)) _ivBulkState.tab='personal'; _call('renderInvoiceBulk'); }
+  if (s==='invoice-bulk-admin') { _ivBulkState.context='all'; _call('renderInvoiceBulk'); }
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
@@ -7058,10 +7059,10 @@ function switchArcTab(tab){
 window._ivBulkState = window._ivBulkState || {
   month: null,       // 'YYYY-MM'
   tab: 'personal',   // 'personal' | 'company' | 'customer'
-  selected: {        // {key: true} key='personal:中川伸一' 'company:〇〇運送' 'customer:大阪...'
-  },
+  context: 'all',    // 'all' | 'col' | 'hr'  ← 呼出元による表示制限
+  selected: {},      // {key: true}
   docTypes: { invoice: true, detail: false },
-  saveFmt: 'concat',  // 'concat' | 'zip'
+  saveFmt: 'concat', // 'concat' | 'zip'
 };
 
 function renderInvoiceBulk(){
@@ -7077,6 +7078,14 @@ function renderInvoiceBulk(){
     el.innerHTML = _renderInvoiceBulkHTML();
     _bindInvoiceBulkEvents(el);
   });
+}
+
+function _ivBulkTabAllowed(tab){
+  // context別に表示可能タブを絞る
+  const ctx = _ivBulkState.context || 'all';
+  if(ctx === 'col')  return tab === 'customer';                    // 集荷: 顧客のみ
+  if(ctx === 'hr')   return tab === 'personal' || tab === 'company'; // 給与人事: 個人+会社
+  return true;                                                       // 管理(all): 全て
 }
 
 function _ivBulkGetData(){
@@ -7219,9 +7228,9 @@ function _renderInvoiceBulkHTML(){
   <!-- ピルタブ + 横断カウント -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
     <div class="iv-pill-tabs">
-      <button class="iv-pill-tab ${tab==='personal'?'active':''}" onclick="_ivBulkSwitchTab('personal')">個人事業主 <span class="cnt">${counts.personal}</span></button>
-      <button class="iv-pill-tab ${tab==='company'?'active':''}" onclick="_ivBulkSwitchTab('company')">委託会社 <span class="cnt">${counts.company}</span></button>
-      <button class="iv-pill-tab ${tab==='customer'?'active':''}" onclick="_ivBulkSwitchTab('customer')">顧客 <span class="cnt">${counts.customer}</span></button>
+      ${_ivBulkTabAllowed('personal') ? `<button class="iv-pill-tab ${tab==='personal'?'active':''}" onclick="_ivBulkSwitchTab('personal')">個人事業主 <span class="cnt">${counts.personal}</span></button>`:''}
+      ${_ivBulkTabAllowed('company') ? `<button class="iv-pill-tab ${tab==='company'?'active':''}" onclick="_ivBulkSwitchTab('company')">委託会社 <span class="cnt">${counts.company}</span></button>`:''}
+      ${_ivBulkTabAllowed('customer') ? `<button class="iv-pill-tab ${tab==='customer'?'active':''}" onclick="_ivBulkSwitchTab('customer')">顧客 <span class="cnt">${counts.customer}</span></button>`:''}
     </div>
     ${totalSelected>0 ? `<div class="iv-cross-count">全タブ選択中: ${totalSelected}件</div>` : ''}
   </div>
