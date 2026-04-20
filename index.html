@@ -1932,6 +1932,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
 
+    <!-- 請求書一括発行 (給与・人事/管理 両方から参照) -->
+    <div id="s-invoice-bulk" class="sec"></div>
+    <div id="s-invoice-bulk-admin" class="sec"></div>
+
     <!-- アーカイブ -->
     <div id="s-archive" class="sec">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
@@ -4373,6 +4377,7 @@ const _TOP_TABS = {
     { s:'salary',      label:'給与計算' },
     { s:'pay-history', label:'給与履歴' },
     { s:'contract',    label:'契約書' },
+    { s:'invoice-bulk',label:'請求書一括発行', badge:'new' },
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
@@ -4384,6 +4389,7 @@ const _TOP_TABS = {
     { s:'offices',     label:'営業所管理' },
     { s:'import',      label:'CSVインポート' },
     { s:'archive',     label:'アーカイブ' },
+    { s:'invoice-bulk-admin',label:'請求書一括発行', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -4475,6 +4481,7 @@ function navByS(s) {
   if (s==='offices')     _call('renderOffCards');
   if (s==='archive')     _call('renderArchive');
   if (s==='contract')    { if(typeof initContractSection==='function') setTimeout(initContractSection, 50); }
+  if (s==='invoice-bulk' || s==='invoice-bulk-admin') _call('renderInvoiceBulk');
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
@@ -7076,6 +7083,386 @@ function switchArcTab(tab){
   });
   renderArchive();
 }
+
+// ══════════════════════════════════════════════════
+// 請求書一括発行 (給与・人事 / 管理 共通画面)
+// ══════════════════════════════════════════════════
+window._ivBulkState = window._ivBulkState || {
+  month: null,       // 'YYYY-MM'
+  tab: 'personal',   // 'personal' | 'company' | 'customer'
+  selected: {        // {key: true} key='personal:中川伸一' 'company:〇〇運送' 'customer:大阪...'
+  },
+  docTypes: { invoice: true, detail: false },
+  saveFmt: 'concat',  // 'concat' | 'zip'
+};
+
+function renderInvoiceBulk(){
+  // 両方のセクション(s-invoice-bulk / s-invoice-bulk-admin)に同じUIを描画
+  const tgts = ['s-invoice-bulk', 's-invoice-bulk-admin'];
+  tgts.forEach(tgtId=>{
+    const el = document.getElementById(tgtId);
+    if(!el) return;
+    if(!_ivBulkState.month){
+      const now = new Date();
+      _ivBulkState.month = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    }
+    el.innerHTML = _renderInvoiceBulkHTML();
+    _bindInvoiceBulkEvents(el);
+  });
+}
+
+function _ivBulkGetData(){
+  // 各タブのデータ収集
+  const month = _ivBulkState.month;
+  // 個人事業主: staff.kubun === '個人事業主'
+  const personal = (D.staff||[]).filter(s=>{
+    if(s.kubun!=='個人事業主') return false;
+    if(s.status && s.status==='終了') return false;
+    return !!s.docs?.invoiceProxy?.enabled;
+  }).map(s=>{
+    const pay = _calcStaffPayment(s.name, month);
+    return {
+      key: 'personal:'+s.name,
+      kind: 'personal',
+      name: s.name,
+      displayName: s.name,
+      code: String(s.empNo||s.id||'0000').padStart(4,'0').slice(-4),
+      invoiceNo: '代'+_genInvoiceNo(String(s.empNo||s.id||'0000').padStart(4,'0').slice(-4)),
+      amount: _calcInvoiceAmountFor(s, pay),
+      lastIssued: _getLastIssuedDate('invoiceProxy', s.name),
+    };
+  });
+  // 委託会社: companies.kubun === '会社委託' (または kubun をチェック)
+  const company = (D.companies||[]).filter(c=>{
+    if(c.status==='終了') return false;
+    return true;
+  }).map(c=>{
+    // 会社配下の従業員を合算して請求額を出す想定。簡易版では会社所属1人の金額をサンプル表示
+    let totalAmount = 0;
+    (D.staff||[]).forEach(s=>{
+      if(s.kubun==='会社委託' && s.companyName===c.name){
+        const pay = _calcStaffPayment(s.name, month);
+        totalAmount += _calcInvoiceAmountFor(s, pay);
+      }
+    });
+    return {
+      key: 'company:'+c.name,
+      kind: 'company',
+      name: c.name,
+      displayName: c.name,
+      code: 'C'+String(c.companyCode||c.id||'001').padStart(3,'0').slice(-4),
+      invoiceNo: '代'+_genInvoiceNo('C'+String(c.companyCode||c.id||'001').padStart(3,'0').slice(-4)),
+      amount: totalAmount,
+      lastIssued: _getLastIssuedDate('companyInvoiceProxy', c.name),
+    };
+  }).filter(x=>x.amount>0);
+  // 顧客: customers (ただし郵便局は除外)
+  const customer = (D.customers||[]).filter(cu=>{
+    if(cu.status==='終了') return false;
+    if((cu.name||'').includes('日本郵便')) return false;
+    return true;
+  }).map(cu=>{
+    const billing = (typeof _calcCustBilling==='function') ? _calcCustBilling(cu.name, month) : {total:0};
+    return {
+      key: 'customer:'+cu.name,
+      kind: 'customer',
+      name: cu.name,
+      displayName: cu.name,
+      code: String(cu.custCode||cu.id||'10001').padStart(5,'0').slice(-5),
+      invoiceNo: _genInvoiceNo(String(cu.custCode||cu.id||'10001').padStart(5,'0').slice(-5)),
+      amount: billing.total || 0,
+      lastIssued: _getLastIssuedDate('custInvoice', cu.name),
+    };
+  }).filter(x=>x.amount>0);
+  return { personal, company, customer };
+}
+
+function _calcInvoiceAmountFor(st, pay){
+  // 請求書金額 = 税区分分解した合計(税込)
+  if(!pay || !pay.breakdown) return 0;
+  const items = _buildInvoiceItems(pay, st);
+  const totals = _calcInvoiceTotals(items);
+  return totals.grandTotal;
+}
+
+function _getLastIssuedDate(type, name){
+  const list = _getIssuedDocs(type, name);
+  return list[0]?.issuedAt ? list[0].issuedAt.slice(0,10) : null;
+}
+
+function _renderInvoiceBulkHTML(){
+  const data = _ivBulkGetData();
+  const month = _ivBulkState.month;
+  const tab = _ivBulkState.tab;
+  const rows = data[tab] || [];
+  // 全タブ横断の選択数
+  const selKeys = Object.keys(_ivBulkState.selected).filter(k=>_ivBulkState.selected[k]);
+  const selTotalAmount = selKeys.reduce((a,k)=>{
+    const kind = k.split(':')[0];
+    const name = k.split(':').slice(1).join(':');
+    const row = (data[kind]||[]).find(r=>r.name===name);
+    return a + (row?.amount||0);
+  }, 0);
+  const selByTab = {
+    personal: selKeys.filter(k=>k.startsWith('personal:')).length,
+    company: selKeys.filter(k=>k.startsWith('company:')).length,
+    customer: selKeys.filter(k=>k.startsWith('customer:')).length,
+  };
+  const totalSelected = selKeys.length;
+  // タブの件数
+  const counts = {
+    personal: data.personal.length,
+    company: data.company.length,
+    customer: data.customer.length,
+  };
+
+  // 行HTML
+  const rowsHTML = rows.length
+    ? rows.map(r=>{
+        const checked = !!_ivBulkState.selected[r.key];
+        const kindBadge = r.kind==='personal' ? '<span class="iv-bdg-pers">個人</span>'
+                        : r.kind==='company' ? '<span class="iv-bdg-comp">会社</span>'
+                        : '<span class="iv-bdg-cust">顧客</span>';
+        const proxyBadge = (r.kind==='personal'||r.kind==='company') ? ' <span class="iv-bdg-proxy">代行</span>' : '';
+        const lastIssued = r.lastIssued ? r.lastIssued.replace(/-/g,'/') : '未発行';
+        return `<tr>
+          <td><input type="checkbox" ${checked?'checked':''} onchange="_ivBulkToggle('${esc(r.key)}',this.checked)"></td>
+          <td>${esc(r.displayName)}</td>
+          <td style="font-family:'DM Mono',monospace;font-weight:700;">${esc(r.invoiceNo)}</td>
+          <td>${kindBadge}${proxyBadge}</td>
+          <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--txt2);">${lastIssued}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace;"><strong>${(r.amount||0).toLocaleString()}</strong></td>
+          <td><button class="btn b-gh btn-sm" onclick="_ivBulkPreviewOne('${esc(r.key)}')">プレビュー</button></td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--txt2);">該当データなし</td></tr>`;
+  const tabAllChecked = rows.length>0 && rows.every(r=>_ivBulkState.selected[r.key]);
+
+  return `
+<div class="iv-bulk-wrap">
+  <!-- 月選択 -->
+  <div style="display:flex;gap:14px;align-items:end;margin-bottom:14px;flex-wrap:wrap;">
+    <div class="fg" style="min-width:160px;">
+      <label style="font-size:10px;color:var(--txt2);font-weight:500;">対象月</label>
+      <input type="month" id="iv-bulk-mon" class="fi" value="${month}" onchange="_ivBulkChangeMonth(this.value)">
+    </div>
+  </div>
+
+  <!-- ピルタブ + 横断カウント -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;">
+    <div class="iv-pill-tabs">
+      <button class="iv-pill-tab ${tab==='personal'?'active':''}" onclick="_ivBulkSwitchTab('personal')">個人事業主 <span class="cnt">${counts.personal}</span></button>
+      <button class="iv-pill-tab ${tab==='company'?'active':''}" onclick="_ivBulkSwitchTab('company')">委託会社 <span class="cnt">${counts.company}</span></button>
+      <button class="iv-pill-tab ${tab==='customer'?'active':''}" onclick="_ivBulkSwitchTab('customer')">顧客 <span class="cnt">${counts.customer}</span></button>
+    </div>
+    ${totalSelected>0 ? `<div class="iv-cross-count">全タブ選択中: ${totalSelected}件</div>` : ''}
+  </div>
+
+  <!-- 書類タイプ -->
+  <div class="iv-ctrl-bar">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span style="color:var(--txt);font-weight:600;">書類タイプ:</span>
+      <label><input type="checkbox" ${_ivBulkState.docTypes.invoice?'checked':''} onchange="_ivBulkState.docTypes.invoice=this.checked"> 請求書</label>
+      <label><input type="checkbox" ${_ivBulkState.docTypes.detail?'checked':''} onchange="_ivBulkState.docTypes.detail=this.checked"> 明細書</label>
+      <span style="color:var(--brd2);">｜</span>
+      <button class="btn b-gh btn-sm" onclick="_ivBulkDocTypeAll()">全選択</button>
+      <button class="btn b-gh btn-sm" onclick="_ivBulkDocTypeClear()">解除</button>
+    </div>
+  </div>
+
+  <!-- 対象一覧ヘッダ -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 2px;flex-wrap:wrap;gap:8px;">
+    <strong style="font-size:12px;">発行対象 (${tab==='personal'?'個人事業主':tab==='company'?'委託会社':'顧客'}タブ)</strong>
+    <div style="display:flex;gap:6px;">
+      <button class="btn b-gh btn-sm" onclick="_ivBulkSelectTabAll()">このタブ全選択</button>
+      <button class="btn b-gh btn-sm" onclick="_ivBulkSelectTabClear()">このタブ解除</button>
+      <button class="btn b-gh btn-sm" onclick="_ivBulkSelectAllClear()">全タブ解除</button>
+    </div>
+  </div>
+
+  <!-- テーブル -->
+  <div class="tw" style="margin-bottom:8px;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px;"><input type="checkbox" ${tabAllChecked?'checked':''} onchange="_ivBulkSelectTabToggle(this.checked)"></th>
+          <th style="width:30%;">対象</th>
+          <th style="width:18%;">請求番号</th>
+          <th style="width:14%;">区分</th>
+          <th style="width:13%;">最終発行</th>
+          <th style="width:15%;text-align:right;">金額(税込)</th>
+          <th style="width:10%;"></th>
+        </tr>
+      </thead>
+      <tbody>${rowsHTML}</tbody>
+    </table>
+  </div>
+
+  <!-- 保存形式 -->
+  <div class="iv-save-opts">
+    <span style="font-weight:700;color:var(--blu2);">保存形式:</span>
+    <label><input type="radio" name="iv-save" ${_ivBulkState.saveFmt==='concat'?'checked':''} onchange="_ivBulkState.saveFmt='concat'"> 連結1ファイル (印刷向け)</label>
+    <label><input type="radio" name="iv-save" ${_ivBulkState.saveFmt==='zip'?'checked':''} onchange="_ivBulkState.saveFmt='zip'"> 個別ファイルZIP (送付向け)</label>
+  </div>
+
+  <!-- アクションバー -->
+  <div class="iv-action-bar">
+    <div>
+      選択 <strong style="color:var(--blu2);font-size:16px;">${totalSelected}</strong>件 ・ 合計
+      <strong style="color:var(--blu2);font-size:16px;">¥${selTotalAmount.toLocaleString()}</strong>
+      ${totalSelected>0 ? `<span style="color:var(--txt2);font-size:11px;margin-left:8px;">(個人${selByTab.personal} / 会社${selByTab.company} / 顧客${selByTab.customer})</span>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn b-gh" onclick="_ivBulkPreviewAll()" ${totalSelected===0?'disabled':''}>全員プレビュー</button>
+      <button class="btn b-blu" onclick="_ivBulkIssue()" ${totalSelected===0?'disabled':''}>選択した${totalSelected}件を一括発行</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.iv-pill-tabs { display: inline-flex; gap: 6px; padding: 4px; background: var(--bg3); border-radius: 6px; align-items: center; }
+.iv-pill-tab { padding: 8px 18px; border-radius: 4px; font-size: 13px; font-weight: 600; color: var(--txt); cursor: pointer; background: transparent; border: none; transition: all 0.15s; }
+.iv-pill-tab:hover { background: var(--sur); }
+.iv-pill-tab.active { color: #ffffff !important; background: var(--blu2) !important; box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 700; }
+.iv-pill-tab .cnt { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 10px; margin-left: 4px; font-weight: 700; background: var(--brd2); color: var(--sur); }
+.iv-pill-tab.active .cnt { background: rgba(255,255,255,.3); color: #ffffff; }
+.iv-cross-count { padding: 6px 14px; background: var(--amb3); color: var(--amb2); font-size: 11px; border-radius: 4px; font-weight: 700; border: 1px solid var(--amb2); }
+.iv-ctrl-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg3); border: 1px solid var(--brd); border-radius: 6px; margin-bottom: 12px; font-size: 12px; flex-wrap: wrap; gap: 10px; }
+.iv-ctrl-bar label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.iv-ctrl-bar input[type=checkbox] { width: 15px; height: 15px; }
+.iv-save-opts { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(48,195,228,.08); border: 1px solid var(--blu2); border-radius: 6px; margin-top: 14px; font-size: 12px; flex-wrap: wrap; }
+.iv-save-opts label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.iv-save-opts input[type=radio] { width: 15px; height: 15px; }
+.iv-action-bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: var(--bg3); border: 1px solid var(--brd); border-radius: 7px; margin-top: 14px; flex-wrap: wrap; gap: 10px; }
+.iv-bdg-pers { display: inline-block; padding: 1px 6px; background: rgba(0,156,90,.15); color: var(--grn2); border-radius: 3px; font-size: 10px; font-weight: 700; }
+.iv-bdg-comp { display: inline-block; padding: 1px 6px; background: rgba(92,107,192,.15); color: var(--blu2); border-radius: 3px; font-size: 10px; font-weight: 700; }
+.iv-bdg-cust { display: inline-block; padding: 1px 6px; background: rgba(52,168,83,.15); color: var(--tel2); border-radius: 3px; font-size: 10px; font-weight: 700; }
+.iv-bdg-proxy { display: inline-block; padding: 1px 6px; background: var(--amb3); color: var(--amb2); border-radius: 3px; font-size: 10px; font-weight: 700; }
+</style>`;
+}
+
+function _bindInvoiceBulkEvents(el){
+  // inline onclickで処理するため個別の再bindは不要
+}
+
+// ── UIイベント ──
+window._ivBulkChangeMonth = function(v){
+  _ivBulkState.month = v;
+  _ivBulkState.selected = {};
+  renderInvoiceBulk();
+};
+window._ivBulkSwitchTab = function(tab){
+  _ivBulkState.tab = tab;
+  renderInvoiceBulk();
+};
+window._ivBulkToggle = function(key, checked){
+  if(checked) _ivBulkState.selected[key] = true;
+  else delete _ivBulkState.selected[key];
+  renderInvoiceBulk();
+};
+window._ivBulkSelectTabAll = function(){
+  const data = _ivBulkGetData();
+  (data[_ivBulkState.tab]||[]).forEach(r=>{_ivBulkState.selected[r.key]=true;});
+  renderInvoiceBulk();
+};
+window._ivBulkSelectTabClear = function(){
+  const data = _ivBulkGetData();
+  (data[_ivBulkState.tab]||[]).forEach(r=>{delete _ivBulkState.selected[r.key];});
+  renderInvoiceBulk();
+};
+window._ivBulkSelectTabToggle = function(check){
+  if(check) _ivBulkSelectTabAll(); else _ivBulkSelectTabClear();
+};
+window._ivBulkSelectAllClear = function(){
+  _ivBulkState.selected = {};
+  renderInvoiceBulk();
+};
+window._ivBulkDocTypeAll = function(){
+  _ivBulkState.docTypes = {invoice:true, detail:true};
+  renderInvoiceBulk();
+};
+window._ivBulkDocTypeClear = function(){
+  _ivBulkState.docTypes = {invoice:false, detail:false};
+  renderInvoiceBulk();
+};
+
+// ── プレビュー・発行 ──
+window._ivBulkPreviewOne = function(key){
+  const kind = key.split(':')[0];
+  const name = key.split(':').slice(1).join(':');
+  const month = _ivBulkState.month;
+  if(kind==='personal' || kind==='company'){
+    const doc = _buildInvoiceProxyHTML(name, month);
+    if(!doc){ showAlert({msg:'データがありません'}); return; }
+    _printDocWindow(doc.title, doc.html);
+  } else if(kind==='customer'){
+    if(typeof _buildCustInvoiceHTML==='function'){
+      const doc = _buildCustInvoiceHTML(name, month);
+      if(!doc){ showAlert({msg:'データがありません'}); return; }
+      _printDocWindow(doc.title, doc.html);
+    }
+  }
+};
+
+window._ivBulkPreviewAll = function(){
+  const month = _ivBulkState.month;
+  const selKeys = Object.keys(_ivBulkState.selected).filter(k=>_ivBulkState.selected[k]);
+  if(!selKeys.length) return;
+  const includeInvoice = _ivBulkState.docTypes.invoice;
+  const includeDetail = _ivBulkState.docTypes.detail;
+  if(!includeInvoice && !includeDetail){
+    showAlert({msg:'書類タイプを1つ以上選択してください'});
+    return;
+  }
+  const htmlParts = [];
+  selKeys.forEach(k=>{
+    const kind = k.split(':')[0];
+    const name = k.split(':').slice(1).join(':');
+    if(includeInvoice){
+      let doc=null;
+      if(kind==='personal' || kind==='company') doc = _buildInvoiceProxyHTML(name, month);
+      else if(kind==='customer' && typeof _buildCustInvoiceHTML==='function') doc = _buildCustInvoiceHTML(name, month);
+      if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
+    }
+    if(includeDetail){
+      // 明細書は今後実装予定 → プレースホルダ
+      htmlParts.push(`<div style="page-break-after:always;padding:40px;text-align:center;color:#999;font-family:'Meiryo',sans-serif;">
+        <h2>明細書: ${esc(name)} (${esc(month)})</h2>
+        <p>※ 明細書機能は現在実装中です</p>
+      </div>`);
+    }
+  });
+  _printDocWindow('請求書一括プレビュー', htmlParts.join(''));
+};
+
+window._ivBulkIssue = function(){
+  const selKeys = Object.keys(_ivBulkState.selected).filter(k=>_ivBulkState.selected[k]);
+  if(!selKeys.length) return;
+  if(_ivBulkState.saveFmt==='zip'){
+    showAlert({msg:'個別ZIPダウンロードは次ターンで実装予定です。\n現在は「連結1ファイル」で発行します。'});
+  }
+  // 一括発行 = プレビュー + 履歴記録
+  _ivBulkPreviewAll();
+  const month = _ivBulkState.month;
+  selKeys.forEach(k=>{
+    const kind = k.split(':')[0];
+    const name = k.split(':').slice(1).join(':');
+    const type = kind==='personal' ? 'invoiceProxy'
+               : kind==='company' ? 'companyInvoiceProxy'
+               : 'custInvoice';
+    const data = _ivBulkGetData();
+    const row = (data[kind]||[]).find(r=>r.name===name);
+    _saveIssuedDoc({
+      type, target:name, month,
+      amount: row?.amount||0,
+      invoiceNo: row?.invoiceNo||'',
+      issuedAt: new Date().toISOString(),
+      bulk: true,
+    });
+  });
+  showAlert({msg:`${selKeys.length}件の請求書を発行しました`});
+};
+
 
 function renderArchive(){
   const el = $('arc-content');
