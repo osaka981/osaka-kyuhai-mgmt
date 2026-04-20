@@ -1512,39 +1512,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 集荷請求 -->
-    <div id="s-pu-inv" class="sec">
-      <div class="flbc mb12">
-        <div class="fla gap6">
-          <input type="month" id="pinv-mon" class="fi" onchange="renderPUInv()">
-          <select id="pinv-filter" class="fi" onchange="renderPUInv()" style="font-size:11px;">
-            <option value="all">全顧客</option>
-            <option value="tax_included">税込単価のみ</option>
-            <option value="tax_excluded">税抜単価のみ</option>
-            <option value="issued">発行済みのみ</option>
-            <option value="unissued">未発行のみ</option>
-          </select>
-        </div>
-        <div class="fla gap6">
-          <button class="btn b-gh btn-sm" onclick="renderPUInv()">🔄 再集計</button>
-          <button class="btn b-blu btn-sm" onclick="bulkGenInvoices()">📄 一括発行 (選択した顧客)</button>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ch">
-          <div class="ct"><div class="cbar"></div>顧客別 請求書一覧</div>
-          <span id="pinv-count" class="xs muted"></span>
-        </div>
-        <div class="tw"><table>
-          <thead><tr>
-            <th style="width:36px;"><input type="checkbox" id="pinv-chk-all" onchange="togglePuInvAll(this.checked)"></th>
-            <th>No</th><th>顧客名</th><th>税区分</th>
-            <th class="tr">数量合計</th><th class="tr">税抜</th><th class="tr">税込</th>
-            <th>最終発行</th><th>版</th><th></th>
-          </tr></thead>
-          <tbody id="tb-pinv"></tbody>
-        </table></div>
-      </div>
-    </div>
+    <div id="s-pu-inv" class="sec"></div>
 
     <!-- CSVインポート -->
     <div id="s-import" class="sec">
@@ -4377,7 +4345,7 @@ const _TOP_TABS = {
     { s:'salary',      label:'給与計算' },
     { s:'pay-history', label:'給与履歴' },
     { s:'contract',    label:'契約書' },
-    { s:'invoice-bulk',label:'請求書一括発行', badge:'new' },
+    { s:'invoice-bulk',label:'請求書', badge:'new' },
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
@@ -4389,7 +4357,7 @@ const _TOP_TABS = {
     { s:'offices',     label:'営業所管理' },
     { s:'import',      label:'CSVインポート' },
     { s:'archive',     label:'アーカイブ' },
-    { s:'invoice-bulk-admin',label:'請求書一括発行', badge:'new' },
+    { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -4470,7 +4438,7 @@ function navByS(s) {
   if (s==='pu-report')   _call('renderPUReport');
   if (s==='pu-sum')      _call('renderSum');
   if (s==='pu-cust')     {} /* onValue自動更新 */
-  if (s==='pu-inv')      _call('renderPUInv');
+  if (s==='pu-inv')      { _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
@@ -7097,8 +7065,8 @@ window._ivBulkState = window._ivBulkState || {
 };
 
 function renderInvoiceBulk(){
-  // 両方のセクション(s-invoice-bulk / s-invoice-bulk-admin)に同じUIを描画
-  const tgts = ['s-invoice-bulk', 's-invoice-bulk-admin'];
+  // 3セクション(s-invoice-bulk / s-invoice-bulk-admin / s-pu-inv)に同じUIを描画
+  const tgts = ['s-invoice-bulk', 's-invoice-bulk-admin', 's-pu-inv'];
   tgts.forEach(tgtId=>{
     const el = document.getElementById(tgtId);
     if(!el) return;
