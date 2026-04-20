@@ -7402,11 +7402,20 @@ window._ivBulkPreviewAll = function(){
       if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
     }
     if(includeDetail){
-      // 明細書は今後実装予定 → プレースホルダ
-      htmlParts.push(`<div style="page-break-after:always;padding:40px;text-align:center;color:#999;font-family:'Meiryo',sans-serif;">
-        <h2>明細書: ${esc(name)} (${esc(month)})</h2>
-        <p>※ 明細書機能は現在実装中です</p>
-      </div>`);
+      // 明細書(日報・金額非表示): 個人事業主・委託会社のみ生成
+      // 宅配日報があれば宅配明細、集荷日報があれば集荷明細の両方を出力
+      if(kind==='personal' || kind==='company'){
+        const hasDelData = (D.delivery||[]).some(r=>r.staff===name && (r.date||'').startsWith(month));
+        const hasColData = (D.pickup||[]).some(r=>r.staff===name && (r.date||'').startsWith(month));
+        if(hasDelData){
+          const doc = _buildInvoiceDetailHTML(name, month);
+          if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
+        }
+        if(hasColData){
+          const doc = _buildCollectionDetailHTML(name, month);
+          if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
+        }
+      }
     }
   });
   _printDocWindow('請求書一括プレビュー', htmlParts.join(''));
@@ -14771,6 +14780,307 @@ function _buildInvoiceProxyHTML(staffName, monStr){
   };
 }
 
+// ══════════════════════════════════════════════════
+// 明細書(日報・金額非表示) - A4縦向き
+// 日別の個数表 + 合計行 / 金額なし / 日報アプリでの使用想定
+// ══════════════════════════════════════════════════
+function _buildInvoiceDetailHTML(staffName, monStr){
+  const st = (D.staff||[]).find(s=>s.name===staffName);
+  if(!st) return null;
+  const info = _getSystemInfo();
+  const toCompany = info.companyName || '大阪急配株式会社';
+
+  // 対象月の日報データ取得
+  const del = (D.delivery||[]).filter(r=>r.staff===staffName && (r.date||'').startsWith(monStr));
+  const pu = (D.pickup||[]).filter(r=>r.staff===staffName && (r.date||'').startsWith(monStr));
+
+  // 日別集計(月の日数分)
+  const [year, month] = monStr.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dows = ['日','月','火','水','木','金','土'];
+
+  // 日付ごとに集計
+  const dailyMap = {};
+  for(let d=1; d<=daysInMonth; d++){
+    const dstr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dowIdx = new Date(year, month-1, d).getDay();
+    dailyMap[dstr] = {
+      day: d,
+      dow: dows[dowIdx],
+      dowIdx,
+      kanryo: 0,   // ①配達完了
+      tenso: 0,    // ②転送返還
+      yakan: 0,    // 配達完了 20時-21時
+      ogata: 0,    // 配達完了 大(170超)
+      shuka: 0,    // 集荷
+    };
+  }
+  del.forEach(r=>{
+    if(!dailyMap[r.date]) return;
+    dailyMap[r.date].kanryo += r.kanryo||0;
+    dailyMap[r.date].tenso  += r.tenso||0;
+    dailyMap[r.date].yakan  += r.yakan||0;
+    dailyMap[r.date].ogata  += r.ogata||0;
+    dailyMap[r.date].shuka  += r.shukka||0;
+  });
+  // 集荷日報からも集計(IK: 集荷品目キー一覧)
+  pu.forEach(r=>{
+    if(!dailyMap[r.date]) return;
+    if(typeof IK !== 'undefined' && Array.isArray(IK)){
+      IK.forEach(k=>{ dailyMap[r.date].shuka += (iq(r, k)||0); });
+    }
+  });
+
+  // 合計計算
+  const totals = { kanryo:0, tenso:0, yakan:0, ogata:0, shuka:0 };
+  Object.values(dailyMap).forEach(d=>{
+    totals.kanryo += d.kanryo;
+    totals.tenso  += d.tenso;
+    totals.yakan  += d.yakan;
+    totals.ogata  += d.ogata;
+    totals.shuka  += d.shuka;
+  });
+  const totalAll = totals.kanryo + totals.tenso;  // ①+②
+
+  // 行HTML生成
+  const rowsHTML = Object.values(dailyMap).sort((a,b)=>a.day-b.day).map(d=>{
+    const total = d.kanryo + d.tenso; // ①+②
+    const rowClass = d.dowIdx===0 ? 'sun' : (d.dowIdx===6 ? 'sat' : '');
+    return `<tr class="${rowClass}">
+      <td class="date">${d.day}日</td>
+      <td class="dow">(${d.dow})</td>
+      <td class="num">${total>0 ? total.toLocaleString() : '0'}</td>
+      <td class="num">${d.kanryo>0 ? d.kanryo.toLocaleString() : ''}</td>
+      <td class="num">${d.tenso>0 ? d.tenso.toLocaleString() : ''}</td>
+      <td class="num">${d.yakan>0 ? d.yakan.toLocaleString() : ''}</td>
+      <td class="num">${d.ogata>0 ? d.ogata.toLocaleString() : ''}</td>
+      <td class="num">${d.shuka>0 ? d.shuka.toLocaleString() : ''}</td>
+    </tr>`;
+  }).join('');
+
+  // 和暦年月
+  const reiwaYear = year - 2018;
+
+  const html = `<div class="dt-paper">
+    <div class="dt-top">
+      <div class="dt-addr-block">
+        <div class="dt-addr-title">${esc(toCompany)}　御中</div>
+      </div>
+      <div class="dt-date">
+        令和<span class="dt-date-inline">${reiwaYear}</span>年
+        <span class="dt-date-inline dt-mon">${month}</span>月度
+      </div>
+    </div>
+
+    <div class="dt-title">${esc(staffName)}</div>
+
+    <table class="dt-daily">
+      <thead>
+        <tr>
+          <th rowspan="2" class="dt-col-day">日</th>
+          <th rowspan="2" class="dt-col-dow">曜</th>
+          <th rowspan="2" class="dt-col-total">①+②<br><span class="sub">配達完了<br>(集荷を除く全て)</span></th>
+          <th class="dt-col-mid">①<br><span class="sub">配達完了</span></th>
+          <th class="dt-col-mid">②<br><span class="sub">転送返還</span></th>
+          <th colspan="2">①の詳細</th>
+          <th rowspan="2" class="dt-col-shuka">集荷</th>
+        </tr>
+        <tr>
+          <th class="sub">配達完了</th>
+          <th class="sub">転送返還</th>
+          <th class="sub">配達完了<br>20時-21時</th>
+          <th class="sub">配達完了<br>大(170超)</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHTML}</tbody>
+      <tfoot>
+        <tr class="dt-total">
+          <td colspan="2" class="dt-tot-label">合計</td>
+          <td class="num">${totalAll.toLocaleString()}</td>
+          <td class="num">${totals.kanryo.toLocaleString()}</td>
+          <td class="num">${totals.tenso.toLocaleString()}</td>
+          <td class="num">${totals.yakan.toLocaleString()}</td>
+          <td class="num">${totals.ogata.toLocaleString()}</td>
+          <td class="num">${totals.shuka.toLocaleString()}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="dt-footer">
+      ※ 本明細書は業務確認用です。金額情報は請求書をご参照ください。
+    </div>
+  </div>`;
+
+  return {
+    title: '宅配明細書（日報）',
+    html,
+    totalQty: totalAll + totals.shuka,
+  };
+}
+
+// ══════════════════════════════════════════════════
+// 集荷明細書(日報・金額非表示) - A4縦向き
+// 顧客別ブロック×品目別日報 / 入力があった品目のみ表示
+// ══════════════════════════════════════════════════
+function _buildCollectionDetailHTML(staffName, monStr){
+  const st = (D.staff||[]).find(s=>s.name===staffName);
+  if(!st) return null;
+  const info = _getSystemInfo();
+  const toCompany = info.companyName || '大阪急配株式会社';
+
+  // 対象月の集荷日報
+  const pu = (D.pickup||[]).filter(r=>r.staff===staffName && (r.date||'').startsWith(monStr));
+  if(pu.length===0) return null;
+
+  const [year, month] = monStr.split('-').map(Number);
+  const reiwaYear = year - 2018;
+  const dows = ['日','月','火','水','木','金','土'];
+
+  // 顧客別にグループ化
+  const byCust = {};
+  pu.forEach(r=>{
+    const custName = r.cust || '(顧客未設定)';
+    if(!byCust[custName]) byCust[custName] = [];
+    byCust[custName].push(r);
+  });
+
+  // 顧客ごとにブロックHTML生成
+  const custNames = Object.keys(byCust).sort();
+  const blocksHTML = custNames.map((custName, idx)=>{
+    const records = byCust[custName];
+
+    // この顧客で入力があった品目キーを収集
+    const usedItemsSet = new Set();
+    records.forEach(r=>{
+      (typeof IK !== 'undefined' ? IK : []).forEach(k=>{
+        if((iq(r, k)||0) > 0) usedItemsSet.add(k);
+      });
+    });
+    const usedItems = Array.from(usedItemsSet);
+    // ITEMSの定義順でソート(IKの並び通り)
+    usedItems.sort((a,b)=>IK.indexOf(a)-IK.indexOf(b));
+
+    if(usedItems.length===0) return ''; // 入力なし顧客はスキップ
+
+    // グループ分類(ゆうパック/ゆうパケット/その他/チャーター)
+    const groupMap = {};
+    usedItems.forEach(k=>{
+      const g = ITEMS[k]?.group || 'その他';
+      if(!groupMap[g]) groupMap[g] = [];
+      groupMap[g].push(k);
+    });
+    const groupOrder = ['ゆうパック','ゆうパケット','その他','チャーター'];
+    const groups = groupOrder.filter(g=>groupMap[g]);
+
+    // ヘッダー行(2段)
+    const grpHeaderCells = groups.map(g=>`<th colspan="${groupMap[g].length}" class="sub-grp">${esc(g)}</th>`).join('');
+    const itemHeaderCells = groups.flatMap(g=>groupMap[g].map(k=>`<th>${esc(ITEMS[k]?.label||k)}</th>`)).join('');
+
+    // 日別データ行(集荷のあった日のみ)
+    const dateSet = new Set(records.map(r=>r.date));
+    const dateList = Array.from(dateSet).sort();
+    let rowsHTML = '';
+    const groupSums = {}; // 合計用
+    usedItems.forEach(k=>groupSums[k]=0);
+    let rowTotalAllSum = 0;
+
+    dateList.forEach(dstr=>{
+      const dayRecs = records.filter(r=>r.date===dstr);
+      // 日付解析
+      const [y,m,d] = dstr.split('-').map(Number);
+      const dowIdx = new Date(y,m-1,d).getDay();
+      const rowClass = dowIdx===0 ? 'sun' : (dowIdx===6 ? 'sat' : '');
+      // 品目セル
+      let rowTotal = 0;
+      const itemCells = usedItems.map(k=>{
+        const qty = dayRecs.reduce((sum,r)=>sum+(iq(r,k)||0),0);
+        groupSums[k]+=qty;
+        rowTotal += qty;
+        return `<td class="num">${qty>0?qty.toLocaleString():''}</td>`;
+      }).join('');
+      rowTotalAllSum += rowTotal;
+      rowsHTML += `<tr class="${rowClass}">
+        <td class="date">${d}日</td>
+        <td class="dow">(${dows[dowIdx]})</td>
+        ${itemCells}
+        <td class="num"><strong>${rowTotal.toLocaleString()}</strong></td>
+      </tr>`;
+    });
+
+    // 合計行
+    const totalCells = usedItems.map(k=>`<td class="num">${groupSums[k].toLocaleString()}</td>`).join('');
+
+    // 顧客合計
+    const custTotal = Object.values(groupSums).reduce((a,v)=>a+v,0);
+
+    const colgroup = `<col style="width:36px;"><col style="width:28px;">` +
+                     usedItems.map(()=>`<col>`).join('') +
+                     `<col style="width:50px;">`;
+
+    return `<div class="col-cust-block">
+      <div class="col-cust-head">
+        <span>${idx+1}. ${esc(custName)}</span>
+        <span class="cust-sum">合計数量: <strong>${custTotal.toLocaleString()}</strong> 個</span>
+      </div>
+      <table class="col-daily">
+        <colgroup>${colgroup}</colgroup>
+        <thead>
+          <tr>
+            <th rowspan="2">日</th>
+            <th rowspan="2">曜</th>
+            ${grpHeaderCells}
+            <th rowspan="2">合計</th>
+          </tr>
+          <tr>${itemHeaderCells}</tr>
+        </thead>
+        <tbody>
+          ${rowsHTML}
+          <tr class="col-total">
+            <td colspan="2" class="tot-label">合計</td>
+            ${totalCells}
+            <td class="num">${custTotal.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+  }).filter(x=>x).join('');
+
+  // 全顧客合計
+  const grandTotal = Object.values(byCust).reduce((a,records)=>{
+    return a + records.reduce((s,r)=>{
+      return s + (typeof IK!=='undefined' ? IK : []).reduce((ss,k)=>ss+(iq(r,k)||0),0);
+    }, 0);
+  }, 0);
+
+  const html = `<div class="dt-paper">
+    <div class="dt-top">
+      <div class="dt-addr-block">
+        <div class="dt-addr-title">${esc(toCompany)}　御中</div>
+      </div>
+      <div class="dt-date">
+        令和<span class="dt-date-inline">${reiwaYear}</span>年
+        <span class="dt-date-inline dt-mon">${month}</span>月度
+      </div>
+    </div>
+
+    <div class="dt-title">${esc(staffName)}</div>
+    <div class="dt-subttl">集荷明細書 (業務確認用) ｜ 総合計: ${grandTotal.toLocaleString()} 個</div>
+
+    ${blocksHTML || '<div style="text-align:center;padding:40px;color:#999;">集荷データがありません</div>'}
+
+    <div class="dt-footer">
+      ※ 本明細書は業務確認用です。金額情報は請求書をご参照ください。<br>
+      ※ 集荷のあった日のみ表示しています。
+    </div>
+  </div>`;
+
+  return {
+    title: '集荷明細書（日報）',
+    html,
+    totalQty: grandTotal,
+  };
+}
+
 function _buildCustInvoiceHTML(custName, monStr, opts){
   opts=opts||{};
   const bill=_calcCustBilling(custName, monStr);
@@ -15148,6 +15458,50 @@ function _printDocWindow(title, html){
       .ci-remark .hd{background:#f4f4f4;padding:5px 12px;font-weight:500;border-bottom:0.75px solid #000;}
       .ci-remark .bd{padding:10px 12px;min-height:50px;color:#333;}
 
+      /* ═══ 明細書(日報・金額非表示) dt-* ═══ */
+      .dt-paper{background:#fff;color:#000;margin:0 auto;padding:40px 52px;font-size:12px;line-height:1.5;width:760px;min-height:1050px;font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;}
+      .dt-top{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start;margin-bottom:14px;}
+      .dt-addr-title{font-size:15px;font-weight:700;padding-bottom:4px;border-bottom:1px solid #000;}
+      .dt-date{text-align:right;font-size:13px;font-weight:500;}
+      .dt-date-inline{display:inline-block;min-width:28px;padding:0 6px;border-bottom:1px solid #000;text-align:center;margin:0 3px;}
+      .dt-date-inline.dt-mon{font-weight:700;min-width:32px;}
+      .dt-title{font-size:16px;text-align:center;font-weight:500;letter-spacing:1em;padding-left:1em;margin:14px 0 12px;font-family:'MS Mincho','Yu Mincho',serif;}
+      .dt-daily{width:100%;border-collapse:collapse;font-size:10px;}
+      .dt-daily th,.dt-daily td{border:0.75px solid #000;padding:3px 6px;}
+      .dt-daily thead th{background:#f4f4f4;text-align:center;font-weight:500;height:22px;}
+      .dt-daily thead th.sub{font-size:9px;font-weight:400;color:#444;}
+      .dt-daily td.date{text-align:center;background:#fafafa;font-weight:500;width:40px;}
+      .dt-daily td.dow{text-align:center;background:#fafafa;color:#666;width:32px;}
+      .dt-daily td.num{text-align:right;font-family:'Times New Roman',serif;}
+      .dt-daily tr.sun td.date,.dt-daily tr.sun td.dow{color:#c62828;}
+      .dt-daily tr.sat td.date,.dt-daily tr.sat td.dow{color:#1565c0;}
+      .dt-daily tr.dt-total td,.dt-daily tr.dt-total{background:#fef3c7;font-weight:700;}
+      .dt-daily tr.dt-total td.dt-tot-label{text-align:center;}
+      .dt-footer{margin-top:14px;padding:8px 12px;border:0.75px solid #000;background:#fafafa;font-size:10px;color:#555;}
+      .dt-col-day{width:40px;}
+      .dt-col-dow{width:32px;}
+      .dt-col-total{width:13%;}
+      .dt-col-mid{width:12%;}
+      .dt-col-shuka{width:10%;}
+
+      /* 集荷明細用 */
+      .dt-subttl{font-size:11px;color:#666;margin-bottom:10px;text-align:center;}
+      .col-cust-block{margin-bottom:16px;}
+      .col-cust-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#e0e7ff;border:0.75px solid #3730a3;border-radius:4px 4px 0 0;font-weight:700;font-size:12px;color:#1e3a8a;}
+      .col-cust-head .cust-sum{font-size:11px;color:#4b5563;font-weight:500;}
+      .col-cust-head .cust-sum strong{color:#1e3a8a;}
+      .col-daily{width:100%;border-collapse:collapse;font-size:10px;margin-top:-1px;}
+      .col-daily th,.col-daily td{border:0.75px solid #000;padding:3px 6px;}
+      .col-daily thead th{background:#f4f4f4;text-align:center;font-weight:500;height:22px;font-size:10px;}
+      .col-daily thead th.sub-grp{background:#eef0ff;font-weight:600;color:#3730a3;}
+      .col-daily td.date{text-align:center;background:#fafafa;font-weight:500;}
+      .col-daily td.dow{text-align:center;background:#fafafa;color:#666;}
+      .col-daily td.num{text-align:right;font-family:'Times New Roman',serif;}
+      .col-daily tr.sun td.date,.col-daily tr.sun td.dow{color:#c62828;}
+      .col-daily tr.sat td.date,.col-daily tr.sat td.dow{color:#1565c0;}
+      .col-daily tr.col-total td,.col-daily tr.col-total{background:#fef3c7;font-weight:700;}
+      .col-daily tr.col-total td.tot-label{text-align:center;}
+
       @media print{body{padding:0;} .no-print{display:none;}}
       .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;z-index:1000;}
     </style></head><body>
@@ -15227,32 +15581,96 @@ function renderStaffDocs(el, name){
     .sort((a,b)=>(b.issuedAt||'').localeCompare(a.issuedAt||''));
 
   const payLabel=isExternal?'支払明細':'給与明細';
-  const paySlipBtn=paySlipOn
-    ? `<button class="btn b-blu btn-sm" onclick="generatePaySlip('${esc(name)}','${mon}')">${payLabel}を発行</button>`
-    : `<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">${payLabel} 発行対象外</span>`;
-  const invProxyBtn=!isExternal?'':(invProxyOn
-    ? `<button class="btn b-grn btn-sm" onclick="generateInvoiceProxy('${esc(name)}','${mon}')">請求書代行を発行</button>`
-    : `<span class="bdg" style="background:var(--red3);color:var(--red2);font-size:11px;padding:4px 8px;">請求書代行 発行対象外</span>`);
 
-  let html=`<div class="fs-card">
+  // チェックボックス式発行UI(書類タイプ選択+発行)
+  // state: window._staffDocCheck[name] = { paySlip, invoice, detailDel, detailCol }
+  window._staffDocCheck = window._staffDocCheck || {};
+  if(!_staffDocCheck[name]){
+    _staffDocCheck[name] = { paySlip: paySlipOn, invoice: false, detailDel: false, detailCol: false };
+  }
+  const chk = _staffDocCheck[name];
+  // 後方互換: 古い detail キーを detailDel にマージ
+  if(chk.detail !== undefined){ chk.detailDel = chk.detailDel || chk.detail; delete chk.detail; }
+  if(chk.detailDel===undefined) chk.detailDel = false;
+  if(chk.detailCol===undefined) chk.detailCol = false;
+  // 発行不可項目は常にfalseに
+  if(!paySlipOn) chk.paySlip = false;
+  if(!invProxyOn || !isExternal) chk.invoice = false;
+
+  // 宅配・集荷の日報データ有無を判定
+  const hasDelData = (D.delivery||[]).some(r=>r.staff===name && (r.date||'').startsWith(mon));
+  const hasColData = (D.pickup||[]).some(r=>r.staff===name && (r.date||'').startsWith(mon));
+  if(!hasDelData) chk.detailDel = false;
+  if(!hasColData) chk.detailCol = false;
+
+  // 各チェックボックスの表示判定(発行OFFは無効表示)
+  const payChkHTML = paySlipOn
+    ? `<label class="sdoc-chk"><input type="checkbox" ${chk.paySlip?'checked':''} onchange="_staffDocToggle('${esc(name)}','paySlip',this.checked)"> ${payLabel}</label>`
+    : `<label class="sdoc-chk disabled"><input type="checkbox" disabled> ${payLabel} <span class="xs" style="color:var(--red2);margin-left:4px;">(OFF)</span></label>`;
+  const invChkHTML = !isExternal
+    ? ''
+    : (invProxyOn
+      ? `<label class="sdoc-chk"><input type="checkbox" ${chk.invoice?'checked':''} onchange="_staffDocToggle('${esc(name)}','invoice',this.checked)"> 請求書代行</label>`
+      : `<label class="sdoc-chk disabled"><input type="checkbox" disabled> 請求書代行 <span class="xs" style="color:var(--red2);margin-left:4px;">(OFF)</span></label>`);
+  const detailDelChkHTML = !isExternal
+    ? ''
+    : (hasDelData
+      ? `<label class="sdoc-chk"><input type="checkbox" ${chk.detailDel?'checked':''} onchange="_staffDocToggle('${esc(name)}','detailDel',this.checked)"> 宅配明細</label>`
+      : `<label class="sdoc-chk disabled"><input type="checkbox" disabled> 宅配明細 <span class="xs" style="color:var(--txt3);margin-left:4px;">(データなし)</span></label>`);
+  const detailColChkHTML = !isExternal
+    ? ''
+    : (hasColData
+      ? `<label class="sdoc-chk"><input type="checkbox" ${chk.detailCol?'checked':''} onchange="_staffDocToggle('${esc(name)}','detailCol',this.checked)"> 集荷明細</label>`
+      : `<label class="sdoc-chk disabled"><input type="checkbox" disabled> 集荷明細 <span class="xs" style="color:var(--txt3);margin-left:4px;">(データなし)</span></label>`);
+
+  // 選択数
+  const selectedCount = (chk.paySlip?1:0) + (chk.invoice?1:0) + (chk.detailDel?1:0) + (chk.detailCol?1:0);
+
+  let html=`
+  <style>
+    .sdoc-ctrl-bar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg3); border:1px solid var(--brd); border-radius:6px; margin-bottom:12px; flex-wrap:wrap; gap:10px; }
+    .sdoc-chk-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .sdoc-chk { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:13px; }
+    .sdoc-chk input[type=checkbox] { width:15px; height:15px; }
+    .sdoc-chk.disabled { opacity:0.5; cursor:not-allowed; }
+    .sdoc-chk-label { color:var(--txt); font-weight:600; }
+    .sdoc-sep { color:var(--brd2); }
+  </style>
+  <div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
       <div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-doc-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('docs')"></div>
     </div>
-    <div class="xs muted">書類発行設定: ${paySlipOn?`<span style="color:var(--grn2)">${payLabel} ON</span>`:`<span style="color:var(--txt3)">${payLabel} OFF</span>`} / ${isExternal?(invProxyOn?'<span style="color:var(--grn2)">請求書代行 ON</span>':'<span style="color:var(--txt3)">請求書代行 OFF</span>'):''}</div>
+    <div class="xs muted">書類発行設定: ${paySlipOn?`<span style="color:var(--grn2)">${payLabel} ON</span>`:`<span style="color:var(--txt3)">${payLabel} OFF</span>`}${isExternal?' / '+(invProxyOn?'<span style="color:var(--grn2)">請求書代行 ON</span>':'<span style="color:var(--txt3)">請求書代行 OFF</span>'):''}</div>
   </div>
 
   <div class="fs-card">
-    <div class="ct mb12"><div class="cbar"></div>${mon}分 ${payLabel}プレビュー</div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;">
+    <div class="ct mb12"><div class="cbar"></div>${mon}分 書類発行</div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;margin-bottom:12px;">
       <div>
         <div class="xs muted">支払金額</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
-        ${paySlipBtn}
-        ${invProxyBtn}
+    </div>
+
+    <!-- チェックボックス式書類選択 -->
+    <div class="sdoc-ctrl-bar">
+      <div class="sdoc-chk-row">
+        <span class="sdoc-chk-label">書類タイプ:</span>
+        ${payChkHTML}
+        ${invChkHTML}
+        ${detailDelChkHTML}
+        ${detailColChkHTML}
+        <span class="sdoc-sep">｜</span>
+        <button class="btn b-gh btn-sm" onclick="_staffDocSelectAll('${esc(name)}')">全選択</button>
+        <button class="btn b-gh btn-sm" onclick="_staffDocSelectClear('${esc(name)}')">解除</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span class="xs muted">選択中: <strong>${selectedCount}</strong>件</span>
+        <button class="btn b-gh btn-sm" onclick="_staffDocPreview('${esc(name)}','${mon}')" ${selectedCount===0?'disabled':''}>プレビュー</button>
+        <button class="btn b-blu btn-sm" onclick="_staffDocIssue('${esc(name)}','${mon}')" ${selectedCount===0?'disabled':''}>選択した${selectedCount}件を発行</button>
       </div>
     </div>
+
     ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
   </div>
 
@@ -15675,6 +16093,115 @@ async function sendStaffMail(name){
     status.textContent='送信失敗: '+(res.error||'');
     status.style.color='var(--red2)';
   }
+}
+
+// ══════════════════════════════════════════════════
+// 従業員ページ 書類タブ チェックボックス式 発行ハンドラ
+// ══════════════════════════════════════════════════
+window._staffDocToggle = function(name, key, checked){
+  window._staffDocCheck = window._staffDocCheck || {};
+  if(!_staffDocCheck[name]) _staffDocCheck[name] = {paySlip:false, invoice:false, detail:false};
+  _staffDocCheck[name][key] = checked;
+  renderStaffFSTab('docs');
+};
+window._staffDocSelectAll = function(name){
+  const st=(D.staff||[]).find(s=>s.name===name);
+  if(!st) return;
+  const now = new Date();
+  const mon = document.getElementById('fs-doc-mon')?.value
+            || (now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'));
+  const isExternal = st.kubun!=='社員・役員' && st.kubun!=='パート（事務）';
+  const paySlipOn = !!st.docs?.paySlip?.enabled;
+  const invProxyOn = !!st.docs?.invoiceProxy?.enabled;
+  const hasDelData = (D.delivery||[]).some(r=>r.staff===name && (r.date||'').startsWith(mon));
+  const hasColData = (D.pickup||[]).some(r=>r.staff===name && (r.date||'').startsWith(mon));
+  window._staffDocCheck = window._staffDocCheck || {};
+  _staffDocCheck[name] = {
+    paySlip: paySlipOn,
+    invoice: isExternal && invProxyOn,
+    detailDel: isExternal && hasDelData,
+    detailCol: isExternal && hasColData,
+  };
+  renderStaffFSTab('docs');
+};
+window._staffDocSelectClear = function(name){
+  window._staffDocCheck = window._staffDocCheck || {};
+  _staffDocCheck[name] = {paySlip:false, invoice:false, detailDel:false, detailCol:false};
+  renderStaffFSTab('docs');
+};
+
+// 選択された書類を連結してプレビュー(発行はしない)
+window._staffDocPreview = function(name, mon){
+  const chk = (window._staffDocCheck||{})[name] || {};
+  const htmlParts = _staffDocBuildParts(name, mon, chk);
+  if(htmlParts.length === 0){ showAlert({msg:'選択された書類がありません'}); return; }
+  _printDocWindow('書類プレビュー', htmlParts.join('<div style="page-break-after:always;"></div>'));
+};
+
+// 選択された書類を発行(プレビュー+履歴記録)
+window._staffDocIssue = function(name, mon){
+  const chk = (window._staffDocCheck||{})[name] || {};
+  const parts = _staffDocBuildPartsWithMeta(name, mon, chk);
+  if(parts.length === 0){ showAlert({msg:'選択された書類がありません'}); return; }
+  // プレビュー(連結)
+  _printDocWindow('書類一括発行', parts.map(p=>p.html).join('<div style="page-break-after:always;"></div>'));
+  // 履歴記録
+  parts.forEach(p=>{
+    if(p.type==='paySlip' || p.type==='invoiceProxy'){
+      _saveIssuedDoc({
+        type: p.type, target: name, month: mon,
+        amount: p.amount||0,
+        invoiceNo: p.invoiceNo||'',
+        issuedAt: new Date().toISOString()
+      });
+    }
+  });
+  if(typeof renderStaffFSTab==='function') setTimeout(()=>renderStaffFSTab('docs'), 100);
+  showAlert({msg:`${parts.length}件の書類を発行しました`});
+};
+
+// 書類HTML生成(プレビュー用・HTML配列を返す)
+function _staffDocBuildParts(name, mon, chk){
+  const parts = [];
+  if(chk.paySlip){
+    const doc = _buildPaySlipHTML(name, mon);
+    if(doc) parts.push(doc.html);
+  }
+  if(chk.invoice){
+    const doc = _buildInvoiceProxyHTML(name, mon);
+    if(doc) parts.push(doc.html);
+  }
+  if(chk.detailDel){
+    const doc = _buildInvoiceDetailHTML(name, mon);
+    if(doc) parts.push(doc.html);
+  }
+  if(chk.detailCol){
+    const doc = _buildCollectionDetailHTML(name, mon);
+    if(doc) parts.push(doc.html);
+  }
+  return parts;
+}
+
+// 書類HTML+メタ情報(発行時の履歴保存用)
+function _staffDocBuildPartsWithMeta(name, mon, chk){
+  const parts = [];
+  if(chk.paySlip){
+    const doc = _buildPaySlipHTML(name, mon);
+    if(doc) parts.push({type:'paySlip', html:doc.html, amount:doc.amount});
+  }
+  if(chk.invoice){
+    const doc = _buildInvoiceProxyHTML(name, mon);
+    if(doc) parts.push({type:'invoiceProxy', html:doc.html, amount:doc.amount, invoiceNo:doc.invoiceNo});
+  }
+  if(chk.detailDel){
+    const doc = _buildInvoiceDetailHTML(name, mon);
+    if(doc) parts.push({type:'detailDel', html:doc.html, totalQty:doc.totalQty});
+  }
+  if(chk.detailCol){
+    const doc = _buildCollectionDetailHTML(name, mon);
+    if(doc) parts.push({type:'detailCol', html:doc.html, totalQty:doc.totalQty});
+  }
+  return parts;
 }
 
 // ── 顧客 書類タブ ──
