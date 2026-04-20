@@ -14782,6 +14782,164 @@ function _saveIssuedDoc(rec){
   }catch(e){}
 }
 
+// ══════════════════════════════════════════════════
+// 委託会社明細書 用の階層集計
+// returns: {
+//   total: 会社総合計,
+//   drivers: [{
+//     name, empNo, total,
+//     offices: [{
+//       postOffice, total,
+//       items: [{label, count, unitPrice, amount}]
+//     }]
+//   }]
+// }
+// ══════════════════════════════════════════════════
+function buildCompanyPaySlipData(coName, monStr){
+  const co=(D.companies||[]).find(c=>c.name===coName);
+  if(!co) return {total:0, drivers:[]};
+  const drivers = _companyDrivers(coName);
+  // 従業員番号順にソート
+  drivers.sort((a,b)=>{
+    const ea=String(a.empNo||''), eb=String(b.empNo||'');
+    if(ea && eb) return ea.localeCompare(eb, 'ja');
+    return 0;
+  });
+
+  const result = {total:0, drivers:[]};
+  drivers.forEach(d=>{
+    const dNode = _buildDriverMonthlyByOffice(d, monStr);
+    result.drivers.push(dNode);
+    result.total += dNode.total;
+  });
+  return result;
+}
+
+// 1人のドライバーの月次を、郵便局別・項目別に集計
+function _buildDriverMonthlyByOffice(staff, monStr){
+  const name = staff.name;
+  const node = {
+    name, empNo: staff.empNo||'',
+    kyuyo: staff.kyuyo || '',
+    total: 0,
+    offices: [],
+  };
+
+  // ── 月給制: 郵便局分類なしで1枠にまとめる ──
+  if(staff.kyuyo === '月給'){
+    const amt = staff.tanka || 0;
+    if(amt > 0){
+      node.offices.push({
+        postOffice: '(給与)',
+        total: amt,
+        items: [{label:'基本給（月給）', count:1, unitPrice:amt, amount:amt}],
+      });
+      node.total += amt;
+    }
+    return node;
+  }
+
+  // ── 歩合制: 郵便局別に明細 ──
+  const dp = staff.fixedPrices?.del || {};
+  const del = (D.delivery||[]).filter(r=>r.staff===name && (r.date||'').startsWith(monStr));
+
+  // 郵便局別に宅配データを集約
+  const byOffice = {}; // {postOffice: {delSum:{kanryo,tenso,...}, items:[]}}
+  del.forEach(r=>{
+    const po = r.postOffice || r.office || '(未設定)';
+    if(!byOffice[po]) byOffice[po] = {delSum:{kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0}};
+    const ds = byOffice[po].delSum;
+    ds.kanryo+=r.kanryo||0; ds.tenso+=r.tenso||0;
+    ds.yakan+=r.yakan||0; ds.ogata+=r.ogata||0;
+    ds.shukka+=r.shukka||0;
+    ds.s1+=r.s1||0; ds.s2+=r.s2||0; ds.s3+=r.s3||0; ds.s4+=r.s4||0;
+  });
+
+  // 宅配事業内集荷(新形式)の有無を判定
+  let dcBreakdown = [];
+  try {
+    const dc = calcStaffDelColPayment(name, monStr);
+    dcBreakdown = (dc.breakdown || []).map(b=>({
+      postOffice: b.postOffice || '(未設定)',
+      label: b.label || '集荷',
+      count: b.count, unitPrice: b.unitPrice,
+      amount: b.amount, isDefault: b.isDefault,
+    }));
+  } catch(e){}
+  const hasNewFormatDelCol = dcBreakdown.length > 0;
+
+  // 宅配事業内集荷を郵便局別・項目名別に集約
+  const colByOffice = {}; // {postOffice: {labelKey: {label, count, unitPrice, amount}}}
+  dcBreakdown.forEach(b=>{
+    const po = b.postOffice || '(未設定)';
+    if(!colByOffice[po]) colByOffice[po] = {};
+    const key = `${b.label}__${b.unitPrice}`;
+    if(!colByOffice[po][key]){
+      colByOffice[po][key] = {label:b.label, count:0, unitPrice:b.unitPrice, amount:0, isDefault:b.isDefault};
+    }
+    colByOffice[po][key].count += b.count;
+    colByOffice[po][key].amount += b.amount;
+  });
+  // 郵便局リストを統合(宅配・宅配内集荷両方)
+  const allPostOffices = new Set([...Object.keys(byOffice), ...Object.keys(colByOffice)]);
+
+  // 営業所コード順にソート: D.offices から探して order を決定
+  const sortedPostOffices = [...allPostOffices].sort((a,b)=>{
+    const oa = (D.offices||[]).find(o=>o.name===a);
+    const ob = (D.offices||[]).find(o=>o.name===b);
+    const ca = oa?.officeCode || '99';
+    const cb = ob?.officeCode || '99';
+    if(ca !== cb) return String(ca).localeCompare(String(cb), 'ja');
+    return String(a).localeCompare(String(b), 'ja');
+  });
+
+  sortedPostOffices.forEach(po=>{
+    const items = [];
+    const delSum = byOffice[po]?.delSum || {};
+
+    // 宅配項目(完了/転送/夜間/大型/その他1-4)
+    const delItems = [
+      {key:'kanryo', label:'完了', price:dp.kanryo},
+      {key:'tenso',  label:'転送', price:dp.tenso},
+      {key:'yakan',  label:'夜間', price:dp.night},
+      {key:'ogata',  label:'大型', price:dp.ogata},
+      // 新形式集荷がある場合は旧shukkaを明細に含めない(集荷は新形式で計上)
+      ...(hasNewFormatDelCol ? [] : [{key:'shukka', label:'集荷', price:dp.shukka}]),
+      {key:'s1', label:'その他1', price:dp.s1},
+      {key:'s2', label:'その他2', price:dp.s2},
+      {key:'s3', label:'その他3', price:dp.s3},
+      {key:'s4', label:'その他4', price:dp.s4},
+    ];
+    delItems.forEach(({key,label,price})=>{
+      const q = delSum[key] || 0;
+      if(q > 0 && price){
+        items.push({label, count:q, unitPrice:price, amount:q*price});
+      }
+    });
+
+    // 宅配事業内集荷(集荷/集荷②/集荷③...)を追加
+    const colItems = Object.values(colByOffice[po] || {});
+    colItems.sort((a,b)=>{
+      if(a.isDefault && !b.isDefault) return -1;
+      if(!a.isDefault && b.isDefault) return 1;
+      return String(a.label).localeCompare(String(b.label), 'ja');
+    });
+    colItems.forEach(c=>{
+      if(c.amount > 0){
+        items.push({label:c.label, count:c.count, unitPrice:c.unitPrice, amount:c.amount});
+      }
+    });
+
+    const officeTotal = items.reduce((a,it)=>a+it.amount, 0);
+    if(items.length > 0 || officeTotal > 0){
+      node.offices.push({postOffice:po, total:officeTotal, items});
+      node.total += officeTotal;
+    }
+  });
+
+  return node;
+}
+
 function _calcStaffPayment(name, monStr){
   const st=(D.staff||[]).find(s=>s.name===name);
   if(!st) return {total:0,breakdown:[]};
@@ -17358,12 +17516,51 @@ function renderCompanyDocs(el, name){
 function generateCompanyPaySlipSummary(coName, monStr){
   const co=(D.companies||[]).find(c=>c.name===coName);
   if(!co){ showAlert({msg:'委託会社データなし'}); return; }
-  const drivers=_companyDrivers(coName);
-  let total=0, rows='';
-  drivers.forEach(d=>{
-    const pay=_calcStaffPayment(d.name, monStr);
-    total+=pay.total;
-    rows+=`<tr><td>${esc(d.name)}</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr>`;
+  const data = buildCompanyPaySlipData(coName, monStr);
+  if(!data.drivers || data.drivers.length === 0){
+    showAlert({msg:`${coName} 所属ドライバーがいません`}); return;
+  }
+
+  // ドライバーごとのセクションを構築
+  let sections = '';
+  data.drivers.forEach(dr=>{
+    let driverBody = '';
+    if(dr.offices.length === 0){
+      driverBody = `<table style="margin:6px 0 10px;"><tr><td style="padding:8px; color:#999;">${_esc(dr.name)} は ${monStr} の実績がありません</td></tr></table>`;
+    } else {
+      dr.offices.forEach(off=>{
+        const rows = off.items.map(it=>
+          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count.toLocaleString()}</td><td class="tr">¥${it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
+        ).join('');
+        driverBody += `
+          <table style="margin:6px 0 4px;">
+            <thead>
+              <tr><th colspan="4" style="background:#e0e7ff; color:#1e3a8a; text-align:left;">【${_esc(off.postOffice)}】</th></tr>
+              <tr><th>項目</th><th class="tr" style="width:70px;">数量</th><th class="tr" style="width:90px;">単価</th><th class="tr" style="width:110px;">金額</th></tr>
+            </thead>
+            <tbody>
+              ${rows}
+              <tr style="background:#f0fdf4; font-weight:700; color:#065f46;">
+                <td colspan="3">${_esc(off.postOffice)} 小計</td>
+                <td class="tr">¥${off.total.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>`;
+      });
+      // ドライバー合計
+      driverBody += `
+        <table style="margin:0 0 12px;">
+          <tr style="background:#f9fafb; font-weight:700;">
+            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 合計</td>
+            <td class="tr" style="width:180px;">¥${dr.total.toLocaleString()}</td>
+          </tr>
+        </table>`;
+    }
+    sections += `
+      <div style="background:#e0e7ff; font-weight:700; color:#1e3a8a; padding:6px 10px; margin-top:14px; border-left:4px solid #2563eb;">
+        ■ ドライバー: ${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''}${dr.kyuyo==='月給'?' <span style="font-size:10px; font-weight:normal;">[月給制]</span>':''}
+      </div>
+      ${driverBody}`;
   });
 
   const today=new Date().toISOString().slice(0,10);
@@ -17373,41 +17570,97 @@ function generateCompanyPaySlipSummary(coName, monStr){
       <div class="doc-title">支 払 明 細 書</div>
       <div class="doc-meta"><span>対象期間：${mon}分</span><span>発行日：${today}</span></div>
     </div>
-    <div class="doc-to">${esc(coName)} 御中</div>
+    <div class="doc-to">${_esc(coName)} 御中</div>
     <div class="doc-amount-box">
       <div class="doc-amount-label">お支払金額</div>
-      <div class="doc-amount">¥${total.toLocaleString()}</div>
+      <div class="doc-amount">¥${data.total.toLocaleString()}</div>
     </div>
-    <table>
-      <thead><tr><th>所属ドライバー</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${total.toLocaleString()}</td></tr></tbody>
+    ${sections}
+    <table style="margin-top:14px;">
+      <tr style="background:#fef3c7; font-weight:800; font-size:13px;">
+        <td>${_esc(coName)} 総合計</td>
+        <td class="tr" style="width:180px;">¥${data.total.toLocaleString()}</td>
+      </tr>
     </table>
     ${_buildCompanyFromBlock(true)}
     ${_buildBankInfoBlock()}
-    <div class="doc-footer">※ 本明細書は会社全体の支払合計です。ドライバー個別の内訳は別途発行します。</div>`;
+    <div class="doc-footer">※ ドライバー別・営業所別の明細を記載しています。</div>`;
 
   _printDocWindow('支払明細書（会社）', html);
-  _saveIssuedDoc({type:'companyPaySlip', target:coName, month:monStr, amount:total, issuedAt:new Date().toISOString()});
+  _saveIssuedDoc({type:'companyPaySlip', target:coName, month:monStr, amount:data.total, issuedAt:new Date().toISOString()});
   renderCompanyFSTab('docs');
+}
+
+// HTMLエスケープ(esc関数が呼べない場合のフォールバック)
+function _esc(s){
+  if(typeof esc === 'function') return esc(s);
+  return String(s==null?'':s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
 // 委託会社向け請求書代行（会社名義）
 function generateCompanyInvoiceProxy(coName, monStr){
   const co=(D.companies||[]).find(c=>c.name===coName);
   if(!co){ showAlert({msg:'委託会社データなし'}); return; }
-  const drivers=_companyDrivers(coName);
-  let total=0, rows='';
-  drivers.forEach(d=>{
-    const pay=_calcStaffPayment(d.name, monStr);
-    total+=pay.total;
-    rows+=`<tr><td>${esc(d.name)} 業務委託料</td><td class="tr">¥${pay.total.toLocaleString()}</td></tr>`;
+  const data = buildCompanyPaySlipData(coName, monStr);
+  if(!data.drivers || data.drivers.length === 0){
+    showAlert({msg:`${coName} 所属ドライバーがいません`}); return;
+  }
+  let total = data.total;
+
+  // ドライバーごとのセクション
+  let sections = '';
+  data.drivers.forEach(dr=>{
+    let driverBody = '';
+    if(dr.offices.length === 0){
+      driverBody = `<table style="margin:6px 0 10px;"><tr><td style="padding:8px; color:#999;">${_esc(dr.name)} 実績なし</td></tr></table>`;
+    } else {
+      dr.offices.forEach(off=>{
+        const rows = off.items.map(it=>
+          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count.toLocaleString()}</td><td class="tr">¥${it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
+        ).join('');
+        driverBody += `
+          <table style="margin:6px 0 4px;">
+            <thead>
+              <tr><th colspan="4" style="background:#e0e7ff; color:#1e3a8a; text-align:left;">【${_esc(off.postOffice)}】</th></tr>
+              <tr><th>項目</th><th class="tr" style="width:70px;">数量</th><th class="tr" style="width:90px;">単価</th><th class="tr" style="width:110px;">金額</th></tr>
+            </thead>
+            <tbody>
+              ${rows}
+              <tr style="background:#f0fdf4; font-weight:700; color:#065f46;">
+                <td colspan="3">${_esc(off.postOffice)} 小計</td>
+                <td class="tr">¥${off.total.toLocaleString()}</td>
+              </tr>
+            </tbody>
+          </table>`;
+      });
+      driverBody += `
+        <table style="margin:0 0 12px;">
+          <tr style="background:#f9fafb; font-weight:700;">
+            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 業務委託料</td>
+            <td class="tr" style="width:180px;">¥${dr.total.toLocaleString()}</td>
+          </tr>
+        </table>`;
+    }
+    sections += `
+      <div style="background:#e0e7ff; font-weight:700; color:#1e3a8a; padding:6px 10px; margin-top:14px; border-left:4px solid #2563eb;">
+        ■ ドライバー: ${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''}${dr.kyuyo==='月給'?' <span style="font-size:10px; font-weight:normal;">[月給制]</span>':''}
+      </div>
+      ${driverBody}`;
   });
-  // 電子印制作費加算（初回のみ）
+
+  // 電子印制作費加算(初回のみ)
   const sysInfo=_getSystemInfo();
   const alreadyCharged = !!co.docs?.stampFeeCharged;
+  let stampFeeRow = '';
   if(co.docs?.stampRequest && sysInfo.stampFee && !alreadyCharged){
-    total+=sysInfo.stampFee;
-    rows+=`<tr><td>電子印制作費（初回のみ）</td><td class="tr">¥${sysInfo.stampFee.toLocaleString()}</td></tr>`;
+    total += sysInfo.stampFee;
+    stampFeeRow = `
+      <table style="margin-top:8px;">
+        <tr style="background:#fef3c7;">
+          <td>電子印制作費（初回のみ）</td>
+          <td class="tr" style="width:180px;">¥${sysInfo.stampFee.toLocaleString()}</td>
+        </tr>
+      </table>`;
   }
 
   const today=new Date().toISOString().slice(0,10);
@@ -17424,15 +17677,19 @@ function generateCompanyInvoiceProxy(coName, monStr){
       <div class="doc-amount-label">ご請求金額</div>
       <div class="doc-amount">¥${total.toLocaleString()}</div>
     </div>
-    <table>
-      <thead><tr><th>内訳</th><th style="text-align:right;">金額</th></tr></thead>
-      <tbody>${rows}<tr style="background:#f5f5f5;font-weight:800;"><td>合計</td><td class="tr">¥${total.toLocaleString()}</td></tr></tbody>
+    ${sections}
+    ${stampFeeRow}
+    <table style="margin-top:14px;">
+      <tr style="background:#fef3c7; font-weight:800; font-size:13px;">
+        <td>総合計</td>
+        <td class="tr" style="width:180px;">¥${total.toLocaleString()}</td>
+      </tr>
     </table>
     <div class="doc-from">
-      <div style="font-size:16px;font-weight:700;">${esc(coName)}</div>
-      ${co.tel?`<div>TEL: ${esc(co.tel)}</div>`:''}
-      ${co.addr?`<div>${esc(co.addr)}</div>`:''}
-      ${co.invoiceNo?`<div>インボイス登録番号：${esc(co.invoiceNo)}</div>`:''}
+      <div style="font-size:16px;font-weight:700;">${_esc(coName)}</div>
+      ${co.tel?`<div>TEL: ${_esc(co.tel)}</div>`:''}
+      ${co.addr?`<div>${_esc(co.addr)}</div>`:''}
+      ${co.invoiceNo?`<div>インボイス登録番号：${_esc(co.invoiceNo)}</div>`:''}
       <div style="margin-top:12px;">${_buildStampHTML(stampUrl, coName.slice(0,2))}</div>
     </div>
     <div class="doc-footer">※ 本請求書は大阪急配株式会社による発行代行です。</div>`;
