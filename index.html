@@ -2706,13 +2706,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 🚐 庸車両 -->
     <div style="border-top:1px solid var(--brd);padding-top:8px;">
       <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車両</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">算定方式</label>
           <select id="cu-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;">
             <option>日額</option><option>月額</option>
           </select>
         </div>
         <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" id="cu-yosha-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">税区分</label>
+          <select id="cu-yosha-tax" class="fi" style="font-size:11px;padding:4px 6px;">
+            <option value="in">税込</option>
+            <option value="ex">税別</option>
+          </select>
+        </div>
         <div class="fg"><label style="font-size:9px;">備考</label><input type="text" id="cu-yosha-note" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="車両番号など"></div>
       </div>
     </div>
@@ -3297,13 +3303,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 庸車両 -->
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
       <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車両</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
         <div class="fg"><label style="font-size:9px;">算定方式</label>
           <select id="st-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onYoshaChange()">
             <option>日額</option><option>月額</option>
           </select>
         </div>
         <div class="fg"><label id="st-yosha-label" style="font-size:9px;">1日あたり（円）</label><input type="number" id="st-yosha-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">税区分</label>
+          <select id="st-yosha-tax" class="fi" style="font-size:11px;padding:4px 6px;">
+            <option value="in">税込</option>
+            <option value="ex">税別</option>
+          </select>
+        </div>
         <div class="fg"><label style="font-size:9px;">備考</label><input type="text" id="st-yosha-note" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="車両番号など"></div>
       </div>
     </div>
@@ -6629,6 +6641,7 @@ function saveCust(){
     gasAmt:parseInt($('cu-gas-amt')?.value)||0,
     yoshaType:$('cu-yosha-type')?.value||'日額',
     yoshaAmt:parseInt($('cu-yosha-amt')?.value)||0,
+    yoshaTax:$('cu-yosha-tax')?.value||'in',
     yoshaNote:$('cu-yosha-note')?.value||'',
   };
   const custData={
@@ -7333,6 +7346,7 @@ function editCust(id){
   if($('cu-gas-amt'))$('cu-gas-amt').value=off.gasAmt||'';
   if($('cu-yosha-type'))$('cu-yosha-type').value=off.yoshaType||'日額';
   if($('cu-yosha-amt'))$('cu-yosha-amt').value=off.yoshaAmt||'';
+  if($('cu-yosha-tax'))$('cu-yosha-tax').value=off.yoshaTax||'in';
   if($('cu-yosha-note'))$('cu-yosha-note').value=off.yoshaNote||'';
   $('m-cust')._editId=id;
   resetCuTax();
@@ -9989,6 +10003,10 @@ function payHistoryRowHtml(h){
         <option ${h.yoshaType==='月額'?'selected':''}>月額</option>
       </select>
       <input type="number" class="fi ph-yosha-amt" style="font-size:10px;padding:2px 5px;width:80px;" value="${h.yoshaAmt||0}" placeholder="0">
+      <select class="fi ph-yosha-tax" style="font-size:10px;padding:2px 5px;width:60px;">
+        <option value="in" ${h.yoshaTax==='in'||!h.yoshaTax?'selected':''}>税込</option>
+        <option value="ex" ${h.yoshaTax==='ex'?'selected':''}>税別</option>
+      </select>
       <span class="ph-yosha-hint" style="font-size:9px;color:var(--amb2);">${h.yoshaType==='なし'?'':(h.yoshaType==='月額'?'円/月':'円/日×稼働日数')}</span>
     </div>
   </div>`;
@@ -10024,6 +10042,7 @@ function collectPayHistory(){
       addCol:row.querySelector('.ph-add-col')?.checked||false,
       yoshaType:row.querySelector('.ph-yosha-type')?.value||'なし',
       yoshaAmt:parseInt(row.querySelector('.ph-yosha-amt')?.value)||0,
+      yoshaTax:row.querySelector('.ph-yosha-tax')?.value||'in',
       note:row.querySelector('.ph-note')?.value||'',
     });
   });
@@ -10043,6 +10062,7 @@ function getActivePayCondition(s, monStr){
     addDel:s.addDelPrice,addCol:s.addColPrice,
     yoshaType:s.offset?.yoshaType||'なし',
     yoshaAmt:s.offset?.yoshaAmt||0,
+    yoshaTax:s.offset?.yoshaTax||'in',
   };
 }
 
@@ -10318,6 +10338,7 @@ function saveStaff(continueAdd=false){
       gasAmt:parseInt($('st-gas-amt')?.value)||0,
       yoshaType:$('st-yosha-type')?.value||'日額',
       yoshaAmt:parseInt($('st-yosha-amt')?.value)||0,
+      yoshaTax:$('st-yosha-tax')?.value||'in',
       yoshaNote:$('st-yosha-note')?.value||'',
       yokonoriUnit:parseInt($('st-yokonori-unit')?.value)||0,
       tokubetsuUnit:parseInt($('st-tokubetsu-unit')?.value)||0,
@@ -13903,97 +13924,487 @@ function _buildPaySlipHTMLContractor(pay, monStr){
   return {title:'支払明細書', html, amount:pay.total};
 }
 
-function _buildInvoiceProxyHTML(staffName, monStr){
-  const pay=_calcStaffPayment(staffName, monStr);
-  if(!pay.staff) return null;
-  const today=(new Date()).toISOString().slice(0,10);
-  const info=_getSystemInfo();
-  const st=pay.staff;
+// ══════════════════════════════════════════════════
+// 請求書代行 v6: 個人=縦向き / 会社=横向き / 税区分3タイプ / ページ分割
+// ══════════════════════════════════════════════════
 
-  // 発行元（請求元）情報
-  const isCompany = st.kubun==='会社委託' && st.companyName;
-  const coInfo = isCompany?(D.companies||[]).find(c=>c.name===st.companyName):null;
-  const issuerName = isCompany?(coInfo?.name||st.companyName):st.name;
-  const issuerZip = (isCompany?coInfo?.zip:st.zip)||'';
-  const issuerAddr = (isCompany?coInfo?.addr:st.addr)||'';
-  const issuerTel = (isCompany?coInfo?.tel:st.tel)||'';
-  const issuerInvoiceNo = (isCompany?coInfo?.invoiceNo:st.invoiceNo)||'';
+// 請求番号生成: R{和暦}{MMDD}-{code}
+// 例: R80408-0610 (個人) / R80408-C001 (会社)
+function _genInvoiceNo(code, issueDate){
+  const d = issueDate ? new Date(issueDate) : new Date();
+  const reiwa = d.getFullYear() - 2018;
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `R${reiwa}${mm}${dd}-${code||'0000'}`;
+}
 
-  // 発行元の印影（会社印または個人印）
-  let stampUrl = st.docs?.stampUrl;
-  if(isCompany){
-    if(coInfo?.docs?.repStampUrl) stampUrl=coInfo.docs.repStampUrl;
-    else if(coInfo?.docs?.companyStampUrl) stampUrl=coInfo.docs.companyStampUrl;
+// pay.breakdownを税区分付き構造化アイテムに変換
+// 戻り値: [{label, qty, unit, amount, taxType:'in'|'ex'|'nt', customerName}]
+function _buildInvoiceItems(pay, st){
+  const items = [];
+  const off = st.offset || {};
+  const brk = pay.breakdown || [];
+
+  // breakdown解析: labelから数量・単価をパースして構造化
+  brk.forEach(b=>{
+    if(!b || !b.label) return;
+    // 控除(マイナス金額)は請求書には載せない
+    if(b.amount < 0) return;
+
+    // 庸車両行(加算ではないが)はここには来ない(控除扱い)→ スキップ
+    // 電子印制作費 等 qty/unitが既に入ってる場合
+    if(b.qty !== undefined && b.unit !== undefined){
+      items.push({
+        label: b.label, qty: b.qty, unit: b.unit, amount: b.amount,
+        taxType: b.taxType || 'in',
+        customerName: b.customerName || ''
+      });
+      return;
+    }
+
+    // label例: "完了 180件×¥100" / "ゆうパック_60 25個×¥100" / "基本給（月給）" / "経歴手当"
+    const m = b.label.match(/^(.+?)\s+([\d,]+)[件個回日]×¥([\d,]+)$/);
+    if(m){
+      const label = m[1].trim();
+      const qty = parseInt(m[2].replace(/,/g,''),0);
+      const unit = parseInt(m[3].replace(/,/g,''),0);
+      // 非課税扱いの項目(手当系)
+      const isHoshou = /保証|手当|経歴/.test(label);
+      items.push({
+        label, qty, unit, amount: b.amount,
+        taxType: isHoshou ? 'nt' : 'in',
+        customerName: ''
+      });
+    } else {
+      // パース不能(基本給・手当単独・保証)は qty=1 / unit=amount 扱い
+      const isTeate = /手当|経歴|通勤|役職|保証|違約/.test(b.label);
+      items.push({
+        label: b.label, qty: 1, unit: b.amount, amount: b.amount,
+        taxType: isTeate ? 'nt' : 'in',
+        customerName: ''
+      });
+    }
+  });
+
+  // 庸車両を明細行として追加(控除ではなく請求項目として)
+  // ※ この関数は_calcStaffPaymentのbreakdownを元にしているため、
+  //   元々「控除」として扱われている庸車両を請求書側では「明細」として追加する
+  //   ただし委託請求書代行なので、委託側から会社への請求として庸車両費を計上する流れは無いのが通常
+  //   → ここでは追加しない。必要になれば後から仕様追加
+
+  // 顧客名順でソート(空欄は後ろ)
+  items.sort((a,b)=>{
+    if(a.customerName && !b.customerName) return -1;
+    if(!a.customerName && b.customerName) return 1;
+    return (a.customerName||'').localeCompare(b.customerName||'','ja');
+  });
+
+  return items;
+}
+
+// 税区分別の合計計算
+// 戻り値: {inclSub, inclTax, exclSub, exclTax, nontaxSub, grandTotal}
+function _calcInvoiceTotals(items){
+  let inclSub = 0, exclSub = 0, nontaxSub = 0;
+  items.forEach(it=>{
+    if(it.taxType === 'in') inclSub += it.amount;
+    else if(it.taxType === 'ex') exclSub += it.amount;
+    else if(it.taxType === 'nt') nontaxSub += it.amount;
+  });
+  const inclTax = Math.floor(inclSub * 10 / 110);   // 税込対象の内消費税
+  const exclTax = Math.floor(exclSub * 0.1);        // 税別対象の別途消費税
+  const grandTotal = inclSub + exclSub + exclTax + nontaxSub;
+  return {inclSub, inclTax, exclSub, exclTax, nontaxSub, grandTotal};
+}
+
+// ページ分割(品目を適切な枚数に分割)
+// 戻り値: [{items:[...], isFirst, isLast, pageNum, totalPages}, ...]
+function _buildInvoicePages(items, isLandscape){
+  const FIRST = isLandscape ? 8 : 10;  // 1枚目の品目数(フルヘッダー分余裕少)
+  const CONT  = isLandscape ? 14 : 18; // 続きページの品目数
+  const LAST_REDUCE = 3;               // 最終ページは下部要素のため-3行
+  const pages = [];
+  let remain = [...items];
+  let idx = 0;
+  while(remain.length > 0){
+    const isFirst = (idx === 0);
+    const baseLimit = isFirst ? FIRST : CONT;
+    // 暫定でこのページに入れる数
+    const chunkLimit = remain.length <= baseLimit ? baseLimit : baseLimit;
+    // このページが最終ページになるか判定
+    const willBeLast = remain.length <= (chunkLimit - LAST_REDUCE);
+    const actualLimit = willBeLast ? (chunkLimit - LAST_REDUCE) : chunkLimit;
+    // ただし最終ページで0だと困る
+    const take = Math.max(1, Math.min(remain.length, actualLimit));
+    pages.push({
+      items: remain.splice(0, take),
+      isFirst,
+      pageNum: idx+1,
+      // totalPagesは後で確定
+    });
+    idx++;
   }
-  const stampImg = stampUrl?`<img src="${esc(stampUrl)}" class="fb-stamp-img">`:`<div class="fb-stamp-overlay">${esc((issuerName||'').slice(0,4))}</div>`;
+  // 最終ページフラグと総ページ数
+  pages.forEach((p,i)=>{
+    p.isLast = (i === pages.length-1);
+    p.totalPages = pages.length;
+  });
+  return pages;
+}
 
-  // 明細
-  let breakdown=[...pay.breakdown];
-  let displayTotal=pay.total;
-  const alreadyCharged = !!st.docs?.stampFeeCharged;
-  if(st.docs?.stampRequest && info.stampFee && !alreadyCharged){
-    breakdown.push({label:'電子印制作費（初回のみ）', qty:1, unit:info.stampFee, amount:info.stampFee});
-    displayTotal += info.stampFee;
+// 品目テーブルの行HTMLを生成(縦向き/横向き共通)
+function _renderItemRows(items, startNo, isLandscape){
+  const rows = items.map((it,i)=>{
+    const taxBadge = it.taxType==='in' ? '<span class="in">税込</span>'
+                   : it.taxType==='ex' ? '<span class="ex">税別</span>'
+                   : '<span class="nt">非課税</span>';
+    if(isLandscape){
+      return `<tr>
+        <td style="text-align:center;">${startNo+i}</td>
+        <td>${esc(it.label)}</td>
+        <td class="num">${(it.qty||1).toLocaleString()}</td>
+        <td class="unit-cell">${(it.unit||0).toLocaleString()}</td>
+        <td class="tax-cell">${taxBadge}</td>
+        <td class="num">${it.amount.toLocaleString()}</td>
+      </tr>`;
+    } else {
+      // 縦向き(個人)はNo列なし
+      return `<tr>
+        <td>${esc(it.label)}</td>
+        <td class="num">${(it.qty||1).toLocaleString()}</td>
+        <td class="unit-cell">${(it.unit||0).toLocaleString()}</td>
+        <td class="tax-cell">${taxBadge}</td>
+        <td class="num">${it.amount.toLocaleString()}</td>
+      </tr>`;
+    }
+  }).join('');
+  return rows;
+}
+
+// 振込先+内訳の統合テーブルを生成(縦向き/横向き共通)
+function _renderBottomTable(bankInfo, totals){
+  const bankName = esc(bankInfo?.bankName || '');
+  const branch = esc(bankInfo?.branch || '');
+  const type = esc(bankInfo?.type || '普通');
+  const num = bankInfo?.kigo
+    ? `記号${esc(bankInfo.kigo)}　番号${esc(bankInfo.ban||'')}`
+    : (bankInfo?.code
+        ? `コード${esc(bankInfo.code)} 店番${esc(bankInfo.store||'')} 番号${esc(bankInfo.ban||'')}`
+        : `番号${esc(bankInfo?.ban||'')}`);
+  const holder = esc(bankInfo?.holder || '');
+  const bankLine = bankName
+    ? `${bankName} ${branch}<br>${type}　${num}`
+    : '<span style="color:#999;">口座情報未登録</span>';
+
+  // 内訳行を条件付きで構築
+  const naiwakeRows = [];
+  if(totals.inclSub > 0){
+    naiwakeRows.push({k:'税込対象 小計', v:totals.inclSub.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'内 消費税(10%)', v:totals.inclTax.toLocaleString(), sub:true});
   }
-  const itemRows = breakdown.map((b,i)=>`
-    <tr><td class="code">${i+1}</td><td>${esc(b.label)}</td><td class="num">${(b.qty||1).toLocaleString()}</td><td class="num">${(b.unit||b.amount).toLocaleString()}</td><td class="num">${b.amount.toLocaleString()}</td></tr>`).join('');
-  const blankCount = Math.max(0, 6-breakdown.length);
-  const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+  if(totals.exclSub > 0){
+    naiwakeRows.push({k:'税別対象 小計', v:totals.exclSub.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'別途 消費税(10%)', v:totals.exclTax.toLocaleString(), sub:true});
+  }
+  if(totals.nontaxSub > 0){
+    naiwakeRows.push({k:'非課税 小計', v:totals.nontaxSub.toLocaleString(), sub:false});
+  }
+  naiwakeRows.push({k:'合計 (税込)', v:'¥'+totals.grandTotal.toLocaleString(), yellow:true});
 
-  // 宛先=自社
-  const toZip = info.zip?`〒 ${esc(info.zip)}`:'';
-  const toAddr = esc(info.addr||'');
-  const toName = esc(info.companyName||'大阪急配株式会社');
-  // 発行元の銀行は未対応（個人/委託会社マスタに銀行未登録のためフッタ銀行は省略）
+  // 各行のleftセル(振込先口座エリア)を配置
+  const rowsHtml = naiwakeRows.map((r,i)=>{
+    let leftCell = '';
+    if(i === 0){
+      leftCell = `<td class="bank-bd" colspan="2" rowspan="2">${bankLine}</td>`;
+    } else if(i === 1){
+      leftCell = ''; // rowspanで覆われる
+    } else if(i === 2){
+      leftCell = `<td class="bank-hd2" colspan="2">口座名義</td>`;
+    } else if(i === 3){
+      leftCell = `<td class="bank-bd2" colspan="2">${holder||'&nbsp;'}</td>`;
+    } else {
+      leftCell = `<td style="background:#fafafa;" colspan="2"></td>`;
+    }
+    const kClass = r.yellow ? 'yel-k' : (r.sub ? 'nw-sub-k' : 'nw-k');
+    const vClass = r.yellow ? 'yel-v' : (r.sub ? 'nw-sub-v' : 'nw-v');
+    return `<tr>${leftCell}<td class="${kClass}">${esc(r.k)}</td><td class="${vClass}">${esc(r.v)}</td></tr>`;
+  }).join('');
 
-  const html = `
-  <div class="fb-paper">
-    <div class="fb-top">
-      <div class="fb-left">
-        <div class="fb-addr-line">${toZip}</div>
-        <div class="fb-addr-line">${toAddr}</div>
-        <div class="fb-cust"><span>${toName}</span><span class="mr">御中</span></div>
-        <div class="fb-subtxt">下記の通り御請求申し上げます。</div>
-      </div>
-      <div class="fb-center">
-        <h1 class="fb-title">請　求　書</h1>
-        <div class="fb-amt-box">
-          <div class="lbl">当　月　御　請　求　金　額</div>
-          <div class="val">¥${displayTotal.toLocaleString()}</div>
+  return `<table class="bottom-table">
+    <colgroup>
+      <col style="width: 14%;">
+      <col style="width: 36%;">
+      <col style="width: 28%;">
+      <col style="width: 22%;">
+    </colgroup>
+    <tbody>
+      <tr>
+        <th colspan="2">振込先口座</th>
+        <th colspan="2">内 訳</th>
+      </tr>
+      ${rowsHtml}
+    </tbody>
+  </table>`;
+}
+
+// 税区分凡例
+function _renderTaxLegend(){
+  return `<div class="tax-legend">
+    <span><span class="sw sw-in"></span>税込 = 単価に消費税を含む</span>
+    <span><span class="sw sw-ex"></span>税別 = 別途消費税10%加算</span>
+    <span><span class="sw sw-nt"></span>非課税 = 消費税対象外 (手当・損害賠償等)</span>
+  </div>`;
+}
+
+// ══ 縦向き(個人事業主) ══
+function _buildInvoiceProxyPortrait(ctx){
+  const {st, info, issuer, stampImg, invoiceNo, todayLabel, items, totals, bankInfo, pages} = ctx;
+  const toZip = info.zip || '';
+  const toAddr = info.addr || '';
+  const toCompany = info.companyName || '大阪急配株式会社';
+  const repName = info.repName || '川村 知弘';
+
+  return pages.map((p, pi)=>{
+    const startNo = pages.slice(0, pi).reduce((a,pp)=>a+pp.items.length, 0) + 1;
+    const itemRows = _renderItemRows(p.items, startNo, false);
+    // 空白行(最終ページ以外は埋める、最終ページは6-残件)
+    const minRows = p.isLast ? 0 : 12;
+    const blankCount = Math.max(0, minRows - p.items.length);
+    const blanks = Array(blankCount).fill('<tr><td></td><td></td><td class="unit-cell"></td><td class="tax-cell"></td><td></td></tr>').join('');
+    // ヘッダー(1ページ目のみフル)
+    const fullHeader = p.isFirst ? `
+      <h1 class="ci-title">御 請 求 書</h1>
+      <div class="ci-top-head">
+        <div class="ci-head-l">
+          ${toZip?`<div>〒${esc(toZip)}</div>`:''}
+          ${toAddr?`<div>${esc(toAddr)}</div>`:''}
+          <div class="ci-to-name">${esc(toCompany)}</div>
+          <div class="ci-to-title">代表取締役</div>
+          <div><span style="display:inline-block;min-width:140px;border-bottom:1px solid #000;padding-bottom:1px;">　${esc(repName)}</span><span class="ci-to-honor">様</span></div>
+        </div>
+        <div class="ci-head-r">
+          <div class="ci-kv"><label>請求日</label><span class="ci-val highlight">${esc(todayLabel)}</span></div>
+          <div class="ci-kv"><label>請求番号</label><span class="ci-val bold">${esc(invoiceNo)}</span></div>
+          ${issuer.invoiceNo ? `<div style="margin-top:6px; text-align: right;">
+            <div class="ci-reg-box">
+              <div class="h">適格請求書発行事業者登録番号</div>
+              <div class="v">${esc(issuer.invoiceNo)}</div>
+            </div>
+          </div>` : ''}
+          <div class="ci-issuer">
+            <div class="ci-issuer-info">
+              <div class="nm">${esc(issuer.name)}</div>
+              ${issuer.zip?`<div>〒${esc(issuer.zip)}</div>`:''}
+              ${issuer.addr?`<div>${esc(issuer.addr)}</div>`:''}
+              ${issuer.tel?`<div>電話番号　${esc(issuer.tel)}</div>`:''}
+            </div>
+            <div class="ci-issuer-stamp">${stampImg}</div>
+          </div>
         </div>
       </div>
-      <div class="fb-right">
-        ${stampImg}
-        <div class="fb-issue">発行日：${today}</div>
-        <div class="fb-co-name">${esc(issuerName)}</div>
-        ${issuerInvoiceNo?`<div class="fb-inv-reg">登録番号: ${esc(issuerInvoiceNo)}</div>`:''}
-        ${issuerZip?`<div>〒 ${esc(issuerZip)}</div>`:''}
-        ${issuerAddr?`<div>${esc(issuerAddr)}</div>`:''}
-        ${issuerTel?`<div>TEL ${esc(issuerTel)}</div>`:''}
+      <div class="ci-subttl">下記の通り、小包委託料金のご請求申し上げます。</div>
+      <div class="ci-amt-row">
+        <div class="lbl"><span class="main">合 計 金 額</span><span class="sub">(税込)</span></div>
+        <div class="val">¥${totals.grandTotal.toLocaleString()}</div>
       </div>
-    </div>
-    <table class="fb-items">
-      <thead>
-        <tr>
-          <th style="width:7%;">No</th>
-          <th style="width:45%;">内訳</th>
-          <th style="width:10%;">件数</th>
-          <th style="width:17%;">単価</th>
-          <th style="width:21%;">金額</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemRows}
-        ${blanks}
-        <tr class="total"><td colspan="4" style="text-align:right;">合計</td><td class="tot-val">${displayTotal.toLocaleString()}</td></tr>
-      </tbody>
-    </table>
-    <div class="fb-remark">
-      <div class="hd">備考</div>
-      <div class="bd">${esc(info.docFooterInvproxy||'※ 本請求書は大阪急配株式会社による発行代行です。')}</div>
-    </div>
-  </div>`;
-  return {title:'請求書（発行代行）', html, amount:displayTotal};
+    ` : `
+      <div class="ci-cont-bar">
+        <div><strong>御請求書(続き)</strong> ｜ 請求番号: <strong>${esc(invoiceNo)}</strong> ｜ 発行者: <strong>${esc(issuer.name)}</strong> ｜ 宛先: <strong>${esc(toCompany)} 様</strong></div>
+        <div>頁 <strong>${p.pageNum} / ${p.totalPages}</strong></div>
+      </div>
+    `;
+    const pageNumDisplay = p.isFirst && p.totalPages>1
+      ? `<div style="text-align:right; font-size:10px; color:#666; margin-top:-6px; margin-bottom:4px;">頁 <strong>1 / ${p.totalPages}</strong></div>`
+      : '';
+    const subtotalRow = !p.isLast
+      ? `<tr class="subtotal-row"><td class="lbl" colspan="4" style="text-align:right;font-weight:500;background:#f9f9f9;">— 次頁に続く —</td><td class="val" style="text-align:right;font-family:'Times New Roman',serif;font-weight:700;background:#f9f9f9;">${p.items.reduce((s,it)=>s+it.amount,0).toLocaleString()}</td></tr>`
+      : '';
+    const bottomSection = p.isLast ? `
+      ${_renderTaxLegend()}
+      ${_renderBottomTable(bankInfo, totals)}
+      <div class="ci-remark">
+        <div class="hd">備考</div>
+        <div class="bd"></div>
+      </div>
+    ` : '';
+    return `<div class="ci-paper ci-portrait">
+      ${fullHeader}
+      ${pageNumDisplay}
+      <table class="ci-items">
+        <colgroup>
+          <col style="width: 36%;"><col style="width: 10%;">
+          <col style="width: 14%;"><col style="width: 10%;"><col style="width: 30%;">
+        </colgroup>
+        <thead>
+          <tr><th>品目・備考</th><th>数量</th><th>単価</th><th>税区分</th><th>金額</th></tr>
+        </thead>
+        <tbody>${itemRows}${blanks}${subtotalRow}</tbody>
+      </table>
+      ${bottomSection}
+    </div>`;
+  }).join('<div style="page-break-after:always;"></div>');
+}
+
+// ══ 横向き(委託会社) ══
+function _buildInvoiceProxyLandscape(ctx){
+  const {st, info, issuer, stampImg, invoiceNo, todayLabel, items, totals, bankInfo, pages} = ctx;
+  const toZip = info.zip || '';
+  const toAddr = info.addr || '';
+  const toCompany = info.companyName || '大阪急配株式会社';
+  const repName = info.repName || '川村 知弘';
+
+  return pages.map((p, pi)=>{
+    const startNo = pages.slice(0, pi).reduce((a,pp)=>a+pp.items.length, 0) + 1;
+    const itemRows = _renderItemRows(p.items, startNo, true);
+    const minRows = p.isLast ? 0 : 8;
+    const blankCount = Math.max(0, minRows - p.items.length);
+    const blanks = Array(blankCount).fill('<tr><td></td><td></td><td></td><td class="unit-cell"></td><td class="tax-cell"></td><td></td></tr>').join('');
+    const fullHeader = p.isFirst ? `
+      <div class="ci-top-head-ls">
+        <div class="ci-head-l">
+          ${toZip?`<div class="addr-line">〒 ${esc(toZip)}</div>`:''}
+          ${toAddr?`<div class="addr-line">${esc(toAddr)}</div>`:''}
+          <div class="ci-cust-block">
+            <div class="co">${esc(toCompany)}</div>
+            <div class="title-line">代表取締役</div>
+            <div class="nm-line"><span>　${esc(repName)}　</span><span>様</span></div>
+          </div>
+          <div style="font-size: 10px; margin-top: 4px; color: #444;">下記の通り、小包委託料金のご請求申し上げます。</div>
+        </div>
+        <div class="ci-center">
+          <h1 class="ci-title-ls">御 請 求 書</h1>
+          <div class="ci-amt-box-ls">
+            <div class="lbl"><span class="main">合 計 金 額</span><span class="sub">(税込)</span></div>
+            <div class="val">¥${totals.grandTotal.toLocaleString()}</div>
+          </div>
+        </div>
+        <div class="ci-head-r">
+          <div class="ci-kv"><label>請求日</label><span class="ci-val highlight">${esc(todayLabel)}</span></div>
+          <div class="ci-kv"><label>請求番号</label><span class="ci-val bold">${esc(invoiceNo)}</span></div>
+          ${issuer.invoiceNo ? `<div class="reg-wrap">
+            <div class="ci-reg-box">
+              <div class="h">適格請求書発行事業者登録番号</div>
+              <div class="v">${esc(issuer.invoiceNo)}</div>
+            </div>
+          </div>` : ''}
+          <div class="ci-issuer-ls">
+            <div class="ci-issuer-info">
+              <div class="nm">${esc(issuer.name)}</div>
+              ${issuer.zip?`<div>〒${esc(issuer.zip)}</div>`:''}
+              ${issuer.addr?`<div>${esc(issuer.addr)}</div>`:''}
+              ${issuer.tel?`<div>TEL ${esc(issuer.tel)}</div>`:''}
+            </div>
+            <div class="ci-issuer-stamp">${stampImg}</div>
+          </div>
+          ${p.totalPages>1 ? `<div class="page-num">頁 <strong>1 / ${p.totalPages}</strong></div>` : ''}
+        </div>
+      </div>
+    ` : `
+      <div class="ci-cont-bar">
+        <div><strong>御請求書(続き)</strong> ｜ 請求番号: <strong>${esc(invoiceNo)}</strong> ｜ 発行者: <strong>${esc(issuer.name)}</strong> ｜ 宛先: <strong>${esc(toCompany)} 様</strong></div>
+        <div>頁 <strong>${p.pageNum} / ${p.totalPages}</strong></div>
+      </div>
+    `;
+    const subtotalRow = !p.isLast
+      ? `<tr class="subtotal-row"><td></td><td class="lbl" colspan="4" style="text-align:right;font-weight:500;background:#f9f9f9;">— 次頁に続く —</td><td class="val" style="text-align:right;font-family:'Times New Roman',serif;font-weight:700;background:#f9f9f9;">${p.items.reduce((s,it)=>s+it.amount,0).toLocaleString()}</td></tr>`
+      : '';
+    const bottomSection = p.isLast ? `
+      ${_renderTaxLegend()}
+      ${_renderBottomTable(bankInfo, totals)}
+      <div class="ci-remark">
+        <div class="hd">備考</div>
+        <div class="bd"></div>
+      </div>
+    ` : '';
+    return `<div class="ci-paper ci-landscape">
+      ${fullHeader}
+      <table class="ci-items">
+        <colgroup>
+          <col style="width: 7%;"><col style="width: 37%;"><col style="width: 10%;">
+          <col style="width: 12%;"><col style="width: 10%;"><col style="width: 24%;">
+        </colgroup>
+        <thead>
+          <tr><th>No</th><th>品目・備考</th><th>数量</th><th>単価</th><th>税区分</th><th>金額</th></tr>
+        </thead>
+        <tbody>${itemRows}${blanks}${subtotalRow}</tbody>
+      </table>
+      ${bottomSection}
+    </div>`;
+  }).join('<div style="page-break-after:always;"></div>');
+}
+
+// メイン関数: 個人=縦向き / 会社=横向き に分岐
+function _buildInvoiceProxyHTML(staffName, monStr){
+  const pay = _calcStaffPayment(staffName, monStr);
+  if(!pay.staff) return null;
+  const info = _getSystemInfo();
+  const st = pay.staff;
+  const today = new Date();
+  const todayLabel = `令和${today.getFullYear()-2018}年 ${today.getMonth()+1}月${today.getDate()}日`;
+
+  // 発行元情報
+  const isCompany = st.kubun==='会社委託' && st.companyName;
+  const coInfo = isCompany ? (D.companies||[]).find(c=>c.name===st.companyName) : null;
+  const issuer = {
+    name: isCompany ? (coInfo?.name || st.companyName) : st.name,
+    zip: (isCompany ? coInfo?.zip : st.zip) || '',
+    addr: (isCompany ? coInfo?.addr : st.addr) || '',
+    tel: (isCompany ? coInfo?.tel : st.tel) || '',
+    invoiceNo: (isCompany ? coInfo?.invoiceNo : st.invoiceNo) || ''
+  };
+
+  // 印影
+  let stampUrl = st.docs?.stampUrl;
+  if(isCompany){
+    if(coInfo?.docs?.repStampUrl) stampUrl = coInfo.docs.repStampUrl;
+    else if(coInfo?.docs?.companyStampUrl) stampUrl = coInfo.docs.companyStampUrl;
+  }
+  const stampImg = stampUrl
+    ? `<img src="${esc(stampUrl)}" class="ci-stamp-img">`
+    : `<div class="ci-stamp-fallback">${esc((issuer.name||'').slice(0,4))}</div>`;
+
+  // 請求番号
+  const codeForNo = isCompany
+    ? ('C'+String(coInfo?.companyCode || coInfo?.id || '001').padStart(3,'0').slice(-4))
+    : String(st.empNo || st.id || '0000').padStart(4,'0').slice(-4);
+  const invoiceNo = _genInvoiceNo(codeForNo);
+
+  // 品目構造化
+  const items = _buildInvoiceItems(pay, st);
+  // 電子印制作費(初回のみ)
+  const alreadyCharged = !!st.docs?.stampFeeCharged;
+  if(st.docs?.stampRequest && info.stampFee && !alreadyCharged){
+    items.push({
+      label: '電子印制作費（初回のみ）',
+      qty: 1, unit: info.stampFee, amount: info.stampFee,
+      taxType: 'in', customerName: ''
+    });
+  }
+  const totals = _calcInvoiceTotals(items);
+
+  // 銀行口座情報(個人=従業員マスタ / 会社=会社マスタから取得、未実装時は空)
+  const bankInfo = isCompany
+    ? (coInfo?.bankInfo || null)
+    : (st.bankInfo || null);
+
+  // ページ分割
+  const isLandscape = isCompany;
+  const pages = _buildInvoicePages(items, isLandscape);
+
+  const ctx = {st, info, issuer, stampImg, invoiceNo, todayLabel, items, totals, bankInfo, pages};
+
+  const body = isLandscape
+    ? _buildInvoiceProxyLandscape(ctx)
+    : _buildInvoiceProxyPortrait(ctx);
+
+  return {
+    title: '請求書（発行代行）',
+    html: body,
+    amount: totals.grandTotal,
+    invoiceNo,
+    taxEx: totals.inclSub + totals.exclSub,  // 税抜相当
+    taxAmt: totals.inclTax + totals.exclTax
+  };
 }
 
 function _buildCustInvoiceHTML(custName, monStr, opts){
@@ -14208,7 +14619,8 @@ function _printDocWindow(title, html){
   if(!w){ showAlert({msg:'ポップアップがブロックされました'}); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
-      @page{size:A4 landscape;margin:10mm;}
+      @page{size:A4;margin:8mm;}
+      @page :first{size:A4;margin:8mm;}
       body{font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;color:#000;padding:20px;background:#fff;margin:0;}
       /* 旧フォーマット互換（給与明細などで使用） */
       .doc-header{border-bottom:3px solid #1a2238;padding-bottom:16px;margin-bottom:24px;}
@@ -14268,6 +14680,110 @@ function _printDocWindow(title, html){
       .fb-remark .hd{background:#f4f4f4;padding:5px 12px;font-weight:500;border-bottom:0.75px solid #000;}
       .fb-remark .bd{padding:8px 12px;min-height:28px;}
       .fb-version{display:inline-block;background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600;}
+
+      /* ═══ ci-* 請求書代行(個人=縦/会社=横)レイアウト ═══ */
+      .ci-paper{background:#fff;color:#000;margin:0 auto 16px;padding:32px 40px;font-size:12px;line-height:1.5;}
+      .ci-paper.ci-portrait{width:760px;min-height:1050px;}
+      .ci-paper.ci-landscape{width:1020px;min-height:700px;padding:22px 30px;font-size:11px;}
+      .ci-title{font-family:'MS Mincho','Yu Mincho',serif;font-size:32px;letter-spacing:0.3em;padding-left:0.3em;margin:0 0 20px;font-weight:400;text-align:center;}
+      .ci-title-ls{font-family:'MS Mincho','Yu Mincho',serif;font-size:26px;letter-spacing:0.4em;padding-left:0.4em;margin:0 0 10px;font-weight:400;text-align:center;}
+      /* 縦向き */
+      .ci-top-head{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start;margin-bottom:18px;}
+      .ci-head-l{font-size:12px;line-height:1.7;}
+      .ci-head-r{font-size:12px;line-height:1.9;min-width:340px;}
+      .ci-head-r .ci-kv{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:10px;margin-bottom:2px;}
+      .ci-head-r .ci-kv label{color:#555;font-size:11px;}
+      .ci-head-r .ci-val.bold{font-weight:700;font-family:'Times New Roman',serif;letter-spacing:0.05em;}
+      .ci-head-r .ci-val.highlight{background:#e8e8e8;padding:1px 8px;font-weight:700;}
+      .ci-to-name{font-size:16px;font-weight:500;margin:2px 0;}
+      .ci-to-title{font-size:13px;margin:2px 0;}
+      .ci-to-honor{font-size:13px;margin-left:12px;display:inline-block;}
+      .ci-reg-box{border:1px solid #000;display:inline-block;}
+      .ci-reg-box .h{background:#f4f4f4;border-bottom:1px solid #000;padding:3px 10px;font-size:11px;text-align:center;}
+      .ci-reg-box .v{padding:4px 10px;text-align:center;font-size:12px;font-family:'Times New Roman',serif;}
+      .ci-issuer{margin-top:14px;line-height:1.7;display:grid;grid-template-columns:1fr 80px;gap:14px;align-items:start;}
+      .ci-issuer-info{text-align:right;padding-right:6px;}
+      .ci-issuer-info .nm{font-size:15px;font-weight:500;letter-spacing:0.08em;}
+      .ci-issuer-stamp{position:relative;height:70px;display:flex;align-items:flex-start;justify-content:center;}
+      .ci-stamp-fallback{width:62px;height:62px;border:2px double #c62828;color:#c62828;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'MS Mincho',serif;font-size:11px;font-weight:700;opacity:0.8;text-align:center;padding:3px;line-height:1.1;}
+      .ci-stamp-img{width:62px;height:62px;object-fit:contain;opacity:0.85;}
+      .ci-subttl{margin:20px 0 8px;font-size:13px;}
+      .ci-amt-row{display:grid;grid-template-columns:auto 1fr;align-items:stretch;border:1px solid #000;margin:10px 0 24px;max-width:400px;}
+      .ci-amt-row .lbl{background:#f4f4f4;padding:10px 16px;font-size:12px;border-right:1px solid #000;white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;}
+      .ci-amt-row .lbl .main{font-weight:500;}
+      .ci-amt-row .lbl .sub{font-size:10px;color:#555;margin-top:2px;}
+      .ci-amt-row .val{padding:10px 20px;font-size:22px;font-weight:700;font-family:'Times New Roman',serif;text-align:right;}
+      /* 横向き */
+      .ci-top-head-ls{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:start;margin-bottom:14px;}
+      .ci-top-head-ls .ci-head-l{font-size:11px;line-height:1.6;}
+      .ci-top-head-ls .ci-head-l .addr-line{border-bottom:1px dotted #888;padding:2px 0;margin-bottom:3px;}
+      .ci-cust-block{margin-top:8px;border-bottom:1.5px solid #000;padding:6px 0 3px;}
+      .ci-cust-block .co{font-size:14px;font-weight:500;}
+      .ci-cust-block .title-line{font-size:11px;}
+      .ci-cust-block .nm-line{display:flex;justify-content:space-between;font-size:13px;margin-top:2px;}
+      .ci-top-head-ls .ci-center{text-align:center;}
+      .ci-amt-box-ls{display:grid;grid-template-columns:auto 1fr;border:1.5px solid #000;margin:0 auto;max-width:320px;}
+      .ci-amt-box-ls .lbl{background:#f4f4f4;padding:8px 12px;font-size:10px;border-right:1.5px solid #000;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;}
+      .ci-amt-box-ls .lbl .main{font-weight:500;letter-spacing:0.1em;}
+      .ci-amt-box-ls .lbl .sub{font-size:9px;color:#555;margin-top:2px;}
+      .ci-amt-box-ls .val{padding:8px 16px;font-size:20px;font-weight:700;font-family:'Times New Roman',serif;text-align:right;}
+      .ci-top-head-ls .ci-head-r{font-size:10px;line-height:1.5;min-width:0;}
+      .ci-top-head-ls .ci-kv{display:grid;grid-template-columns:68px 1fr;align-items:center;gap:6px;margin-bottom:2px;}
+      .ci-top-head-ls .reg-wrap{text-align:right;margin:4px 0 0;}
+      .ci-top-head-ls .ci-reg-box .h{font-size:9px;padding:2px 8px;}
+      .ci-top-head-ls .ci-reg-box .v{font-size:10px;padding:2px 8px;}
+      .ci-issuer-ls{margin-top:8px;display:grid;grid-template-columns:1fr 66px;gap:8px;align-items:start;}
+      .ci-issuer-ls .ci-issuer-info{text-align:right;padding-right:4px;font-size:10px;}
+      .ci-issuer-ls .ci-issuer-info .nm{font-size:13px;font-weight:500;letter-spacing:0.05em;}
+      .ci-issuer-ls .ci-issuer-stamp{height:62px;}
+      .ci-issuer-ls .ci-stamp-fallback{width:52px;height:52px;font-size:10px;padding:2px;}
+      .ci-issuer-ls .ci-stamp-img{width:52px;height:52px;}
+      .ci-top-head-ls .page-num{text-align:right;font-size:10px;color:#666;margin-top:4px;font-weight:500;}
+      .ci-top-head-ls .page-num strong{color:#000;font-size:12px;}
+      /* 継続バー(2枚目以降) */
+      .ci-cont-bar{background:#fef3c7;border:0.75px solid #d97706;padding:6px 12px;margin-bottom:10px;font-size:11px;display:flex;justify-content:space-between;align-items:center;}
+      .ci-cont-bar strong{color:#78350f;}
+      /* 品目テーブル(ci用) */
+      .ci-items{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:8px;}
+      .ci-items th,.ci-items td{border:0.75px solid #000;padding:6px 10px;}
+      .ci-items thead th{background:#f4f4f4;text-align:center;font-weight:500;padding:5px 8px;}
+      .ci-items td{height:28px;}
+      .ci-portrait .ci-items{font-size:12px;}
+      .ci-portrait .ci-items thead th{font-size:12px;}
+      .ci-landscape .ci-items{font-size:11px;}
+      .ci-landscape .ci-items thead th{font-size:11px;}
+      .ci-landscape .ci-items td{height:26px;padding:5px 8px;}
+      .ci-items td.num{text-align:right;font-family:'Times New Roman',serif;}
+      .ci-items td.unit-cell{background:#f4f4f4;text-align:right;font-family:'Times New Roman',serif;}
+      .ci-items td.tax-cell{text-align:center;font-size:10px;}
+      .ci-items td.tax-cell .in{display:inline-block;padding:1px 6px;background:#fef3c7;color:#92400e;border-radius:3px;font-weight:500;}
+      .ci-items td.tax-cell .ex{display:inline-block;padding:1px 6px;background:#dbeafe;color:#1e40af;border-radius:3px;font-weight:500;}
+      .ci-items td.tax-cell .nt{display:inline-block;padding:1px 6px;background:#e5e7eb;color:#4b5563;border-radius:3px;font-weight:500;}
+      /* 下段テーブル */
+      .bottom-table{border-collapse:collapse;width:100%;font-size:11px;margin-top:12px;table-layout:fixed;}
+      .bottom-table td,.bottom-table th{border:0.75px solid #000;padding:6px 10px;vertical-align:top;}
+      .bottom-table th{background:#f4f4f4;text-align:center;font-weight:500;}
+      .bottom-table td.bank-hd2{background:#f4f4f4;font-weight:500;font-size:10px;padding:4px 12px;}
+      .bottom-table td.bank-bd{line-height:1.7;padding:10px 12px;}
+      .bottom-table td.bank-bd2{padding:8px 12px;min-height:28px;}
+      .bottom-table td.nw-k{background:#f4f4f4;}
+      .bottom-table td.nw-v{text-align:right;font-family:'Times New Roman',serif;}
+      .bottom-table td.nw-sub-k{color:#666;padding-left:20px;font-size:10px;}
+      .bottom-table td.nw-sub-v{text-align:right;font-family:'Times New Roman',serif;color:#666;font-size:10px;}
+      .bottom-table td.yel-k{background:#fff3b0;font-weight:700;text-align:center;}
+      .bottom-table td.yel-v{background:#fff3b0;font-weight:700;text-align:right;font-family:'Times New Roman',serif;font-size:13px;}
+      /* 税区分凡例 */
+      .tax-legend{font-size:10px;color:#555;margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;}
+      .tax-legend span{display:inline-flex;align-items:center;gap:4px;}
+      .tax-legend .sw{display:inline-block;width:18px;height:14px;border-radius:2px;}
+      .tax-legend .sw-in{background:#fef3c7;}
+      .tax-legend .sw-ex{background:#dbeafe;}
+      .tax-legend .sw-nt{background:#e5e7eb;}
+      /* 備考 */
+      .ci-remark{border:0.75px solid #000;margin-top:18px;font-size:11px;}
+      .ci-remark .hd{background:#f4f4f4;padding:5px 12px;font-weight:500;border-bottom:0.75px solid #000;}
+      .ci-remark .bd{padding:10px 12px;min-height:50px;color:#333;}
+
       @media print{body{padding:0;} .no-print{display:none;}}
       .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;z-index:1000;}
     </style></head><body>
@@ -17496,6 +18012,7 @@ function editStaff(id){
   if($('st-gas-amt'))$('st-gas-amt').value=off.gasAmt||'';
   if($('st-yosha-type'))$('st-yosha-type').value=off.yoshaType||'日額';
   if($('st-yosha-amt'))$('st-yosha-amt').value=off.yoshaAmt||'';
+  if($('st-yosha-tax'))$('st-yosha-tax').value=off.yoshaTax||'in';
   if($('st-yosha-note'))$('st-yosha-note').value=off.yoshaNote||'';
   if($('st-yokonori-unit'))$('st-yokonori-unit').value=off.yokonoriUnit||'';
   if($('st-tokubetsu-unit'))$('st-tokubetsu-unit').value=off.tokubetsuUnit||'';
