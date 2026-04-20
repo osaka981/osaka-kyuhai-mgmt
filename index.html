@@ -1931,7 +1931,233 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
 
-    <!-- TS: 経営設定 -->
+    <!-- 距離料金&見積 -->
+    <div id="s-dist-quote" class="sec">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">🗺️ 距離料金 & 見積ツール</div>
+          <div style="font-size:10px;color:var(--txt2);">距離制運賃による見積作成。作成した見積は履歴として保持されます。</div>
+        </div>
+      </div>
+
+      <!-- サブタブ -->
+      <div style="display:flex;gap:2px;margin-bottom:12px;border-bottom:1px solid var(--brd);">
+        <button class="btn" id="dq-tab-quote" onclick="switchDqTab('quote')"
+          style="border-radius:5px 5px 0 0;border-bottom:none;background:var(--sur);color:#fff;font-size:11.5px;padding:6px 16px;">💼 見積作成</button>
+        <button class="btn b-gh" id="dq-tab-hist" onclick="switchDqTab('hist')"
+          style="border-radius:5px 5px 0 0;border-bottom:none;font-size:11.5px;padding:6px 16px;">📋 見積履歴</button>
+        <button class="btn b-gh" id="dq-tab-rate" onclick="switchDqTab('rate')"
+          style="border-radius:5px 5px 0 0;border-bottom:none;font-size:11.5px;padding:6px 16px;">⚙️ 料金設定</button>
+      </div>
+
+      <!-- 見積作成パネル -->
+      <div id="dq-panel-quote">
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;align-items:start;">
+
+          <!-- 入力フォーム -->
+          <div class="card" style="padding:12px 14px;">
+            <div style="font-size:12px;font-weight:700;color:var(--blu2);margin-bottom:10px;">📋 見積入力</div>
+
+            <!-- 顧客情報 -->
+            <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:8px;">顧客・担当者情報</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px;">
+                <div class="fg"><label style="font-size:10px;">会社名</label><input type="text" id="dq-company" class="fi" style="font-size:11px;padding:5px 8px;" placeholder="例: 株式会社 ○○"></div>
+                <div class="fg"><label style="font-size:10px;">担当者</label><input type="text" id="dq-contact" class="fi" style="font-size:11px;padding:5px 8px;" placeholder="例: 山田 太郎"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div class="fg"><label style="font-size:10px;">電話番号</label><input type="tel" id="dq-tel" class="fi" style="font-size:11px;padding:5px 8px;" placeholder="06-0000-0000"></div>
+                <div class="fg"><label style="font-size:10px;">メール(任意)</label><input type="email" id="dq-email" class="fi" style="font-size:11px;padding:5px 8px;"></div>
+              </div>
+            </div>
+
+            <!-- 日時情報 -->
+            <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:8px;">実施日時</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                <div class="fg"><label style="font-size:10px;">実施日</label><input type="date" id="dq-date" class="fi" style="font-size:11px;padding:5px 8px;"></div>
+                <div class="fg"><label style="font-size:10px;">開始時刻</label><input type="time" id="dq-time-from" class="fi" style="font-size:11px;padding:5px 8px;" onchange="dqCalcQuote()"></div>
+                <div class="fg"><label style="font-size:10px;">終了時刻(予定)</label><input type="time" id="dq-time-to" class="fi" style="font-size:11px;padding:5px 8px;"></div>
+              </div>
+            </div>
+
+            <!-- 経路情報 -->
+            <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:11px;font-weight:700;color:var(--txt2);">経路</div>
+                <button class="btn b-gh btn-sm" onclick="dqAddVia()" style="font-size:10px;padding:2px 8px;">＋ 経由地追加</button>
+              </div>
+              <div class="fg" style="margin-bottom:6px;"><label style="font-size:10px;">出発地</label><input type="text" id="dq-from" class="fi" style="font-size:11px;padding:5px 8px;" placeholder="例: 大阪市北区"></div>
+              <div id="dq-vias" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
+              <div class="fg"><label style="font-size:10px;">到着地</label><input type="text" id="dq-to" class="fi" style="font-size:11px;padding:5px 8px;" placeholder="例: 神戸市中央区"></div>
+            </div>
+
+            <!-- 距離・時間 -->
+            <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:8px;">距離・時間</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px;">
+                <div class="fg"><label style="font-size:10px;">走行距離(km)</label><input type="number" id="dq-distance" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+                <div class="fg"><label style="font-size:10px;">待機時間(分)</label><input type="number" id="dq-wait" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+                <div class="fg"><label style="font-size:10px;">拘束超過(分)</label><input type="number" id="dq-overtime" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+                <div class="fg"><label style="font-size:10px;">荷扱い時間(分)</label><input type="number" id="dq-loading" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+                <div class="fg"><label style="font-size:10px;">階数(発地)</label><input type="number" id="dq-floor-from" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="1" min="1"></div>
+                <div class="fg"><label style="font-size:10px;">階数(着地)</label><input type="number" id="dq-floor-to" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="1" min="1"></div>
+              </div>
+              <div style="display:flex;gap:14px;margin-top:6px;font-size:10px;">
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-elev-from" onchange="dqCalcQuote()"> 発地EVあり</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-elev-to" onchange="dqCalcQuote()"> 着地EVあり</label>
+              </div>
+            </div>
+
+            <!-- 割増・オプション -->
+            <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:8px;">割増・オプション</div>
+              <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:8px;">
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-night" onchange="dqCalcQuote()"> 深夜(22-5時)</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-holiday" onchange="dqCalcQuote()"> 日祝</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-specified" onchange="dqCalcQuote()"> 車両指定</label>
+                <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" id="dq-refrig" onchange="dqCalcQuote()"> 冷蔵冷凍</label>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div class="fg"><label style="font-size:10px;">高速代(実費・円)</label><input type="number" id="dq-toll" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+                <div class="fg"><label style="font-size:10px;">駐車場代(実費・円)</label><input type="number" id="dq-parking" class="fi" style="font-size:11px;padding:5px 8px;" oninput="dqCalcQuote()" placeholder="0"></div>
+              </div>
+            </div>
+
+            <div class="fg" style="margin-bottom:10px;"><label style="font-size:10px;">備考</label><textarea id="dq-note" class="fi" style="font-size:11px;padding:5px 8px;min-height:50px;" placeholder="追加情報・特記事項"></textarea></div>
+
+            <div style="display:flex;gap:6px;">
+              <button class="btn b-blu" onclick="dqCalcQuote()" style="flex:1;">🧮 再計算</button>
+              <button class="btn b-grn" onclick="dqSaveQuote()" style="flex:1;">💾 見積保存</button>
+              <button class="btn b-amb" onclick="dqPrintQuote()" style="flex:1;">🖨️ 印刷</button>
+              <button class="btn b-gh" onclick="dqResetQuote()">クリア</button>
+            </div>
+          </div>
+
+          <!-- 計算結果 -->
+          <div class="card" style="padding:12px 14px;position:sticky;top:10px;">
+            <div style="font-size:12px;font-weight:700;color:var(--grn2);margin-bottom:10px;">💰 計算結果</div>
+            <div id="dq-breakdown" style="font-size:11px;line-height:1.8;"></div>
+            <div style="border-top:2px solid var(--brd);margin-top:10px;padding-top:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px;">
+                <span>小計(税抜)</span>
+                <span id="dq-subtotal" style="font-family:'Bebas Neue',sans-serif;font-size:15px;">¥0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11px;color:var(--txt2);">
+                <span>消費税(10%)</span>
+                <span id="dq-tax" style="font-family:'Bebas Neue',sans-serif;font-size:13px;">¥0</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;border-top:1px dashed var(--brd);font-weight:700;">
+                <span>合計(税込)</span>
+                <span id="dq-total" style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--grn2);">¥0</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 見積履歴パネル -->
+      <div id="dq-panel-hist" style="display:none;">
+        <div class="flbc mb12">
+          <div class="fla gap6">
+            <input type="text" id="dq-hist-search" class="fi" placeholder="会社名・担当者で検索" style="width:240px;" oninput="renderDqHistory()">
+            <button class="btn b-gh btn-sm" onclick="renderDqHistory()">🔄 更新</button>
+          </div>
+          <div class="fla gap6">
+            <button class="btn b-blu btn-sm" onclick="dqExportJson()">📤 JSONエクスポート</button>
+            <button class="btn b-gh btn-sm" onclick="dqImportJson()">📥 JSONインポート</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="tw"><table>
+            <thead><tr>
+              <th>作成日</th><th>実施日</th><th>会社名</th><th>担当者</th><th>電話</th>
+              <th>出発→到着</th><th class="tr">距離</th><th class="tr">合計(税込)</th><th></th>
+            </tr></thead>
+            <tbody id="tb-dq-hist"></tbody>
+          </table></div>
+          <div id="dq-hist-empty" style="display:none;text-align:center;padding:32px;color:var(--txt2);font-size:12px;">見積履歴はありません</div>
+        </div>
+      </div>
+
+      <!-- 料金設定パネル -->
+      <div id="dq-panel-rate" style="display:none;">
+        <div class="card" style="padding:14px 18px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:700;color:var(--blu2);">⚙️ 距離料金表 設定</div>
+            <div class="fla gap6">
+              <button class="btn b-amb btn-sm" onclick="dqResetRate()">🔄 デフォルトに戻す</button>
+              <button class="btn b-grn btn-sm" onclick="dqSaveRate()">💾 設定保存</button>
+            </div>
+          </div>
+
+          <!-- 距離別基本料金 -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;">距離別 基本料金(税抜)</div>
+            <div id="dq-rate-dist" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+
+          <!-- 時間・拘束 -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;">時間・拘束</div>
+            <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:10px;">
+              <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;">
+                <div style="font-size:10px;font-weight:700;margin-bottom:4px;">待機料</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                  <div class="fg"><label style="font-size:9px;">無料(分)</label><input type="number" id="dq-r-wait-free" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+                  <div class="fg"><label style="font-size:9px;">毎(分)</label><input type="number" id="dq-r-wait-per" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+                </div>
+                <div class="fg" style="margin-top:4px;"><label style="font-size:9px;">金額(円)</label><input type="number" id="dq-r-wait-amt" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              </div>
+              <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;">
+                <div style="font-size:10px;font-weight:700;margin-bottom:4px;">拘束超過</div>
+                <div class="fg"><label style="font-size:9px;">毎(分)</label><input type="number" id="dq-r-ot-per" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+                <div class="fg" style="margin-top:4px;"><label style="font-size:9px;">金額(円)</label><input type="number" id="dq-r-ot-amt" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              </div>
+              <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;">
+                <div style="font-size:10px;font-weight:700;margin-bottom:4px;">荷扱い</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+                  <div class="fg"><label style="font-size:9px;">無料(分)</label><input type="number" id="dq-r-load-free" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+                  <div class="fg"><label style="font-size:9px;">毎(分)</label><input type="number" id="dq-r-load-per" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+                </div>
+                <div class="fg" style="margin-top:4px;"><label style="font-size:9px;">金額(円)</label><input type="number" id="dq-r-load-amt" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 階数 -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;">階数加算(エレベーターなし時)</div>
+            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;">
+              <div class="fg"><label style="font-size:9px;">2階(円)</label><input type="number" id="dq-r-floor2" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">3階(円)</label><input type="number" id="dq-r-floor3" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">4階(円)</label><input type="number" id="dq-r-floor4" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">5階以上(円/階)</label><input type="number" id="dq-r-floor5plus" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+            </div>
+          </div>
+
+          <!-- 割増率 -->
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:6px;">割増率(%・基本料金に対して)</div>
+            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;">
+              <div class="fg"><label style="font-size:9px;">深夜(22-5時)</label><input type="number" id="dq-r-night" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">日祝</label><input type="number" id="dq-r-holiday" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">車両指定</label><input type="number" id="dq-r-specified" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+              <div class="fg"><label style="font-size:9px;">冷蔵冷凍</label><input type="number" id="dq-r-refrig" class="fi" style="font-size:10px;padding:3px 5px;"></div>
+            </div>
+          </div>
+
+          <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:10px;color:var(--txt2);margin-top:12px;">
+            💡 設定を変更した後、見積作成画面で再計算すると新料金が反映されます。<br>
+            💡 「デフォルトに戻す」は関西圏実勢ベース(阪神カーゴ・ファインサービス・NEXT STAGEを参考)に戻します。
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="s-ts-settings" class="sec">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px 14px;background:var(--sur);border:1px solid var(--brd);border-radius:7px;">
         <div><div style="font-size:13px;font-weight:700;">システム設定</div>
@@ -4368,6 +4594,7 @@ const _TOP_TABS = {
     { s:'import',      label:'CSVインポート' },
     { s:'archive',     label:'アーカイブ' },
     { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
+    { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -19573,10 +19800,661 @@ function initContractSection(){
       if(s === 'contract'){
         setTimeout(initContractSection, 50);
       }
+      if(s === 'dist-quote'){
+        setTimeout(initDistQuoteSection, 50);
+      }
       return r;
     };
   }
 })();
+
+// ═══════════════════════════════════════════════════════════
+// 距離料金 & 見積ツール
+// ═══════════════════════════════════════════════════════════
+const DQ_LS_KEY_RATE = 'dq_rate_table_v1';
+const DQ_LS_KEY_QUOTES = 'dq_quotes_v1';
+
+// 関西圏実勢ベースのデフォルト料金表
+const DQ_RATE_DEFAULT = {
+  distances: [
+    {from:0,   to:10,   type:'flat',   price:4000},
+    {from:10,  to:20,   type:'flat',   price:5000},
+    {from:20,  to:50,   type:'per_km', addPerKm:200},
+    {from:50,  to:100,  type:'per_km', addPerKm:180},
+    {from:100, to:null, type:'per_km', addPerKm:150},
+  ],
+  timeCharges: {
+    waitFree:30,     waitPer:30,     waitAmt:1000,
+    overtimePer:60,  overtimeAmt:2000,
+    loadingFree:15,  loadingPer:15,  loadingAmt:500,
+  },
+  floorCharges: {f2:500, f3:1000, f4:1500, f5plus:2000},
+  surcharges:   {night:20, holiday:20, specified:10, refrigerated:20},
+};
+
+let _dqRate = null;     // 現在の料金表
+let _dqQuotes = [];     // 見積履歴
+let _dqVias = [];       // 経由地(編集中)
+let _dqEditId = null;   // 編集中の見積ID
+let _dqLastCalc = null; // 直近の計算結果
+
+// 初期化
+function initDistQuoteSection(){
+  _dqLoadRate();
+  _dqLoadQuotes();
+  _dqRenderRateForm();
+  _dqRenderVias();
+  const dEl=document.getElementById('dq-date');
+  if(dEl && !dEl.value) dEl.value = new Date().toISOString().slice(0,10);
+  dqCalcQuote();
+  renderDqHistory();
+}
+
+// サブタブ切替
+function switchDqTab(t){
+  ['quote','hist','rate'].forEach(id=>{
+    const btn=document.getElementById('dq-tab-'+id);
+    const p=document.getElementById('dq-panel-'+id);
+    if(btn){
+      btn.classList.remove('b-gh');
+      if(id===t){
+        btn.style.background='var(--sur)';
+        btn.style.color='#fff';
+      } else {
+        btn.style.background='';
+        btn.style.color='';
+        btn.classList.add('b-gh');
+      }
+    }
+    if(p) p.style.display = id===t ? '' : 'none';
+  });
+  if(t==='hist') renderDqHistory();
+  if(t==='rate') _dqRenderRateForm();
+}
+window.switchDqTab = switchDqTab;
+
+// ───────────────────────────────────────
+// 料金表 ロード・保存
+// ───────────────────────────────────────
+function _dqLoadRate(){
+  try{
+    const saved = localStorage.getItem(DQ_LS_KEY_RATE);
+    if(saved){ _dqRate = JSON.parse(saved); return; }
+  }catch{}
+  _dqRate = JSON.parse(JSON.stringify(DQ_RATE_DEFAULT));
+}
+function _dqSaveRateLS(){
+  try{ localStorage.setItem(DQ_LS_KEY_RATE, JSON.stringify(_dqRate)); }catch{}
+}
+
+function _dqRenderRateForm(){
+  if(!_dqRate) _dqLoadRate();
+  const r = _dqRate;
+  // 距離別
+  const distEl = document.getElementById('dq-rate-dist');
+  if(distEl){
+    distEl.innerHTML = r.distances.map((d,i)=>{
+      const rangeStr = d.to === null ? `${d.from}km〜` : `${d.from}〜${d.to}km`;
+      const valField = d.type==='flat'
+        ? `<div class="fg" style="flex:1;"><label style="font-size:9px;">基本料金(円)</label><input type="number" class="fi" style="font-size:11px;padding:4px 6px;" value="${d.price||0}" onchange="_dqUpdateDist(${i},'price',this.value)"></div>`
+        : `<div class="fg" style="flex:1;"><label style="font-size:9px;">追加/km(円)</label><input type="number" class="fi" style="font-size:11px;padding:4px 6px;" value="${d.addPerKm||0}" onchange="_dqUpdateDist(${i},'addPerKm',this.value)"></div>`;
+      return `<div style="display:flex;gap:8px;align-items:end;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;">
+        <div style="font-size:11px;font-weight:700;min-width:90px;color:var(--blu2);">${rangeStr}</div>
+        <div style="font-size:10px;color:var(--txt2);min-width:60px;">${d.type==='flat'?'定額':'km単位'}</div>
+        ${valField}
+      </div>`;
+    }).join('');
+  }
+  // 時間・拘束
+  const fld = (id,v)=>{const e=document.getElementById(id);if(e)e.value=v;};
+  fld('dq-r-wait-free',   r.timeCharges.waitFree);
+  fld('dq-r-wait-per',    r.timeCharges.waitPer);
+  fld('dq-r-wait-amt',    r.timeCharges.waitAmt);
+  fld('dq-r-ot-per',      r.timeCharges.overtimePer);
+  fld('dq-r-ot-amt',      r.timeCharges.overtimeAmt);
+  fld('dq-r-load-free',   r.timeCharges.loadingFree);
+  fld('dq-r-load-per',    r.timeCharges.loadingPer);
+  fld('dq-r-load-amt',    r.timeCharges.loadingAmt);
+  // 階数
+  fld('dq-r-floor2',     r.floorCharges.f2);
+  fld('dq-r-floor3',     r.floorCharges.f3);
+  fld('dq-r-floor4',     r.floorCharges.f4);
+  fld('dq-r-floor5plus', r.floorCharges.f5plus);
+  // 割増
+  fld('dq-r-night',     r.surcharges.night);
+  fld('dq-r-holiday',   r.surcharges.holiday);
+  fld('dq-r-specified', r.surcharges.specified);
+  fld('dq-r-refrig',    r.surcharges.refrigerated);
+}
+
+window._dqUpdateDist = function(idx, key, val){
+  if(!_dqRate) return;
+  const n = parseInt(val)||0;
+  if(_dqRate.distances[idx]) _dqRate.distances[idx][key] = n;
+};
+
+window.dqSaveRate = function(){
+  if(!_dqRate) _dqLoadRate();
+  const getN = id => parseInt(document.getElementById(id)?.value)||0;
+  _dqRate.timeCharges.waitFree     = getN('dq-r-wait-free');
+  _dqRate.timeCharges.waitPer      = getN('dq-r-wait-per');
+  _dqRate.timeCharges.waitAmt      = getN('dq-r-wait-amt');
+  _dqRate.timeCharges.overtimePer  = getN('dq-r-ot-per');
+  _dqRate.timeCharges.overtimeAmt  = getN('dq-r-ot-amt');
+  _dqRate.timeCharges.loadingFree  = getN('dq-r-load-free');
+  _dqRate.timeCharges.loadingPer   = getN('dq-r-load-per');
+  _dqRate.timeCharges.loadingAmt   = getN('dq-r-load-amt');
+  _dqRate.floorCharges.f2         = getN('dq-r-floor2');
+  _dqRate.floorCharges.f3         = getN('dq-r-floor3');
+  _dqRate.floorCharges.f4         = getN('dq-r-floor4');
+  _dqRate.floorCharges.f5plus     = getN('dq-r-floor5plus');
+  _dqRate.surcharges.night        = getN('dq-r-night');
+  _dqRate.surcharges.holiday      = getN('dq-r-holiday');
+  _dqRate.surcharges.specified    = getN('dq-r-specified');
+  _dqRate.surcharges.refrigerated = getN('dq-r-refrig');
+  _dqSaveRateLS();
+  if(typeof showAlert==='function') showAlert({msg:'料金設定を保存しました'});
+  else alert('料金設定を保存しました');
+};
+
+window.dqResetRate = function(){
+  const doReset = ()=>{
+    _dqRate = JSON.parse(JSON.stringify(DQ_RATE_DEFAULT));
+    _dqSaveRateLS();
+    _dqRenderRateForm();
+    if(typeof showAlert==='function') showAlert({msg:'デフォルト料金表に戻しました'});
+  };
+  if(typeof showConfirm==='function'){
+    showConfirm('料金表を関西圏実勢ベースのデフォルトに戻しますか?', doReset);
+  } else {
+    if(confirm('料金表をデフォルトに戻しますか?')) doReset();
+  }
+};
+
+// ───────────────────────────────────────
+// 見積計算
+// ───────────────────────────────────────
+function dqCalcQuote(){
+  if(!_dqRate) _dqLoadRate();
+  const r = _dqRate;
+  const getN = id => parseFloat(document.getElementById(id)?.value)||0;
+  const getB = id => !!document.getElementById(id)?.checked;
+  const distance = getN('dq-distance');
+  const waitMin = getN('dq-wait');
+  const otMin = getN('dq-overtime');
+  const loadMin = getN('dq-loading');
+  const floorFrom = Math.max(1, getN('dq-floor-from')||1);
+  const floorTo = Math.max(1, getN('dq-floor-to')||1);
+  const elevFrom = getB('dq-elev-from');
+  const elevTo = getB('dq-elev-to');
+  const isNight = getB('dq-night');
+  const isHoliday = getB('dq-holiday');
+  const isSpecified = getB('dq-specified');
+  const isRefrig = getB('dq-refrig');
+  const toll = getN('dq-toll');
+  const parking = getN('dq-parking');
+
+  const items = [];
+
+  // 1. 基本距離料金
+  let baseAmt = 0;
+  if(distance > 0){
+    let remaining = distance;
+    let baseFound = false;
+    for(const band of r.distances){
+      const bandTo = band.to === null ? Infinity : band.to;
+      if(band.type === 'flat'){
+        // 定額帯
+        if(distance <= bandTo && !baseFound){
+          baseAmt = band.price;
+          items.push({label:`基本料金 (〜${bandTo}km)`, amt:band.price});
+          baseFound = true;
+          break;
+        }
+      } else {
+        // km単位加算帯
+        if(!baseFound){
+          // 定額帯が見つからなかった場合、最大定額分を基準にする
+          const lastFlat = r.distances.filter(d=>d.type==='flat').slice(-1)[0];
+          if(lastFlat){
+            baseAmt = lastFlat.price;
+            items.push({label:`基本料金 (〜${lastFlat.to}km)`, amt:lastFlat.price});
+            baseFound = true;
+          }
+        }
+        const bandFrom = band.from;
+        if(distance > bandFrom){
+          const kmInBand = Math.min(distance, bandTo) - bandFrom;
+          if(kmInBand > 0){
+            const addAmt = Math.round(kmInBand * band.addPerKm);
+            baseAmt += addAmt;
+            items.push({label:`距離加算 (${bandFrom}〜${Math.min(distance, bandTo)}km × ${band.addPerKm}円)`, amt:addAmt});
+          }
+        }
+      }
+    }
+  }
+
+  // 2. 待機料
+  if(waitMin > r.timeCharges.waitFree){
+    const over = waitMin - r.timeCharges.waitFree;
+    const units = Math.ceil(over / r.timeCharges.waitPer);
+    const amt = units * r.timeCharges.waitAmt;
+    items.push({label:`待機料 (${over}分超過・${units}単位)`, amt});
+  }
+
+  // 3. 拘束超過
+  if(otMin > 0){
+    const units = Math.ceil(otMin / r.timeCharges.overtimePer);
+    const amt = units * r.timeCharges.overtimeAmt;
+    items.push({label:`拘束超過 (${otMin}分・${units}単位)`, amt});
+  }
+
+  // 4. 荷扱い料
+  if(loadMin > r.timeCharges.loadingFree){
+    const over = loadMin - r.timeCharges.loadingFree;
+    const units = Math.ceil(over / r.timeCharges.loadingPer);
+    const amt = units * r.timeCharges.loadingAmt;
+    items.push({label:`荷扱い料 (${over}分超過・${units}単位)`, amt});
+  }
+
+  // 5. 階数料金(EVなし時のみ)
+  const floorAmtOf = (floor)=>{
+    if(floor <= 1) return 0;
+    if(floor === 2) return r.floorCharges.f2;
+    if(floor === 3) return r.floorCharges.f3;
+    if(floor === 4) return r.floorCharges.f4;
+    return r.floorCharges.f4 + (floor-4)*r.floorCharges.f5plus;
+  };
+  if(!elevFrom && floorFrom >= 2){
+    const amt = floorAmtOf(floorFrom);
+    if(amt > 0) items.push({label:`階数料金(発地${floorFrom}階・EVなし)`, amt});
+  }
+  if(!elevTo && floorTo >= 2){
+    const amt = floorAmtOf(floorTo);
+    if(amt > 0) items.push({label:`階数料金(着地${floorTo}階・EVなし)`, amt});
+  }
+
+  // ここまでの小計
+  let subtotalBeforeSurcharge = items.reduce((a,it)=>a+it.amt, 0);
+
+  // 6. 割増(基本料金に対して・重複可)
+  // ※割増対象は「基本料金+距離加算」部分のみ(阪神カーゴ・NEXT STAGE方式)
+  let surchargeRate = 0;
+  if(isNight){ surchargeRate += r.surcharges.night; }
+  if(isHoliday){ surchargeRate += r.surcharges.holiday; }
+  if(isSpecified){ surchargeRate += r.surcharges.specified; }
+  if(isRefrig){ surchargeRate += r.surcharges.refrigerated; }
+  if(surchargeRate > 0 && baseAmt > 0){
+    const amt = Math.round(baseAmt * surchargeRate / 100);
+    const labels = [];
+    if(isNight) labels.push(`深夜${r.surcharges.night}%`);
+    if(isHoliday) labels.push(`日祝${r.surcharges.holiday}%`);
+    if(isSpecified) labels.push(`車両指定${r.surcharges.specified}%`);
+    if(isRefrig) labels.push(`冷蔵冷凍${r.surcharges.refrigerated}%`);
+    items.push({label:`割増 (${labels.join('・')})`, amt});
+  }
+
+  // 7. 実費
+  if(toll > 0) items.push({label:'高速代(実費)', amt:toll});
+  if(parking > 0) items.push({label:'駐車場代(実費)', amt:parking});
+
+  // 合計
+  const subtotal = items.reduce((a,it)=>a+it.amt, 0);
+  const tax = Math.floor(subtotal * 0.1);
+  const total = subtotal + tax;
+
+  _dqLastCalc = {items, subtotal, tax, total, baseAmt, distance, surchargeRate};
+
+  // 内訳表示
+  const bdEl = document.getElementById('dq-breakdown');
+  if(bdEl){
+    if(items.length === 0){
+      bdEl.innerHTML = '<div style="color:var(--txt2);font-size:10px;padding:8px 0;">距離を入力すると計算結果が表示されます</div>';
+    } else {
+      bdEl.innerHTML = items.map(it=>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;">
+          <span style="color:var(--txt);flex:1;">${esc(it.label)}</span>
+          <span style="font-family:'DM Mono',monospace;color:${it.amt<0?'var(--red2)':'var(--txt)'};">¥${it.amt.toLocaleString()}</span>
+        </div>`
+      ).join('');
+    }
+  }
+  const st = document.getElementById('dq-subtotal'); if(st) st.textContent = '¥'+subtotal.toLocaleString();
+  const tx = document.getElementById('dq-tax'); if(tx) tx.textContent = '¥'+tax.toLocaleString();
+  const tt = document.getElementById('dq-total'); if(tt) tt.textContent = '¥'+total.toLocaleString();
+}
+window.dqCalcQuote = dqCalcQuote;
+
+// ───────────────────────────────────────
+// 経由地
+// ───────────────────────────────────────
+function _dqRenderVias(){
+  const el = document.getElementById('dq-vias');
+  if(!el) return;
+  if(_dqVias.length === 0){ el.innerHTML = ''; return; }
+  el.innerHTML = _dqVias.map((v, i)=>`
+    <div style="display:flex;gap:6px;align-items:center;">
+      <span style="font-size:10px;color:var(--txt2);min-width:60px;">経由地 ${i+1}</span>
+      <input type="text" class="fi" style="flex:1;font-size:11px;padding:5px 8px;" value="${esc(v)}" oninput="_dqUpdateVia(${i}, this.value)">
+      <button class="btn b-gh btn-sm" onclick="_dqRemoveVia(${i})" style="font-size:10px;padding:2px 6px;">✕</button>
+    </div>
+  `).join('');
+}
+window.dqAddVia = function(){
+  _dqVias.push('');
+  _dqRenderVias();
+};
+window._dqUpdateVia = function(i, v){ _dqVias[i] = v; };
+window._dqRemoveVia = function(i){
+  _dqVias.splice(i, 1);
+  _dqRenderVias();
+};
+
+// ───────────────────────────────────────
+// 見積保存
+// ───────────────────────────────────────
+function _dqLoadQuotes(){
+  try{
+    const saved = localStorage.getItem(DQ_LS_KEY_QUOTES);
+    _dqQuotes = saved ? JSON.parse(saved) : [];
+  }catch{ _dqQuotes = []; }
+}
+function _dqSaveQuotesLS(){
+  try{ localStorage.setItem(DQ_LS_KEY_QUOTES, JSON.stringify(_dqQuotes)); }catch{}
+}
+
+function _dqCollectInputs(){
+  const getV = id => document.getElementById(id)?.value || '';
+  const getN = id => parseFloat(document.getElementById(id)?.value)||0;
+  const getB = id => !!document.getElementById(id)?.checked;
+  return {
+    company: getV('dq-company'),
+    contact: getV('dq-contact'),
+    tel: getV('dq-tel'),
+    email: getV('dq-email'),
+    scheduledDate: getV('dq-date'),
+    timeFrom: getV('dq-time-from'),
+    timeTo: getV('dq-time-to'),
+    from: getV('dq-from'),
+    to: getV('dq-to'),
+    vias: [..._dqVias],
+    distance: getN('dq-distance'),
+    wait: getN('dq-wait'),
+    overtime: getN('dq-overtime'),
+    loading: getN('dq-loading'),
+    floorFrom: getN('dq-floor-from')||1,
+    floorTo: getN('dq-floor-to')||1,
+    elevFrom: getB('dq-elev-from'),
+    elevTo: getB('dq-elev-to'),
+    isNight: getB('dq-night'),
+    isHoliday: getB('dq-holiday'),
+    isSpecified: getB('dq-specified'),
+    isRefrig: getB('dq-refrig'),
+    toll: getN('dq-toll'),
+    parking: getN('dq-parking'),
+    note: getV('dq-note'),
+  };
+}
+
+window.dqSaveQuote = function(){
+  dqCalcQuote();
+  const inp = _dqCollectInputs();
+  if(!inp.company){ alert('会社名を入力してください'); return; }
+  if(!_dqLastCalc || _dqLastCalc.total === 0){ alert('距離を入力してください'); return; }
+  const now = new Date();
+  const q = {
+    id: _dqEditId || ('quote_'+now.getTime()),
+    createdAt: _dqEditId
+      ? (_dqQuotes.find(x=>x.id===_dqEditId)?.createdAt || now.toISOString())
+      : now.toISOString(),
+    updatedAt: now.toISOString(),
+    ...inp,
+    calc: {
+      items: _dqLastCalc.items,
+      subtotal: _dqLastCalc.subtotal,
+      tax: _dqLastCalc.tax,
+      total: _dqLastCalc.total,
+    },
+    status: 'draft',
+  };
+  if(_dqEditId){
+    const idx = _dqQuotes.findIndex(x=>x.id===_dqEditId);
+    if(idx>=0) _dqQuotes[idx] = q; else _dqQuotes.push(q);
+  } else {
+    _dqQuotes.push(q);
+  }
+  _dqSaveQuotesLS();
+  _dqEditId = null;
+  if(typeof showAlert==='function') showAlert({msg:`見積を保存しました: ¥${q.calc.total.toLocaleString()}`});
+  else alert(`見積を保存しました: ¥${q.calc.total.toLocaleString()}`);
+  renderDqHistory();
+};
+
+window.dqResetQuote = function(){
+  const doReset = ()=>{
+    ['dq-company','dq-contact','dq-tel','dq-email','dq-date','dq-time-from','dq-time-to',
+     'dq-from','dq-to','dq-distance','dq-wait','dq-overtime','dq-loading',
+     'dq-floor-from','dq-floor-to','dq-toll','dq-parking','dq-note'].forEach(id=>{
+      const e = document.getElementById(id); if(e) e.value='';
+    });
+    ['dq-elev-from','dq-elev-to','dq-night','dq-holiday','dq-specified','dq-refrig'].forEach(id=>{
+      const e = document.getElementById(id); if(e) e.checked=false;
+    });
+    _dqVias = [];
+    _dqEditId = null;
+    _dqRenderVias();
+    const dEl = document.getElementById('dq-date');
+    if(dEl) dEl.value = new Date().toISOString().slice(0,10);
+    dqCalcQuote();
+  };
+  if(typeof showConfirm==='function') showConfirm('入力中の内容をクリアしますか?', doReset);
+  else { if(confirm('入力中の内容をクリアしますか?')) doReset(); }
+};
+
+window.dqPrintQuote = function(){
+  dqCalcQuote();
+  const inp = _dqCollectInputs();
+  if(!_dqLastCalc) return;
+  const info = (typeof _getSystemInfo==='function') ? _getSystemInfo() : {};
+  const today = new Date().toISOString().slice(0,10);
+  const addr = info.address || '';
+  const companyName = info.companyName || '大阪急配株式会社';
+  const tel = info.tel || '';
+  const routeParts = [inp.from, ...inp.vias, inp.to].filter(x=>x);
+  const html = `<div style="font-family:'Meiryo',sans-serif;padding:30px 40px;max-width:760px;margin:0 auto;">
+    <h1 style="text-align:center;font-size:22px;letter-spacing:0.8em;padding-left:0.8em;margin-bottom:20px;font-family:'MS Mincho',serif;">見　積　書</h1>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:14px;font-weight:700;border-bottom:1px solid #000;padding-bottom:4px;margin-bottom:8px;">${esc(inp.company)}　御中</div>
+        ${inp.contact?`<div style="font-size:11px;">ご担当者: ${esc(inp.contact)} 様</div>`:''}
+        ${inp.tel?`<div style="font-size:10px;color:#666;">TEL: ${esc(inp.tel)}</div>`:''}
+      </div>
+      <div style="text-align:right;font-size:11px;">
+        <div>発行日: ${today}</div>
+        <div style="margin-top:12px;font-size:13px;font-weight:700;">${esc(companyName)}</div>
+        ${addr?`<div style="font-size:10px;color:#666;">${esc(addr)}</div>`:''}
+        ${tel?`<div style="font-size:10px;color:#666;">TEL: ${esc(tel)}</div>`:''}
+      </div>
+    </div>
+    <div style="background:#fef3c7;border:1.5px solid #d97706;padding:10px 16px;border-radius:4px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-size:12px;">御見積金額 (税込)</span>
+      <span style="font-size:22px;font-weight:700;">¥${_dqLastCalc.total.toLocaleString()}</span>
+    </div>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;padding:10px 14px;border-radius:4px;margin-bottom:14px;font-size:11px;">
+      <div style="margin-bottom:4px;"><strong>実施日:</strong> ${esc(inp.scheduledDate)} ${inp.timeFrom?esc(inp.timeFrom):''}${inp.timeTo?'〜'+esc(inp.timeTo):''}</div>
+      <div><strong>経路:</strong> ${routeParts.map(esc).join(' → ')}</div>
+      <div><strong>走行距離:</strong> ${inp.distance}km</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#f4f4f4;">
+        <th style="border:0.75px solid #000;padding:6px;text-align:left;">内訳</th>
+        <th style="border:0.75px solid #000;padding:6px;text-align:right;width:130px;">金額</th>
+      </tr></thead>
+      <tbody>
+        ${_dqLastCalc.items.map(it=>`<tr>
+          <td style="border:0.75px solid #000;padding:5px 8px;">${esc(it.label)}</td>
+          <td style="border:0.75px solid #000;padding:5px 8px;text-align:right;">¥${it.amt.toLocaleString()}</td>
+        </tr>`).join('')}
+        <tr style="background:#fafafa;">
+          <td style="border:0.75px solid #000;padding:5px 8px;text-align:right;">小計(税抜)</td>
+          <td style="border:0.75px solid #000;padding:5px 8px;text-align:right;font-weight:700;">¥${_dqLastCalc.subtotal.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td style="border:0.75px solid #000;padding:5px 8px;text-align:right;">消費税(10%)</td>
+          <td style="border:0.75px solid #000;padding:5px 8px;text-align:right;">¥${_dqLastCalc.tax.toLocaleString()}</td>
+        </tr>
+        <tr style="background:#fef3c7;">
+          <td style="border:0.75px solid #000;padding:7px 8px;text-align:right;font-weight:700;">合計(税込)</td>
+          <td style="border:0.75px solid #000;padding:7px 8px;text-align:right;font-weight:700;font-size:14px;">¥${_dqLastCalc.total.toLocaleString()}</td>
+        </tr>
+      </tbody>
+    </table>
+    ${inp.note?`<div style="margin-top:14px;padding:10px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;"><strong>備考:</strong><br>${esc(inp.note).replace(/\n/g,'<br>')}</div>`:''}
+    <div style="margin-top:16px;font-size:9px;color:#666;padding-top:8px;border-top:1px solid #ddd;">
+      ※ 高速代・駐車場代は実費精算となります。<br>
+      ※ 現地到着後の待機・拘束・荷扱い超過分は別途加算される場合があります。
+    </div>
+  </div>`;
+  if(typeof _printDocWindow==='function') _printDocWindow('見積書', html);
+  else {
+    const w = window.open('', '_blank'); w.document.write('<html><head><title>見積書</title></head><body>'+html+'</body></html>'); w.document.close();
+  }
+};
+
+// ───────────────────────────────────────
+// 見積履歴
+// ───────────────────────────────────────
+function renderDqHistory(){
+  _dqLoadQuotes();
+  const q = (document.getElementById('dq-hist-search')?.value||'').trim().toLowerCase();
+  let list = _dqQuotes.slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(q){
+    list = list.filter(x =>
+      (x.company||'').toLowerCase().includes(q) ||
+      (x.contact||'').toLowerCase().includes(q) ||
+      (x.tel||'').includes(q)
+    );
+  }
+  const tb = document.getElementById('tb-dq-hist');
+  const empty = document.getElementById('dq-hist-empty');
+  if(!tb) return;
+  if(list.length === 0){
+    tb.innerHTML = '';
+    if(empty) empty.style.display = '';
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+  tb.innerHTML = list.map(x=>{
+    const created = (x.createdAt||'').slice(0,10);
+    const sch = x.scheduledDate||'';
+    const route = `${esc(x.from||'')} → ${esc(x.to||'')}`;
+    return `<tr>
+      <td style="font-size:10px;color:var(--txt2);">${created}</td>
+      <td style="font-size:10px;">${sch}${x.timeFrom?' '+x.timeFrom:''}</td>
+      <td style="font-size:11px;font-weight:700;">${esc(x.company||'')}</td>
+      <td style="font-size:10px;">${esc(x.contact||'')}</td>
+      <td style="font-size:10px;">${esc(x.tel||'')}</td>
+      <td style="font-size:10px;">${route} (${x.distance||0}km)</td>
+      <td class="tr" style="font-family:'DM Mono',monospace;color:var(--grn2);">¥${(x.calc?.total||0).toLocaleString()}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn b-gh btn-sm" onclick="dqEditQuote('${x.id}')" style="font-size:10px;padding:2px 6px;">編集</button>
+        <button class="btn b-gh btn-sm" onclick="dqPrintHistQuote('${x.id}')" style="font-size:10px;padding:2px 6px;">🖨</button>
+        <button class="btn btn-sm" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);font-size:10px;padding:2px 6px;" onclick="dqDeleteQuote('${x.id}')">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+window.renderDqHistory = renderDqHistory;
+
+window.dqEditQuote = function(id){
+  const q = _dqQuotes.find(x=>x.id===id);
+  if(!q) return;
+  _dqEditId = id;
+  const setV = (eid, v)=>{const e=document.getElementById(eid);if(e)e.value=v||'';};
+  const setB = (eid, v)=>{const e=document.getElementById(eid);if(e)e.checked=!!v;};
+  setV('dq-company', q.company); setV('dq-contact', q.contact);
+  setV('dq-tel', q.tel); setV('dq-email', q.email);
+  setV('dq-date', q.scheduledDate); setV('dq-time-from', q.timeFrom); setV('dq-time-to', q.timeTo);
+  setV('dq-from', q.from); setV('dq-to', q.to);
+  _dqVias = Array.isArray(q.vias) ? [...q.vias] : [];
+  _dqRenderVias();
+  setV('dq-distance', q.distance); setV('dq-wait', q.wait);
+  setV('dq-overtime', q.overtime); setV('dq-loading', q.loading);
+  setV('dq-floor-from', q.floorFrom); setV('dq-floor-to', q.floorTo);
+  setB('dq-elev-from', q.elevFrom); setB('dq-elev-to', q.elevTo);
+  setB('dq-night', q.isNight); setB('dq-holiday', q.isHoliday);
+  setB('dq-specified', q.isSpecified); setB('dq-refrig', q.isRefrig);
+  setV('dq-toll', q.toll); setV('dq-parking', q.parking);
+  setV('dq-note', q.note);
+  dqCalcQuote();
+  switchDqTab('quote');
+};
+
+window.dqDeleteQuote = function(id){
+  const doDel = ()=>{
+    _dqQuotes = _dqQuotes.filter(x=>x.id!==id);
+    _dqSaveQuotesLS();
+    renderDqHistory();
+  };
+  if(typeof showConfirm==='function') showConfirm('この見積を削除しますか?', doDel);
+  else { if(confirm('この見積を削除しますか?')) doDel(); }
+};
+
+window.dqPrintHistQuote = function(id){
+  const q = _dqQuotes.find(x=>x.id===id);
+  if(!q) return;
+  _dqEditId = id;
+  dqEditQuote(id);
+  setTimeout(()=>dqPrintQuote(), 200);
+};
+
+window.dqExportJson = function(){
+  _dqLoadQuotes();
+  const data = JSON.stringify({quotes:_dqQuotes, rate:_dqRate, exportedAt:new Date().toISOString()}, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `distance-quotes-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.dqImportJson = function(){
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/json';
+  inp.onchange = e=>{
+    const f = e.target.files[0];
+    if(!f) return;
+    const rd = new FileReader();
+    rd.onload = ()=>{
+      try{
+        const d = JSON.parse(rd.result);
+        if(Array.isArray(d.quotes)){
+          const doImport = ()=>{
+            _dqQuotes = d.quotes;
+            if(d.rate) _dqRate = d.rate;
+            _dqSaveQuotesLS();
+            _dqSaveRateLS();
+            renderDqHistory();
+            if(typeof showAlert==='function') showAlert({msg:`${d.quotes.length}件の見積をインポートしました`});
+          };
+          if(typeof showConfirm==='function') showConfirm(`${d.quotes.length}件の見積をインポートします。既存の見積は上書きされます。よろしいですか?`, doImport);
+          else { if(confirm(`${d.quotes.length}件インポートしますか?既存上書き`)) doImport(); }
+        } else {
+          alert('形式が不正です');
+        }
+      }catch(err){
+        alert('JSONの読み込みに失敗しました: '+err.message);
+      }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+};
+
 </script>
 
 <!-- 日報レポート詳細フルスクリーンモーダル -->
