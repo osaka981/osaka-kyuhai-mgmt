@@ -3747,6 +3747,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fg"><label style="font-size:9px;">その他3（円）</label><input type="number" id="of-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg"><label style="font-size:9px;">その他4（円）</label><input type="number" id="of-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         </div>
+        <!-- 定時集荷先 -->
+        <div style="margin-top:8px;border-top:1px solid rgba(192,57,43,.15);padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <div>
+              <div class="xs muted fw7">📦 定時集荷先</div>
+              <div style="font-size:9px;color:var(--txt2);margin-top:2px;">会社名のみ記入 → 「集荷」枠のデフォルト単価を適用 / 単価も記入 → 例外単価を適用</div>
+            </div>
+            <button type="button" class="btn b-gh btn-sm" onclick="addColCompanyRow()">＋ 集荷先追加</button>
+          </div>
+          <div id="of-col-companies" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
+        </div>
         <!-- 複数単価条件 -->
         <div style="margin-top:8px;border-top:1px solid rgba(192,57,43,.15);padding-top:8px;">
           <div class="xs muted fw7 mb6">特殊条件単価（期間・条件別）</div>
@@ -3756,6 +3767,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
   </div>
+
 
   <div id="office-confirm-area" style="display:none;margin-bottom:10px;">
     <div id="office-confirm-body" class="reg-preview"></div>
@@ -4218,24 +4230,42 @@ function onStAddrInput(inp){
 function renderSubOfficeBadges(){
   const wrap=$('sub-office-badges');if(!wrap)return;
   const mainOff=$('st-off')?.value||'';
-  // 全郵便局リストを取得（D.officesから）
-  const offices=D.offices||[];
-  const allNames=[...new Set([...offices.map(o=>o.name),...(D.staff||[]).map(s=>s.office).filter(Boolean)])].filter(Boolean).sort();
-  const selected=getSubOffices();
+  // 宅配事業チェックが入った郵便局のみ対象
+  const offices=(D.offices||[]).filter(o=>o.typesDel);
+  const allNames=[...new Set(offices.map(o=>o.name))].filter(Boolean).sort();
+  const selected = getSubOffices(); // [{name, del, col}]
+  const findSel = nm => selected.find(s=>s.name===nm);
 
   wrap.innerHTML=allNames.filter(n=>n!==mainOff).map(name=>{
-    const on=selected.includes(name);
-    return `<span onclick="toggleSubOfficeBadge('${name.replace(/'/g,"\'")}',this)"
-      style="cursor:pointer;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:700;border:1.5px solid ${on?'var(--blu2)':'var(--brd2)'};background:${on?'var(--blu3)':'transparent'};color:${on?'var(--blu2)':'var(--txt2)'};">
-      ${name}
+    const sel = findSel(name);
+    const on = !!sel;
+    const isDel = !!sel?.del;
+    const isCol = !!sel?.col;
+    const modeLabel = on ? (isDel&&isCol?' [宅配+集荷]':(isCol?' [集荷のみ]':' [宅配のみ]')) : '';
+    const nameEsc = name.replace(/'/g,"\\'");
+    return `<span style="display:inline-flex;align-items:center;gap:0;margin:2px;">
+      <span onclick="toggleSubOfficeBadge('${nameEsc}',this.parentElement)"
+        style="cursor:pointer;padding:4px 10px;border-radius:14px 0 0 14px;font-size:11px;font-weight:700;border:1.5px solid ${on?'var(--blu2)':'var(--brd2)'};border-right:none;background:${on?'var(--blu3)':'transparent'};color:${on?'var(--blu2)':'var(--txt2)'};">
+        ${esc(name)}${modeLabel}
+      </span>
+      ${on?`<span onclick="openSubOfficeMode('${nameEsc}',this.parentElement,'staff')" title="宅配/集荷を選択" style="cursor:pointer;padding:4px 8px;border-radius:0 14px 14px 0;font-size:11px;font-weight:700;border:1.5px solid var(--blu2);border-left:1px solid rgba(92,107,192,.3);background:var(--blu3);color:var(--blu2);">⚙️</span>`:''}
     </span>`;
   }).join('');
 }
 
 function getSubOffices(){
-  // hidden inputに保存された選択済み郵便局リストを取得
+  // hidden inputに保存された選択済み郵便局リスト(新形式)を取得
+  // 新形式: [{name, del, col}]
+  // 旧形式(文字列配列)は互換変換
   const v=$('st-sub-offices-val')?.value||'';
-  try{return JSON.parse(v)||[];}catch{return [];}
+  let parsed;
+  try{ parsed = JSON.parse(v); }catch{ parsed = []; }
+  if(!Array.isArray(parsed)) parsed = [];
+  // マイグレーション: 要素が文字列なら {name, del:true, col:false} に
+  return parsed.map(item=>{
+    if(typeof item === 'string') return {name:item, del:true, col:false};
+    return {name:item.name||'', del:!!item.del, col:!!item.col};
+  }).filter(x=>x.name);
 }
 function setSubOffices(list){
   let el=$('st-sub-offices-val');
@@ -4243,19 +4273,141 @@ function setSubOffices(list){
     el=document.createElement('input');el.type='hidden';el.id='st-sub-offices-val';
     $('sub-office-badges')?.parentElement?.appendChild(el);
   }
-  el.value=JSON.stringify(list);
+  // 新形式で保存
+  const normalized = (list||[]).map(item=>{
+    if(typeof item === 'string') return {name:item, del:true, col:false};
+    return {name:item.name||'', del:!!item.del, col:!!item.col};
+  }).filter(x=>x.name);
+  el.value=JSON.stringify(normalized);
 }
-function toggleSubOfficeBadge(name,el){
+function toggleSubOfficeBadge(name, wrapEl){
   const list=getSubOffices();
-  const idx=list.indexOf(name);
-  if(idx>=0) list.splice(idx,1); else list.push(name);
+  const idx=list.findIndex(x=>x.name===name);
+  if(idx>=0) list.splice(idx,1);
+  else list.push({name, del:true, col:false}); // 新規選択時は宅配デフォルトON
   setSubOffices(list);
-  // バッジの見た目を更新
-  const on=list.includes(name);
-  el.style.borderColor=on?'var(--blu2)':'var(--brd2)';
-  el.style.background=on?'var(--blu3)':'transparent';
-  el.style.color=on?'var(--blu2)':'var(--txt2)';
+  renderSubOfficeBadges(); // 全体再描画
 }
+// 宅配/集荷モード選択ポップアップ
+function openSubOfficeMode(name, wrapEl, ownerType){
+  ownerType = ownerType || 'staff'; // 'staff' or 'company'
+  const getter = ownerType==='company' ? getCoSubOffices : getSubOffices;
+  const setter = ownerType==='company' ? setCoSubOffices : setSubOffices;
+  const rerender = ownerType==='company' ? renderCoSubOfficeBadges : renderSubOfficeBadges;
+  const list = getter();
+  const sel = list.find(x=>x.name===name);
+  if(!sel) return;
+  // 簡易ポップアップ(モーダル)
+  const overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  const panel = document.createElement('div');
+  panel.style.cssText='background:var(--sur);border:1px solid var(--brd);border-radius:8px;padding:18px 24px;min-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.25);';
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px;">${esc(name)} の担当業務</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" id="sub-mode-del" ${sel.del?'checked':''} style="width:15px;height:15px;">
+        <span style="color:var(--blu2);font-weight:700;">🚛 宅配</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" id="sub-mode-col" ${sel.col?'checked':''} style="width:15px;height:15px;">
+        <span style="color:var(--tel2);font-weight:700;">📦 集荷</span>
+      </label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:6px;">
+      <button type="button" class="btn b-gh btn-sm" id="sub-mode-cancel">キャンセル</button>
+      <button type="button" class="btn b-grn btn-sm" id="sub-mode-ok">OK</button>
+    </div>
+  `;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  const close = ()=>{ document.body.removeChild(overlay); };
+  panel.querySelector('#sub-mode-cancel').onclick = close;
+  panel.querySelector('#sub-mode-ok').onclick = ()=>{
+    const del = panel.querySelector('#sub-mode-del').checked;
+    const col = panel.querySelector('#sub-mode-col').checked;
+    if(!del && !col){
+      alert('宅配または集荷のいずれかを選択してください');
+      return;
+    }
+    sel.del = del; sel.col = col;
+    setter(list);
+    rerender();
+    close();
+  };
+  overlay.onclick = e=>{ if(e.target===overlay) close(); };
+}
+
+// ══════════════════════════════════════════════════
+// 委託会社モーダル: 担当郵便局バッジ
+// ══════════════════════════════════════════════════
+function renderCoSubOfficeBadges(){
+  const wrap = document.getElementById('co-sub-office-badges');
+  if(!wrap) return;
+  const offices = (D.offices||[]).filter(o=>o.typesDel);
+  const allNames = [...new Set(offices.map(o=>o.name))].filter(Boolean).sort();
+  const selected = getCoSubOffices();
+  const findSel = nm => selected.find(s=>s.name===nm);
+
+  if(allNames.length === 0){
+    wrap.innerHTML = '<span style="font-size:10px;color:var(--txt2);">宅配事業にチェックされた営業所がありません</span>';
+    return;
+  }
+
+  wrap.innerHTML = allNames.map(name=>{
+    const sel = findSel(name);
+    const on = !!sel;
+    const isDel = !!sel?.del;
+    const isCol = !!sel?.col;
+    const modeLabel = on ? (isDel&&isCol?' [宅配+集荷]':(isCol?' [集荷のみ]':' [宅配のみ]')) : '';
+    const nameEsc = name.replace(/'/g,"\\'");
+    return `<span style="display:inline-flex;align-items:center;gap:0;margin:2px;">
+      <span onclick="toggleCoSubOfficeBadge('${nameEsc}')"
+        style="cursor:pointer;padding:4px 10px;border-radius:14px 0 0 14px;font-size:11px;font-weight:700;border:1.5px solid ${on?'var(--blu2)':'var(--brd2)'};border-right:none;background:${on?'var(--blu3)':'transparent'};color:${on?'var(--blu2)':'var(--txt2)'};">
+        ${esc(name)}${modeLabel}
+      </span>
+      ${on?`<span onclick="openSubOfficeMode('${nameEsc}',null,'company')" title="宅配/集荷を選択" style="cursor:pointer;padding:4px 8px;border-radius:0 14px 14px 0;font-size:11px;font-weight:700;border:1.5px solid var(--blu2);border-left:1px solid rgba(92,107,192,.3);background:var(--blu3);color:var(--blu2);">⚙️</span>`:''}
+    </span>`;
+  }).join('');
+}
+
+function getCoSubOffices(){
+  const v = document.getElementById('co-sub-offices-val')?.value || '';
+  let parsed;
+  try{ parsed = JSON.parse(v); }catch{ parsed = []; }
+  if(!Array.isArray(parsed)) parsed = [];
+  return parsed.map(item=>{
+    if(typeof item === 'string') return {name:item, del:true, col:false};
+    return {name:item.name||'', del:!!item.del, col:!!item.col};
+  }).filter(x=>x.name);
+}
+
+function setCoSubOffices(list){
+  let el = document.getElementById('co-sub-offices-val');
+  if(!el){
+    el = document.createElement('input');
+    el.type = 'hidden';
+    el.id = 'co-sub-offices-val';
+    const wrap = document.getElementById('co-sub-office-badges');
+    if(wrap) wrap.parentElement.appendChild(el);
+  }
+  const normalized = (list||[]).map(item=>{
+    if(typeof item === 'string') return {name:item, del:true, col:false};
+    return {name:item.name||'', del:!!item.del, col:!!item.col};
+  }).filter(x=>x.name);
+  el.value = JSON.stringify(normalized);
+}
+
+function toggleCoSubOfficeBadge(name){
+  const list = getCoSubOffices();
+  const idx = list.findIndex(x=>x.name===name);
+  if(idx>=0) list.splice(idx,1);
+  else list.push({name, del:true, col:false});
+  setCoSubOffices(list);
+  renderCoSubOfficeBadges();
+}
+window.toggleCoSubOfficeBadge = toggleCoSubOfficeBadge;
+window.openSubOfficeMode = openSubOfficeMode;
 
 // 区分→給与形態 自動決定
 const KBN_KY_MAP={
@@ -10893,8 +11045,8 @@ function saveStaff(continueAdd=false){
     holder:$('st-bank-holder')?.value.trim()||'',
   };
 
-  // 追加郵便局を収集（バッジUIから）
-  const subOffices=getSubOffices().filter(n=>n!==officeName);
+  // 追加郵便局を収集（バッジUIから） - 新形式: [{name, del, col}]
+  const subOffices=getSubOffices().filter(o=>o.name!==officeName);
 
   const newDrv={
     id:Date.now(),
@@ -12270,6 +12422,9 @@ function openCompanyModal(coId){
   if($('co-status'))$('co-status').value=co?.status||'稼働中';
   if($('co-status-reason'))$('co-status-reason').value=co?.statusReason||'';
   onCoStatusChange();
+  // 担当郵便局(バッジ)復元
+  if(typeof setCoSubOffices==='function') setCoSubOffices(co?.subOffices||[]);
+  if(typeof renderCoSubOfficeBadges==='function') renderCoSubOfficeBadges();
   openM('m-company');
 }
 
@@ -12321,6 +12476,7 @@ function saveCompany(){
     offices,prices,bankInfo,gasCards,yosha,charges,memo,otherItems:coOtherItems,
     docs: collectCompanyDocsField(),
     colRoutes:(_coEditId?D.companies.find(x=>x.id===_coEditId)?.colRoutes:null)||[],active:true,
+    subOffices: (typeof getCoSubOffices==='function') ? getCoSubOffices() : [],
     status:$('co-status')?.value||'稼働中',
     statusReason:$('co-status-reason')?.value||'',
   };
@@ -13263,10 +13419,13 @@ function editOffice(id){
     if($('of-ps2'))$('of-ps2').value=p.s2||0;
     if($('of-ps3'))$('of-ps3').value=p.s3||0;
     if($('of-ps4'))$('of-ps4').value=p.s4||0;
+    // 定時集荷先リスト復元
+    if(typeof restoreColCompanies==='function') restoreColCompanies(p.colCompanies||[]);
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
   } else {
     // 認証なし or 単価未設定: ロック表示に戻す
+    if(typeof restoreColCompanies==='function') restoreColCompanies([]);
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='block';
     if($('of-del-price-content'))$('of-del-price-content').style.display='none';
   }
@@ -13315,6 +13474,7 @@ function addOffice(){
     shukka:ofTc($('of-pshukka')?.value),
     s1:ofTc($('of-ps1')?.value), s2:ofTc($('of-ps2')?.value),
     s3:ofTc($('of-ps3')?.value), s4:ofTc($('of-ps4')?.value),
+    colCompanies: (typeof collectColCompanies==='function') ? collectColCompanies() : [],
     _taxType:ofTaxType,
   } : null;
 
@@ -18677,6 +18837,43 @@ function addOfficePriceRow(){
   list.appendChild(row);
 }
 
+// ── 定時集荷先: 行追加 ──
+function addColCompanyRow(name, price){
+  const list = document.getElementById('of-col-companies');
+  if(!list) return;
+  const row = document.createElement('div');
+  row.className = 'of-col-cmp-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 140px 30px;gap:6px;align-items:end;';
+  const escVal = v => (v==null?'':String(v).replace(/"/g,'&quot;'));
+  row.innerHTML = `
+    <div class="fg"><label style="font-size:9px;">会社名</label><input type="text" class="fi of-col-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}"></div>
+    <div class="fg"><label style="font-size:9px;">単価（空欄=デフォルト）</label><input type="number" class="fi of-col-cmp-price" style="font-size:10px;padding:3px 6px;" placeholder="デフォルト" value="${escVal(price)}"></div>
+    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(row);
+}
+
+// ── 定時集荷先: 収集(保存時) ──
+function collectColCompanies(){
+  const rows = document.querySelectorAll('#of-col-companies .of-col-cmp-row');
+  const result = [];
+  rows.forEach(row=>{
+    const name = row.querySelector('.of-col-cmp-name')?.value.trim() || '';
+    const priceStr = row.querySelector('.of-col-cmp-price')?.value.trim() || '';
+    if(!name) return;
+    const price = priceStr === '' ? null : (parseInt(priceStr)||0);
+    result.push({name, price});
+  });
+  return result;
+}
+
+// ── 定時集荷先: 復元(編集時) ──
+function restoreColCompanies(list){
+  const wrap = document.getElementById('of-col-companies');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  (list||[]).forEach(c=>addColCompanyRow(c.name, c.price));
+}
+
 // ── 宅配請求書タブ切替 ──
 function switchDelInvTab(t){
   if(t==='post'&&!isTSAuthenticated()){
@@ -20578,6 +20775,13 @@ window.dqImportJson = function(){
         <label style="font-size:12px;">適格請求書発行事業者名</label>
         <input type="text" id="co-invoice-name" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;" placeholder="登録証の名称（法人名・屋号）">
       </div>
+    </div>
+
+    <!-- ■ 担当郵便局(営業所) -->
+    <div class="xs muted fw7 mb8 mt12" style="letter-spacing:.4px;">■ 担当郵便局（宅配事業）</div>
+    <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:8px;">宅配事業チェック済の郵便局のみ表示されます。バッジを押して選択、⚙️で宅配/集荷モードを設定します。</div>
+      <div id="co-sub-office-badges" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
     </div>
 
     <!-- ■ 書類発行設定 -->
