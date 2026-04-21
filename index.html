@@ -4105,6 +4105,14 @@ function applyFirebaseData() {
   // 集荷日報（COL_LOGS → D.pickup）
   const colLogs = lsGet(LS_KEYS.COL, null);
   if (colLogs && colLogs.length) {
+    // 既存D.pickupから金額情報を引き継ぐためのmap
+    const existingChargeMap = new Map();
+    (D.pickup||[]).forEach(r=>{
+      if(r.charter && (r.charter.amount || r.charter.amountSetAt)){
+        existingChargeMap.set(String(r.id), r.charter);
+      }
+    });
+
     const fbPu = colLogs.map(r => {
       const rows = r.rows || [];
       // rows[] → items{} に変換(品目別数量を合算)
@@ -4119,14 +4127,26 @@ function applyFirebaseData() {
       // ルート情報抽出(新仕様: route masterKey のrowが1件)
       const routeRow = rows.find(row => row.masterKey === 'route');
       const charterRow = rows.find(row => row.masterKey === 'チャーター');
-      const cuName = rows[0]?.customerName || routeRow?.customerName || charterRow?.customerName || '';
-      const cu = D.customers.find(c => c.name === cuName);
+
+      // 顧客名はチャーター優先(その顧客の請求書に含めるため)、次にrows先頭、次にroute
+      let cuName = charterRow?.customerName || rows[0]?.customerName || routeRow?.customerName || '';
+      let cuId = charterRow?.customerId || 0;
+      if(!cuId){
+        const cuMatch = D.customers.find(c => c.name === cuName);
+        cuId = cuMatch?.id || 0;
+      }
+
+      // 既存の金額情報を引き継ぐ(col_logsに保存された金額を優先)
+      const existingCharge = existingChargeMap.get(String(r.id));
+      const rowAmount = charterRow?.amount || 0;
+      const rowAmtSetAt = charterRow?.amountSetAt || '';
+
       return {
         id: r.id,
         date: r.date,
         office: r.driver?.office || '',
         staff:  r.driver?.name || '',
-        customerId:   cu?.id || 0,
+        customerId:   cuId,
         customerName: cuName,
         region:       rows[0]?.region || '',
         items,
@@ -4142,10 +4162,15 @@ function applyFirebaseData() {
         } : null,
         // チャーター情報(Pattern C)
         charter: charterRow ? {
+          customerId:  charterRow.customerId || 0,
           custName:    charterRow.customerName || '',
           from:        charterRow.charterFrom || '',
           to:          charterRow.charterTo   || '',
           content:     charterRow.charterContent || '',
+          // 金額情報: col_logsに保存されていればそれを使い、なければ既存D.pickupから引き継ぐ
+          amount:      rowAmount || existingCharge?.amount || 0,
+          amountSetAt: rowAmtSetAt || existingCharge?.amountSetAt || '',
+          amountSetBy: existingCharge?.amountSetBy || '',
         } : null,
         note: r.note || '',
         _fromApp: true,
@@ -5739,6 +5764,23 @@ function renderDash() {
   // フリート未登録ドライバー通知
   const unregFleet = getUnregisteredFleetDrivers();
   if(unregFleet.length) als.push(`<div class="al al-w" style="cursor:pointer" onclick="navByS('staff');renderSubNav('hr','staff');setTimeout(()=>{const el=$('unregistered-fleet-card');if(el)el.scrollIntoView({behavior:'smooth'});},300);"><span>🔗</span><span>フリートに<strong>未登録ドライバーが${unregFleet.length}名</strong>います → クリックして確認</span></div>`);
+
+  // 金額未設定チャーター通知
+  const unsetCharters = (D.pickup||[]).filter(r=>{
+    return r.charter && (r.charter.content||r.charter.from||r.charter.to) && !(r.charter.amount>0);
+  });
+  if(unsetCharters.length){
+    // チャーターを顧客別にグループ化
+    const byCust = {};
+    unsetCharters.forEach(r=>{
+      const n = r.charter?.custName || r.customerName || '(顧客不明)';
+      byCust[n] = (byCust[n]||0) + 1;
+    });
+    const custNames = Object.keys(byCust);
+    const firstCust = custNames[0];
+    als.push(`<div class="al al-w" style="cursor:pointer" onclick="openFS('customer','${esc(firstCust)}');setTimeout(()=>{switchFSTab('docs');},100);"><span>💰</span><span>金額未設定の<strong>チャーターが${unsetCharters.length}件</strong>あります → クリックして入力</span></div>`);
+  }
+
   const alHtml=als.join('')||'<div class="al al-ok"><span>✅</span><span>アラートなし</span></div>';
   $('d-alerts').innerHTML=als.length?als.join(''):'';
   $('d-alert').innerHTML=alHtml;
@@ -15337,14 +15379,18 @@ function _calcCustBilling(custName, monStr){
   const charters = [];
   rows.forEach(r=>{
     if(!r.charter || !(r.charter.content || r.charter.from || r.charter.to)) return;
-    // チャーターは現状金額情報なし(将来拡張). Todo: 別途金額欄 or 個別入力
+    const ch = r.charter;
+    const amount = Number(ch.amount)||0;
+    total += amount;
     charters.push({
       date: r.date,
-      custName: r.charter.custName,
-      from: r.charter.from,
-      to: r.charter.to,
-      content: r.charter.content,
-      // amount: 0, // 未実装
+      customerId: ch.customerId,
+      custName: ch.custName,
+      from: ch.from,
+      to: ch.to,
+      content: ch.content,
+      amount,
+      isAmountSet: amount > 0,
     });
   });
 
@@ -16552,18 +16598,22 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
     </tr>`;
   }).join('');
 
-  // チャーター行(Pattern C) - 金額情報は将来拡張予定
+  // チャーター行(Pattern C)
   const charterStartNo = routeStartNo + (bill.routes||[]).length;
   const charterRows = (bill.charters||[]).map((c, i)=>{
     const detail = [c.from, c.to].filter(Boolean).join(' → ');
     const label = detail ? `${esc(c.content||'')} <span style="font-size:10px;color:#666;">${esc(detail)}</span>` : esc(c.content||'');
+    const dateStr = c.date ? `${esc(c.date)} ` : '';
+    const amtCell = c.isAmountSet
+      ? c.amount.toLocaleString()
+      : '<span style="color:#c0392b;font-size:10px;">⚠未設定</span>';
     return `
     <tr>
       <td class="code">${charterStartNo + i}</td>
-      <td>【チャーター】${esc(c.date||'')} ${label}</td>
+      <td>【チャーター】${dateStr}${label}</td>
       <td class="num">1</td>
       <td class="num">-</td>
-      <td class="num">-</td>
+      <td class="num">${amtCell}</td>
     </tr>`;
   }).join('');
 
@@ -17709,6 +17759,13 @@ function renderCustDocs(el, name){
   const bill=_calcCustBilling(name, mon);
   const history=_getIssuedDocs('custInvoice', name);
 
+  // チャーター一覧(D.pickupから抽出、customerId一致)
+  const charters = (D.pickup||[]).filter(r=>
+    r.charter && (r.date||'').startsWith(mon) &&
+    (r.charter.customerId === cu?.id || r.customerName === name)
+  );
+  const unsetCharters = charters.filter(r=>!(r.charter?.amount>0));
+
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-cu-doc-mon" class="fi" value="${mon}" onchange="renderCustFSTab('docs')"></div></div>
   </div>
@@ -17721,9 +17778,49 @@ function renderCustDocs(el, name){
         <div class="xs muted mt8">集荷 ${bill.rowCount}件</div>
       </div>
       <button class="btn b-blu" onclick="generateCustInvoice('${esc(name)}','${mon}')">請求書を発行</button>
-    </div>
-    ${bill.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>品目</th><th class="tr">数量</th><th class="tr">単価</th><th class="tr">金額</th></tr></thead><tbody>${bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">${b.qty}</td><td class="tr mono">¥${b.unit}</td><td class="tr mono fw7">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
-  </div>
+    </div>`;
+
+  // Pattern A: 個建
+  if(bill.breakdown.length){
+    html+=`<div class="tw mt12"><table><thead><tr><th>品目</th><th class="tr">数量</th><th class="tr">単価</th><th class="tr">金額</th></tr></thead><tbody>${bill.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">${b.qty}</td><td class="tr mono">¥${b.unit}</td><td class="tr mono fw7">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  // Pattern B: ルート配送
+  if((bill.routes||[]).length){
+    html+=`<div class="ct mt12 mb8" style="font-size:12px;"><div class="cbar" style="background:var(--grn2);"></div>【ルート配送】</div>`;
+    html+=`<div class="tw"><table><thead><tr><th>ルート名</th><th>区間</th><th class="tr">稼働日数</th><th class="tr">回数</th><th class="tr">単価</th><th class="tr">金額</th></tr></thead><tbody>`;
+    bill.routes.forEach(rt=>{
+      html+=`<tr><td>${esc(rt.name)}</td><td class="xs">${esc(rt.fromTo||'')}</td><td class="tr mono">${rt.workDays}日</td><td class="tr mono">${rt.totalRounds}回</td><td class="tr mono">¥${rt.unitPrice.toLocaleString()}</td><td class="tr mono fw7">¥${rt.amount.toLocaleString()}</td></tr>`;
+    });
+    html+=`</tbody></table></div>`;
+  }
+  // Pattern C: チャーター
+  if(charters.length){
+    html+=`<div class="ct mt12 mb8" style="font-size:12px;"><div class="cbar" style="background:var(--amb2);"></div>【チャーター】 ${unsetCharters.length>0?`<span class="bdg" style="background:rgba(192,57,43,.15);color:var(--red2);font-size:10px;padding:2px 6px;margin-left:6px;">金額未設定 ${unsetCharters.length}件</span>`:''}</div>`;
+    html+=`<div class="tw"><table><thead><tr><th style="width:90px;">日付</th><th>内容</th><th>出発→行先</th><th class="tr" style="width:160px;">金額(税別)</th><th style="width:80px;"></th></tr></thead><tbody>`;
+    charters.forEach(r=>{
+      const ch = r.charter;
+      const amt = ch.amount || 0;
+      const isSet = amt > 0;
+      const fromTo = [ch.from, ch.to].filter(Boolean).join(' → ') || '-';
+      html+=`<tr>
+        <td class="mono xs">${esc(r.date)}</td>
+        <td>${esc(ch.content||'')}</td>
+        <td class="xs">${esc(fromTo)}</td>
+        <td class="tr">
+          <input type="number" id="ch-amt-${r.id}" class="fi" value="${amt||''}" placeholder="0" style="width:130px;text-align:right;font-family:monospace;${!isSet?'background:rgba(192,57,43,.08);border-color:var(--red2);':''}">
+        </td>
+        <td><button class="btn b-grn btn-sm" onclick="saveCharterAmount(${r.id})">保存</button></td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    if(unsetCharters.length>0){
+      html+=`<div class="xs muted mt8" style="color:var(--red2);">⚠️ 金額未設定のチャーターがあります。請求書発行前に金額を設定してください。</div>`;
+    }
+  }
+  if(!bill.breakdown.length && !(bill.routes||[]).length && !charters.length){
+    html+='<div class="xs muted mt8">該当月のデータがありません</div>';
+  }
+  html+=`</div>
   <div class="fs-card">
     <div class="ct mb12"><div class="cbar"></div>発行履歴</div>`;
   if(history.length){
@@ -17735,6 +17832,41 @@ function renderCustDocs(el, name){
   } else html+=`<div class="xs muted">発行履歴はありません</div>`;
   html+=`</div>`;
   el.innerHTML=html;
+}
+
+// チャーター金額保存
+function saveCharterAmount(pickupId){
+  const rec = (D.pickup||[]).find(r=>r.id===pickupId);
+  if(!rec || !rec.charter){ showAlert({msg:'データが見つかりません'}); return; }
+  const inputEl = document.getElementById(`ch-amt-${pickupId}`);
+  if(!inputEl) return;
+  const amt = parseInt(inputEl.value)||0;
+  if(amt<0){ showAlert({msg:'金額は0以上の数値を入力してください'}); return; }
+  rec.charter.amount = amt;
+  rec.charter.amountSetAt = new Date().toISOString();
+  // D.pickupを永続化 + Firebase同期
+  if(typeof lsSet==='function' && typeof LS_KEYS!=='undefined'){
+    // pickupは通常col_logsから再生成されるが、チャーター金額は別系統で保持する必要あり
+    // col_logsのrowに amount フィールドを追加する方が永続化に適している
+  }
+  // col_logsも更新(再マージ対策)
+  try{
+    const colLogs = lsGet(LS_KEYS.COL, []) || [];
+    const log = colLogs.find(l=>String(l.id)===String(pickupId));
+    if(log){
+      const charterRow = (log.rows||[]).find(row=>row.masterKey==='チャーター');
+      if(charterRow){
+        charterRow.amount = amt;
+        charterRow.amountSetAt = rec.charter.amountSetAt;
+      }
+      lsSet(LS_KEYS.COL, colLogs);
+      if(typeof fbSet==='function') fbSet('col_logs', colLogs);
+    }
+  }catch(e){ console.error(e); }
+  // 再描画
+  renderCustFSTab('docs');
+  if(typeof renderPUInv==='function') renderPUInv();
+  if(typeof renderDash==='function') renderDash();
 }
 
 function renderCustMail(el, name){
