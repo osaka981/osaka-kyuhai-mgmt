@@ -3923,6 +3923,8 @@ const LS_KEYS = {
   REGIONS:  'nikki_regions',
   COMPANIES:'nikki_companies',
   STAFF:    'nikki_staff',
+  DEPARTMENTS: 'nikki_departments',   // 部署マスタ(Phase 1追加)
+  LOCATIONS:   'nikki_locations',     // 拠点マスタ(Phase 1追加)
 };
 
 let fbDB = null;
@@ -3941,6 +3943,114 @@ const lsSet = (k, v) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
   // localStorage不可でも動作継続（D.xxx はメモリ上で保持）
 };
+
+// ══════════════════════════════════════════════════
+// 部署・拠点ヘルパー関数 (Phase 1)
+// ══════════════════════════════════════════════════
+
+// 部署タイプ定数
+const DEPT_TYPES = {
+  MGMT: 'mgmt',  // 管理部
+  DEL:  'del',   // 宅配事業部
+  COL:  'col',   // 集荷事業部
+};
+
+// 拠点タイプ定数
+const LOC_TYPES = {
+  HEAD:        'head',         // 本社
+  POST_OFFICE: 'post_office',  // 郵便局(isBilling=trueが多い)
+  COL_OFFICE:  'col_office',   // 集荷営業所
+};
+
+// 部署一覧を取得(active=trueのみ、order順)
+function getActiveDepartments(){
+  return (D.departments||[])
+    .filter(d=>d.active!==false)
+    .sort((a,b)=>(a.order||99)-(b.order||99));
+}
+// ID→部署
+function getDepartmentById(id){
+  return (D.departments||[]).find(d=>String(d.id)===String(id)) || null;
+}
+// 種別→部署(複数部署が同じtypeを持つ可能性もあるが、通常は1対1)
+function getDepartmentByType(type){
+  return (D.departments||[]).find(d=>d.type===type) || null;
+}
+// 部署名→部署
+function getDepartmentByName(name){
+  if(!name) return null;
+  return (D.departments||[]).find(d=>d.name===name) || null;
+}
+
+// 拠点一覧を取得(active=trueのみ、order順)
+function getActiveLocations(filterDeptId){
+  let list = (D.locations||[]).filter(l=>l.active!==false);
+  if(filterDeptId != null){
+    list = list.filter(l=>(l.deptIds||[]).includes(filterDeptId) || (l.deptIds||[]).includes(String(filterDeptId)));
+  }
+  return list.sort((a,b)=>(a.order||99)-(b.order||99));
+}
+// ID→拠点
+function getLocationById(id){
+  return (D.locations||[]).find(l=>String(l.id)===String(id)) || null;
+}
+// 名前→拠点
+function getLocationByName(name){
+  if(!name) return null;
+  return (D.locations||[]).find(l=>l.name===name) || null;
+}
+// 種別→拠点配列
+function getLocationsByType(type){
+  return (D.locations||[]).filter(l=>l.type===type && l.active!==false);
+}
+// 郵便局(請求対象)拠点
+function getBillingLocations(){
+  return (D.locations||[]).filter(l=>l.isBilling===true && l.active!==false)
+    .sort((a,b)=>(a.order||99)-(b.order||99));
+}
+
+// スタッフの所属部署ID配列を取得(新旧両対応)
+function getStaffDeptIds(staff){
+  if(!staff) return [];
+  if(Array.isArray(staff.deptIds) && staff.deptIds.length) return staff.deptIds;
+  // フォールバック: kubunから推定
+  const k = staff.kubun || '';
+  if(k === '社員' || k === '役員' || k === 'パート' || k === 'パート（事務）'){
+    const d = getDepartmentByType(DEPT_TYPES.MGMT);
+    if(d) return [d.id];
+  }
+  // 委託系・個人事業主 → 宅配事業部とする(暫定)
+  const d = getDepartmentByType(DEPT_TYPES.DEL);
+  return d ? [d.id] : [];
+}
+
+// スタッフの主拠点IDを取得(新旧両対応)
+function getStaffPrimaryLocationId(staff){
+  if(!staff) return null;
+  if(staff.primaryLocationId) return staff.primaryLocationId;
+  // フォールバック: staff.office(文字列)から拠点を検索
+  if(staff.office){
+    const loc = getLocationByName(staff.office);
+    if(loc) return loc.id;
+  }
+  return null;
+}
+
+// スタッフのサブ拠点ID配列を取得
+function getStaffSubLocationIds(staff){
+  if(!staff) return [];
+  if(Array.isArray(staff.subLocationIds) && staff.subLocationIds.length) return staff.subLocationIds;
+  // フォールバック: staff.subOffices(文字列配列 or {name,del,col}配列)
+  const subs = staff.subOffices || [];
+  const ids = [];
+  subs.forEach(s=>{
+    const name = typeof s === 'string' ? s : s.name;
+    if(!name) return;
+    const loc = getLocationByName(name);
+    if(loc) ids.push(loc.id);
+  });
+  return ids;
+}
 
 // Firebase に書き込み（ls も同時更新）
 async function fbSet(key, value) {
@@ -4033,6 +4143,71 @@ function applyFirebaseData() {
     }));
     // FBデータで完全に上書き（初期サンプルデータは除去）
     D.offices = newOffices;
+  }
+
+  // 部署マスタ(DEPARTMENTS → D.departments)
+  const fbDepartments = lsGet(LS_KEYS.DEPARTMENTS, null);
+  if(fbDepartments && fbDepartments.length){
+    D.departments = fbDepartments;
+  } else if(D.departments && D.departments.length){
+    // 初回起動時は初期値をlocalStorageに保存
+    lsSet(LS_KEYS.DEPARTMENTS, D.departments);
+  }
+
+  // 拠点マスタ(LOCATIONS → D.locations) + 既存D.officesからの自動マイグレーション
+  const fbLocations = lsGet(LS_KEYS.LOCATIONS, null);
+  if(fbLocations && fbLocations.length){
+    D.locations = fbLocations;
+  }
+  // D.locationsに「郵便局拠点」が不足していたら、D.officesからマイグレーション
+  _migrateOfficesToLocations();
+
+  function _migrateOfficesToLocations(){
+    try{
+      if(!Array.isArray(D.locations)) D.locations = [];
+      if(!Array.isArray(D.offices)) return;
+      // 宅配事業部ID
+      const delDept = (D.departments||[]).find(d=>d.type==='del');
+      const delDeptId = delDept?.id || 2;
+      // 既に拠点マスタに存在するnameを収集(重複防止)
+      const existingNames = new Set(D.locations.map(l=>l.name));
+      const existingOfficeCodes = new Set(D.locations.map(l=>String(l.code||'')));
+      // D.offices内で typesDel または postPrices を持つものは郵便局拠点候補
+      // 既存のoffice名で拠点マスタに無ければ追加
+      let maxId = D.locations.reduce((m,l)=>Math.max(m, l.id||0), 100);
+      (D.offices||[]).forEach(o=>{
+        if(!o || !o.name) return;
+        if(existingNames.has(o.name)) return;
+        maxId += 1;
+        const isPostOffice = o.typesDel || (o.postPrices && Object.keys(o.postPrices).length);
+        D.locations.push({
+          id: maxId,
+          code: o.officeCode || '',
+          name: o.name,
+          type: isPostOffice ? 'post_office' : 'col_office',
+          deptIds: isPostOffice ? [delDeptId] : [(D.departments||[]).find(d=>d.type==='col')?.id || 3],
+          addr: o.addr || '',
+          tel: o.tel || '',
+          fax: o.fax || '',
+          head: o.head || '',
+          order: parseInt(o.officeCode)||99,
+          active: true,
+          isBilling: !!isPostOffice,
+          // 郵便局請求書用の契約情報(デフォルト空)
+          clientCompany: isPostOffice ? '日本郵便株式会社' : '',
+          clientBranch: isPostOffice ? o.name : '',
+          invoiceNo: '',
+          // 単価情報(既存postPricesを引き継ぐ)
+          prices: o.postPrices ? {...o.postPrices} : null,
+          // 旧D.officesとの参照保持(段階的移行用)
+          _legacyOfficeId: o.id,
+        });
+        existingNames.add(o.name);
+      });
+      if(D.locations.length){
+        lsSet(LS_KEYS.LOCATIONS, D.locations);
+      }
+    }catch(e){ console.error('_migrateOfficesToLocations error:', e); }
   }
 
   // 宅配日報（YP_LOGS → D.delivery）
@@ -5235,6 +5410,23 @@ const D = {
       charges:[], memo:{}, otherItems:[],
     },
     {id:10002, companyCode:'10002', name:'左近トランスポート', tel:'06-3333-4444', contact:'', addr:'', note:'', offices:[], colRoutes:[], active:true},
+  ],
+  // 部署マスタ (Phase 1 新設)
+  departments: [
+    {id:1, code:'ADM', name:'管理部',     type:'mgmt', active:true, order:10, note:'社員・役員・事務'},
+    {id:2, code:'DEL', name:'宅配事業部', type:'del',  active:true, order:20, note:'郵便局委託業務'},
+    {id:3, code:'COL', name:'集荷事業部', type:'col',  active:true, order:30, note:'集荷・ルート・チャーター'},
+  ],
+  // 拠点マスタ (Phase 1 新設: 旧D.officesの置換先)
+  // type: 'head'=本社, 'post_office'=郵便局, 'col_office'=集荷営業所
+  // deptIds: この拠点を利用する部署ID配列(兼用可)
+  // isBilling: true=この拠点は請求書発行対象(郵便局のみtrue)
+  locations: [
+    // 本社(管理部)
+    {id:101, code:'HQ', name:'本社', type:'head', deptIds:[1],
+     addr:'大阪府堺市北区常磐町3-12-5', tel:'072-258-9811', fax:'072-258-6000',
+     head:'', order:10, active:true, isBilling:false},
+    // 郵便局(宅配事業部) - デフォルトは空配列、既存D.officesからマイグレーションで生成
   ],
   offices: [
     {id:1,officeCode:'01',name:'大阪北営業所',addr:'大阪市北区○○1-2-3',  tel:'06-1234-1111',head:'田中 一郎',typesDel:true,typesCol:false,
