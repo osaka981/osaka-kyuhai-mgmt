@@ -1753,7 +1753,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div style="font-size:14px;font-weight:700;">拠点マスタ</div>
           <div style="font-size:10.5px;color:var(--txt2);">物理的な業務拠点(本社/郵便局/集荷営業所)を管理します</div>
         </div>
-        <button class="btn b-grn btn-sm" onclick="openLocModal()">＋ 拠点を追加</button>
+        <button class="btn b-grn btn-sm" onclick="openOfficeFromLocation(null)">＋ 拠点を追加</button>
       </div>
       <!-- 部署タブでフィルタ -->
       <div id="loc-dept-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
@@ -3877,6 +3877,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg"><label>FAX</label><input type="tel" oninput="telField(this)" onblur="telField(this)" id="of-fax" class="fi" placeholder="06-XXXX-XXXX"></div>
   </div>
 
+  <!-- 拠点種別・所属部署(Phase 2統合) -->
+  <div class="sep"></div>
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px;">
+    <div class="fg">
+      <label>拠点種別</label>
+      <select id="of-loc-type" class="fi" onchange="onOfLocTypeChange()">
+        <option value="post_office">📮 郵便局</option>
+        <option value="head">🏢 本社</option>
+        <option value="col_office">📦 集荷営業所</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>所属部署 (複数選択可)</label>
+      <div id="of-dept-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px;padding:6px 8px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;min-height:32px;"></div>
+    </div>
+  </div>
+
   <!-- 事業種別 -->
   <div class="sep"></div>
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 事業種別</div>
@@ -3889,6 +3906,34 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <input type="checkbox" id="of-type-col" onchange="onOfTypeChange()" style="width:14px;height:14px;">
       <div><div style="font-size:12px;font-weight:700;color:var(--tel2);">📦 集荷事業</div><div style="font-size:9.5px;color:var(--txt2);">顧客からの集荷業務</div></div>
     </label>
+  </div>
+
+  <!-- 郵便局請求情報(Phase 2統合: 郵便局拠点のみ表示) -->
+  <div id="of-billing-area" style="display:none;padding:10px 12px;background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.25);border-radius:6px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <span style="font-size:12px;">🔐</span>
+      <span style="font-size:11px;font-weight:700;color:var(--txt);">郵便局請求情報</span>
+    </div>
+    <!-- PIN未認証時 -->
+    <div id="of-billing-lock" style="display:block;text-align:center;padding:14px;">
+      <div style="color:var(--txt2);font-size:11px;margin-bottom:8px;">請求情報を編集するにはPIN認証が必要です</div>
+      <button type="button" class="btn b-gh btn-sm" onclick="requireTSForOfBilling()">PIN認証して編集</button>
+    </div>
+    <!-- PIN認証後 -->
+    <div id="of-billing-content" style="display:none;">
+      <div class="fg mb8"><label style="font-size:10px;"><input type="checkbox" id="of-isBilling"> 請求書発行対象にする(郵便局請求書で使用)</label></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
+        <div class="fg"><label style="font-size:9px;">請求先会社名</label>
+          <input type="text" id="of-clientCompany" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="日本郵便株式会社">
+        </div>
+        <div class="fg"><label style="font-size:9px;">支店名(郵便局名)</label>
+          <input type="text" id="of-clientBranch" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="○○郵便局">
+        </div>
+      </div>
+      <div class="fg"><label style="font-size:9px;">インボイス登録番号</label>
+        <input type="text" id="of-invoiceNo" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="T1234567890123">
+      </div>
+    </div>
   </div>
 
   <!-- 宅配 郵便局単価（トップシークレット） -->
@@ -4368,7 +4413,7 @@ function renderLocCards(){
     // 単価情報(郵便局のみ)
     const hasPrice = l.prices && Object.values(l.prices).some(v=>v>0);
     const priceText = l.type==='post_office' ? (hasPrice?'単価登録済':'<span style="color:var(--red2);">単価未設定</span>') : '';
-    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openLocModal(${l.id})">
+    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openOfficeFromLocation(${l.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
         <div>
           <div style="font-size:14px;font-weight:700;">${esc(l.name)}${inactiveMark}${billingBadge}</div>
@@ -4393,6 +4438,69 @@ function renderLocCards(){
 function setLocFilter(deptId){
   _locFilterDeptId = deptId;
   renderLocCards();
+}
+
+// 拠点管理から既存の営業所モーダル(m-office)を開く(統合モーダル)
+function openOfficeFromLocation(locationId){
+  // resetStaffModal相当: m-officeをクリーン状態に
+  ['of-code','of-name','of-addr','of-tel','of-fax','of-head',
+   'of-isBilling','of-clientCompany','of-clientBranch','of-invoiceNo',
+   'of-status-reason'].forEach(id=>{const e=$(id);if(!e)return; if(e.type==='checkbox')e.checked=false; else e.value='';});
+  if($('of-type-del'))$('of-type-del').checked=false;
+  if($('of-type-col'))$('of-type-col').checked=false;
+  if($('of-status'))$('of-status').value='稼働';
+  if($('of-code-auto-hint'))$('of-code-auto-hint').style.display='';
+  if($('of-del-price-lock'))$('of-del-price-lock').style.display='block';
+  if($('of-del-price-content'))$('of-del-price-content').style.display='none';
+  if(typeof restoreColCompanies==='function') restoreColCompanies([]);
+  if(typeof setOfTax==='function') setOfTax('ex');
+  // editIdリセット
+  const m = $('m-office'); if(m) m._editId = null;
+
+  if(locationId == null){
+    // 新規追加
+    const mtt = m?.querySelector('.mtt');
+    if(mtt) mtt.textContent = '📍 拠点を追加';
+    // デフォルト値
+    if($('of-loc-type'))$('of-loc-type').value='post_office';
+    renderOfDeptCheckboxes([]);
+    if($('of-type-del'))$('of-type-del').checked=true;
+    onOfTypeChange();
+    onOfLocTypeChange();
+    openM('m-office');
+    return;
+  }
+
+  // 既存拠点編集: D.locations から情報取得
+  const loc = getLocationById(locationId);
+  if(!loc){ showAlert({msg:'拠点が見つかりません'}); return; }
+
+  // 対応する D.offices を検索(同名)
+  let relOff = D.offices.find(o=>o.name===loc.name);
+  if(!relOff){
+    // 旧D.officesに無ければ暫定レコードを作成(保存時に正式登録される)
+    const maxC = D.offices.reduce((m,o)=>Math.max(m,parseInt(o.officeCode)||0),0);
+    const newCode = loc.code || String(maxC+1).padStart(2,'0');
+    relOff = {
+      id: Date.now(),
+      officeCode: newCode,
+      name: loc.name,
+      addr: loc.addr||'', tel: loc.tel||'', fax: loc.fax||'', head: loc.head||'',
+      typesDel: loc.type==='post_office',
+      typesCol: loc.type==='col_office',
+      postPrices: null,
+      status: loc.active===false?'廃止':'稼働',
+    };
+  }
+
+  // editOfficeを呼び出して既存モーダルに流し込む
+  editOffice(relOff.id);
+
+  // タイトルを「拠点を編集」に
+  setTimeout(()=>{
+    const mtt = $('m-office')?.querySelector('.mtt');
+    if(mtt) mtt.textContent = '📍 拠点を編集：'+loc.name;
+  }, 50);
 }
 
 // 拠点モーダルを開く
@@ -14893,6 +15001,23 @@ function editOffice(id){
   $('m-office')._editId=id;
   const mtt=$('m-office').querySelector('.mtt');
   if(mtt)mtt.textContent='🏢 営業所編集：'+o.name;
+
+  // 拠点マスタから対応するlocationを取得(拠点種別・部署・請求情報を復元)
+  const relLoc = getLocationByName(o.name);
+  // 拠点種別
+  if($('of-loc-type')){
+    $('of-loc-type').value = relLoc?.type || (o.typesDel?'post_office':(o.typesCol?'col_office':'post_office'));
+  }
+  // 所属部署
+  renderOfDeptCheckboxes(relLoc?.deptIds || []);
+  // 郵便局請求情報
+  if($('of-isBilling'))     $('of-isBilling').checked     = !!relLoc?.isBilling;
+  if($('of-clientCompany')) $('of-clientCompany').value   = relLoc?.clientCompany || (o.typesDel?'日本郵便株式会社':'');
+  if($('of-clientBranch'))  $('of-clientBranch').value    = relLoc?.clientBranch  || o.name || '';
+  if($('of-invoiceNo'))     $('of-invoiceNo').value       = relLoc?.invoiceNo     || '';
+  // 表示制御(拠点種別に応じて)
+  onOfLocTypeChange();
+
   openM('m-office');
 }
 
@@ -14982,6 +15107,67 @@ function addOffice(){
     typesDel:o.typesDel||false, typesCol:o.typesCol||false,
     postPrices:o.postPrices||null
   })));
+
+  // ── D.locations 同期更新 (Phase 2統合モーダル) ──
+  try{
+    if(!Array.isArray(D.locations)) D.locations = [];
+    const tsOk = (typeof isTSAuthenticated==='function' && isTSAuthenticated());
+    const locType = $('of-loc-type')?.value || 'post_office';
+    const deptIds = getOfSelectedDeptIds();
+    // 対応する拠点を検索(同名 or legacy参照)
+    let loc = D.locations.find(l=>l.name===offData.name);
+    if(!loc){
+      // 新規作成
+      const maxId = D.locations.reduce((m,l)=>Math.max(m, l.id||0), 100);
+      loc = {
+        id: maxId + 1,
+        code: offData.officeCode || '',
+        name: offData.name,
+        order: parseInt(offData.officeCode)||99,
+        active: true,
+        _legacyOfficeId: editId || Date.now(),
+      };
+      D.locations.push(loc);
+    }
+    // 基本情報を同期
+    loc.code = offData.officeCode || loc.code;
+    loc.name = offData.name;
+    loc.type = locType;
+    loc.deptIds = deptIds.length ? deptIds : (loc.deptIds||[]);
+    loc.addr = offData.addr;
+    loc.tel  = offData.tel;
+    loc.fax  = offData.fax;
+    loc.head = offData.head;
+    loc.active = offData.status !== '廃止';
+    // 郵便局請求情報(PIN認証時のみ編集、未認証なら既存保持)
+    if(locType === 'post_office'){
+      if(tsOk){
+        loc.isBilling     = !!$('of-isBilling')?.checked;
+        loc.clientCompany = $('of-clientCompany')?.value.trim() || loc.clientCompany || '';
+        loc.clientBranch  = $('of-clientBranch')?.value.trim()  || loc.clientBranch  || offData.name;
+        loc.invoiceNo     = $('of-invoiceNo')?.value.trim()     || '';
+      }
+      // 単価もPIN認証時のみ更新(postPricesから同期)
+      if(postPrices){
+        loc.prices = {
+          kanryo: postPrices.kanryo || 0,
+          tenso:  postPrices.tenso || 0,
+          night:  postPrices.night || 0,
+          ogata:  postPrices.ogata || 0,
+          shukka: postPrices.shukka || 0,
+          mochimodoiri: postPrices.modori || 0,
+          colCompanies: postPrices.colCompanies || [],
+        };
+      }
+    } else {
+      // 本社/集荷営業所なら請求関係をクリア
+      loc.isBilling = false;
+      loc.prices = null;
+    }
+    lsSet(LS_KEYS.LOCATIONS, D.locations);
+    if(typeof fbSet==='function') fbSet('locations', D.locations);
+  }catch(e){ console.error('locations sync error:', e); }
+  // ─────────────────────────────────
 
   // 単価エリアを再ロック
   if($('of-del-price-lock'))  $('of-del-price-lock').style.display='block';
@@ -20810,6 +20996,9 @@ function executeTSAction(){
   } else if(a.type==='loc-prices'){
     // 拠点モーダル内の請求情報セクション解除
     _updateLocBillingVisibility();
+  } else if(a.type==='of-billing'){
+    // 統合版の営業所モーダル内の請求情報セクション解除
+    _updateOfBillingLock();
   } else if(a.type==='postinv'){
     if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
     if($('delinv-post-content'))$('delinv-post-content').style.display='block';
@@ -20863,6 +21052,73 @@ function onOfTypeChange(){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='block';
     if($('of-del-price-content'))$('of-del-price-content').style.display='none';
   }
+  // 郵便局請求情報エリアの表示制御(拠点種別=郵便局の時のみ表示)
+  _updateOfBillingAreaVisibility();
+}
+
+// 拠点種別変更時
+function onOfLocTypeChange(){
+  _updateOfBillingAreaVisibility();
+}
+
+// 郵便局請求情報エリアの表示制御
+function _updateOfBillingAreaVisibility(){
+  const locType = $('of-loc-type')?.value || 'post_office';
+  const billingArea = $('of-billing-area');
+  if(billingArea){
+    billingArea.style.display = (locType === 'post_office') ? '' : 'none';
+  }
+  // PIN未認証なら常にロック表示
+  _updateOfBillingLock();
+}
+
+function _updateOfBillingLock(){
+  const lock = $('of-billing-lock');
+  const content = $('of-billing-content');
+  if(!lock || !content) return;
+  if(typeof isTSAuthenticated==='function' && isTSAuthenticated()){
+    lock.style.display = 'none';
+    content.style.display = '';
+  } else {
+    lock.style.display = '';
+    content.style.display = 'none';
+  }
+}
+
+// 拠点モーダルの請求情報セクション用PIN認証
+function requireTSForOfBilling(){
+  if(typeof isTSAuthenticated==='function' && isTSAuthenticated()){
+    _updateOfBillingLock();
+    return;
+  }
+  tsPendingAction = {type:'of-billing'};
+  openTSOverlay();
+}
+
+// 部署チェックボックス描画(m-office用)
+function renderOfDeptCheckboxes(selectedDeptIds){
+  const wrap = document.getElementById('of-dept-checkboxes');
+  if(!wrap) return;
+  const depts = getActiveDepartments();
+  const selected = new Set((selectedDeptIds||[]).map(String));
+  const typeColors = {mgmt:'#6b7280', del:'#3b82f6', col:'#10b981', other:'#9ca3af'};
+  if(!depts.length){
+    wrap.innerHTML = '<span style="font-size:10px;color:var(--txt2);">部署が登録されていません</span>';
+    return;
+  }
+  wrap.innerHTML = depts.map(d=>{
+    const col = typeColors[d.type]||'#9ca3af';
+    const checked = selected.has(String(d.id));
+    return `<label style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:5px;border:1.5px solid ${checked?col:'var(--brd2)'};background:${checked?col+'15':'transparent'};cursor:pointer;font-size:11px;font-weight:${checked?'700':'500'};color:${checked?col:'var(--txt2)'};">
+      <input type="checkbox" class="of-dept-chk" data-id="${d.id}" ${checked?'checked':''}>
+      ${esc(d.name)}
+    </label>`;
+  }).join('');
+}
+
+function getOfSelectedDeptIds(){
+  return Array.from(document.querySelectorAll('.of-dept-chk:checked'))
+    .map(cb=>parseInt(cb.dataset.id)||0).filter(x=>x>0);
 }
 
 // 営業所単価特殊条件行追加
