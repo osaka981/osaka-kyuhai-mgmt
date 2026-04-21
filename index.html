@@ -11993,7 +11993,7 @@ function renderCompanyPage(){
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
             ${co.companyCode?`<span style="font-family:monospace;font-size:10px;color:var(--amb2);font-weight:700;background:var(--sur);border:1px solid rgba(230,126,34,.4);padding:2px 8px;border-radius:3px;">${co.companyCode}</span>`:''}
-            <span style="font-size:16px;font-weight:700;color:var(--txt);">${co.name||'（名称未設定）'}</span>
+            <span onclick="openFS('company','${esc(co.name||'')}')" style="font-size:16px;font-weight:700;color:var(--txt);cursor:pointer;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="クリックで詳細画面を開く">${co.name||'（名称未設定）'}</span>
             ${offNames?`<div style="display:inline-flex;gap:4px;flex-wrap:wrap;">${offNames}</div>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--txt2);">
@@ -12007,6 +12007,7 @@ function renderCompanyPage(){
         </div>
         <!-- 操作ボタン群 -->
         <div style="display:flex;gap:6px;flex-shrink:0;margin-left:16px;align-items:flex-start;">
+          <button class="btn b-blu btn-sm" onclick="openFS('company','${esc(co.name||'')}')" style="font-size:11px;">📋 詳細・書類</button>
           <button class="btn b-gh btn-sm" onclick="openCompanyModal(${co.id})" style="font-size:11px;">✏️ 編集</button>
           <button class="btn b-grn btn-sm" onclick="openDriverModal(null,${co.id})" style="font-size:11px;">＋ ドライバー</button>
           <button class="btn btn-sm" onclick="openCoMonthlyInput(${co.id})" style="background:rgba(192,57,43,.1);color:var(--red2);border:1px solid rgba(192,57,43,.3);font-size:11px;">⚠️ 当月入力</button>
