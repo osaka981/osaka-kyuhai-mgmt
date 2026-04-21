@@ -11788,20 +11788,23 @@ function openRouteModal(routeId){
   if(titleEl) titleEl.textContent=routeId?'🗺️ 集荷ルート編集':'🗺️ 集荷ルート登録';
 
   // リセット
-  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{
+  ['rt-name','rt-route-price','rt-note','rt-cust-search','rt-fromto'].forEach(id=>{
     const e=$(id);if(e)e.value='';
   });
+  if($('rt-stop-count')) $('rt-stop-count').value='1';
   if($('rt-pattern')) $('rt-pattern').value='D';
   if($('rt-tax')) $('rt-tax').value='ex';
   renderRtCustChips();
   onRtPatternChange();
 
-  // 編集時：データ復元（オーナー非依存）
+  // 編集時:データ復元(オーナー非依存)
   if(routeId){
     const routes = _rtGetOwnerRoutes();
     const rt = routes?.find(r=>r.id===routeId);
     if(rt){
       if($('rt-name')) $('rt-name').value=rt.name||'';
+      if($('rt-fromto')) $('rt-fromto').value=rt.fromTo||'';
+      if($('rt-stop-count')) $('rt-stop-count').value=rt.stopCount||1;
       if($('rt-tax')) $('rt-tax').value=rt.taxType||'ex';
       if($('rt-note')) $('rt-note').value=rt.note||'';
       if($('rt-route-price')) $('rt-route-price').value=rt.routePrice||rt.dailyAmt||0;
@@ -11965,6 +11968,8 @@ function saveRoute(){
     pattern:'D',       // 車建固定
     routePrice,
     dailyAmt:routePrice,
+    fromTo:($('rt-fromto')?.value||'').trim(),           // 区間(どこからどこまで)
+    stopCount:parseInt($('rt-stop-count')?.value)||1,    // 立ち寄り件数
     customers:_rtSelCusts.map(c=>c.id),
     taxType:$('rt-tax')?.value||'ex',
     itemPrices:null,
@@ -13167,10 +13172,14 @@ function renderCustRouteInline(){
   list.innerHTML = routes.map(rt=>{
     const price = rt.routePrice || rt.dailyAmt || 0;
     const taxLbl = rt.taxType==='in' ? '税込' : '税別';
+    const fromTo = rt.fromTo ? `<span style="font-size:10px;color:var(--txt2);margin-left:8px;">${esc(rt.fromTo)}</span>` : '';
+    const stopCount = rt.stopCount ? `<span style="font-size:10px;color:var(--txt2);margin-left:6px;">${rt.stopCount}件/回</span>` : '';
     return `<div style="background:var(--sur);border:1px solid var(--brd);border-radius:5px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
       <div>
         <span style="font-size:12px;font-weight:700;">${esc(rt.name)}</span>
-        <span style="font-size:10px;color:var(--txt2);margin-left:8px;">¥${price.toLocaleString()}/日(${taxLbl})</span>
+        ${fromTo}
+        ${stopCount}
+        <span style="font-size:10px;color:var(--txt2);margin-left:8px;">¥${price.toLocaleString()}/回(${taxLbl})</span>
       </div>
       <div style="display:flex;gap:5px;">
         <button type="button" class="btn b-gh btn-sm" onclick="editCustRouteFromModal('${rt.id}')">✏️</button>
@@ -13185,7 +13194,8 @@ window.openCustRouteFromModal = function(){
   _rtOwnerType='customer'; _rtCustOwnerId=editId; _rtStaffId=null; _rtCoId=null;
   _rtEditId=null; _rtSelCusts=[];
   // フォームリセット
-  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  ['rt-name','rt-route-price','rt-note','rt-cust-search','rt-fromto'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  if(document.getElementById('rt-stop-count')) document.getElementById('rt-stop-count').value='1';
   if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value='ex';
   const t = document.getElementById('m-route-title');
   const cu = D.customers.find(x=>x.id===editId);
@@ -13203,12 +13213,15 @@ window.editCustRouteFromModal = function(rtId){
   _rtEditId=rtId; _rtSelCusts=[];
   const cu = D.customers.find(x=>x.id===editId);
   const rt = (cu?.colRoutes||[]).find(r=>r.id===rtId);
-  ['rt-name','rt-route-price','rt-note','rt-cust-search'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  ['rt-name','rt-route-price','rt-note','rt-cust-search','rt-fromto'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';});
+  if(document.getElementById('rt-stop-count')) document.getElementById('rt-stop-count').value='1';
   if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value='ex';
   const t = document.getElementById('m-route-title');
   if(t) t.textContent = `🗺️ ルート編集（${cu?.name||''}）`;
   if(rt){
     if(document.getElementById('rt-name')) document.getElementById('rt-name').value = rt.name||'';
+    if(document.getElementById('rt-fromto')) document.getElementById('rt-fromto').value = rt.fromTo||'';
+    if(document.getElementById('rt-stop-count')) document.getElementById('rt-stop-count').value = rt.stopCount||1;
     if(document.getElementById('rt-route-price')) document.getElementById('rt-route-price').value = rt.routePrice||rt.dailyAmt||0;
     if(document.getElementById('rt-tax')) document.getElementById('rt-tax').value = rt.taxType||'ex';
     if(document.getElementById('rt-note')) document.getElementById('rt-note').value = rt.note||'';
@@ -22358,24 +22371,36 @@ window.dqImportJson = function(){
   <div class="mhd"><div class="mtt" id="m-route-title">🗺️ 集荷ルート登録</div><button class="mx" onclick="closeM('m-route')">×</button></div>
 
   <!-- ルート名 -->
-  <div class="fg" style="margin-bottom:14px;">
+  <div class="fg" style="margin-bottom:10px;">
     <label style="font-size:12px;font-weight:700;">ルート名 <span style="color:var(--red2);">*</span></label>
     <input type="text" id="rt-name" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;" placeholder="例：港区グループ・徳岡ルート">
+  </div>
+
+  <!-- 区間(どこからどこまで) -->
+  <div class="fg" style="margin-bottom:10px;">
+    <label style="font-size:12px;font-weight:700;">区間 <span style="font-size:10px;color:var(--txt2);font-weight:400;">(どこからどこまで)</span></label>
+    <input type="text" id="rt-fromto" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;" placeholder="例：大阪工場 → 東京倉庫">
+  </div>
+
+  <!-- 立ち寄り件数 -->
+  <div class="fg" style="margin-bottom:14px;">
+    <label style="font-size:12px;font-weight:700;">ルート件数 <span style="font-size:10px;color:var(--txt2);font-weight:400;">(立ち寄り箇所の数。例: 引取+引渡で2件)</span></label>
+    <input type="number" id="rt-stop-count" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;width:140px;" placeholder="2" min="1" value="1">
   </div>
   <!-- 単価（車建のみ） -->
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:14px;">
     <div style="font-size:12px;font-weight:700;color:var(--grn2);margin-bottom:10px;">
       車建（ルート固定単価）
-      <span style="font-size:10px;color:var(--txt2);font-weight:400;margin-left:8px;">何社集荷しても1ルートとして計算</span>
+      <span style="font-size:10px;color:var(--txt2);font-weight:400;margin-left:8px;">ルート1回(1周)ごとの固定料金</span>
     </div>
     <div style="display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:end;">
       <div class="fg">
-        <label style="font-size:11px;">ルート単価（円）</label>
+        <label style="font-size:11px;">ルート単価（円/回）</label>
         <input type="number" id="rt-route-price" class="fi" style="font-size:16px;font-weight:700;padding:7px 10px;margin-top:4px;" placeholder="例：5000" min="0">
       </div>
       <div style="font-size:11px;color:var(--txt2);padding-bottom:8px;line-height:1.7;">
-        休業・一部未集荷の場合も同単価。<br>
-        同日・同ルート複数入力時は照合画面で合算確認。
+        日報でルートが実施された日数×単価で請求。<br>
+        同日に複数回実施した場合は回数分を加算。
       </div>
     </div>
   </div>
