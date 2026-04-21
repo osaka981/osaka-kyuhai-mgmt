@@ -7061,6 +7061,18 @@ function getDelColPayPrice(staff, companyName){
 // label: 単価入力時の項目名(例: "集荷②"). デフォルトshukkaの場合は "集荷"
 // isDefault: デフォルト集荷単価扱いか(true=集荷にまとめる)
 // officeName: 任意. 指定した場合は office+name で厳密一致、見つからない場合は name のみで検索
+//
+// 優先順位(区分ベース):
+//   ▶ 委託会社所属ドライバー(kubun='委託会社所属' or '委託ドライバー'):
+//      弊社は委託会社に支払うため、委託会社単価が最優先
+//      1. 委託会社 prices.del.colCompanies[name].price
+//      2. 委託会社 prices.del.shukka
+//      3. ドライバー個別 fixedPrices.del.colCompanies (フォールバック)
+//      4. ドライバー個別 fixedPrices.del.shukka (フォールバック)
+//   ▶ それ以外(社員・パート・個人事業主など):
+//      1. ドライバー個別 fixedPrices.del.colCompanies
+//      2. ドライバー個別 fixedPrices.del.shukka
+//      (委託会社単価は使用しない)
 function getDelColPayEntry(staff, companyName, officeName){
   if(!staff) return {price:0, label:'集荷', isDefault:true};
 
@@ -7075,36 +7087,45 @@ function getDelColPayEntry(staff, companyName, officeName){
     return list.find(c=>c && c.name===name) || null;
   };
 
-  // 1. ドライバー個別の会社別単価
-  const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
-  if(dEntry && dEntry.price != null && dEntry.price !== ''){
-    return {price: Number(dEntry.price)||0, label: dEntry.label || '集荷②', isDefault:false};
-  }
-
-  // 2. ドライバー個別の集荷デフォルト単価
-  const driverShukka = staff.fixedPrices?.del?.shukka;
-  if(driverShukka != null && driverShukka !== '' && Number(driverShukka) > 0){
-    return {price: Number(driverShukka)||0, label:'集荷', isDefault:true};
-  }
-
-  // 3. 委託会社の会社別単価(委託会社所属のみ)
-  if(staff.companyId){
-    const co = (D.companies||[]).find(c=>c.id===staff.companyId);
-    if(co){
-      const cEntry = matchEntry(co.prices?.del?.colCompanies, companyName, officeName);
-      if(cEntry && cEntry.price != null && cEntry.price !== ''){
-        return {price: Number(cEntry.price)||0, label: cEntry.label || '集荷②', isDefault:false};
-      }
-
-      // 4. 委託会社の集荷デフォルト単価
-      const coShukka = co.prices?.del?.shukka;
-      if(coShukka != null && coShukka !== ''){
-        return {price: Number(coShukka)||0, label:'集荷', isDefault:true};
-      }
+  // 各層の単価解決を関数化
+  const resolveFromDriver = ()=>{
+    const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
+    if(dEntry && dEntry.price != null && dEntry.price !== ''){
+      return {price: Number(dEntry.price)||0, label: dEntry.label || '集荷②', isDefault:false};
     }
-  }
+    const driverShukka = staff.fixedPrices?.del?.shukka;
+    if(driverShukka != null && driverShukka !== '' && Number(driverShukka) > 0){
+      return {price: Number(driverShukka)||0, label:'集荷', isDefault:true};
+    }
+    return null;
+  };
 
-  return {price:0, label:'集荷', isDefault:true};
+  const resolveFromCompany = ()=>{
+    if(!staff.companyId) return null;
+    const co = (D.companies||[]).find(c=>c.id===staff.companyId);
+    if(!co) return null;
+    const cEntry = matchEntry(co.prices?.del?.colCompanies, companyName, officeName);
+    if(cEntry && cEntry.price != null && cEntry.price !== ''){
+      return {price: Number(cEntry.price)||0, label: cEntry.label || '集荷②', isDefault:false};
+    }
+    const coShukka = co.prices?.del?.shukka;
+    if(coShukka != null && coShukka !== '' && Number(coShukka) > 0){
+      return {price: Number(coShukka)||0, label:'集荷', isDefault:true};
+    }
+    return null;
+  };
+
+  // 区分による優先順位の分岐
+  const kubun = staff.kubun || '';
+  const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
+
+  if(isCompanyDriver){
+    // 委託会社所属: 委託会社単価が最優先、ドライバー個別はフォールバック
+    return resolveFromCompany() || resolveFromDriver() || {price:0, label:'集荷', isDefault:true};
+  } else {
+    // 個人事業主・社員・パート: ドライバー個別のみ(委託会社単価は使わない)
+    return resolveFromDriver() || {price:0, label:'集荷', isDefault:true};
+  }
 }
 
 // ドライバーの月次宅配事業内集荷の支払額を計算
@@ -7749,7 +7770,85 @@ function registerFromFleet(fleetName){
   const md = _findFleetDriverByName(fleetName);
   if(!md){ showAlert({msg:'フリートデータが見つかりません'}); return; }
 
-  // モーダルを新規登録モードで開く
+  // 委託会社所属の場合、先に会社が経営管理に登録されているかチェック
+  if(md._companyName){
+    const existingCo = _findCompanyByName(md._companyName);
+    if(!existingCo){
+      // 会社未登録 → 会社登録フロー開始
+      showDialog({
+        icon:'🏭',
+        title:'委託会社が未登録です',
+        msg:`「${md._companyName}」は経営管理に未登録です。\nまず委託会社を登録しますか?\n\n登録完了後、続けて「${md.name}」のドライバー登録画面を開きます。`,
+        okText:'会社を登録する', cancelText:'キャンセル'
+      }).then(ok=>{
+        if(!ok) return;
+        _openCompanyModalForFleet(md);
+      });
+      return;
+    }
+  }
+
+  // 会社登録済み or 個人事業主 → ドライバー登録に直行
+  _openDriverModalFromFleet(md);
+}
+
+// フリートデータを元に委託会社モーダルを開く(ドライバー登録への自動遷移付き)
+function _openCompanyModalForFleet(md){
+  // フリート側の会社情報を取得してプリフィル
+  const fleetCo = _findFleetCompanyByName(md._companyName);
+  // 保留情報: 会社保存後にドライバー登録に進むため
+  window._pendingFleetDriverForCo = md;
+
+  // 会社モーダルを開く
+  openCompanyModal(null);
+  // フリート情報でプリフィル
+  setTimeout(()=>{
+    if($('co-name')) $('co-name').value = md._companyName || '';
+    if(fleetCo){
+      if($('co-tel') && fleetCo.tel) $('co-tel').value = fleetCo.tel;
+      if($('co-addr') && fleetCo.addr) $('co-addr').value = fleetCo.addr;
+      if($('co-contact') && fleetCo.contact) $('co-contact').value = fleetCo.contact;
+      if($('co-fax') && fleetCo.fax) $('co-fax').value = fleetCo.fax;
+      if($('co-zip') && fleetCo.zip) $('co-zip').value = fleetCo.zip;
+      if($('co-invoice') && fleetCo.invoiceNo) $('co-invoice').value = fleetCo.invoiceNo;
+    }
+    // 保存後フック
+    _installCoSaveHookForFleet();
+  }, 100);
+}
+
+// 委託会社保存時のフック: フリート由来の登録ならドライバー登録に自動遷移
+function _installCoSaveHookForFleet(){
+  // saveCompany 関数が呼ばれる際に割り込み
+  if(window._coSaveHookInstalled) return;
+  window._coSaveHookInstalled = true;
+  if(typeof saveCompany === 'function'){
+    const original = saveCompany;
+    window.saveCompany = function(...args){
+      const pendingDriver = window._pendingFleetDriverForCo;
+      const result = original.apply(this, args);
+      if(pendingDriver){
+        window._pendingFleetDriverForCo = null;
+        // 保存後、少し遅延してから次のステップへ
+        setTimeout(()=>{
+          showDialog({
+            icon:'✅',
+            title:'委託会社を登録しました',
+            msg:`「${pendingDriver._companyName}」の登録が完了しました。\n続けて「${pendingDriver.name}」をドライバーとして登録しますか?`,
+            okText:'ドライバーを登録', cancelText:'後で'
+          }).then(ok=>{
+            if(!ok) return;
+            _openDriverModalFromFleet(pendingDriver);
+          });
+        }, 400);
+      }
+      return result;
+    };
+  }
+}
+
+// ドライバー登録モーダル (フリート情報から自動入力)
+function _openDriverModalFromFleet(md){
   resetStaffModal();
   openM('m-staff');
 
@@ -7773,21 +7872,42 @@ function registerFromFleet(fleetName){
   const firstOffice = (Array.isArray(md.offices)?md.offices[0]:md.office)||'';
   if(firstOffice && $('st-off')){
     $('st-off').value=firstOffice;
-    // 社員番号を自動採番
     const empNo = genEmpNo(firstOffice);
     if($('st-empno-disp') && empNo) $('st-empno-disp').value=empNo;
   }
 
-  // 区分を推定
-  if(md.type==='外注'||md.type==='外注（個人）'){
+  // 区分設定
+  if(md._companyName){
+    // 委託会社所属
+    if($('st-kbn'))$('st-kbn').value='委託会社所属';
+    if(typeof onStKbnChange==='function') onStKbnChange();
+    // 会社選択
+    setTimeout(()=>{
+      const co = _findCompanyByName(md._companyName);
+      if(co){
+        // 既存会社から選択ドロップダウンに値をセット
+        const selEl = $('st-company-select');
+        if(selEl){
+          selEl.value = co.id;
+          if(typeof onStCompanySelectChange === 'function') onStCompanySelectChange();
+        }
+        // 明示フィールドにもセット
+        if($('st-company-name'))$('st-company-name').value = co.name;
+        if($('st-company-tel'))$('st-company-tel').value = co.tel||'';
+        if($('st-company-addr'))$('st-company-addr').value = co.addr||'';
+        if($('st-company-fax'))$('st-company-fax').value = co.fax||'';
+        if($('st-company-contact'))$('st-company-contact').value = co.contact||'';
+      }
+    }, 150);
+  } else if(md.type==='外注'||md.type==='外注（個人）'){
     if($('st-kbn'))$('st-kbn').value='個人事業主';
-  } else if(md._companyName){
-    if($('st-kbn'))$('st-kbn').value='会社委託';
+    if(typeof onStKbnChange==='function') onStKbnChange();
+  } else {
+    if(typeof onStKbnChange==='function') onStKbnChange();
   }
-  if(typeof onStKbnChange==='function') onStKbnChange();
   if(typeof onKyuChange==='function') onKyuChange();
 
-  // 書類PDFリンクを表示（_editId未設定でも表示できるようフリート名を一時保存）
+  // 書類PDFリンクを表示
   window._pendingFleetName = md.name;
   setTimeout(()=>renderStDocLinks(), 200);
 }
@@ -14796,6 +14916,39 @@ function _saveIssuedDoc(rec){
 //   }]
 // }
 // ══════════════════════════════════════════════════
+
+// ドライバーの実効宅配単価を返す(区分による優先順位を適用)
+// 委託会社所属: 委託会社単価 → ドライバー個別 のフォールバック
+// それ以外:    ドライバー個別のみ
+function _getEffectiveDelPrices(staff){
+  if(!staff) return {};
+  const kubun = staff.kubun || '';
+  const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
+  const driverDel = staff.fixedPrices?.del || {};
+  if(!isCompanyDriver) return driverDel;
+
+  // 委託会社所属: 委託会社単価を優先、未設定項目はドライバー個別にフォールバック
+  const co = (D.companies||[]).find(c=>c.id===staff.companyId);
+  const companyDel = co?.prices?.del || {};
+
+  const pick = (key)=>{
+    const cv = companyDel[key];
+    if(cv != null && cv !== '' && Number(cv) > 0) return cv;
+    const dv = driverDel[key];
+    if(dv != null && dv !== '' && Number(dv) > 0) return dv;
+    return 0;
+  };
+
+  return {
+    kanryo: pick('kanryo'),
+    tenso: pick('tenso'),
+    night: pick('night'),
+    ogata: pick('ogata'),
+    shukka: pick('shukka'),
+    s1: pick('s1'), s2: pick('s2'), s3: pick('s3'), s4: pick('s4'),
+  };
+}
+
 function buildCompanyPaySlipData(coName, monStr){
   const co=(D.companies||[]).find(c=>c.name===coName);
   if(!co) return {total:0, drivers:[]};
@@ -14841,7 +14994,7 @@ function _buildDriverMonthlyByOffice(staff, monStr){
   }
 
   // ── 歩合制: 郵便局別に明細 ──
-  const dp = staff.fixedPrices?.del || {};
+  const dp = _getEffectiveDelPrices(staff);
   const del = (D.delivery||[]).filter(r=>r.staff===name && (r.date||'').startsWith(monStr));
 
   // 郵便局別に宅配データを集約
@@ -14956,7 +15109,7 @@ function _calcStaffPayment(name, monStr){
     total=st.tanka||0;
     breakdown.push({label:'基本給（月給）', amount:total});
   } else if(st.kyuyo==='個数制（歩合）'){
-    const dp=st.fixedPrices?.del||{};
+    const dp = _getEffectiveDelPrices(st);
     const delSum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
     del.forEach(r=>{
       delSum.kanryo+=r.kanryo||0; delSum.tenso+=r.tenso||0;
@@ -17121,6 +17274,51 @@ function _findFleetDriverByName(staffName){
     }
   }catch(e){}
   return null;
+}
+
+// 会社名の正規化: 空白・括弧内容・株式会社/（株）などを除去
+function _normalizeCompanyName(name){
+  if(!name) return '';
+  return String(name)
+    .replace(/\s+/g,'')
+    .replace(/\(.*?\)/g,'')
+    .replace(/（.*?）/g,'')
+    .replace(/株式会社|有限会社|合同会社|合資会社|合名会社/g,'')
+    .replace(/（株）|㈱|（有）|㈲/g,'')
+    .toLowerCase();
+}
+
+// 経営管理の D.companies から会社名で検索(完全一致→正規化一致)
+function _findCompanyByName(name){
+  if(!name) return null;
+  const list = D.companies||[];
+  // 完全一致
+  let found = list.find(c=>c.name===name);
+  if(found) return found;
+  // 空白除去で一致
+  const trim = String(name).replace(/\s+/g,'');
+  found = list.find(c=>String(c.name||'').replace(/\s+/g,'')===trim);
+  if(found) return found;
+  // 正規化一致
+  const norm = _normalizeCompanyName(name);
+  if(!norm) return null;
+  found = list.find(c=>_normalizeCompanyName(c.name)===norm);
+  return found || null;
+}
+
+// フリート側の委託会社データを取得
+function _findFleetCompanyByName(companyName){
+  if(!companyName) return null;
+  const norm = _normalizeCompanyName(companyName);
+  try{
+    const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
+    // 完全一致
+    let found = fleetCompanies.find(c=>c.name===companyName);
+    if(found) return found;
+    // 正規化一致
+    found = fleetCompanies.find(c=>_normalizeCompanyName(c.name)===norm);
+    return found || null;
+  }catch(e){ return null; }
 }
 
 function renderFSFleetDocs(staffName){
