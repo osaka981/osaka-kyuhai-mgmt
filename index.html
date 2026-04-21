@@ -707,7 +707,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="nc">
     <div class="nl sb-grp" onclick="toggleSbGrp(this)"><span class="sb-arrow">▾</span>⚙️ 管理</div>
     <div class="sb-items">
-      <div class="ni" data-s="offices" onclick="nav(this)"><span class="ni-ico">🏢</span>営業所管理</div>
+      <div class="ni" data-s="departments" onclick="nav(this)"><span class="ni-ico">🏛</span>部署管理</div>
+      <div class="ni" data-s="locations" onclick="nav(this)"><span class="ni-ico">📍</span>拠点管理</div>
+      <div class="ni" data-s="offices" onclick="nav(this)"><span class="ni-ico">🏢</span>営業所管理<span style="font-size:9px;color:var(--txt3);margin-left:4px;">(旧)</span></div>
       <div class="ni" data-s="billing" onclick="nav(this)"><span class="ni-ico">💰</span>売上・支払明細</div>
       <div class="ni" data-s="import" onclick="nav(this)"><span class="ni-ico">📂</span>CSVインポート</div>
       <div class="ni" data-s="ts-inv" onclick="requireTS('ts-inv',this)"><span class="ni-ico">📄</span>郵便局請求書</div>
@@ -1730,6 +1732,32 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 部署管理 (Phase 2 新設) -->
+    <div id="s-departments" class="sec">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">部署マスタ</div>
+          <div style="font-size:10.5px;color:var(--txt2);">組織の部署を管理します(管理部/宅配事業部/集荷事業部など)</div>
+        </div>
+        <button class="btn b-grn btn-sm" onclick="openDeptModal()">＋ 部署を追加</button>
+      </div>
+      <div id="dept-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;"></div>
+    </div>
+
+    <!-- 拠点管理 (Phase 2 新設) -->
+    <div id="s-locations" class="sec">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">拠点マスタ</div>
+          <div style="font-size:10.5px;color:var(--txt2);">物理的な業務拠点(本社/郵便局/集荷営業所)を管理します</div>
+        </div>
+        <button class="btn b-grn btn-sm" onclick="openLocModal()">＋ 拠点を追加</button>
+      </div>
+      <!-- 部署タブでフィルタ -->
+      <div id="loc-dept-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
+      <div id="loc-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;"></div>
     </div>
 
     <!-- 営業所管理 -->
@@ -3065,6 +3093,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div style="font-size:10px;color:var(--txt2);">メイン郵便局以外に担当する場合は上のバッジをタップしてください</div>
   </div>
 
+  <!-- ■ 所属部署（複数選択 Phase 3追加） -->
+  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 所属部署（複数選択可）</div>
+  <div style="background:rgba(14,165,164,.05);border:1px solid rgba(14,165,164,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
+    <div id="st-dept-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;min-height:28px;"></div>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;">
+      <label style="font-size:11px;font-weight:700;color:var(--txt2);white-space:nowrap;">主所属部署</label>
+      <select id="st-primary-dept" class="fi" style="font-size:12px;">
+        <option value="">自動(複数選択時は最初)</option>
+      </select>
+    </div>
+    <div style="font-size:10px;color:var(--txt2);margin-top:6px;">
+      例: 社員=管理部 / 宅配ドライバー=宅配事業部 / 兼務者は複数チェック
+    </div>
+  </div>
+
   <!-- 委託会社情報 -->
   <div id="st-company-area" style="display:none;">
     <div class="xs muted fw7 mb8" style="letter-spacing:.4px;color:var(--tel2);">■ 委託会社情報</div>
@@ -3690,6 +3733,113 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 </div>
 
+<!-- 部署 追加・編集モーダル (Phase 2) -->
+<div id="m-dept" class="mbg">
+<div class="modal" style="width:440px;max-width:98vw;">
+  <div class="mhd"><div class="mtt" id="m-dept-title">🏛 部署を追加</div><button class="mx" onclick="closeM('m-dept')">×</button></div>
+  <input type="hidden" id="dept-edit-id">
+  <div class="fg mb8"><label>部署コード (短縮)</label>
+    <input type="text" id="dept-code" class="fi" maxlength="8" placeholder="例: ADM, DEL, COL" style="font-family:'DM Mono',monospace;text-transform:uppercase;">
+  </div>
+  <div class="fg mb8"><label>部署名 <span style="color:var(--red);">*</span></label>
+    <input type="text" id="dept-name" class="fi" placeholder="例: 管理部">
+  </div>
+  <div class="fg mb8"><label>種別</label>
+    <select id="dept-type" class="fi">
+      <option value="mgmt">管理部門 (mgmt)</option>
+      <option value="del">宅配事業 (del)</option>
+      <option value="col">集荷事業 (col)</option>
+      <option value="other">その他 (other)</option>
+    </select>
+  </div>
+  <div class="fg mb8"><label>表示順 (小さい順に表示)</label>
+    <input type="number" id="dept-order" class="fi" value="50" min="1" max="999">
+  </div>
+  <div class="fg mb8"><label>備考</label>
+    <textarea id="dept-note" class="fi" rows="2" style="resize:vertical;"></textarea>
+  </div>
+  <div class="fg mb12"><label><input type="checkbox" id="dept-active" checked> 有効にする</label></div>
+  <div class="fla gap6" style="justify-content:flex-end;">
+    <button class="btn b-gh btn-sm" onclick="closeM('m-dept')">キャンセル</button>
+    <button id="dept-delete-btn" class="btn b-red btn-sm" style="display:none;" onclick="deleteDepartment()">削除</button>
+    <button class="btn b-grn btn-sm" onclick="saveDepartment()">保存</button>
+  </div>
+</div>
+</div>
+
+<!-- 拠点 追加・編集モーダル (Phase 2) -->
+<div id="m-loc" class="mbg">
+<div class="modal" style="width:600px;max-width:98vw;">
+  <div class="mhd"><div class="mtt" id="m-loc-title">📍 拠点を追加</div><button class="mx" onclick="closeM('m-loc')">×</button></div>
+  <input type="hidden" id="loc-edit-id">
+
+  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 基本情報</div>
+  <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;margin-bottom:10px;">
+    <div class="fg"><label>拠点コード</label>
+      <input type="text" id="loc-code" class="fi" maxlength="8" placeholder="例: 01, HQ" style="font-family:'DM Mono',monospace;">
+    </div>
+    <div class="fg"><label>拠点名 <span style="color:var(--red);">*</span></label>
+      <input type="text" id="loc-name" class="fi" placeholder="例: 西成郵便局">
+    </div>
+  </div>
+
+  <div class="fg mb8"><label>種別 <span style="color:var(--red);">*</span></label>
+    <select id="loc-type" class="fi" onchange="onLocTypeChange()">
+      <option value="head">🏢 本社</option>
+      <option value="post_office">📮 郵便局</option>
+      <option value="col_office">📦 集荷営業所</option>
+    </select>
+  </div>
+
+  <div class="fg mb8"><label>所属部署 (複数選択可)</label>
+    <div id="loc-dept-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px;background:var(--bg3);border-radius:6px;"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+    <div class="fg"><label>電話</label><input type="tel" id="loc-tel" class="fi"></div>
+    <div class="fg"><label>FAX</label><input type="tel" id="loc-fax" class="fi"></div>
+  </div>
+  <div class="fg mb8"><label>住所</label><input type="text" id="loc-addr" class="fi"></div>
+  <div class="fg mb8"><label>責任者</label><input type="text" id="loc-head" class="fi" placeholder="任意"></div>
+  <div class="fg mb8"><label>表示順</label><input type="number" id="loc-order" class="fi" value="50" min="1" max="999"></div>
+
+  <!-- 郵便局の場合のみ表示: 請求情報 -->
+  <div id="loc-billing-section" style="border:1px dashed var(--brd);border-radius:6px;padding:10px;margin-bottom:10px;background:rgba(74,122,155,.04);">
+    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 請求情報 (郵便局の場合)</div>
+    <div class="fg mb8"><label><input type="checkbox" id="loc-isBilling"> 請求書発行対象にする</label></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div class="fg"><label>請求先会社名</label>
+        <input type="text" id="loc-clientCompany" class="fi" placeholder="日本郵便株式会社">
+      </div>
+      <div class="fg"><label>支店名</label>
+        <input type="text" id="loc-clientBranch" class="fi" placeholder="○○郵便局">
+      </div>
+    </div>
+    <div class="fg mb8"><label>インボイス登録番号</label>
+      <input type="text" id="loc-invoiceNo" class="fi" placeholder="T1234567890123">
+    </div>
+
+    <!-- 郵便局単価 -->
+    <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 郵便局単価</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
+      <div class="fg"><label>完了</label><input type="number" id="loc-price-kanryo" class="fi" placeholder="0"></div>
+      <div class="fg"><label>転送</label><input type="number" id="loc-price-tenso" class="fi" placeholder="0"></div>
+      <div class="fg"><label>夜間</label><input type="number" id="loc-price-night" class="fi" placeholder="0"></div>
+      <div class="fg"><label>大型</label><input type="number" id="loc-price-ogata" class="fi" placeholder="0"></div>
+      <div class="fg"><label>集荷(委託)</label><input type="number" id="loc-price-shukka" class="fi" placeholder="0"></div>
+      <div class="fg"><label>持戻</label><input type="number" id="loc-price-mochi" class="fi" placeholder="0"></div>
+    </div>
+  </div>
+
+  <div class="fg mb12"><label><input type="checkbox" id="loc-active" checked> 有効にする</label></div>
+  <div class="fla gap6" style="justify-content:flex-end;">
+    <button class="btn b-gh btn-sm" onclick="closeM('m-loc')">キャンセル</button>
+    <button id="loc-delete-btn" class="btn b-red btn-sm" style="display:none;" onclick="deleteLocation()">削除</button>
+    <button class="btn b-grn btn-sm" onclick="saveLocation()">保存</button>
+  </div>
+</div>
+</div>
+
 <!-- 営業所追加 -->
 <div id="m-office" class="mbg">
 <div class="modal" style="width:620px;max-width:98vw;";position:relative;">
@@ -4052,6 +4202,330 @@ function getStaffSubLocationIds(staff){
   return ids;
 }
 
+// ══════════════════════════════════════════════════
+// 部署管理UI (Phase 2)
+// ══════════════════════════════════════════════════
+function renderDeptCards(){
+  const wrap = document.getElementById('dept-cards');
+  if(!wrap) return;
+  const list = (D.departments||[]).slice().sort((a,b)=>(a.order||99)-(b.order||99));
+  if(!list.length){
+    wrap.innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2);">部署が登録されていません。上の「＋部署を追加」ボタンから追加してください。</div>';
+    return;
+  }
+  const typeLabels = {mgmt:'📋 管理部門', del:'🚛 宅配事業', col:'📦 集荷事業', other:'その他'};
+  const typeColors = {mgmt:'#6b7280', del:'#3b82f6', col:'#10b981', other:'#9ca3af'};
+  wrap.innerHTML = list.map(d=>{
+    const col = typeColors[d.type]||'#9ca3af';
+    // この部署に所属する拠点数
+    const locCount = (D.locations||[]).filter(l=>(l.deptIds||[]).map(String).includes(String(d.id))).length;
+    // この部署に所属するスタッフ数(新旧両対応)
+    const staffCount = (D.staff||[]).filter(s=>getStaffDeptIds(s).map(String).includes(String(d.id))).length;
+    const inactiveMark = d.active===false ? '<span style="font-size:10px;color:var(--red2);margin-left:6px;">(無効)</span>' : '';
+    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openDeptModal(${d.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">${esc(d.name)}${inactiveMark}</div>
+          <div style="font-size:10px;color:var(--txt2);margin-top:2px;">
+            <span style="font-family:monospace;color:${col};font-weight:700;">${esc(d.code||'--')}</span>
+            · ${typeLabels[d.type]||d.type}
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);text-align:right;">
+          拠点: ${locCount}<br>スタッフ: ${staffCount}
+        </div>
+      </div>
+      ${d.note?`<div style="font-size:10.5px;color:var(--txt2);margin-top:6px;padding-top:6px;border-top:1px solid var(--brd);">${esc(d.note)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// 部署モーダルを開く
+function openDeptModal(id){
+  const isEdit = id != null;
+  const d = isEdit ? getDepartmentById(id) : null;
+  document.getElementById('m-dept-title').textContent = isEdit ? '🏛 部署を編集' : '🏛 部署を追加';
+  document.getElementById('dept-edit-id').value = isEdit ? String(d?.id||'') : '';
+  document.getElementById('dept-code').value = d?.code || '';
+  document.getElementById('dept-name').value = d?.name || '';
+  document.getElementById('dept-type').value = d?.type || 'other';
+  document.getElementById('dept-order').value = d?.order || 50;
+  document.getElementById('dept-note').value = d?.note || '';
+  document.getElementById('dept-active').checked = d ? (d.active!==false) : true;
+  document.getElementById('dept-delete-btn').style.display = isEdit ? '' : 'none';
+  openM('m-dept');
+}
+
+function saveDepartment(){
+  const id = document.getElementById('dept-edit-id').value;
+  const code = document.getElementById('dept-code').value.trim().toUpperCase();
+  const name = document.getElementById('dept-name').value.trim();
+  const type = document.getElementById('dept-type').value;
+  const order = parseInt(document.getElementById('dept-order').value) || 50;
+  const note = document.getElementById('dept-note').value.trim();
+  const active = document.getElementById('dept-active').checked;
+
+  if(!name){ showAlert({msg:'部署名を入力してください'}); return; }
+
+  // 重複チェック(同名)
+  const dup = (D.departments||[]).find(x=>x.name===name && String(x.id)!==String(id));
+  if(dup){ showAlert({msg:'同じ名前の部署が既に存在します'}); return; }
+
+  if(!D.departments) D.departments = [];
+  if(id){
+    // 編集
+    const idx = D.departments.findIndex(x=>String(x.id)===String(id));
+    if(idx>=0){
+      D.departments[idx] = {...D.departments[idx], code, name, type, order, note, active};
+    }
+  } else {
+    // 追加
+    const newId = (D.departments.reduce((m,x)=>Math.max(m,x.id||0),0))+1;
+    D.departments.push({id:newId, code, name, type, order, note, active});
+  }
+  lsSet(LS_KEYS.DEPARTMENTS, D.departments);
+  if(typeof fbSet==='function') fbSet('departments', D.departments);
+  closeM('m-dept');
+  renderDeptCards();
+  // 拠点カードも部署名が変わった可能性があるので再描画
+  if(document.getElementById('loc-cards')) renderLocCards();
+  toast(id?'部署を更新しました':'部署を追加しました');
+}
+
+function deleteDepartment(){
+  const id = document.getElementById('dept-edit-id').value;
+  if(!id) return;
+  const d = getDepartmentById(id);
+  if(!d) return;
+  // 参照チェック
+  const locs = (D.locations||[]).filter(l=>(l.deptIds||[]).map(String).includes(String(id)));
+  const staffs = (D.staff||[]).filter(s=>getStaffDeptIds(s).map(String).includes(String(id)));
+  if(locs.length || staffs.length){
+    showAlert({msg:`この部署は拠点${locs.length}件・スタッフ${staffs.length}名で使用されています。先に紐付けを解除してください。`});
+    return;
+  }
+  if(!confirm(`部署「${d.name}」を削除しますか?`)) return;
+  D.departments = D.departments.filter(x=>String(x.id)!==String(id));
+  lsSet(LS_KEYS.DEPARTMENTS, D.departments);
+  if(typeof fbSet==='function') fbSet('departments', D.departments);
+  closeM('m-dept');
+  renderDeptCards();
+  toast('部署を削除しました');
+}
+
+// ══════════════════════════════════════════════════
+// 拠点管理UI (Phase 2)
+// ══════════════════════════════════════════════════
+let _locFilterDeptId = null;  // 部署フィルタ
+
+function renderLocCards(){
+  const wrap = document.getElementById('loc-cards');
+  const tabs = document.getElementById('loc-dept-tabs');
+  if(!wrap || !tabs) return;
+
+  // 部署フィルタタブ
+  const depts = getActiveDepartments();
+  let tabHTML = `<div class="otab ${_locFilterDeptId==null?'on':''}" onclick="setLocFilter(null)">すべて</div>`;
+  depts.forEach(d=>{
+    tabHTML += `<div class="otab ${String(_locFilterDeptId)===String(d.id)?'on':''}" onclick="setLocFilter(${d.id})">${esc(d.name)}</div>`;
+  });
+  tabs.innerHTML = tabHTML;
+
+  // 拠点リスト
+  let list = (D.locations||[]).slice();
+  if(_locFilterDeptId != null){
+    list = list.filter(l=>(l.deptIds||[]).map(String).includes(String(_locFilterDeptId)));
+  }
+  list.sort((a,b)=>(a.order||99)-(b.order||99));
+
+  if(!list.length){
+    wrap.innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2);">拠点が登録されていません。</div>';
+    return;
+  }
+  const typeLabels = {head:'🏢 本社', post_office:'📮 郵便局', col_office:'📦 集荷営業所'};
+  const typeColors = {head:'#6b7280', post_office:'#3b82f6', col_office:'#10b981'};
+  wrap.innerHTML = list.map(l=>{
+    const col = typeColors[l.type]||'#9ca3af';
+    const inactiveMark = l.active===false ? '<span style="font-size:10px;color:var(--red2);margin-left:6px;">(無効)</span>' : '';
+    const billingBadge = l.isBilling ? '<span class="bdg" style="background:rgba(59,130,246,.15);color:#2563eb;font-size:10px;padding:2px 8px;margin-left:6px;">請求対象</span>' : '';
+    // 所属部署名
+    const deptNames = (l.deptIds||[]).map(did=>{
+      const d = getDepartmentById(did);
+      return d ? d.name : '';
+    }).filter(Boolean).join('・');
+    // 単価情報(郵便局のみ)
+    const hasPrice = l.prices && Object.values(l.prices).some(v=>v>0);
+    const priceText = l.type==='post_office' ? (hasPrice?'単価登録済':'<span style="color:var(--red2);">単価未設定</span>') : '';
+    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openLocModal(${l.id})">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;">${esc(l.name)}${inactiveMark}${billingBadge}</div>
+          <div style="font-size:10px;color:var(--txt2);margin-top:2px;">
+            <span style="font-family:monospace;color:${col};font-weight:700;">${esc(l.code||'--')}</span>
+            · ${typeLabels[l.type]||l.type}
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--txt3);text-align:right;">
+          ${deptNames?'所属: '+esc(deptNames):'<span style="color:var(--red2);">部署未設定</span>'}
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--txt2);line-height:1.5;">
+        ${l.addr?`📍 ${esc(l.addr)}<br>`:''}
+        ${l.tel?`☎ ${esc(l.tel)}`:''}${l.fax?` / FAX ${esc(l.fax)}`:''}
+      </div>
+      ${priceText?`<div style="font-size:10px;margin-top:6px;padding-top:6px;border-top:1px solid var(--brd);">${priceText}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function setLocFilter(deptId){
+  _locFilterDeptId = deptId;
+  renderLocCards();
+}
+
+// 拠点モーダルを開く
+function openLocModal(id){
+  const isEdit = id != null;
+  const l = isEdit ? getLocationById(id) : null;
+  document.getElementById('m-loc-title').textContent = isEdit ? '📍 拠点を編集' : '📍 拠点を追加';
+  document.getElementById('loc-edit-id').value = isEdit ? String(l?.id||'') : '';
+  document.getElementById('loc-code').value = l?.code || '';
+  document.getElementById('loc-name').value = l?.name || '';
+  document.getElementById('loc-type').value = l?.type || 'post_office';
+  document.getElementById('loc-tel').value = l?.tel || '';
+  document.getElementById('loc-fax').value = l?.fax || '';
+  document.getElementById('loc-addr').value = l?.addr || '';
+  document.getElementById('loc-head').value = l?.head || '';
+  document.getElementById('loc-order').value = l?.order || 50;
+  document.getElementById('loc-active').checked = l ? (l.active!==false) : true;
+
+  // 請求情報(郵便局用)
+  document.getElementById('loc-isBilling').checked = !!l?.isBilling;
+  document.getElementById('loc-clientCompany').value = l?.clientCompany || (l?.type==='post_office'?'日本郵便株式会社':'');
+  document.getElementById('loc-clientBranch').value = l?.clientBranch || '';
+  document.getElementById('loc-invoiceNo').value = l?.invoiceNo || '';
+
+  // 単価
+  const p = l?.prices || {};
+  document.getElementById('loc-price-kanryo').value = p.kanryo || '';
+  document.getElementById('loc-price-tenso').value = p.tenso || '';
+  document.getElementById('loc-price-night').value = p.night || '';
+  document.getElementById('loc-price-ogata').value = p.ogata || '';
+  document.getElementById('loc-price-shukka').value = p.shukka || '';
+  document.getElementById('loc-price-mochi').value = p.mochimodoiri || '';
+
+  // 部署チェックボックス
+  const deptBox = document.getElementById('loc-dept-checkboxes');
+  const depts = getActiveDepartments();
+  const selectedDepts = new Set((l?.deptIds||[]).map(String));
+  deptBox.innerHTML = depts.map(d=>{
+    const checked = selectedDepts.has(String(d.id)) ? 'checked' : '';
+    return `<label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;">
+      <input type="checkbox" class="loc-dept-chk" data-id="${d.id}" ${checked}>
+      ${esc(d.name)}
+    </label>`;
+  }).join('');
+
+  document.getElementById('loc-delete-btn').style.display = isEdit ? '' : 'none';
+  onLocTypeChange();
+  openM('m-loc');
+}
+
+// 拠点種別が変わったら請求情報セクションの表示を切り替え
+function onLocTypeChange(){
+  const type = document.getElementById('loc-type').value;
+  const billingSection = document.getElementById('loc-billing-section');
+  if(billingSection){
+    billingSection.style.display = (type === 'post_office') ? '' : 'none';
+  }
+  // 郵便局以外ならisBilling強制OFF
+  if(type !== 'post_office'){
+    document.getElementById('loc-isBilling').checked = false;
+  }
+}
+
+function saveLocation(){
+  const id = document.getElementById('loc-edit-id').value;
+  const code = document.getElementById('loc-code').value.trim();
+  const name = document.getElementById('loc-name').value.trim();
+  const type = document.getElementById('loc-type').value;
+
+  if(!name){ showAlert({msg:'拠点名を入力してください'}); return; }
+
+  // 重複チェック
+  const dup = (D.locations||[]).find(x=>x.name===name && String(x.id)!==String(id));
+  if(dup){ showAlert({msg:'同じ名前の拠点が既に存在します'}); return; }
+
+  // 部署チェックボックスから取得
+  const deptIds = Array.from(document.querySelectorAll('.loc-dept-chk:checked'))
+    .map(cb=>parseInt(cb.dataset.id)||0).filter(x=>x>0);
+
+  const isBilling = document.getElementById('loc-isBilling').checked && (type === 'post_office');
+
+  // 単価
+  const prices = {
+    kanryo: parseInt(document.getElementById('loc-price-kanryo').value) || 0,
+    tenso:  parseInt(document.getElementById('loc-price-tenso').value) || 0,
+    night:  parseInt(document.getElementById('loc-price-night').value) || 0,
+    ogata:  parseInt(document.getElementById('loc-price-ogata').value) || 0,
+    shukka: parseInt(document.getElementById('loc-price-shukka').value) || 0,
+    mochimodoiri: parseInt(document.getElementById('loc-price-mochi').value) || 0,
+  };
+
+  const data = {
+    code, name, type, deptIds,
+    tel:  document.getElementById('loc-tel').value.trim(),
+    fax:  document.getElementById('loc-fax').value.trim(),
+    addr: document.getElementById('loc-addr').value.trim(),
+    head: document.getElementById('loc-head').value.trim(),
+    order: parseInt(document.getElementById('loc-order').value) || 50,
+    active: document.getElementById('loc-active').checked,
+    isBilling,
+    clientCompany: isBilling ? document.getElementById('loc-clientCompany').value.trim() : '',
+    clientBranch:  isBilling ? document.getElementById('loc-clientBranch').value.trim() : '',
+    invoiceNo:     isBilling ? document.getElementById('loc-invoiceNo').value.trim() : '',
+    prices: (type === 'post_office') ? prices : null,
+  };
+
+  if(!D.locations) D.locations = [];
+  if(id){
+    const idx = D.locations.findIndex(x=>String(x.id)===String(id));
+    if(idx>=0){
+      D.locations[idx] = {...D.locations[idx], ...data};
+    }
+  } else {
+    const newId = (D.locations.reduce((m,x)=>Math.max(m,x.id||0),100))+1;
+    D.locations.push({id:newId, ...data});
+  }
+  lsSet(LS_KEYS.LOCATIONS, D.locations);
+  if(typeof fbSet==='function') fbSet('locations', D.locations);
+  closeM('m-loc');
+  renderLocCards();
+  toast(id?'拠点を更新しました':'拠点を追加しました');
+}
+
+function deleteLocation(){
+  const id = document.getElementById('loc-edit-id').value;
+  if(!id) return;
+  const l = getLocationById(id);
+  if(!l) return;
+  // 参照チェック(主拠点・応援拠点として使用中か)
+  const staffsPrimary = (D.staff||[]).filter(s=>String(s.primaryLocationId)===String(id));
+  const staffsSub = (D.staff||[]).filter(s=>(s.subLocationIds||[]).map(String).includes(String(id)));
+  const totalRef = staffsPrimary.length + staffsSub.length;
+  if(totalRef){
+    showAlert({msg:`この拠点は${totalRef}名のスタッフで使用されています。先に紐付けを解除してください。`});
+    return;
+  }
+  if(!confirm(`拠点「${l.name}」を削除しますか?`)) return;
+  D.locations = D.locations.filter(x=>String(x.id)!==String(id));
+  lsSet(LS_KEYS.LOCATIONS, D.locations);
+  if(typeof fbSet==='function') fbSet('locations', D.locations);
+  closeM('m-loc');
+  renderLocCards();
+  toast('拠点を削除しました');
+}
+
 // Firebase に書き込み（ls も同時更新）
 async function fbSet(key, value) {
   lsSet('nikki_' + key, value);
@@ -4065,7 +4539,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -4396,6 +4870,20 @@ function setupRealtimeSync() {
     applyFirebaseData();
     updOffSels(); renderOffCards(); renderDelOtabs();
   });
+  // 部署・拠点のリアルタイム購読(Phase 2)
+  onValue(ref(fbDB, 'nikki/departments'), snap => {
+    if (!snap.exists()) return;
+    lsSet(LS_KEYS.DEPARTMENTS, snap.val());
+    D.departments = snap.val();
+    if(document.getElementById('dept-cards')) renderDeptCards();
+    if(document.getElementById('loc-cards'))  renderLocCards();
+  });
+  onValue(ref(fbDB, 'nikki/locations'), snap => {
+    if (!snap.exists()) return;
+    lsSet(LS_KEYS.LOCATIONS, snap.val());
+    D.locations = snap.val();
+    if(document.getElementById('loc-cards')) renderLocCards();
+  });
   onValue(ref(fbDB, 'nikki/att_logs'), snap => {
     if (!snap.exists()) return;
     lsSet(LS_KEYS.ATT, snap.val());
@@ -4528,6 +5016,60 @@ function renderSubOfficeBadges(){
       ${on?`<span onclick="openSubOfficeMode('${nameEsc}',this.parentElement,'staff')" title="宅配/集荷を選択" style="cursor:pointer;padding:4px 8px;border-radius:0 14px 14px 0;font-size:11px;font-weight:700;border:1.5px solid var(--blu2);border-left:1px solid rgba(92,107,192,.3);background:var(--blu3);color:var(--blu2);">⚙️</span>`:''}
     </span>`;
   }).join('');
+}
+
+// 部署チェックボックス描画(Phase 3)
+function renderStDeptCheckboxes(selectedDeptIds, primaryDeptId){
+  const wrap = document.getElementById('st-dept-checkboxes');
+  const primarySel = document.getElementById('st-primary-dept');
+  if(!wrap || !primarySel) return;
+
+  const depts = getActiveDepartments();
+  const selected = new Set((selectedDeptIds||[]).map(String));
+
+  // 色マッピング(type別)
+  const typeColors = {mgmt:'#6b7280', del:'#3b82f6', col:'#10b981', other:'#9ca3af'};
+
+  wrap.innerHTML = depts.map(d=>{
+    const col = typeColors[d.type]||'#9ca3af';
+    const checked = selected.has(String(d.id));
+    return `<label style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;border:1.5px solid ${checked?col:'var(--brd2)'};background:${checked?col+'15':'transparent'};cursor:pointer;font-size:11.5px;font-weight:${checked?'700':'500'};color:${checked?col:'var(--txt2)'};">
+      <input type="checkbox" class="st-dept-chk" data-id="${d.id}" data-type="${d.type}"
+        ${checked?'checked':''}
+        onchange="onStDeptChange()">
+      ${esc(d.name)}
+    </label>`;
+  }).join('');
+
+  // 主所属ドロップダウンを更新
+  updateStPrimaryDeptOptions(primaryDeptId);
+}
+
+// チェック変更時: 主所属ドロップダウンを更新
+function onStDeptChange(){
+  updateStPrimaryDeptOptions();
+  // 再描画(チェック状態反映)
+  const selIds = getStSelectedDeptIds();
+  const primary = document.getElementById('st-primary-dept')?.value || '';
+  renderStDeptCheckboxes(selIds, primary);
+}
+
+// 主所属ドロップダウンのオプションを更新
+function updateStPrimaryDeptOptions(initialPrimaryId){
+  const primarySel = document.getElementById('st-primary-dept');
+  if(!primarySel) return;
+  const selIds = getStSelectedDeptIds();
+  const depts = getActiveDepartments().filter(d=>selIds.map(String).includes(String(d.id)));
+  // 現在の値を保持
+  const cur = primarySel.value || initialPrimaryId || '';
+  primarySel.innerHTML = `<option value="">自動(複数選択時は最初)</option>` +
+    depts.map(d=>`<option value="${d.id}" ${String(cur)===String(d.id)?'selected':''}>${esc(d.name)}</option>`).join('');
+}
+
+// チェック済み部署ID配列を取得
+function getStSelectedDeptIds(){
+  return Array.from(document.querySelectorAll('.st-dept-chk:checked'))
+    .map(cb=>parseInt(cb.dataset.id)||0).filter(x=>x>0);
 }
 
 function getSubOffices(){
@@ -4726,6 +5268,24 @@ function onStKbnChange(){
   const siArea=$('st-social-ins-section');
   const showSI=(kbn==='社員・役員'||kbn==='パート（事務）');
   if(siArea) siArea.style.display=showSI?'block':'none';
+
+  // 部署デフォルト提案(Phase 3): まだ何もチェックされていない場合のみ
+  if(typeof getStSelectedDeptIds==='function' && typeof renderStDeptCheckboxes==='function'){
+    const selected = getStSelectedDeptIds();
+    if(!selected.length){
+      // 区分から適切な部署を推定
+      let suggestDept = null;
+      if(kbn==='社員・役員' || kbn==='パート（事務）'){
+        suggestDept = getDepartmentByType('mgmt');
+      } else if(kbn==='個人事業主（歩合）' || kbn==='個人事業主（時間単価）' ||
+                kbn==='個人事業主（日額）' || kbn==='委託会社所属' || kbn==='スポット（単発）'){
+        suggestDept = getDepartmentByType('del');
+      }
+      if(suggestDept){
+        renderStDeptCheckboxes([suggestDept.id], suggestDept.id);
+      }
+    }
+  }
 }
 
 // ── 社保・税 ヘルパー ──
@@ -4896,6 +5456,10 @@ function resetStaffModal(){
   // バッジリセット
   setSubOffices([]);
   if($('sub-office-badges'))$('sub-office-badges').innerHTML='';
+  // 部署チェックボックスリセット(Phase 3)
+  if(typeof renderStDeptCheckboxes==='function'){
+    renderStDeptCheckboxes([], null);
+  }
   // _editIdリセット
   if($('m-staff'))$('m-staff')._editId=null;
   // 行列リセット
@@ -5021,7 +5585,9 @@ const _TOP_TABS = {
     { s:'reconcile', label:'数量照合' },
   ]},
   admin:    { subs: [
-    { s:'offices',     label:'営業所管理' },
+    { s:'departments', label:'部署管理' },
+    { s:'locations',   label:'拠点管理' },
+    { s:'offices',     label:'営業所管理(旧)' },
     { s:'import',      label:'CSVインポート' },
     { s:'archive',     label:'アーカイブ' },
     { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
@@ -5115,6 +5681,8 @@ function navByS(s) {
   if (s==='monthly-summary') _call('renderMonthlySummary');
   if (s==='cost-analysis')   _call('renderCostAnalysis');
   if (s==='offices')     _call('renderOffCards');
+  if (s==='departments') _call('renderDeptCards');
+  if (s==='locations')   _call('renderLocCards');
   if (s==='archive')     _call('renderArchive');
   if (s==='contract')    { if(typeof initContractSection==='function') setTimeout(initContractSection, 50); }
   if (s==='invoice-bulk') { _ivBulkState.context='hr'; if(!_ivBulkTabAllowed(_ivBulkState.tab)) _ivBulkState.tab='personal'; _call('renderInvoiceBulk'); }
@@ -11911,6 +12479,23 @@ function saveStaff(continueAdd=false){
     // 取引状態
     status:$('st-status')?.value||'在籍',
     statusReason:$('st-status-reason')?.value||'',
+    // 部署・拠点所属 (Phase 3追加)
+    deptIds: getStSelectedDeptIds(),
+    primaryDeptId: parseInt(document.getElementById('st-primary-dept')?.value)||null,
+    primaryLocationId: (function(){
+      // メイン郵便局名からID取得
+      const locName = $('st-off')?.value||'';
+      const loc = getLocationByName(locName);
+      return loc?.id || null;
+    })(),
+    subLocationIds: (function(){
+      // subOffices(新形式 [{name,del,col}])から拠点ID取得
+      return (subOffices||[]).map(s=>{
+        const name = typeof s==='string' ? s : s.name;
+        const loc = getLocationByName(name);
+        return loc?.id || null;
+      }).filter(x=>x);
+    })(),
   };
 
   // 退職の場合はアーカイブ情報を自動設定
@@ -13340,6 +13925,16 @@ function saveDriver(){
   if(!name){alert('氏名を入力してください');return;}
   const drvNo=$('drv-id-disp')?.textContent||'';
   const driverOffices=[...document.querySelectorAll('.drv-off-chk:checked')].map(el=>parseInt(el.dataset.id));
+  // 委託ドライバーは宅配事業部所属とする
+  const delDept = getDepartmentByType('del');
+  const primaryOff = D.offices.find(o=>driverOffices.includes(o.id));
+  const primaryLoc = primaryOff ? getLocationByName(primaryOff.name) : null;
+  const subLocs = driverOffices
+    .filter(id=>id!==primaryOff?.id)
+    .map(id=>{
+      const o = D.offices.find(x=>x.id===id);
+      return o ? getLocationByName(o.name)?.id : null;
+    }).filter(x=>x);
   const newDrv={
     id:_drvEditId||(Date.now()),empNo:drvNo,driverNo:drvNo,name,kana:$('drv-kana')?.value||'',
     kubun:'委託ドライバー',companyId:_drvCoId,
@@ -13347,6 +13942,11 @@ function saveDriver(){
     driverOffices,tel:toHankaku($('drv-tel')?.value||''),car:toHankaku($('drv-car')?.value||''),
     startDate:$('drv-start')?.value||'',note:$('drv-note')?.value||'',
     kyuyo:'個数制（歩合）',tanka:0,
+    // 部署・拠点(Phase 3追加)
+    deptIds: delDept ? [delDept.id] : [],
+    primaryDeptId: delDept?.id || null,
+    primaryLocationId: primaryLoc?.id || null,
+    subLocationIds: subLocs,
   };
   if(_drvEditId){const idx=D.staff.findIndex(x=>x.id===_drvEditId);if(idx>=0)D.staff[idx]={...D.staff[idx],...newDrv};else D.staff.push(newDrv);}
   else D.staff.push(newDrv);
@@ -21063,6 +21663,12 @@ function editStaff(id){
   setTimeout(()=>{
     setSubOffices(s.subOffices||[]);
     renderSubOfficeBadges();
+  },100);
+  // 所属部署の復元(Phase 3)
+  setTimeout(()=>{
+    const deptIds = getStaffDeptIds(s); // 新旧両対応ヘルパー
+    const primaryDeptId = s.primaryDeptId || (deptIds[0]||null);
+    renderStDeptCheckboxes(deptIds, primaryDeptId);
   },100);
   if($('st-add-del'))$('st-add-del').checked=s.addDelPrice||false;
   if($('st-add-col'))$('st-add-col').checked=s.addColPrice||false;
