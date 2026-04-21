@@ -4456,6 +4456,8 @@ function openOfficeFromLocation(locationId){
   if(typeof setOfTax==='function') setOfTax('ex');
   // editIdリセット
   const m = $('m-office'); if(m) m._editId = null;
+  // 削除ボタンは初期非表示
+  if($('of-del-btn')) $('of-del-btn').style.display='none';
 
   if(locationId == null){
     // 新規追加
@@ -15204,20 +15206,49 @@ function showConfirm(msg, onOk){
 function deleteOfficeById(id){
   const o=D.offices.find(x=>x.id===id);if(!o)return;
   showConfirm(`「${o.name}」を削除しますか？\n※ 関連する日報データは残ります`,()=>{
+    const targetName = o.name;
     D.offices=D.offices.filter(x=>x.id!==id);
     fbSet('offices',D.offices.map(o=>({id:o.id,officeCode:o.officeCode,name:o.name,addr:o.addr,tel:o.tel,fax:o.fax,head:o.head,typesDel:o.typesDel||false,typesCol:o.typesCol||false,postPrices:o.postPrices||null})));
+    // D.locationsの対応拠点も削除(同期)
+    _syncDeleteLocationByName(targetName);
     renderAll();
+    if(document.getElementById('loc-cards')) renderLocCards();
   });
 }
 function deleteOffice(){
   const editId=$('m-office')?._editId;if(!editId)return;
   const o=D.offices.find(x=>x.id===editId);if(!o)return;
   showConfirm(`「${o.name}」を削除しますか？\n※ 関連する日報データは残ります`,()=>{
+    const targetName = o.name;
     D.offices=D.offices.filter(x=>x.id!==editId);
     $('m-office')._editId=null;
     fbSet('offices',D.offices.map(o=>({id:o.id,officeCode:o.officeCode,name:o.name,addr:o.addr,tel:o.tel,fax:o.fax,head:o.head,typesDel:o.typesDel||false,typesCol:o.typesCol||false,postPrices:o.postPrices||null})));
+    // D.locationsの対応拠点も削除(同期)
+    _syncDeleteLocationByName(targetName);
     closeM('m-office');renderAll();
+    if(document.getElementById('loc-cards')) renderLocCards();
   });
+}
+
+// D.locationsから同名拠点を削除(スタッフ参照があれば警告のみ)
+function _syncDeleteLocationByName(name){
+  try{
+    if(!Array.isArray(D.locations)) return;
+    const loc = D.locations.find(l=>l.name===name);
+    if(!loc) return;
+    // スタッフ参照チェック(警告だけ出す)
+    const staffsPrimary = (D.staff||[]).filter(s=>String(s.primaryLocationId)===String(loc.id));
+    const staffsSub = (D.staff||[]).filter(s=>(s.subLocationIds||[]).map(String).includes(String(loc.id)));
+    const totalRef = staffsPrimary.length + staffsSub.length;
+    D.locations = D.locations.filter(l=>l.id!==loc.id);
+    lsSet(LS_KEYS.LOCATIONS, D.locations);
+    if(typeof fbSet==='function') fbSet('locations', D.locations);
+    if(totalRef > 0){
+      setTimeout(()=>{
+        showAlert({msg:`拠点「${name}」を削除しました。\n(${totalRef}名のスタッフがこの拠点を参照していました)`});
+      }, 100);
+    }
+  }catch(e){ console.error('_syncDeleteLocationByName error:', e); }
 }
 
 function renderOffCards(){
