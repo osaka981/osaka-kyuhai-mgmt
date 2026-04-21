@@ -4106,22 +4106,47 @@ function applyFirebaseData() {
   const colLogs = lsGet(LS_KEYS.COL, null);
   if (colLogs && colLogs.length) {
     const fbPu = colLogs.map(r => {
-      // rows[] → items{} に変換
+      const rows = r.rows || [];
+      // rows[] → items{} に変換(品目別数量を合算)
       const items = {};
-      (r.rows || []).forEach(row => {
+      rows.forEach(row => {
         const k = row.masterKey;
+        // route/チャーター系はitemsに入れない(金額計上しない為)
+        if (k === 'route' || k === 'route_rest' || k === 'チャーター') return;
+        if (!k) return;
         items[k] = (items[k] || 0) + (row.qty || 0);
       });
-      const cu = D.customers.find(c => c.name === (r.rows?.[0]?.customerName || ''));
+      // ルート情報抽出(新仕様: route masterKey のrowが1件)
+      const routeRow = rows.find(row => row.masterKey === 'route');
+      const charterRow = rows.find(row => row.masterKey === 'チャーター');
+      const cuName = rows[0]?.customerName || routeRow?.customerName || charterRow?.customerName || '';
+      const cu = D.customers.find(c => c.name === cuName);
       return {
         id: r.id,
         date: r.date,
         office: r.driver?.office || '',
         staff:  r.driver?.name || '',
         customerId:   cu?.id || 0,
-        customerName: r.rows?.[0]?.customerName || '',
-        region:       r.rows?.[0]?.region || '',
+        customerName: cuName,
+        region:       rows[0]?.region || '',
         items,
+        // ルート契約情報(新仕様)
+        route: routeRow ? {
+          routeId:     routeRow.routeId,
+          routeName:   routeRow.routeName,
+          fromTo:      routeRow.fromTo || '',
+          stopCount:   routeRow.stopCount || 1,
+          unitPrice:   routeRow.unitPrice || 0,
+          rounds:      routeRow.rounds || 1,
+          stops:       routeRow.stops || [],
+        } : null,
+        // チャーター情報(Pattern C)
+        charter: charterRow ? {
+          custName:    charterRow.customerName || '',
+          from:        charterRow.charterFrom || '',
+          to:          charterRow.charterTo   || '',
+          content:     charterRow.charterContent || '',
+        } : null,
         note: r.note || '',
         _fromApp: true,
       };
@@ -15249,10 +15274,12 @@ function _calcStaffPayment(name, monStr){
 
 function _calcCustBilling(custName, monStr){
   const cu=(D.customers||[]).find(c=>c.name===custName);
-  if(!cu) return {total:0, breakdown:[]};
+  if(!cu) return {total:0, breakdown:[], routes:[], charters:[]};
   const rows=(D.pickup||[]).filter(r=>r.customerName===custName&&(r.date||'').startsWith(monStr));
   const breakdown=[];
   let total=0;
+
+  // ── Pattern A: 個建(品目別数量×単価) ──
   const itemSum={};
   rows.forEach(r=>IK.forEach(k=>{ itemSum[k]=(itemSum[k]||0)+(iq(r,k)||0); }));
   Object.entries(itemSum).forEach(([k,q])=>{
@@ -15263,7 +15290,65 @@ function _calcCustBilling(custName, monStr){
       total+=amt;
     }
   });
-  return {total, breakdown, customer:cu, rowCount:rows.length};
+
+  // ── Pattern B: ルート配送(稼働日数/回数 × 単価) ──
+  // 日報のroute情報を集計
+  const routeAgg = {}; // {routeId: {name, fromTo, unitPrice, totalRounds, dates:[{date,rounds,stops}]}}
+  rows.forEach(r=>{
+    if(!r.route || !r.route.routeId) return;
+    const rid = r.route.routeId;
+    if(!routeAgg[rid]){
+      // 顧客マスタから最新のルート情報を取得(変更された場合に備え)
+      const masterRt = (cu.colRoutes||[]).find(x=>x.id===rid);
+      routeAgg[rid] = {
+        routeId: rid,
+        name: masterRt?.name || r.route.routeName || 'ルート',
+        fromTo: masterRt?.fromTo || r.route.fromTo || '',
+        stopCount: masterRt?.stopCount || r.route.stopCount || 1,
+        unitPrice: (masterRt?.routePrice || masterRt?.dailyAmt || r.route.unitPrice || 0),
+        totalRounds: 0,
+        workDays: new Set(),
+        dates: [],
+      };
+    }
+    const rec = routeAgg[rid];
+    const rounds = parseInt(r.route.rounds)||1;
+    rec.totalRounds += rounds;
+    rec.workDays.add(r.date);
+    rec.dates.push({date:r.date, rounds, stops:r.route.stops||[]});
+  });
+  const routes = Object.values(routeAgg).map(rt=>{
+    const amount = rt.totalRounds * rt.unitPrice;
+    total += amount;
+    return {
+      routeId: rt.routeId,
+      name: rt.name,
+      fromTo: rt.fromTo,
+      stopCount: rt.stopCount,
+      unitPrice: rt.unitPrice,
+      totalRounds: rt.totalRounds,
+      workDays: rt.workDays.size,
+      amount,
+      dates: rt.dates.sort((a,b)=>String(a.date).localeCompare(String(b.date))),
+    };
+  });
+
+  // ── Pattern C: チャーター(都度) ──
+  const charters = [];
+  rows.forEach(r=>{
+    if(!r.charter || !(r.charter.content || r.charter.from || r.charter.to)) return;
+    // チャーターは現状金額情報なし(将来拡張). Todo: 別途金額欄 or 個別入力
+    charters.push({
+      date: r.date,
+      custName: r.charter.custName,
+      from: r.charter.from,
+      to: r.charter.to,
+      content: r.charter.content,
+      // amount: 0, // 未実装
+    });
+  });
+
+  return {total, breakdown, routes, charters, customer:cu, rowCount:rows.length};
 }
 
 // ── PDF生成（簡易印刷ベース） ──
@@ -16441,7 +16526,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   // 支払期日
   const payDeadline = _calcPaymentDeadline(cu, monStr) || '';
 
-  // 明細行
+  // 明細行(Pattern A: 個建)
   const itemRows = bill.breakdown.map((b,i)=>`
     <tr>
       <td class="code">${i+1}</td>
@@ -16450,8 +16535,41 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
       <td class="num">${b.unit.toLocaleString()}</td>
       <td class="num">${b.amount.toLocaleString()}</td>
     </tr>`).join('');
-  // 空白行（最低6行埋める）
-  const blankCount = Math.max(0, 6-bill.breakdown.length);
+
+  // ルート配送行(Pattern B)
+  const routeStartNo = bill.breakdown.length + 1;
+  const routeRows = (bill.routes||[]).map((rt, i)=>{
+    const label = rt.fromTo
+      ? `${esc(rt.name)} <span style="font-size:10px;color:#666;">(${esc(rt.fromTo)})</span>`
+      : esc(rt.name);
+    return `
+    <tr>
+      <td class="code">${routeStartNo + i}</td>
+      <td>【ルート配送】${label}</td>
+      <td class="num">${rt.totalRounds.toLocaleString()}回</td>
+      <td class="num">${rt.unitPrice.toLocaleString()}</td>
+      <td class="num">${rt.amount.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  // チャーター行(Pattern C) - 金額情報は将来拡張予定
+  const charterStartNo = routeStartNo + (bill.routes||[]).length;
+  const charterRows = (bill.charters||[]).map((c, i)=>{
+    const detail = [c.from, c.to].filter(Boolean).join(' → ');
+    const label = detail ? `${esc(c.content||'')} <span style="font-size:10px;color:#666;">${esc(detail)}</span>` : esc(c.content||'');
+    return `
+    <tr>
+      <td class="code">${charterStartNo + i}</td>
+      <td>【チャーター】${esc(c.date||'')} ${label}</td>
+      <td class="num">1</td>
+      <td class="num">-</td>
+      <td class="num">-</td>
+    </tr>`;
+  }).join('');
+
+  // 空白行(最低6行埋める)
+  const filledRows = bill.breakdown.length + (bill.routes||[]).length + (bill.charters||[]).length;
+  const blankCount = Math.max(0, 6-filledRows);
   const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
 
   // 宛先ブロック
@@ -16532,6 +16650,8 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
       </thead>
       <tbody>
         ${itemRows}
+        ${routeRows}
+        ${charterRows}
         ${blanks}
         <tr class="total">
           <td colspan="4" style="text-align:right;">頁 計(${taxLabel})</td>
