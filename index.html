@@ -3806,6 +3806,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 郵便局の場合のみ表示: 請求情報 -->
   <div id="loc-billing-section" style="border:1px dashed var(--brd);border-radius:6px;padding:10px;margin-bottom:10px;background:rgba(74,122,155,.04);">
     <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 請求情報 (郵便局の場合)</div>
+
+    <!-- PIN未認証時のロック画面 -->
+    <div id="loc-billing-locked" style="text-align:center;padding:30px 12px;">
+      <div style="font-size:24px;margin-bottom:8px;">🔐</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px;">請求情報・単価はPIN認証が必要です</div>
+      <div style="font-size:10px;color:var(--txt2);margin-bottom:12px;">金額情報の漏洩防止のためPIN認証してください</div>
+      <button type="button" class="btn b-gh btn-sm" onclick="requireTSForLocPrices()">PIN認証して編集</button>
+    </div>
+
+    <!-- PIN認証済時のコンテンツ -->
+    <div id="loc-billing-content" style="display:none;">
     <div class="fg mb8"><label><input type="checkbox" id="loc-isBilling"> 請求書発行対象にする</label></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
       <div class="fg"><label>請求先会社名</label>
@@ -3829,6 +3840,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label>集荷(委託)</label><input type="number" id="loc-price-shukka" class="fi" placeholder="0"></div>
       <div class="fg"><label>持戻</label><input type="number" id="loc-price-mochi" class="fi" placeholder="0"></div>
     </div>
+    </div><!-- /loc-billing-content -->
   </div>
 
   <div class="fg mb12"><label><input type="checkbox" id="loc-active" checked> 有効にする</label></div>
@@ -4427,8 +4439,36 @@ function openLocModal(id){
   }).join('');
 
   document.getElementById('loc-delete-btn').style.display = isEdit ? '' : 'none';
+
+  // PIN認証状態に応じて請求情報セクションを表示制御(新規追加)
+  _updateLocBillingVisibility();
+
   onLocTypeChange();
   openM('m-loc');
+}
+
+// 請求情報セクションのPIN認証可視性更新
+function _updateLocBillingVisibility(){
+  const locked = document.getElementById('loc-billing-locked');
+  const content = document.getElementById('loc-billing-content');
+  if(!locked || !content) return;
+  if(typeof isTSAuthenticated==='function' && isTSAuthenticated()){
+    locked.style.display = 'none';
+    content.style.display = '';
+  } else {
+    locked.style.display = '';
+    content.style.display = 'none';
+  }
+}
+
+// 拠点モーダルの請求情報セクション用PIN認証
+function requireTSForLocPrices(){
+  if(typeof isTSAuthenticated==='function' && isTSAuthenticated()){
+    _updateLocBillingVisibility();
+    return;
+  }
+  tsPendingAction = {type:'loc-prices'};
+  openTSOverlay();
 }
 
 // 拠点種別が変わったら請求情報セクションの表示を切り替え
@@ -4460,17 +4500,39 @@ function saveLocation(){
   const deptIds = Array.from(document.querySelectorAll('.loc-dept-chk:checked'))
     .map(cb=>parseInt(cb.dataset.id)||0).filter(x=>x>0);
 
-  const isBilling = document.getElementById('loc-isBilling').checked && (type === 'post_office');
+  // PIN認証状態で請求情報の取扱を分岐
+  const tsOk = (typeof isTSAuthenticated==='function' && isTSAuthenticated());
+  const existingLoc = id ? getLocationById(id) : null;
 
-  // 単価
-  const prices = {
-    kanryo: parseInt(document.getElementById('loc-price-kanryo').value) || 0,
-    tenso:  parseInt(document.getElementById('loc-price-tenso').value) || 0,
-    night:  parseInt(document.getElementById('loc-price-night').value) || 0,
-    ogata:  parseInt(document.getElementById('loc-price-ogata').value) || 0,
-    shukka: parseInt(document.getElementById('loc-price-shukka').value) || 0,
-    mochimodoiri: parseInt(document.getElementById('loc-price-mochi').value) || 0,
-  };
+  // isBilling / 単価 / 請求先情報:
+  // PIN認証時のみ編集可、未認証時は既存値を保持
+  let isBilling, clientCompany, clientBranch, invoiceNo, prices;
+  if(tsOk){
+    isBilling = document.getElementById('loc-isBilling').checked && (type === 'post_office');
+    clientCompany = isBilling ? document.getElementById('loc-clientCompany').value.trim() : '';
+    clientBranch  = isBilling ? document.getElementById('loc-clientBranch').value.trim() : '';
+    invoiceNo     = isBilling ? document.getElementById('loc-invoiceNo').value.trim() : '';
+    const rawPrices = {
+      kanryo: parseInt(document.getElementById('loc-price-kanryo').value) || 0,
+      tenso:  parseInt(document.getElementById('loc-price-tenso').value) || 0,
+      night:  parseInt(document.getElementById('loc-price-night').value) || 0,
+      ogata:  parseInt(document.getElementById('loc-price-ogata').value) || 0,
+      shukka: parseInt(document.getElementById('loc-price-shukka').value) || 0,
+      mochimodoiri: parseInt(document.getElementById('loc-price-mochi').value) || 0,
+    };
+    // 既存のcolCompanies(指定事業所集荷単価)があれば保持
+    if(existingLoc?.prices?.colCompanies){
+      rawPrices.colCompanies = existingLoc.prices.colCompanies;
+    }
+    prices = (type === 'post_office') ? rawPrices : null;
+  } else {
+    // PIN未認証: 既存の請求情報をそのまま保持
+    isBilling     = !!existingLoc?.isBilling;
+    clientCompany = existingLoc?.clientCompany || '';
+    clientBranch  = existingLoc?.clientBranch  || '';
+    invoiceNo     = existingLoc?.invoiceNo     || '';
+    prices        = existingLoc?.prices || ((type === 'post_office') ? {} : null);
+  }
 
   const data = {
     code, name, type, deptIds,
@@ -4481,10 +4543,10 @@ function saveLocation(){
     order: parseInt(document.getElementById('loc-order').value) || 50,
     active: document.getElementById('loc-active').checked,
     isBilling,
-    clientCompany: isBilling ? document.getElementById('loc-clientCompany').value.trim() : '',
-    clientBranch:  isBilling ? document.getElementById('loc-clientBranch').value.trim() : '',
-    invoiceNo:     isBilling ? document.getElementById('loc-invoiceNo').value.trim() : '',
-    prices: (type === 'post_office') ? prices : null,
+    clientCompany,
+    clientBranch,
+    invoiceNo,
+    prices,
   };
 
   if(!D.locations) D.locations = [];
@@ -20663,6 +20725,21 @@ function requireTSForPostInv(){
   if(isTSAuthenticated()){
     if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
     if($('delinv-post-content'))$('delinv-post-content').style.display='block';
+    // 当月デフォルトを設定してリストを表示(Phase 5)
+    setTimeout(()=>{
+      const now = new Date();
+      const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+      const monInp = $('delinv-post-mon');
+      if(monInp && !monInp.value) monInp.value = ym;
+      if(monInp && !monInp.onchange){
+        monInp.onchange = ()=>renderPostInvList();
+      }
+      const offSel = $('delinv-post-off');
+      if(offSel && !offSel.onchange){
+        offSel.onchange = ()=>renderPostInvList();
+      }
+      if(typeof renderPostInvList==='function') renderPostInvList();
+    }, 50);
     return;
   }
   tsPendingAction = {type:'postinv'};
@@ -20730,9 +20807,20 @@ function executeTSAction(){
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
+  } else if(a.type==='loc-prices'){
+    // 拠点モーダル内の請求情報セクション解除
+    _updateLocBillingVisibility();
   } else if(a.type==='postinv'){
     if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
     if($('delinv-post-content'))$('delinv-post-content').style.display='block';
+    // 初期描画(Phase 5)
+    setTimeout(()=>{
+      const now = new Date();
+      const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+      const monInp = $('delinv-post-mon');
+      if(monInp && !monInp.value) monInp.value = ym;
+      if(typeof renderPostInvList==='function') renderPostInvList();
+    }, 50);
   } else if(a.type==='contract-template'){
     // PIN認証成功後、Driveの契約書雛形フォルダを開く
     _doOpenContractTemplateFolder();
@@ -21115,41 +21203,355 @@ function switchDelInvTab(t){
 }
 
 // ── 郵便局請求書生成 ──
-function genPostInv(){
-  const mon=toYM($('delinv-post-mon')?.value||'');
-  const off=$('delinv-post-off')?.value||'';
-  const rows=D.delivery.filter(r=>(!mon||r.date.startsWith(mon))&&(!off||r.office===off));
-  // 営業所別に集計
-  const byOff={};
-  rows.forEach(r=>{
-    if(!byOff[r.office])byOff[r.office]={office:r.office,cnt:0,kanryo:0,yakan:0,tenso:0,ogata:0,shukka:0};
-    byOff[r.office].cnt++;
-    byOff[r.office].kanryo+=r.kanryo||0;
-    byOff[r.office].yakan+=r.yakan||0;
-    byOff[r.office].tenso+=r.tenso||0;
-    byOff[r.office].ogata+=r.ogata||0;
-    byOff[r.office].shukka+=r.shukka||0;
+// ══════════════════════════════════════════════════
+// 郵便局請求書 (Phase 5)
+// ══════════════════════════════════════════════════
+
+// 郵便局請求金額を集計
+// locationIdOrOfficeName: 拠点IDまたは営業所名(後方互換)
+function _calcPostBilling(locationIdOrName, monStr){
+  // 拠点情報取得(ID or 名前)
+  let loc = null;
+  if(typeof locationIdOrName === 'number' || /^\d+$/.test(String(locationIdOrName||''))){
+    loc = getLocationById(locationIdOrName);
+  }
+  if(!loc){
+    loc = getLocationByName(locationIdOrName);
+  }
+  // 拠点名ベースで集計(D.delivery.officeの値と一致する名前)
+  const locName = loc?.name || String(locationIdOrName||'');
+
+  // 単価取得(新拠点マスタ優先、旧officesフォールバック)
+  let prices = loc?.prices || null;
+  if(!prices){
+    const oldOff = (D.offices||[]).find(o=>o.name===locName);
+    prices = oldOff?.postPrices || {};
+  }
+  prices = prices || {};
+
+  // 宅配日報(D.delivery)を集計
+  const delRows = (D.delivery||[]).filter(r=>
+    r.office===locName && (r.date||'').startsWith(monStr)
+  );
+  const agg = {
+    kanryo: 0, tenso: 0, yakan: 0, ogata: 0, mochimodoiri: 0, shukka: 0,
+    workDays: new Set(),
+  };
+  delRows.forEach(r=>{
+    agg.kanryo += r.kanryo||0;
+    agg.tenso  += r.tenso||0;
+    agg.yakan  += r.yakan||0;
+    agg.ogata  += r.ogata||0;
+    agg.mochimodoiri += r.mochimodoiri||0;
+    agg.shukka += r.shukka||0;
+    if(r.date) agg.workDays.add(r.date);
   });
-  let h='',totalAmt=0;
-  Object.values(byOff).forEach((o,i)=>{
-    const offData=D.offices.find(x=>x.name===o.office);
-    const prices=offData?.postPrices||{};
-    const amt=(o.kanryo*(prices.p60||0))+(o.yakan*(prices.night||0))+(o.tenso*(prices.tenso||0))+(o.ogata*(prices.ogata||0))+(o.shukka*(prices.shukka||0));
-    totalAmt+=amt;
-    h+=`<tr>
-      <td class="mono">PINV-${mon.replace('/','')}-${String(i+1).padStart(3,'0')}</td>
-      <td class="fw7">${offData?.postOfficeClient||o.office}</td>
-      <td>${o.office}</td>
-      <td>${mon}</td>
-      <td class="tr">${fmt(o.kanryo)}</td>
-      <td class="tr xs muted">${offData?.postPrices?'登録済':'<span style="color:var(--red2)">未設定</span>'}</td>
-      <td class="tr fw7" style="color:var(--tel2)">¥${fmt(amt)}</td>
-      <td><span class="bdg bz">未発行</span></td>
-      <td><button class="btn b-gh btn-sm">PDF</button></td>
+
+  // 指定事業所集荷(D.deliveryCol)を集計
+  const delColRows = (D.deliveryCol||[]).filter(r=>
+    r.office===locName && (r.date||'').startsWith(monStr)
+  );
+  const colCompanyAgg = {}; // {会社名: 件数}
+  delColRows.forEach(r=>{
+    (r.companies||[]).forEach(c=>{
+      if(!c.name) return;
+      colCompanyAgg[c.name] = (colCompanyAgg[c.name]||0) + (c.count||0);
+    });
+  });
+
+  // 明細項目構築
+  const items = [];
+  let subtotal = 0;
+
+  // 配達業務
+  if(agg.kanryo > 0){
+    const unit = prices.kanryo || 0;
+    const amount = agg.kanryo * unit;
+    items.push({category:'del', label:'配達完了', qty:agg.kanryo, unit, amount});
+    subtotal += amount;
+  }
+  if(agg.tenso > 0){
+    const unit = prices.tenso || 0;
+    const amount = agg.tenso * unit;
+    items.push({category:'del', label:'転送還付', qty:agg.tenso, unit, amount});
+    subtotal += amount;
+  }
+  if(agg.yakan > 0){
+    const unit = prices.night || 0;
+    const amount = agg.yakan * unit;
+    items.push({category:'del', label:'夜間配達', qty:agg.yakan, unit, amount});
+    subtotal += amount;
+  }
+  if(agg.ogata > 0){
+    const unit = prices.ogata || 0;
+    const amount = agg.ogata * unit;
+    items.push({category:'del', label:'大型配達', qty:agg.ogata, unit, amount});
+    subtotal += amount;
+  }
+  if(agg.mochimodoiri > 0){
+    const unit = prices.mochimodoiri || 0;
+    const amount = agg.mochimodoiri * unit;
+    items.push({category:'del', label:'持戻り', qty:agg.mochimodoiri, unit, amount});
+    subtotal += amount;
+  }
+
+  // 集荷委託(shukka)
+  if(agg.shukka > 0){
+    const unit = prices.shukka || 0;
+    const amount = agg.shukka * unit;
+    items.push({category:'col', label:'【集荷委託】', qty:agg.shukka, unit, amount});
+    subtotal += amount;
+  }
+
+  // 指定事業所集荷 (colCompanies単価適用、無ければshukka単価にフォールバック)
+  const colCompanyList = prices.colCompanies || [];
+  Object.entries(colCompanyAgg).forEach(([name, qty])=>{
+    if(qty <= 0) return;
+    const cc = colCompanyList.find(x=>x.name===name);
+    const unit = (cc && cc.price!=null) ? cc.price : (prices.shukka || 0);
+    const amount = qty * unit;
+    items.push({category:'col_company', label:`【指定事業所集荷】${name}`, qty, unit, amount});
+    subtotal += amount;
+  });
+
+  return {
+    location: loc,
+    locationName: locName,
+    items,
+    subtotal,
+    workDays: agg.workDays.size,
+    rawAgg: agg,
+    colCompanyAgg,
+    hasData: items.length > 0,
+  };
+}
+
+// 郵便局請求書HTML生成
+function _buildPostInvoiceHTML(locationId, monStr, opts){
+  opts = opts || {};
+  const bill = _calcPostBilling(locationId, monStr);
+  if(!bill.hasData) return null;
+  const loc = bill.location;
+  const today = (new Date()).toISOString().slice(0,10);
+  const info = (typeof _getSystemInfo==='function' ? _getSystemInfo() : {});
+
+  // 税計算(税抜扱い)
+  const taxEx = bill.subtotal;
+  const taxAmt = Math.floor(taxEx * 0.1);
+  const grand = taxEx + taxAmt;
+
+  // 宛先(郵便局の契約情報から)
+  const clientCo = loc?.clientCompany || '日本郵便株式会社';
+  const clientBr = loc?.clientBranch  || loc?.name || '';
+  const clientZip = loc?.clientZip || loc?.zip || '';
+  const clientAddr = loc?.clientAddr || loc?.addr || '';
+
+  // 自社情報
+  const coName = esc(info.companyName||'大阪急配株式会社');
+  const coZip  = info.zip?`〒 ${esc(info.zip)}`:'〒 591-8001';
+  const coAddr = esc(info.addr||'大阪府堺市北区常磐町3-12-5');
+  const coTel  = info.tel||'TEL 072-258-9811';
+  const coFax  = info.fax||'FAX 072-258-6000';
+  const invoiceNo = info.invoiceNo||'';
+  const stampImg = info.companyStampUrl
+    ?`<img src="${esc(info.companyStampUrl)}" class="fb-stamp-img">`
+    :`<div class="fb-stamp-overlay">${esc(info.companyName||'大阪急配')}</div>`;
+
+  // 明細行
+  const itemRows = bill.items.map((it,i)=>`
+    <tr>
+      <td class="code">${i+1}</td>
+      <td>${esc(it.label)}</td>
+      <td class="num">${it.qty.toLocaleString()}</td>
+      <td class="num">${it.unit.toLocaleString()}</td>
+      <td class="num">${it.amount.toLocaleString()}</td>
+    </tr>`).join('');
+  const blankCount = Math.max(0, 6 - bill.items.length);
+  const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+  // 版数
+  const version = opts.version||1;
+  const versionLabel = version>1?`<span class="fb-version">(第${version}版)</span>`:'';
+
+  const noteLine = `※ 単価・金額は税抜表示となっております。お振込は税込合計 ¥${grand.toLocaleString()} にてお願い申し上げます。`;
+
+  const html = `
+  <div class="fb-paper">
+    <div class="fb-top">
+      <div class="fb-left">
+        ${clientZip?`<div class="fb-addr-line">〒 ${esc(clientZip)}</div>`:''}
+        ${clientAddr?`<div class="fb-addr-line">${esc(clientAddr)}</div>`:''}
+        <div class="fb-cust"><span>${esc(clientCo)}</span></div>
+        <div class="fb-cust"><span>${esc(clientBr)}</span><span class="mr">御中</span></div>
+        <div class="fb-subtxt">下記の通り御請求申し上げます。</div>
+      </div>
+      <div class="fb-center">
+        <h1 class="fb-title">請　求　書</h1>
+        <div class="fb-amt-box">
+          <div class="lbl">当　月　御　請　求　金　額</div>
+          <div class="val">¥${grand.toLocaleString()}</div>
+        </div>
+        <div class="fb-due" style="margin-top:8px;">対象期間: ${esc(monStr)} / 稼働 ${bill.workDays}日</div>
+      </div>
+      <div class="fb-right">
+        ${stampImg}
+        <div class="fb-issue">発行日：${today} ${versionLabel}</div>
+        <div class="fb-co-name">${coName}</div>
+        ${invoiceNo?`<div class="fb-inv-reg">登録番号: ${esc(invoiceNo)}</div>`:''}
+        <div>${coZip}</div>
+        <div>${coAddr}</div>
+        <div>${esc(coTel)} / ${esc(coFax)}</div>
+      </div>
+    </div>
+
+    <div class="fb-mid">
+      <div></div>
+      <div>
+        <table class="fb-sum">
+          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
+          <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
+          <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
+          <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">拠点コード</th></tr>
+          <tr><td style="text-align:center;">${esc(monStr.replace('-','/')+'/末')}</td><td style="text-align:center;">${esc(loc?.code||'')}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <table class="fb-items">
+      <thead>
+        <tr>
+          <th style="width:7%;">コード</th>
+          <th style="width:45%;">項目・備考</th>
+          <th style="width:10%;">数量</th>
+          <th style="width:17%;">単価(税抜)</th>
+          <th style="width:21%;">金額(税抜)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${blanks}
+        <tr class="total">
+          <td colspan="4" style="text-align:right;">頁 計(税抜)</td>
+          <td class="tot-val">${taxEx.toLocaleString()}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    ${typeof _buildBankInfoBlock==='function' ? _buildBankInfoBlock('') : ''}
+
+    <div class="fb-remark">
+      <div class="hd">備考</div>
+      <div class="bd">${noteLine}</div>
+    </div>
+  </div>`;
+
+  return {
+    title:'郵便局請求書',
+    html,
+    amount:grand, taxEx, taxAmt, version,
+    target: loc?.name || String(locationId),
+    targetId: loc?.id,
+    month: monStr,
+  };
+}
+
+// 郵便局請求書を発行(印刷+履歴保存)
+function generatePostInvoice(locationId, monStr){
+  const loc = getLocationById(locationId);
+  if(!loc){ showAlert({msg:'拠点が見つかりません'}); return; }
+  const targetName = loc.name;
+
+  // 既存発行履歴
+  const history = (typeof _getIssuedDocs==='function' ? _getIssuedDocs('postInvoice', targetName) : [])
+    .filter(h=>h.month===monStr);
+  let nextVersion = 1;
+  if(history.length){
+    const maxVer = Math.max(...history.map(h=>h.version||1));
+    nextVersion = maxVer + 1;
+    if(!confirm(`${targetName} ${monStr}分の請求書は既に発行済みです(最新: 第${maxVer}版)。\n\n第${nextVersion}版として再発行しますか?(履歴は残ります)`)){
+      return;
+    }
+  }
+
+  const doc = _buildPostInvoiceHTML(locationId, monStr, {version:nextVersion});
+  if(!doc){ showAlert({msg:'該当月のデータがありません'}); return; }
+
+  // 印刷
+  if(typeof _printDocWindow==='function'){
+    _printDocWindow(doc.title, doc.html);
+  }
+  // 履歴保存
+  if(typeof _saveIssuedDoc==='function'){
+    _saveIssuedDoc({
+      type:'postInvoice', target:targetName, targetId:locationId, month:monStr,
+      amount:doc.amount, taxEx:doc.taxEx, taxAmt:doc.taxAmt,
+      version:nextVersion, issuedAt:new Date().toISOString()
+    });
+  }
+  // 一覧再描画
+  try{ renderPostInvList(); }catch(e){}
+}
+
+// 郵便局請求書 一覧の再描画
+function renderPostInvList(){
+  const mon = toYM($('delinv-post-mon')?.value||'');
+  const filterId = $('delinv-post-off')?.value||'';
+
+  // 請求対象拠点リスト(isBilling:trueのみ)
+  let locations = getBillingLocations();
+  if(filterId){
+    locations = locations.filter(l=>String(l.id)===String(filterId));
+  }
+
+  // ドロップダウンを拠点マスタから再構築
+  const sel = $('delinv-post-off');
+  if(sel){
+    const cur = sel.value;
+    const opts = ['<option value="">全拠点</option>']
+      .concat(getBillingLocations().map(l=>
+        `<option value="${l.id}" ${String(cur)===String(l.id)?'selected':''}>${esc(l.name)}</option>`
+      ));
+    sel.innerHTML = opts.join('');
+  }
+
+  let h = '', totalAmt = 0;
+  locations.forEach((loc, i)=>{
+    const bill = _calcPostBilling(loc.id, mon);
+    if(!bill.hasData) return;
+    totalAmt += bill.subtotal;
+    const issuedList = (typeof _getIssuedDocs==='function' ? _getIssuedDocs('postInvoice', loc.name) : []);
+    const issued = issuedList.filter(x=>x.month===mon).sort((a,b)=>(b.version||0)-(a.version||0))[0];
+    const statusBadge = issued
+      ? `<span class="bdg" style="background:rgba(39,174,96,.15);color:#1e7e3e;">発行済 v${issued.version||1}</span>`
+      : `<span class="bdg bz">未発行</span>`;
+    const hasPrice = !!loc.prices && Object.values(loc.prices).some(v=>v>0);
+    const priceMark = hasPrice ? '✅登録済' : '<span style="color:var(--red2)">⚠未設定</span>';
+    h += `<tr>
+      <td class="mono">PINV-${mon.replace('-','')}-${String(i+1).padStart(3,'0')}</td>
+      <td class="fw7">${esc(loc.clientCompany||'日本郵便株式会社')}<br><span class="xs muted">${esc(loc.clientBranch||loc.name)}</span></td>
+      <td>${esc(loc.name)}</td>
+      <td>${esc(mon)}</td>
+      <td class="tr">${fmt(bill.rawAgg.kanryo)}</td>
+      <td class="tr xs muted">${priceMark}</td>
+      <td class="tr fw7" style="color:var(--tel2)">¥${fmt(bill.subtotal)}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <button class="btn b-red btn-sm" onclick="generatePostInvoice(${loc.id},'${mon}')">📄 発行</button>
+      </td>
     </tr>`;
   });
-  if($('tb-post-inv'))$('tb-post-inv').innerHTML=h||`<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
-  if($('post-inv-total'))$('post-inv-total').textContent=`合計 ¥${fmt(totalAmt)}`;
+
+  if($('tb-post-inv')){
+    $('tb-post-inv').innerHTML = h || `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--txt2)">対象月にデータがありません</td></tr>`;
+  }
+  if($('post-inv-total')){
+    $('post-inv-total').textContent = `合計(税抜) ¥${fmt(totalAmt)}`;
+  }
+}
+
+// 旧genPostInvを新関数へのエイリアスに
+function genPostInv(){
+  renderPostInvList();
 }
 
 // 従業員請求書生成（簡易）
