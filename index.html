@@ -738,10 +738,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <span id="fb-status-badge-top" style="font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);color:var(--txt2);"></span>
     <span class="tb-dt" id="today-s-top" style="font-size:13px;color:rgba(255,255,255,.65);font-family:'DM Mono',monospace;letter-spacing:.5px;"></span>
     <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
-    <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋宅配日報</button>
+    <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋局日報</button>
     <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
-    <button onclick="openNewStaff()" style="background:#5c6bc0;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋従業員</button>
-    <button onclick="openM('m-office')" style="background:#607d8b;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋営業所</button>
     <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);">🌙</button>
     <button class="tn-ts-btn" id="ts-top-btn" onclick="requireTS('ts-inv',null)">TS</button>
   </div>
@@ -756,8 +754,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="tb-r">
       <span id="fb-status-badge" style="display:none;"></span>
       <span class="tb-dt" id="today-s"></span>
-      <button onclick="nav(document.querySelector('[data-s=staff]'))" style="background:#ffb6d4;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 従業員</button>
-      <button onclick="openM('m-office')" style="background:#0756c5;color:#fff;border:none;font-weight:700;padding:7px 14px;border-radius:5px;font-size:12px;cursor:pointer;">＋ 営業所</button>
     </div>
   </div>
   <div class="content">
@@ -827,7 +823,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="ch"><div class="ct"><div class="cbar"></div>絞り込み</div></div>
         <div class="fla gap6" style="flex-wrap:wrap;">
           <div class="fg" style="min-width:120px;"><label>月</label><input type="month" id="rpt-del-mon" class="fi" onchange="renderDelReport()"></div>
-          <div class="fg" style="min-width:140px;"><label>営業所</label><select id="rpt-del-off" class="fi" onchange="renderDelReport()"><option value="">全営業所</option></select></div>
+          <div class="fg" style="min-width:140px;"><label>営業所</label><select id="rpt-del-off" class="fi" onchange="renderDelReport()"><option value="">全局</option></select></div>
           <div class="fg" style="min-width:140px;"><label>従事員</label><select id="rpt-del-staff" class="fi" onchange="renderDelReport()"><option value="">全従事員</option></select></div>
           <div style="display:flex;align-items:flex-end;gap:6px;">
             <button class="btn b-gh btn-sm" onclick="renderDelReport()">🔄 更新</button>
@@ -1224,7 +1220,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="f3">
           <div class="fg"><label>対象月</label><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
-          <div class="fg"><label>営業所</label><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全営業所</option></select></div>
+          <div class="fg"><label>営業所</label><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
           <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
         </div>
       </div>
@@ -1375,7 +1371,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="flbc mb12">
           <div class="fla gap6">
             <input type="month" id="delinv-emp-mon" class="fi">
-            <select id="delinv-emp-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
+            <select id="delinv-emp-off" class="fi" style="width:160px;"><option value="">全局</option></select>
             <select id="delinv-emp-target" class="fi" style="width:160px;">
               <option value="">全従業員・委託</option>
               <option value="staff">社員のみ</option>
@@ -1412,7 +1408,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="flbc mb12">
             <div class="fla gap6">
               <input type="month" id="delinv-post-mon" class="fi">
-              <select id="delinv-post-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
+              <select id="delinv-post-off" class="fi" style="width:160px;"><option value="">全局</option></select>
             </div>
             <button class="btn b-red btn-sm" onclick="genPostInv()">📄 郵便局請求書生成</button>
           </div>
@@ -1775,7 +1771,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <input type="month" id="tsinv-mon" class="fi">
-          <select id="tsinv-off" class="fi" style="width:160px;"><option value="">全営業所</option></select>
+          <select id="tsinv-off" class="fi" style="width:160px;"><option value="">全局</option></select>
         </div>
         <button class="btn b-grn btn-sm" onclick="renderTSInv()">🔄 請求書生成</button>
       </div>
@@ -21793,7 +21789,7 @@ function renderPostInvList(){
   const sel = $('delinv-post-off');
   if(sel){
     const cur = sel.value;
-    const opts = ['<option value="">全拠点</option>']
+    const opts = ['<option value="">全局</option>']
       .concat(getBillingLocations().map(l=>
         `<option value="${l.id}" ${String(cur)===String(l.id)?'selected':''}>${esc(l.name)}</option>`
       ));
