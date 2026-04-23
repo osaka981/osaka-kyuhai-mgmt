@@ -4820,6 +4820,36 @@ function applyFirebaseData() {
   // D.locationsに「郵便局拠点」が不足していたら、D.officesからマイグレーション
   _migrateOfficesToLocations();
 
+  // 委託ドライバーNo の 2桁→3桁マイグレーション(Step B準備)
+  _migrateDriverNoTo3Digits();
+
+  function _migrateDriverNoTo3Digits(){
+    try{
+      if(!Array.isArray(D.staff)) return;
+      let changed = 0;
+      D.staff.forEach(s=>{
+        if(!s.driverNo) return;
+        const m = String(s.driverNo).match(/^(\d{5})-(\d{1,2})$/);
+        if(m){
+          const newNo = `${m[1]}-${String(parseInt(m[2])).padStart(3,'0')}`;
+          // -99は-999(管理者コード)に
+          const oldSuffix = parseInt(m[2]);
+          if(oldSuffix === 99){
+            s.driverNo = `${m[1]}-999`;
+          } else {
+            s.driverNo = newNo;
+          }
+          // empNoにdriverNoを同期している場合も反映
+          if(s.empNo === m[0]) s.empNo = s.driverNo;
+          changed++;
+        }
+      });
+      if(changed > 0){
+        console.log(`委託ドライバーNo マイグレーション: ${changed}件を3桁形式に変換`);
+      }
+    }catch(e){ console.error('_migrateDriverNoTo3Digits error:', e); }
+  }
+
   function _migrateOfficesToLocations(){
     try{
       if(!Array.isArray(D.locations)) D.locations = [];
@@ -13123,7 +13153,7 @@ function renderCompanyPage(){
     const driverHtml = drivers.length
       ? drivers.map(d=>{
           const doffs=(d.driverOffices||[]).map(oid=>{const o=D.offices.find(x=>x.id===oid);return o?o.name:'?';}).join('・');
-          const isAdmin=String(d.driverNo||'').endsWith('-99');
+          const isAdmin=String(d.driverNo||'').endsWith('-999');
           return `<div onclick="openDriverModal(${d.id},${co.id})" style="cursor:pointer;background:var(--bg3);border:1px solid ${isAdmin?'rgba(192,57,43,.4)':'var(--brd)'};border-left:3px solid ${isAdmin?'var(--red2)':'#5c6bc0'};border-radius:5px;padding:8px 12px;min-width:140px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.15)'" onmouseout="this.style.boxShadow='none'">
             <div style="font-size:12px;font-weight:700;margin-bottom:3px;">${isAdmin?'👑 ':''}<span style="color:var(--txt);">${d.name}</span></div>
             <div style="font-size:10px;color:var(--txt2);">ID: <span style="font-family:monospace;">${d.driverNo||'−'}</span></div>
@@ -14082,8 +14112,18 @@ function openDriverModal(drvId,coId){
   if(drv){drvNo=drv.driverNo||'';}
   else{
     const ex=D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===coId);
-    const mx=ex.reduce((m,d)=>{const p=(d.driverNo||'').split('-');return Math.max(m,parseInt(p[1])||0);},0);
-    drvNo=`${co?.companyCode||coId}-${String(Math.min(mx+1,98)).padStart(2,'0')}`;
+    // 3桁採番: 001〜998(999は管理者予約)
+    const mx=ex.reduce((m,d)=>{
+      const p=(d.driverNo||'').split('-');
+      const n=parseInt(p[1])||0;
+      return (n>=1 && n<=998) ? Math.max(m,n) : m;
+    },0);
+    const next = mx + 1;
+    if(next > 998){
+      alert('この会社の連番が上限(998)に達しました');
+      return;
+    }
+    drvNo=`${co?.companyCode||coId}-${String(next).padStart(3,'0')}`;
   }
   if($('drv-id-disp'))$('drv-id-disp').textContent=drvNo;
   if($('drv-name'))$('drv-name').value=drv?.name||'';
