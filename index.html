@@ -3080,6 +3080,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
+  <!-- ■ 日報アプリPIN管理 -->
+  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 日報アプリPIN</div>
+  <div style="background:rgba(184,134,11,.04);border:1px solid rgba(184,134,11,.25);border-radius:7px;padding:10px 12px;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <div style="font-size:12px;font-weight:700;color:var(--ink);">PIN状態: <span id="st-pin-status" style="color:var(--txt2);font-weight:500;">未発行</span></div>
+      <div>
+        <button type="button" class="btn btn-sm b-amb" onclick="issueInitialPin()" id="st-issue-pin-btn">🔑 初期PIN発行</button>
+        <button type="button" class="btn btn-sm b-gh" onclick="resetStaffPin()" id="st-reset-pin-btn" style="display:none;">PINリセット</button>
+      </div>
+    </div>
+    <div style="font-size:10.5px;color:var(--txt2);line-height:1.5;">
+      初期PINを発行後、ドライバーに口頭/紙で伝達。初回ログイン時に本人がPINを変更します。<br>
+      本人がPINを忘れた場合は「PINリセット」で再発行できます。
+    </div>
+    <div id="st-last-pin-info" style="font-size:10.5px;color:var(--amb2);margin-top:6px;display:none;"></div>
+  </div>
+
   <!-- ■ 担当郵便局（バッジ選択UI） -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
   <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
@@ -5635,6 +5652,8 @@ function resetStaffModal(){
   });
   // 集荷個別単価リセット
   if($('st-delcol-companies'))$('st-delcol-companies').innerHTML='';
+  // PIN状態リセット(Step A)
+  _refreshStaffPinUI(null);
   // ラベル更新
   onStKbnChange();
 }
@@ -22293,6 +22312,240 @@ function openM(id){
   }
 }
 
+// ══════════════════════════════════════════════════
+// 日報アプリPIN発行(Step A続き)
+// ══════════════════════════════════════════════════
+
+async function _mgmtSha256(str){
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function _genRandomPin6(){
+  // 弱PINを避けてランダム6桁を生成
+  let pin;
+  do {
+    pin = String(Math.floor(Math.random()*1000000)).padStart(6,'0');
+  } while(/^(\d)\1+$/.test(pin) || pin==='123456' || pin==='000000');
+  return pin;
+}
+
+// スタッフモーダル内のPIN状態UI更新
+function _refreshStaffPinUI(s){
+  const statusEl = document.getElementById('st-pin-status');
+  const issueBtn = document.getElementById('st-issue-pin-btn');
+  const resetBtn = document.getElementById('st-reset-pin-btn');
+  const lastInfo = document.getElementById('st-last-pin-info');
+
+  if(!statusEl) return; // UI未描画
+
+  if(!s){
+    // 新規登録モード
+    statusEl.textContent = '保存後に発行できます';
+    statusEl.style.color = 'var(--txt2)';
+    if(issueBtn) issueBtn.disabled = true;
+    if(issueBtn) issueBtn.style.opacity = '.4';
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo) lastInfo.style.display = 'none';
+    return;
+  }
+
+  // 既存スタッフ
+  if(issueBtn){ issueBtn.disabled = false; issueBtn.style.opacity = '1'; }
+
+  if(s.pinHash){
+    // 本人がPIN変更済み
+    statusEl.textContent = '本人設定済み';
+    statusEl.style.color = 'var(--grn2)';
+    if(issueBtn) issueBtn.style.display = 'none';
+    if(resetBtn) resetBtn.style.display = '';
+    if(lastInfo){
+      if(s.pinInitializedAt){
+        lastInfo.textContent = `最終PIN設定: ${new Date(s.pinInitializedAt).toLocaleString('ja-JP')}`;
+        lastInfo.style.display = '';
+      } else {
+        lastInfo.style.display = 'none';
+      }
+    }
+  } else if(s.initialPinHash){
+    // 初期PIN発行済み・本人未変更
+    statusEl.textContent = '初期PIN発行済み(本人未変更)';
+    statusEl.style.color = 'var(--amb2)';
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 初期PINを再発行'; }
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo){
+      if(s.initialPinIssuedAt){
+        lastInfo.textContent = `初期PIN発行日時: ${new Date(s.initialPinIssuedAt).toLocaleString('ja-JP')}`;
+        lastInfo.style.display = '';
+      } else {
+        lastInfo.style.display = 'none';
+      }
+    }
+  } else {
+    // 未発行
+    statusEl.textContent = '未発行';
+    statusEl.style.color = 'var(--txt2)';
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 初期PIN発行'; }
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo) lastInfo.style.display = 'none';
+  }
+}
+
+async function issueInitialPin(){
+  const editId = document.getElementById('m-staff')?._editId;
+  if(!editId){
+    await showAlert('先に従業員を保存してからPINを発行してください');
+    return;
+  }
+  const s = D.staff.find(x=>x.id===editId);
+  if(!s){ await showAlert('従業員が見つかりません'); return; }
+
+  const confirmMsg = s.initialPinHash
+    ? `「${s.name}」の初期PINを再発行します。既存の初期PINは無効になります。よろしいですか?`
+    : `「${s.name}」の初期PINを発行します。よろしいですか?`;
+
+  const ok = await showDialog({
+    title: '初期PIN発行',
+    message: confirmMsg,
+    confirmText: '発行する',
+    cancelText: 'キャンセル',
+  });
+  if(!ok) return;
+
+  // ランダム6桁生成
+  const newPin = _genRandomPin6();
+  const hash = await _mgmtSha256(newPin);
+
+  // staffに保存
+  s.initialPinHash = hash;
+  s.initialPinIssuedAt = new Date().toISOString();
+  s.pinHash = null; // 本人設定分はリセット
+  s.pinInitialized = false;
+  s.pinInitializedAt = null;
+
+  // Firebase保存
+  if(typeof _fbSaveData === 'function'){
+    try{ await _fbSaveData('staff', D.staff); }catch(e){ console.warn(e); }
+  } else if(typeof fbSet === 'function'){
+    try{ fbSet('staff', D.staff); }catch(e){ console.warn(e); }
+  }
+
+  // 日報アプリ側のDRIVERSにも反映(Firebaseで共有)
+  // DRIVERS配列にもPINを反映する必要あり
+  _syncPinToDriversNode(s, hash, 'initial');
+
+  // PIN表示ダイアログ(一度だけ表示・コピー可能)
+  await showPinDisplayDialog(s.name, newPin);
+
+  // UI更新
+  _refreshStaffPinUI(s);
+  // スタッフ一覧を再描画
+  if(typeof renderStaffCards==='function') renderStaffCards();
+}
+
+async function resetStaffPin(){
+  const editId = document.getElementById('m-staff')?._editId;
+  if(!editId) return;
+  const s = D.staff.find(x=>x.id===editId);
+  if(!s) return;
+
+  const ok = await showDialog({
+    title: 'PINリセット',
+    message: `「${s.name}」のPINをリセットし、新しい初期PINを発行します。本人が再度ログイン時にPINを設定する必要があります。`,
+    confirmText: 'リセット',
+    cancelText: 'キャンセル',
+  });
+  if(!ok) return;
+
+  await issueInitialPin();
+}
+
+// 日報アプリ側のdriversノードにPINを同期
+function _syncPinToDriversNode(staffRec, hash, mode){
+  // nikki/drivers(日報アプリのDRIVERS)にも同じid/empNoのレコードがあればPINを反映
+  // Firebase: nikki/drivers
+  if(typeof firebase === 'undefined' && typeof fbDB === 'undefined') return;
+  const driverId = staffRec.empNo || staffRec.driverNo || String(staffRec.id);
+  const update = {};
+  if(mode === 'initial'){
+    update.initialPinHash = hash;
+    update.initialPinIssuedAt = staffRec.initialPinIssuedAt;
+    update.pinHash = null;
+    update.pinInitialized = false;
+  } else if(mode === 'user'){
+    update.pinHash = hash;
+    update.pinInitialized = true;
+  }
+  // Firebase直接更新を試みる
+  try{
+    if(typeof fbDB !== 'undefined' && fbDB && typeof ref === 'function' && typeof update === 'object'){
+      // この経路は mgmt.html のFirebase SDK経由
+      // 既存のsave関数があればそちらを使う
+      // 簡易実装: DRIVERSノードを丸ごと更新する既存関数があればそれ
+    }
+  }catch(e){ console.warn('PIN sync failed', e); }
+  // 確実な同期は別途実装が必要(今は表示のみで動作)
+}
+
+// 初期PIN表示ダイアログ(一度だけ)
+async function showPinDisplayDialog(name, pin){
+  return new Promise((resolve)=>{
+    // 専用モーダルを動的生成
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;';
+    box.innerHTML = `
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--ink);">初期PIN発行完了</div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">${esc(name)} さんの初期PIN:</div>
+      <div id="pin-display-val" style="background:var(--bg3);border:2px solid var(--amb2);border-radius:8px;padding:14px 16px;text-align:center;font-family:'DM Mono',monospace;font-size:28px;font-weight:700;letter-spacing:.4em;color:var(--amb2);margin-bottom:10px;user-select:all;cursor:text;">${pin}</div>
+      <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:12px;background:rgba(184,134,11,.08);border:1px solid rgba(184,134,11,.25);padding:8px 10px;border-radius:6px;">
+        <strong style="color:var(--amb2);">注意:</strong> このPINは<strong>一度しか表示されません</strong>。<br>
+        ドライバーに直接伝達してください(電話/紙/対面)。<br>
+        初回ログイン時に本人がPINを変更します。
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="pin-copy-btn" class="btn b-blu btn-sm">コピー</button>
+        <button id="pin-print-btn" class="btn b-gh btn-sm">印刷</button>
+        <button id="pin-close-btn" class="btn b-grn btn-sm">確認しました</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    document.getElementById('pin-copy-btn').onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(pin);
+        const btn = document.getElementById('pin-copy-btn');
+        const prev = btn.textContent;
+        btn.textContent = 'コピー済み';
+        setTimeout(()=>{ btn.textContent = prev; }, 1500);
+      }catch(e){
+        alert('コピーに失敗しました。手動でコピーしてください');
+      }
+    };
+    document.getElementById('pin-print-btn').onclick = ()=>{
+      const w = window.open('', '_blank');
+      if(!w){ alert('ポップアップがブロックされました'); return; }
+      w.document.write(`<html><head><title>初期PIN通知</title><style>body{font-family:sans-serif;padding:40px;}h1{font-size:18px;}.pin{font-size:48px;letter-spacing:.4em;font-weight:700;margin:20px 0;padding:16px;border:2px solid #333;text-align:center;font-family:monospace;}</style></head><body>
+        <h1>日報アプリ 初期PIN通知</h1>
+        <p>${esc(name)} さん</p>
+        <p>日報アプリの初期PINは以下の通りです:</p>
+        <div class="pin">${pin}</div>
+        <p style="color:#b84;"><strong>重要:</strong> このPINは初期値です。初回ログイン時に必ず変更してください。</p>
+        <p style="font-size:11px;color:#888;">発行日: ${new Date().toLocaleString('ja-JP')}</p>
+      </body></html>`);
+      w.document.close();
+      w.print();
+    };
+    document.getElementById('pin-close-btn').onclick = ()=>{
+      document.body.removeChild(overlay);
+      resolve();
+    };
+  });
+}
+
 function editStaff(id){
   const s=D.staff.find(x=>x.id===id);if(!s)return;
   resetStaffModal();
@@ -22461,6 +22714,8 @@ function editStaff(id){
   setTimeout(()=>renderStDocLinks(), 200);
   // 集荷タブが選択されている場合に備えてルート一覧を描画
   setTimeout(()=>{ if(typeof renderStaffRouteInline==='function') renderStaffRouteInline(); }, 50);
+  // PIN状態反映(Step A)
+  _refreshStaffPinUI(s);
 }
 function closeM(id){
   $(id)?.classList.remove('on');
