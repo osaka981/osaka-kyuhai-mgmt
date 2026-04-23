@@ -22410,7 +22410,14 @@ function _refreshStaffPinUI(s){
     if(resetBtn) resetBtn.style.display = '';
     if(lastInfo){
       if(s.pinInitializedAt){
-        lastInfo.textContent = `最終PIN設定: ${new Date(s.pinInitializedAt).toLocaleString('ja-JP')}`;
+        const setDate = new Date(s.pinInitializedAt);
+        // 3ヶ月経過判定(個人直属のみ)
+        const isPersonal = _isPersonalStaff(s);
+        const now = new Date();
+        const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth()-3, now.getDate());
+        const needsUpdate = isPersonal && setDate < threeMonthsAgo;
+        lastInfo.innerHTML = `最終PIN設定: ${setDate.toLocaleString('ja-JP')}` +
+          (isPersonal ? `<br><span style="color:${needsUpdate?'var(--red2)':'var(--grn2)'};font-weight:600;">${needsUpdate?'⚠️ 3ヶ月経過・要更新':'3ヶ月ルール適用中'}</span>` : '');
         lastInfo.style.display = '';
       } else {
         lastInfo.style.display = 'none';
@@ -22418,9 +22425,10 @@ function _refreshStaffPinUI(s){
     }
   } else if(s.initialPinHash){
     // 初期PIN発行済み・本人未変更
-    statusEl.textContent = '初期PIN発行済み(本人未変更)';
+    const isPersonal = _isPersonalStaff(s);
+    statusEl.textContent = isPersonal ? '初期PIN「000000」発行済み' : '初期PIN発行済み(本人未変更)';
     statusEl.style.color = 'var(--amb2)';
-    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 初期PINを再発行'; }
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = isPersonal ? '🔑 初期PINリセット(000000)' : '🔑 初期PINを再発行'; }
     if(resetBtn) resetBtn.style.display = 'none';
     if(lastInfo){
       if(s.initialPinIssuedAt){
@@ -22432,12 +22440,24 @@ function _refreshStaffPinUI(s){
     }
   } else {
     // 未発行
+    const isPersonal = _isPersonalStaff(s);
     statusEl.textContent = '未発行';
     statusEl.style.color = 'var(--txt2)';
-    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 初期PIN発行'; }
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = isPersonal ? '🔑 初期PIN発行(000000)' : '🔑 初期PIN発行(ランダム)'; }
     if(resetBtn) resetBtn.style.display = 'none';
     if(lastInfo) lastInfo.style.display = 'none';
   }
+}
+
+// 個人直属(社員・個人事業主)判定
+function _isPersonalStaff(s){
+  if(!s) return false;
+  // 委託会社所属・委託ドライバーは除外
+  const companyKbns = ['委託会社所属', '委託ドライバー', 'スポット（単発）'];
+  if(companyKbns.includes(s.kubun)) return false;
+  if(s.companyId) return false;
+  // 個人直属: 社員・役員 / 個人事業主(歩合/時間/日額) / パート(事務)
+  return true;
 }
 
 async function issueInitialPin(){
@@ -22449,9 +22469,13 @@ async function issueInitialPin(){
   const s = D.staff.find(x=>x.id===editId);
   if(!s){ await showAlert('従業員が見つかりません'); return; }
 
+  const isPersonal = _isPersonalStaff(s);
+
   const confirmMsg = s.initialPinHash
     ? `「${s.name}」の初期PINを再発行します。既存の初期PINは無効になります。よろしいですか?`
-    : `「${s.name}」の初期PINを発行します。よろしいですか?`;
+    : (isPersonal
+      ? `「${s.name}」に初期PIN「000000」を設定します。初回ログイン時に本人がPINを変更します。よろしいですか?`
+      : `「${s.name}」の初期PINをランダム発行します。よろしいですか?`);
 
   const ok = await showDialog({
     title: '初期PIN発行',
@@ -22461,8 +22485,8 @@ async function issueInitialPin(){
   });
   if(!ok) return;
 
-  // ランダム6桁生成
-  const newPin = _genRandomPin6();
+  // 個人直属は 000000 固定、委託系はランダム
+  const newPin = isPersonal ? '000000' : _genRandomPin6();
   const hash = await _mgmtSha256(newPin);
 
   // staffに保存
@@ -22471,6 +22495,7 @@ async function issueInitialPin(){
   s.pinHash = null; // 本人設定分はリセット
   s.pinInitialized = false;
   s.pinInitializedAt = null;
+  s.pinIsPersonalFixed = isPersonal; // 個人直属固定PINフラグ
 
   // Firebase保存
   if(typeof _fbSaveData === 'function'){
@@ -22479,12 +22504,15 @@ async function issueInitialPin(){
     try{ fbSet('staff', D.staff); }catch(e){ console.warn(e); }
   }
 
-  // 日報アプリ側のDRIVERSにも反映(Firebaseで共有)
-  // DRIVERS配列にもPINを反映する必要あり
+  // 日報アプリ側のDRIVERSにも反映
   _syncPinToDriversNode(s, hash, 'initial');
 
-  // PIN表示ダイアログ(一度だけ表示・コピー可能)
-  await showPinDisplayDialog(s.name, newPin);
+  // 個人直属の場合は「000000」の固定説明、委託系は通常のPIN表示
+  if(isPersonal){
+    await showPinInfoDialog(s.name, '000000', true);
+  } else {
+    await showPinDisplayDialog(s.name, newPin);
+  }
 
   // UI更新
   _refreshStaffPinUI(s);
@@ -22537,6 +22565,37 @@ function _syncPinToDriversNode(staffRec, hash, mode){
 }
 
 // 初期PIN表示ダイアログ(一度だけ)
+// 個人直属の固定PIN(000000)通知ダイアログ(シンプル)
+async function showPinInfoDialog(name, pin, isPersonal){
+  return new Promise((resolve)=>{
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;';
+    box.innerHTML = `
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--ink);">初期PIN設定完了</div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">${esc(name)} さんの初期PIN:</div>
+      <div style="background:var(--bg3);border:2px solid var(--grn2);border-radius:8px;padding:14px 16px;text-align:center;font-family:'DM Mono',monospace;font-size:32px;font-weight:700;letter-spacing:.4em;color:var(--grn2);margin-bottom:10px;user-select:all;">${pin}</div>
+      <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:12px;background:rgba(46,139,87,.08);border:1px solid rgba(46,139,87,.25);padding:8px 10px;border-radius:6px;">
+        <strong style="color:var(--grn2);">個人直属スタッフの初期PINは固定「000000」です。</strong><br>
+        ドライバーに伝達の必要はありません。<br>
+        初回ログイン時に本人が新しいPINを設定します。<br>
+        その後は<strong>3ヶ月ごとに強制変更</strong>が促されます。
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button id="pin-info-close-btn" class="btn b-grn btn-sm">確認しました</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    document.getElementById('pin-info-close-btn').onclick = ()=>{
+      document.body.removeChild(overlay);
+      resolve();
+    };
+  });
+}
+
 async function showPinDisplayDialog(name, pin){
   return new Promise((resolve)=>{
     // 専用モーダルを動的生成
