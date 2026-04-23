@@ -14016,6 +14016,9 @@ function openCompanyModal(coId){
   // 担当郵便局(バッジ)復元
   if(typeof setCoSubOffices==='function') setCoSubOffices(co?.subOffices||[]);
   if(typeof renderCoSubOfficeBadges==='function') renderCoSubOfficeBadges();
+  // オーナーPIN UI更新(Step C)
+  if($('m-company')) $('m-company')._editId = _coEditId;
+  if(typeof _refreshOwnerPinUI==='function') _refreshOwnerPinUI(co);
   openM('m-company');
 }
 
@@ -22352,8 +22355,13 @@ function openM(id){
   }
 }
 
+function editStaff(id){
+  // 実装は下の別のeditStaff定義を使う(重複定義問題の修正・こちらは空)
+  return _editStaffImpl(id);
+}
+
 // ══════════════════════════════════════════════════
-// 日報アプリPIN発行(Step A続き)
+// 日報アプリPIN発行(Step A + Step C)
 // ══════════════════════════════════════════════════
 
 async function _mgmtSha256(str){
@@ -22586,7 +22594,132 @@ async function showPinDisplayDialog(name, pin){
   });
 }
 
-function editStaff(id){
+// ══════════════════════════════════════════════════
+// 委託会社オーナーPIN (Step C)
+// ══════════════════════════════════════════════════
+
+// 委託会社オーナーID生成: "9" + 会社コード5桁
+function _buildOwnerLoginId(companyCode){
+  const code = String(companyCode||'').padStart(5,'0');
+  return '9' + code;
+}
+
+// 委託会社モーダル内のオーナーPIN状態UI更新
+function _refreshOwnerPinUI(co){
+  const idDisp = document.getElementById('co-owner-id-disp');
+  const statusEl = document.getElementById('co-owner-pin-status');
+  const issueBtn = document.getElementById('co-issue-pin-btn');
+  const resetBtn = document.getElementById('co-reset-pin-btn');
+  const lastInfo = document.getElementById('co-last-owner-pin-info');
+
+  if(!statusEl) return;
+
+  if(!co || !co.companyCode){
+    if(idDisp) idDisp.textContent = '−';
+    statusEl.textContent = '会社コード未設定';
+    statusEl.style.color = 'var(--txt2)';
+    if(issueBtn){ issueBtn.disabled = true; issueBtn.style.opacity = '.4'; }
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo) lastInfo.style.display = 'none';
+    return;
+  }
+
+  if(idDisp) idDisp.textContent = _buildOwnerLoginId(co.companyCode);
+  if(issueBtn){ issueBtn.disabled = false; issueBtn.style.opacity = '1'; }
+
+  if(co.ownerPinHash){
+    statusEl.textContent = 'オーナー設定済み';
+    statusEl.style.color = 'var(--grn2)';
+    if(issueBtn) issueBtn.style.display = 'none';
+    if(resetBtn) resetBtn.style.display = '';
+    if(lastInfo){
+      if(co.ownerPinInitializedAt){
+        lastInfo.textContent = `オーナー最終PIN設定: ${new Date(co.ownerPinInitializedAt).toLocaleString('ja-JP')}`;
+        lastInfo.style.display = '';
+      }
+    }
+  } else if(co.ownerInitialPinHash){
+    statusEl.textContent = '初期PIN発行済み(オーナー未変更)';
+    statusEl.style.color = 'var(--amb2)';
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 初期PINを再発行'; }
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo){
+      if(co.ownerInitialPinIssuedAt){
+        lastInfo.textContent = `初期PIN発行日時: ${new Date(co.ownerInitialPinIssuedAt).toLocaleString('ja-JP')}`;
+        lastInfo.style.display = '';
+      }
+    }
+  } else {
+    statusEl.textContent = '未発行';
+    statusEl.style.color = 'var(--txt2)';
+    if(issueBtn){ issueBtn.style.display = ''; issueBtn.textContent = '🔑 オーナーPIN発行'; }
+    if(resetBtn) resetBtn.style.display = 'none';
+    if(lastInfo) lastInfo.style.display = 'none';
+  }
+}
+
+async function issueOwnerPin(){
+  const editId = document.getElementById('m-company')?._editId;
+  if(!editId){
+    await showAlert('先に会社を保存してからPINを発行してください');
+    return;
+  }
+  const co = D.companies.find(x=>x.id===editId);
+  if(!co){ await showAlert('会社が見つかりません'); return; }
+  if(!co.companyCode){ await showAlert('会社コードが未設定です'); return; }
+
+  const ownerLoginId = _buildOwnerLoginId(co.companyCode);
+  const confirmMsg = co.ownerInitialPinHash
+    ? `${co.name} の オーナーPIN(${ownerLoginId}) を再発行します。よろしいですか?`
+    : `${co.name} の オーナーPIN(${ownerLoginId}) を発行します。よろしいですか?`;
+
+  const ok = await showDialog({
+    title: 'オーナーPIN発行',
+    message: confirmMsg,
+    confirmText: '発行する',
+    cancelText: 'キャンセル',
+  });
+  if(!ok) return;
+
+  const newPin = _genRandomPin6();
+  const hash = await _mgmtSha256(newPin);
+
+  co.ownerLoginId = ownerLoginId;
+  co.ownerInitialPinHash = hash;
+  co.ownerInitialPinIssuedAt = new Date().toISOString();
+  co.ownerPinHash = null;
+  co.ownerPinInitialized = false;
+  co.ownerPinInitializedAt = null;
+
+  // 保存
+  if(typeof fbSet === 'function'){
+    try{ fbSet('companies', D.companies); }catch(e){ console.warn(e); }
+  }
+
+  await showPinDisplayDialog(`${co.name} (オーナー用)`, newPin);
+
+  _refreshOwnerPinUI(co);
+  if(typeof renderCompanyPage === 'function') renderCompanyPage();
+}
+
+async function resetOwnerPin(){
+  const editId = document.getElementById('m-company')?._editId;
+  if(!editId) return;
+  const co = D.companies.find(x=>x.id===editId);
+  if(!co) return;
+
+  const ok = await showDialog({
+    title: 'オーナーPINリセット',
+    message: `${co.name} のオーナーPINをリセットし、新しい初期PINを発行します。`,
+    confirmText: 'リセット',
+    cancelText: 'キャンセル',
+  });
+  if(!ok) return;
+
+  await issueOwnerPin();
+}
+
+function _editStaffImpl(id){
   const s=D.staff.find(x=>x.id===id);if(!s)return;
   resetStaffModal();
   openM('m-staff');
@@ -24109,6 +24242,26 @@ window.dqImportJson = function(){
         <div class="xs mt8" id="co-status-hint" style="line-height:1.6;color:var(--grn2);font-weight:600;">通常の取引状態です。</div>
         <div id="co-status-info" class="xs mt8" style="display:none;padding:8px 10px;background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:4px;color:var(--red2);font-weight:600;line-height:1.6;"></div>
       </div>
+    </div>
+
+    <!-- ■ 委託会社オーナー用 日報アプリPIN -->
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(218,165,32,.06);border:1px solid rgba(218,165,32,.3);border-radius:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--amb2);margin-bottom:6px;">■ 日報アプリ オーナーPIN (会社ページ用)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11.5px;">
+          オーナーID: <span id="co-owner-id-disp" style="font-family:'DM Mono',monospace;font-weight:700;color:var(--amb2);font-size:14px;letter-spacing:.1em;">−</span><br>
+          状態: <span id="co-owner-pin-status" style="color:var(--txt2);font-weight:600;">未発行</span>
+        </div>
+        <div>
+          <button type="button" class="btn btn-sm b-amb" onclick="issueOwnerPin()" id="co-issue-pin-btn">🔑 オーナーPIN発行</button>
+          <button type="button" class="btn btn-sm b-gh" onclick="resetOwnerPin()" id="co-reset-pin-btn" style="display:none;">リセット</button>
+        </div>
+      </div>
+      <div style="font-size:10.5px;color:var(--txt2);line-height:1.5;">
+        オーナーは自分のオーナーIDで日報アプリにログイン → 会社ページで傘下ドライバーの実績確認・PINリセット等ができます。<br>
+        初期PINを発行後、オーナー本人に伝達してください。
+      </div>
+      <div id="co-last-owner-pin-info" style="font-size:10.5px;color:var(--amb2);margin-top:6px;display:none;"></div>
     </div>
 
   </div>
