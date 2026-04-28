@@ -3097,6 +3097,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="st-last-pin-info" style="font-size:10.5px;color:var(--amb2);margin-top:6px;display:none;"></div>
   </div>
 
+  <!-- ■ お知らせ送信権限(社員・役員のみ) -->
+  <div id="st-send-perm-section" style="display:none;">
+    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ お知らせ送信権限</div>
+    <div style="background:rgba(193,114,76,.05);border:1px solid rgba(193,114,76,.3);border-radius:7px;padding:10px 12px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:12px;font-weight:700;color:var(--ink);">
+          状態: <span id="st-send-perm-status" style="color:var(--txt2);font-weight:500;">無効</span>
+        </div>
+        <button type="button" class="btn btn-sm b-amb" onclick="toggleSendPermission()" id="st-send-perm-btn">状態を切り替える</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--txt2);line-height:1.5;">
+        有効化すると、このドライバーは大阪急配オーナーページ(99で始まるID)にアクセスでき、<br>
+        全ドライバー・委託会社オーナーへお知らせを送信できるようになります。<br>
+        変更には<strong>管理者PIN</strong>が必要です。
+      </div>
+    </div>
+  </div>
+
   <!-- ■ 担当郵便局（バッジ選択UI） -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
   <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
@@ -5471,6 +5489,9 @@ function onStKbnChange(){
   // 役員報酬エリア
   const execArea=$('st-exec-pay-area');
   if(execArea) execArea.style.display=(kbn==='社員・役員')?'block':'none';
+  // お知らせ送信権限エリア(社員・役員のみ)
+  const sendPermArea=$('st-send-perm-section');
+  if(sendPermArea) sendPermArea.style.display=(kbn==='社員・役員')?'block':'none';
   // 保証・手当エリア（業務委託のみ）
   const hoshoArea=$('st-hosho-area');
   const showHosho=['個人事業主（歩合）','個人事業主（時間単価）','個人事業主（日額）','委託会社所属','スポット（単発）'].includes(kbn);
@@ -5684,6 +5705,9 @@ function resetStaffModal(){
   if($('st-delcol-companies'))$('st-delcol-companies').innerHTML='';
   // PIN状態リセット(Step A)
   _refreshStaffPinUI(null);
+  // お知らせ送信権限フラグもリセット
+  _editingSendPermission = false;
+  _updateSendPermUI();
   // ラベル更新
   onStKbnChange();
 }
@@ -12712,6 +12736,8 @@ function saveStaff(continueAdd=false){
         return loc?.id || null;
       }).filter(x=>x);
     })(),
+    // お知らせ送信権限(社員・役員のみ意味あり)
+    canSendNotification: (kbn==='社員・役員') ? !!_editingSendPermission : false,
   };
 
   // 退職の場合はアーカイブ情報を自動設定
@@ -12723,10 +12749,22 @@ function saveStaff(continueAdd=false){
 
   D.staff.push(newDrv);
 
-  // Firebaseのnikki_driversにも追加
+  // Firebaseのnikki_driversにも追加(お知らせ送信権限フラグも含める)
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
-  fbDrivers.push({id:String(empNo),name:newDrv.name,company:companyName,officeType,office:officeName,subOffices,kyuyo:newDrv.kyuyo||''});
-  fbSet('drivers',fbDrivers);
+  // 既存ドライバー削除(empNo一致)→新規追加で重複防止
+  const filteredFb = fbDrivers.filter(d => String(d.id)!==String(empNo));
+  filteredFb.push({
+    id:String(empNo),
+    name:newDrv.name,
+    company:companyName,
+    officeType,
+    office:officeName,
+    subOffices,
+    kyuyo:newDrv.kyuyo||'',
+    canSendNotification: !!newDrv.canSendNotification,
+  });
+  fbSet('drivers', filteredFb);
+  lsSet(LS_KEYS.DRIVERS, filteredFb);
 
   // フォームリセット
   const keepCompany=kbn==='会社委託'&&continueAdd;
@@ -14135,6 +14173,12 @@ function openDriverModal(drvId,coId){
   if($('drv-car'))$('drv-car').value=toHankaku(drv?.car||'');
   if($('drv-start'))$('drv-start').value=drv?.startDate||'';
   if($('drv-note'))$('drv-note').value=drv?.note||'';
+  // 業務種別を読込(レガシーは 'delivery')
+  const wt = drv?.workType || 'delivery';
+  document.querySelectorAll('input[name="drv-worktype"]').forEach(r=>{
+    r.checked = (r.value === wt);
+  });
+  onDrvWorkTypeChange();
   const delBtn=$('drv-delete-btn');if(delBtn)delBtn.style.display=drv?'':'none';
   const offList=$('drv-offices-list');
   if(offList){
@@ -14153,7 +14197,12 @@ function saveDriver(){
   const name=($('drv-name')?.value||'').trim();
   if(!name){alert('氏名を入力してください');return;}
   const drvNo=$('drv-id-disp')?.textContent||'';
+  const workType = document.querySelector('input[name="drv-worktype"]:checked')?.value || 'delivery';
   const driverOffices=[...document.querySelectorAll('.drv-off-chk:checked')].map(el=>parseInt(el.dataset.id));
+  // 集荷専従でない場合、営業所が1つは必要(警告のみ)
+  if(workType !== 'collection' && !driverOffices.length){
+    if(!confirm('業務種別が「集荷専従」以外ですが、担当営業所が選択されていません。\nこのまま保存しますか?')) return;
+  }
   // 委託ドライバーは宅配事業部所属とする
   const delDept = getDepartmentByType('del');
   const primaryOff = D.offices.find(o=>driverOffices.includes(o.id));
@@ -14167,19 +14216,35 @@ function saveDriver(){
   const newDrv={
     id:_drvEditId||(Date.now()),empNo:drvNo,driverNo:drvNo,name,kana:$('drv-kana')?.value||'',
     kubun:'委託ドライバー',companyId:_drvCoId,
-    office:(D.offices.find(o=>driverOffices.includes(o.id))?.name||''),
-    driverOffices,tel:toHankaku($('drv-tel')?.value||''),car:toHankaku($('drv-car')?.value||''),
+    workType: workType,
+    office:(workType === 'collection' ? '' : (D.offices.find(o=>driverOffices.includes(o.id))?.name||'')),
+    driverOffices:(workType === 'collection' ? [] : driverOffices),
+    tel:toHankaku($('drv-tel')?.value||''),car:toHankaku($('drv-car')?.value||''),
     startDate:$('drv-start')?.value||'',note:$('drv-note')?.value||'',
-    kyuyo:'個数制（歩合）',tanka:0,
+    kyuyo:'個数制(歩合)',tanka:0,
     // 部署・拠点(Phase 3追加)
     deptIds: delDept ? [delDept.id] : [],
     primaryDeptId: delDept?.id || null,
-    primaryLocationId: primaryLoc?.id || null,
-    subLocationIds: subLocs,
+    primaryLocationId: workType === 'collection' ? null : (primaryLoc?.id || null),
+    subLocationIds: workType === 'collection' ? [] : subLocs,
   };
   if(_drvEditId){const idx=D.staff.findIndex(x=>x.id===_drvEditId);if(idx>=0)D.staff[idx]={...D.staff[idx],...newDrv};else D.staff.push(newDrv);}
   else D.staff.push(newDrv);
   closeM('m-driver');renderCompanyPage();
+}
+
+// 業務種別変更時:担当営業所の表示切替
+function onDrvWorkTypeChange(){
+  const wt = document.querySelector('input[name="drv-worktype"]:checked')?.value || 'delivery';
+  const wrap = document.getElementById('drv-offices-wrap');
+  if(!wrap) return;
+  if(wt === 'collection'){
+    wrap.style.display = 'none';
+    // チェックも全外し
+    document.querySelectorAll('.drv-off-chk:checked').forEach(c=>{ c.checked = false; });
+  } else {
+    wrap.style.display = '';
+  }
 }
 
 function deleteDriver(){
@@ -21101,6 +21166,9 @@ function executeTSAction(){
   } else if(a.type==='contract-template'){
     // PIN認証成功後、Driveの契約書雛形フォルダを開く
     _doOpenContractTemplateFolder();
+  } else if(a.type==='send-perm-toggle'){
+    // 送信権限の切替を実行
+    _executeSendPermToggle();
   }
 }
 
@@ -21118,6 +21186,53 @@ function lockTS(){
 function lockPostInv(){
   if($('delinv-post-locked'))$('delinv-post-locked').style.display='block';
   if($('delinv-post-content'))$('delinv-post-content').style.display='none';
+}
+
+// ─────────────────────────────────────
+// お知らせ送信権限の切替
+// ─────────────────────────────────────
+
+// 現在編集中のドライバーの送信権限フラグ(モーダル内一時保持)
+let _editingSendPermission = false;
+
+// UI更新
+function _updateSendPermUI(){
+  const status = $('st-send-perm-status');
+  const btn = $('st-send-perm-btn');
+  if(!status || !btn) return;
+  if(_editingSendPermission){
+    status.textContent = '有効 (送信可能)';
+    status.style.color = 'var(--ok)';
+    status.style.fontWeight = '700';
+    btn.textContent = '無効化する';
+    btn.classList.remove('b-amb');
+    btn.classList.add('b-red');
+  } else {
+    status.textContent = '無効';
+    status.style.color = 'var(--txt2)';
+    status.style.fontWeight = '500';
+    btn.textContent = '有効化する';
+    btn.classList.remove('b-red');
+    btn.classList.add('b-amb');
+  }
+}
+
+// 送信権限切替ボタン押下
+function toggleSendPermission(){
+  // 既存のTS PIN認証を要求
+  if(isTSAuthenticated()){
+    // セッション内なら即実行
+    _executeSendPermToggle();
+    return;
+  }
+  tsPendingAction = {type:'send-perm-toggle'};
+  openTSOverlay();
+}
+
+// 認証成功後の実行
+function _executeSendPermToggle(){
+  _editingSendPermission = !_editingSendPermission;
+  _updateSendPermUI();
 }
 
 // TSピン変更
@@ -22815,6 +22930,9 @@ function _editStaffImpl(id){
   if(lbl) lbl.textContent=KY_LABEL_MAP[ky]||ky;
   // 役員報酬
   if($('st-exec-pay'))$('st-exec-pay').value=s.execPay||'';
+  // お知らせ送信権限
+  _editingSendPermission = !!s.canSendNotification;
+  _updateSendPermUI();
   // 保証・手当復元
   if(s.hoshoB){
     if($('st-hosho-b-on'))$('st-hosho-b-on').checked=s.hoshoB.on||false;
@@ -24581,7 +24699,36 @@ window.dqImportJson = function(){
       <input type="text" id="drv-car" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;" placeholder="大阪 330 あ 1234">
     </div>
     <div class="fg" style="grid-column:span 2;">
-      <label style="font-size:12px;">担当営業所（複数選択可）</label>
+      <label style="font-size:12px;font-weight:700;">業務種別 <span style="color:var(--red2);">*</span></label>
+      <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+        <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;cursor:pointer;">
+          <input type="radio" name="drv-worktype" value="delivery" checked onchange="onDrvWorkTypeChange()" style="margin:0;">
+          <div style="font-size:11px;line-height:1.4;">
+            <div style="font-weight:700;">宅配中心</div>
+            <div style="font-size:9.5px;color:var(--txt2);">郵便局所属(集荷も対応可)</div>
+          </div>
+        </label>
+        <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;cursor:pointer;">
+          <input type="radio" name="drv-worktype" value="both" onchange="onDrvWorkTypeChange()" style="margin:0;">
+          <div style="font-size:11px;line-height:1.4;">
+            <div style="font-weight:700;">両方(兼務)</div>
+            <div style="font-size:9.5px;color:var(--txt2);">宅配と集荷を兼務</div>
+          </div>
+        </label>
+        <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;cursor:pointer;">
+          <input type="radio" name="drv-worktype" value="collection" onchange="onDrvWorkTypeChange()" style="margin:0;">
+          <div style="font-size:11px;line-height:1.4;">
+            <div style="font-weight:700;">集荷事業専従</div>
+            <div style="font-size:9.5px;color:var(--txt2);">郵便局所属なし</div>
+          </div>
+        </label>
+      </div>
+      <div style="margin-top:6px;padding:8px 10px;background:rgba(45,109,180,.06);border-left:3px solid var(--tel2);border-radius:0 4px 4px 0;font-size:10.5px;color:var(--txt2);line-height:1.5;">
+        宅配は配属が決定していない場合、もしくは可能性があっても現状で予定がない場合は<strong>集荷事業専従</strong>を選択してください。後にオーナーページから変更できます。
+      </div>
+    </div>
+    <div class="fg" id="drv-offices-wrap" style="grid-column:span 2;">
+      <label style="font-size:12px;">担当営業所(複数選択可)</label>
       <div id="drv-offices-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:8px;"></div>
     </div>
     <div class="fg">
