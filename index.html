@@ -6607,10 +6607,13 @@ function renderCustTbl(){
   const q=($('cust-search')?.value||'').trim().toLowerCase();
   const sort=$('cust-sort')?.value||'no-asc';
   let list=[...(D.customers||[])].filter(cu=>cu.status!=='終了'); // アーカイブ済は除外
-  if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(cu.custNo||'').toString().toLowerCase().includes(q);});
+  if(q) list=list.filter(function(cu){return (cu.name||'').toLowerCase().includes(q)||(_normalizeCustNo(cu.custNo)||'').includes(q);});
   list.sort(function(a,b){
-    if(sort==='no-asc')  return String(a.custNo||'').localeCompare(String(b.custNo||''));
-    if(sort==='no-desc') return String(b.custNo||'').localeCompare(String(a.custNo||''));
+    // 顧客番号は数値ソート(001,002,003...)
+    const numA = parseInt(_normalizeCustNo(a.custNo)) || 0;
+    const numB = parseInt(_normalizeCustNo(b.custNo)) || 0;
+    if(sort==='no-asc')  return numA - numB;
+    if(sort==='no-desc') return numB - numA;
     if(sort==='name-asc') return (a.name||'').localeCompare(b.name||'');
     if(sort==='name-desc') return (b.name||'').localeCompare(a.name||'');
     return 0;
@@ -6623,7 +6626,7 @@ function renderCustTbl(){
     const cp=cu.colPrices||cu.prices||{};
     const active=cu.invoiceEnabled!==false;
     html.push('<tr>');
-    html.push('<td class="mono">'+esc(cu.custNo||'')+'</td>');
+    html.push('<td class="mono">'+esc(_normalizeCustNo(cu.custNo)||cu.custNo||'')+'</td>');
     html.push('<td>'+custLink(cu.name||'')+'</td>');
     html.push('<td>'+esc(cu.region||'')+'</td>');
     html.push('<td class="tr mono">'+(cp.p60?'¥'+cp.p60:'-')+'</td>');
@@ -8395,11 +8398,101 @@ function addCuCharterRow(){
 }
 
 function genCustNo(){
-  // 現役のみから最大値+1を採番（アーカイブ済みの番号は空きとして再利用可能）
-  const active = D.customers.filter(c=>c.status!=='終了');
-  const existing = active.map(c=>parseInt(c.custNo)||0).filter(n=>n>0);
-  const next = existing.length?Math.max(...existing)+1:1;
-  return String(next).padStart(4,'0');
+  // 1〜999の範囲で空き番号を採番(現役+1年以内に終了した顧客を除外)
+  const lockedNos = _getLockedCustNos(); // 1年以内終了の番号(再利用不可)
+  for(let n=1; n<=999; n++){
+    const noStr = String(n).padStart(3,'0');
+    // 現役顧客が同じ番号を使っていれば除外
+    const inUse = D.customers.find(c=>{
+      const cn = _normalizeCustNo(c.custNo);
+      return cn === noStr && c.status !== '終了';
+    });
+    if(inUse) continue;
+    // ロック中の番号(1年以内に終了)も除外
+    if(lockedNos.includes(noStr)) continue;
+    return noStr;
+  }
+  // 999まで埋まっている場合
+  alert('顧客番号が満杯です(1〜999)。古い番号の整理が必要です。');
+  return '';
+}
+
+/** 顧客番号を3桁ゼロパディング形式に正規化 */
+function _normalizeCustNo(no){
+  if(!no) return '';
+  const s = String(no).trim();
+  if(!s) return '';
+  // 数字以外を除去
+  const digits = s.replace(/\D/g, '');
+  if(!digits) return s; // 数字なし(特殊な番号)はそのまま
+  const n = parseInt(digits);
+  if(isNaN(n) || n < 1 || n > 999) return s;
+  return String(n).padStart(3,'0');
+}
+
+/** 1年以内に終了した顧客の番号(再利用ロック中) */
+function _getLockedCustNos(){
+  const locked = [];
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  (D.customers||[]).forEach(c=>{
+    if(c.status !== '終了') return;
+    const archDate = c.archivedAt || c.statusChangedAt;
+    if(!archDate) return;
+    const d = new Date(archDate);
+    if(d >= oneYearAgo){
+      const cn = _normalizeCustNo(c.custNo);
+      if(cn) locked.push(cn);
+    }
+  });
+  return locked;
+}
+
+/** 終了顧客との類似マッチ検出
+ *  顧客名・電話・FAX・住所・代表者名で照合し、ヒット数2以上で「同一顧客の可能性」と判定
+ *  返り値: マッチした終了顧客の配列(一致度順) */
+function _findSimilarArchivedCustomers(name, tel, fax, addr, repName){
+  const matches = [];
+  const nameNorm = (name||'').replace(/[\s\u3000・,、.]/g, '').toLowerCase();
+  const telNorm = (tel||'').replace(/[^\d]/g, '');
+  const faxNorm = (fax||'').replace(/[^\d]/g, '');
+  const addrNorm = (addr||'').replace(/[\s\u3000]/g, '');
+  const repNorm = (repName||'').replace(/[\s\u3000・,、.]/g, '').toLowerCase();
+  if(!nameNorm && !telNorm && !faxNorm && !addrNorm && !repNorm) return [];
+
+  (D.customers||[]).forEach(c=>{
+    if(c.status !== '終了') return; // 終了顧客のみ
+    let score = 0;
+    const reasons = [];
+    // 顧客名(部分一致でもOK)
+    const cnName = (c.name||'').replace(/[\s\u3000・,、.]/g, '').toLowerCase();
+    if(nameNorm && cnName){
+      if(cnName === nameNorm){ score += 3; reasons.push('顧客名 完全一致'); }
+      else if(cnName.includes(nameNorm) || nameNorm.includes(cnName)){ score += 2; reasons.push('顧客名 部分一致'); }
+    }
+    // 電話
+    const cnTel = (c.tel||'').replace(/[^\d]/g, '');
+    if(telNorm && cnTel && cnTel === telNorm){ score += 3; reasons.push('電話番号 一致'); }
+    // FAX
+    const cnFax = (c.fax||'').replace(/[^\d]/g, '');
+    if(faxNorm && cnFax && cnFax === faxNorm){ score += 2; reasons.push('FAX 一致'); }
+    // 住所(都道府県+市区町村レベル)
+    const cnAddr = (c.addr||'').replace(/[\s\u3000]/g, '');
+    if(addrNorm && cnAddr){
+      // 先頭10文字で前方一致(都道府県+市区町村相当)
+      const a1 = addrNorm.slice(0, 10);
+      const a2 = cnAddr.slice(0, 10);
+      if(a1 === a2 && a1.length >= 4){ score += 2; reasons.push('住所 前方一致'); }
+    }
+    // 代表者名(完全一致のみ)
+    const cnRep = (c.repName||'').replace(/[\s\u3000・,、.]/g, '').toLowerCase();
+    if(repNorm && cnRep && cnRep === repNorm){ score += 2; reasons.push('代表者名 一致'); }
+    if(score >= 3){ // ヒット2項目以上(★3個以上の重み)
+      matches.push({ customer: c, score, reasons });
+    }
+  });
+  matches.sort((a,b) => b.score - a.score);
+  return matches;
 }
 
 // ※ 削除番号レジストリは廃止（アーカイブ済み番号の再利用を許可するため）
@@ -8568,13 +8661,79 @@ async function onCuZipBlur(){
   }catch(e){}
 }
 
-function saveCust(){
+async function saveCust(){
   const name=$('cu-name')?.value.trim();if(!name){alert('顧客名を入力してください');return;}
+  // 顧客番号を3桁形式に正規化
   let custNo=$('cu-no')?.value.trim()||genCustNo();
-  // 重複チェック（編集中のID除外）
+  custNo = _normalizeCustNo(custNo);
+  if(!custNo){
+    alert('顧客番号が不正です(1〜999の範囲で入力してください)');
+    return;
+  }
+  // 重複チェック(編集中のID除外、正規化後で比較)
   const editId=$('m-cust')?._editId;
-  if(D.customers.find(c=>c.custNo===custNo && c.id!==editId && c.status!=='終了')){
-    alert(`顧客番号 ${custNo} は現役の顧客で使用されています`);return;
+  const dupCust = D.customers.find(c=>_normalizeCustNo(c.custNo)===custNo && c.id!==editId && c.status!=='終了');
+  if(dupCust){
+    alert(`顧客番号 ${custNo} は現役の顧客「${dupCust.name}」で使用されています`);return;
+  }
+  // 1年以内終了番号のロックチェック(編集時は除外、新規時のみ)
+  if(!editId){
+    const locked = _getLockedCustNos();
+    if(locked.includes(custNo)){
+      const lockedCust = D.customers.find(c=>_normalizeCustNo(c.custNo)===custNo && c.status==='終了');
+      const lockedName = lockedCust ? lockedCust.name : '';
+      const ok = await showDialog({
+        icon:'⚠️',
+        title:'番号ロック中',
+        msg:`顧客番号 ${custNo} は1年以内に終了した顧客「${lockedName}」で使用されていました。\n\n誤って同じ番号を使うと旧顧客のデータと混同する恐れがあります。\n\n別の番号を選択することをお勧めします。`,
+        okText:'別の番号を選ぶ',
+        cancelText:'それでも続行',
+      });
+      if(ok){
+        // 「別の番号を選ぶ」を選択 → 自動採番
+        const newNo = genCustNo();
+        if(!newNo) return;
+        if($('cu-no')) $('cu-no').value = newNo;
+        custNo = newNo;
+      }
+      // 「それでも続行」→ そのまま使用
+    }
+  }
+  // 新規登録時: 終了顧客との類似マッチを検出
+  if(!editId){
+    const tel = $('cu-tel')?.value.trim() || '';
+    const fax = $('cu-fax')?.value.trim() || '';
+    const addr = $('cu-addr')?.value.trim() || '';
+    const repName = $('cu-rep-name')?.value.trim() || '';
+    const matches = _findSimilarArchivedCustomers(name, tel, fax, addr, repName);
+    if(matches.length > 0){
+      const m = matches[0];
+      const c = m.customer;
+      const archDate = c.archivedAt || c.statusChangedAt || '不明';
+      const oldNo = _normalizeCustNo(c.custNo) || '?';
+      const result = await showDialog({
+        icon:'🔍',
+        title:'過去顧客と一致',
+        msg:`同じ顧客の可能性があります。\n\n[${oldNo}] ${c.name}\n終了日: ${archDate}\n一致項目: ${m.reasons.join(' / ')}\n\nこの過去顧客を「取引再開」しますか?\n(同じ顧客番号 ${oldNo} で復活します)`,
+        okText:`取引再開(番号${oldNo})`,
+        cancelText:'別顧客として新規登録',
+      });
+      if(result){
+        // 取引再開: 既存顧客の status を 稼働中 に戻して、入力内容で更新
+        const idx = D.customers.findIndex(x => x.id === c.id);
+        if(idx >= 0){
+          // 編集モードに切り替えて保存続行
+          $('m-cust')._editId = c.id;
+          custNo = oldNo;
+          if($('cu-no')) $('cu-no').value = oldNo;
+          // 取引状態を稼働中に戻す
+          if($('cu-status')) $('cu-status').value = '稼働中';
+          // status reason クリア
+          if($('cu-status-reason')) $('cu-status-reason').value = '';
+        }
+      }
+      // 「別顧客として新規登録」→ そのまま新規として続行
+    }
   }
   const tt=$('cu-tax-type')?.value||'ex';
   const tc=v=>taxConv(v,tt);
@@ -9775,7 +9934,8 @@ function archiveDelete(kind, id){
 function editCust(id){
   const c=D.customers.find(x=>x.id===id);if(!c)return;
   if($('cu-no')){
-    $('cu-no').value=c.custNo||'';
+    // 顧客番号を3桁ゼロパディング形式で表示
+    $('cu-no').value=_normalizeCustNo(c.custNo)||c.custNo||'';
     $('cu-no').readOnly=false;
     $('cu-no').style.background='var(--bg2)';
     $('cu-no').style.color='var(--txt)';
