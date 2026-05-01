@@ -688,6 +688,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="pu-sum" onclick="nav(this)"><span class="ni-ico">📊</span>品目別集計</div>
       <div class="ni" data-s="pu-cust" onclick="nav(this)"><span class="ni-ico">🤝</span>顧客・契約管理</div>
       <div class="ni" data-s="pu-inv" onclick="nav(this)"><span class="ni-ico">💰</span>請求書</div>
+      <div class="ni" data-s="schedule-mgmt" onclick="nav(this)"><span class="ni-ico">📅</span>休業日管理</div>
+      <div class="ni" data-s="schedule-survey" onclick="nav(this)"><span class="ni-ico">📨</span>休業調査<span class="nbadge" id="nb-survey">0</span></div>
     </div>
   </div>
 
@@ -1510,6 +1512,56 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- 集荷請求 -->
     <div id="s-pu-inv" class="sec"></div>
+
+    <!-- ══ 休業日管理(Phase 1) ══ -->
+    <div id="s-schedule-mgmt" class="sec">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:16px;font-weight:700;">📅 休業日管理</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn b-prim btn-sm" onclick="openScheduleAddModal('customer')">+ 顧客休業を追加</button>
+            <button class="btn b-prim btn-sm" onclick="openScheduleAddModal('route')">+ ルート休業を追加</button>
+          </div>
+        </div>
+        <!-- 表示モード切替 + エリアフィルタ -->
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-sm b-prim" id="btn-sm-view-cal" onclick="setScheduleMgmtView('calendar')">カレンダー</button>
+            <button class="btn btn-sm b-gh" id="btn-sm-view-list" onclick="setScheduleMgmtView('list')">リスト</button>
+            <button class="btn btn-sm b-gh" id="btn-sm-view-log" onclick="setScheduleMgmtView('log')">ログ</button>
+          </div>
+          <div style="flex:1;min-width:120px;"></div>
+          <select id="sm-office-filter" onchange="renderScheduleMgmt()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--gray3);">
+            <option value="">全営業所</option>
+          </select>
+          <select id="sm-target-filter" onchange="renderScheduleMgmt()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--gray3);">
+            <option value="all">全種別</option>
+            <option value="customer">顧客のみ</option>
+            <option value="route">ルートのみ</option>
+          </select>
+        </div>
+        <!-- 月切替 -->
+        <div style="display:flex;align-items:center;gap:12px;justify-content:center;">
+          <button class="btn b-gh btn-sm" onclick="changeScheduleMgmtMonth(-1)">‹ 前月</button>
+          <div id="sm-current-month" style="font-size:14px;font-weight:700;min-width:120px;text-align:center;"></div>
+          <button class="btn b-gh btn-sm" onclick="changeScheduleMgmtMonth(1)">次月 ›</button>
+          <button class="btn b-gh btn-sm" onclick="resetScheduleMgmtMonth()">今月</button>
+        </div>
+      </div>
+      <!-- メインコンテンツ -->
+      <div id="sm-content"></div>
+    </div>
+
+    <!-- ══ 休業調査(Phase 1) ══ -->
+    <div id="s-schedule-survey" class="sec">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:16px;font-weight:700;">📨 休業調査</h2>
+          <button class="btn b-prim btn-sm" onclick="openSurveyCreateModal()">+ 新規調査作成</button>
+        </div>
+      </div>
+      <div id="ss-content"></div>
+    </div>
 
     <!-- CSVインポート -->
     <div id="s-import" class="sec">
@@ -4162,7 +4214,20 @@ const LS_KEYS = {
   STAFF:    'nikki_staff',
   DEPARTMENTS: 'nikki_departments',   // 部署マスタ(Phase 1追加)
   LOCATIONS:   'nikki_locations',     // 拠点マスタ(Phase 1追加)
+  // 休業調査システム(Phase 1: 2026/05/01追加)
+  SCHEDULE_OVERRIDES: 'nikki_schedule_overrides',  // 顧客の休業/時間変更
+  SCHEDULE_SURVEYS:   'nikki_schedule_surveys',    // 調査依頼
+  SURVEY_RESPONSES:   'nikki_survey_responses',    // 回答状況
+  SCHEDULE_LOGS:      'nikki_schedule_logs',       // 変更ログ
+  CUSTOMER_NOTES:     'nikki_customer_notes',      // 顧客申し送りメモ
 };
+
+// 休業調査システム データ(グローバル) - lsGet 後に初期化される
+let SCHEDULE_OVERRIDES = [];
+let SCHEDULE_SURVEYS = [];
+let SURVEY_RESPONSES = [];
+let SCHEDULE_LOGS = [];
+let CUSTOMER_NOTES = [];
 
 let fbDB = null;
 let fbOnline = false;
@@ -4180,6 +4245,13 @@ const lsSet = (k, v) => {
   try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
   // localStorage不可でも動作継続（D.xxx はメモリ上で保持）
 };
+
+// 休業調査システム データ初期化(localStorageから復元)
+SCHEDULE_OVERRIDES = lsGet(LS_KEYS.SCHEDULE_OVERRIDES, []);
+SCHEDULE_SURVEYS = lsGet(LS_KEYS.SCHEDULE_SURVEYS, []);
+SURVEY_RESPONSES = lsGet(LS_KEYS.SURVEY_RESPONSES, []);
+SCHEDULE_LOGS = lsGet(LS_KEYS.SCHEDULE_LOGS, []);
+CUSTOMER_NOTES = lsGet(LS_KEYS.CUSTOMER_NOTES, []);
 
 // ══════════════════════════════════════════════════
 // 部署・拠点ヘルパー関数 (Phase 1)
@@ -5121,6 +5193,41 @@ function setupRealtimeSync() {
     lsSet(LS_KEYS.ATT, snap.val());
     renderSalary(); // 勤怠データ更新時は給与計算を再描画
   });
+
+  // ══ 休業調査システム (Phase 1: 2026/05/01) ══
+  onValue(ref(fbDB, 'nikki/schedule_overrides'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    SCHEDULE_OVERRIDES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.SCHEDULE_OVERRIDES, SCHEDULE_OVERRIDES);
+    if (typeof renderScheduleMgmt === 'function' && document.getElementById('scr-schedule-mgmt')) renderScheduleMgmt();
+  });
+  onValue(ref(fbDB, 'nikki/schedule_surveys'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    SCHEDULE_SURVEYS = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.SCHEDULE_SURVEYS, SCHEDULE_SURVEYS);
+    if (typeof renderScheduleSurvey === 'function' && document.getElementById('scr-schedule-survey')) renderScheduleSurvey();
+  });
+  onValue(ref(fbDB, 'nikki/survey_responses'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    SURVEY_RESPONSES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.SURVEY_RESPONSES, SURVEY_RESPONSES);
+    if (typeof renderScheduleSurvey === 'function' && document.getElementById('scr-schedule-survey')) renderScheduleSurvey();
+  });
+  onValue(ref(fbDB, 'nikki/schedule_logs'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    SCHEDULE_LOGS = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.SCHEDULE_LOGS, SCHEDULE_LOGS);
+  });
+  onValue(ref(fbDB, 'nikki/customer_notes'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    CUSTOMER_NOTES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.CUSTOMER_NOTES, CUSTOMER_NOTES);
+  });
 }
 
 // Firebase接続状態バッジ表示
@@ -5809,6 +5916,8 @@ const _TOP_TABS = {
     { s:'pu-sum',     label:'品目別集計' },
     { s:'pu-cust',    label:'顧客・契約管理' },
     { s:'pu-inv',     label:'請求書' },
+    { s:'schedule-mgmt',   label:'休業日管理' },
+    { s:'schedule-survey', label:'休業調査', badge:'survey' },
   ]},
   hr:       { subs: [
     { s:'staff',       label:'従業員管理' },
@@ -9725,7 +9834,7 @@ function renderStaff(flt){
         s.kyuyo==='月給'?'¥'+fmt(s.tanka)+'/月':'¥'+fmt(s.tanka)}</td>
       <td class="tr">${fmt(kn)}</td>
       <td class="tr fw7">¥${fmt(est)}</td>
-      <td><button class="btn b-gh btn-sm" onclick="event.stopPropagation();editStaff(${s.id})">編集</button></td>
+      <td><button class="btn b-gh btn-sm" onclick="event.stopPropagation();editStaff('${s.id}')">編集</button></td>
     </tr>`;
   });
   $('tb-staff').innerHTML=h;
@@ -12890,9 +12999,11 @@ function openRouteModal(routeId){
     const e=$(id);if(e)e.value='';
   });
   if($('rt-stop-count')) $('rt-stop-count').value='1';
+  if($('rt-rounds')) $('rt-rounds').value='1';
   if($('rt-pattern')) $('rt-pattern').value='D';
   if($('rt-tax')) $('rt-tax').value='ex';
   renderRtCustChips();
+  renderRtWeekdays([1,2,3,4,5]);  // デフォルト平日のみ
   onRtPatternChange();
 
   // 編集時:データ復元(オーナー非依存)
@@ -12903,6 +13014,7 @@ function openRouteModal(routeId){
       if($('rt-name')) $('rt-name').value=rt.name||'';
       if($('rt-fromto')) $('rt-fromto').value=rt.fromTo||'';
       if($('rt-stop-count')) $('rt-stop-count').value=rt.stopCount||1;
+      if($('rt-rounds')) $('rt-rounds').value=rt.rounds||1;
       if($('rt-tax')) $('rt-tax').value=rt.taxType||'ex';
       if($('rt-note')) $('rt-note').value=rt.note||'';
       if($('rt-route-price')) $('rt-route-price').value=rt.routePrice||rt.dailyAmt||0;
@@ -12911,23 +13023,77 @@ function openRouteModal(routeId){
         return c?{id:cid,name:c.name}:null;
       }).filter(Boolean);
       renderRtCustChips();
+      renderRtWeekdays(Array.isArray(rt.weekdays) ? rt.weekdays : [0,1,2,3,4,5,6]);
     }
   }
   openM('m-route');
 }
 
-// ─── 顧客チップ描画 ───
+// ─── 顧客チップ描画(立寄り順) ───
 function renderRtCustChips(){
   const el=$('rt-cust-list');if(!el)return;
-  el.innerHTML=_rtSelCusts.map(c=>
-    `<span style="background:var(--tel3);border:1px solid var(--tel);border-radius:4px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:5px;">
+  el.innerHTML=_rtSelCusts.map((c,idx)=>{
+    const isFirst = idx === 0;
+    const isLast = idx === _rtSelCusts.length - 1;
+    return `<span style="background:var(--tel3);border:1px solid var(--tel);border-radius:4px;padding:4px 6px 4px 8px;font-size:12px;display:inline-flex;align-items:center;gap:4px;">
+      <span style="font-size:9.5px;color:var(--txt2);font-weight:600;min-width:14px;text-align:right;">${idx+1}.</span>
       <span style="font-size:10px;color:var(--amb2);">${D.customers.find(x=>x.id===c.id)?.custNo||''}</span>
-      ${c.name}
-      <span style="cursor:pointer;color:var(--red2);font-weight:700;font-size:14px;line-height:1;" onclick="removeRtCust(${c.id})">×</span>
-    </span>`
-  ).join('')+(
+      <span>${c.name}</span>
+      <button type="button" onclick="moveRtCust(${c.id},-1)" ${isFirst?'disabled':''} title="上へ" style="background:transparent;border:none;cursor:${isFirst?'default':'pointer'};opacity:${isFirst?'0.25':'0.7'};font-size:10px;padding:0 2px;color:var(--txt2);">▲</button>
+      <button type="button" onclick="moveRtCust(${c.id},1)" ${isLast?'disabled':''} title="下へ" style="background:transparent;border:none;cursor:${isLast?'default':'pointer'};opacity:${isLast?'0.25':'0.7'};font-size:10px;padding:0 2px;color:var(--txt2);">▼</button>
+      <span style="cursor:pointer;color:var(--red2);font-weight:700;font-size:14px;line-height:1;padding:0 2px;" onclick="removeRtCust(${c.id})">×</span>
+    </span>`;
+  }).join('')+(
     _rtSelCusts.length?'':'<span style="font-size:11px;color:var(--txt2);padding:4px;align-self:center;">🔍 下の検索欄から顧客を追加してください</span>'
   );
+}
+
+// 立寄り順を上下に移動
+function moveRtCust(id, delta){
+  const idx = _rtSelCusts.findIndex(c=>c.id===id);
+  if(idx === -1) return;
+  const newIdx = idx + delta;
+  if(newIdx < 0 || newIdx >= _rtSelCusts.length) return;
+  const tmp = _rtSelCusts[idx];
+  _rtSelCusts[idx] = _rtSelCusts[newIdx];
+  _rtSelCusts[newIdx] = tmp;
+  renderRtCustChips();
+}
+
+// ─── 曜日チップ描画+トグル ───
+const _RT_WEEKDAY_LABELS = ['日','月','火','水','木','金','土'];
+function renderRtWeekdays(activeArr){
+  const el = $('rt-weekdays');
+  if(!el) return;
+  // activeArr が undefined / null の場合は全曜日 active
+  const active = Array.isArray(activeArr) ? activeArr : [0,1,2,3,4,5,6];
+  el.innerHTML = _RT_WEEKDAY_LABELS.map((lbl,i)=>{
+    const isActive = active.includes(i);
+    const isWeekend = (i===0||i===6);
+    const color = isActive ? (isWeekend ? '#dc2626' : 'var(--amb2)') : 'var(--txt2)';
+    const bg = isActive ? (isWeekend ? '#fee2e2' : 'var(--tel3)') : 'transparent';
+    const border = isActive ? (isWeekend ? '#dc2626' : 'var(--tel)') : 'var(--brd)';
+    return `<button type="button" id="rt-wd-${i}" data-active="${isActive?'1':'0'}" onclick="toggleRtWeekday(${i})" style="background:${bg};border:1px solid ${border};color:${color};border-radius:4px;padding:6px 11px;font-size:12px;font-weight:${isActive?'700':'500'};cursor:pointer;min-width:36px;">${lbl}</button>`;
+  }).join('');
+}
+function toggleRtWeekday(i){
+  const btn = $(`rt-wd-${i}`);
+  if(!btn) return;
+  const newState = btn.dataset.active === '1' ? '0' : '1';
+  btn.dataset.active = newState;
+  // 再描画(active状態を反映)
+  const active = [];
+  for(let j=0;j<7;j++){
+    if(($(`rt-wd-${j}`)?.dataset.active) === '1') active.push(j);
+  }
+  renderRtWeekdays(active);
+}
+function rtSetWeekdaysPreset(preset){
+  let active;
+  if(preset === 'weekday') active = [1,2,3,4,5];
+  else if(preset === 'weekend') active = [0,6];
+  else active = [0,1,2,3,4,5,6];
+  renderRtWeekdays(active);
 }
 
 function removeRtCust(id){
@@ -13060,6 +13226,15 @@ function saveRoute(){
   const dup = routes.find(r=>r.name===name && r.id!==_rtEditId);
   if(dup){alert(`「${name}」は既に登録されています。別の名前にしてください。`);return;}
 
+  // 曜日チップから稼働曜日を収集(0=日,1=月,...,6=土)
+  const weekdays = [];
+  for(let i=0;i<7;i++){
+    const el = $(`rt-wd-${i}`);
+    if(el && el.dataset.active === '1') weekdays.push(i);
+  }
+  // すべて選択(または未設定)の場合は[0,1,2,3,4,5,6]を保存
+  const finalWeekdays = weekdays.length ? weekdays : [0,1,2,3,4,5,6];
+
   const newRoute={
     id:_rtEditId||('rt_'+Date.now()),
     name,
@@ -13068,12 +13243,15 @@ function saveRoute(){
     dailyAmt:routePrice,
     fromTo:($('rt-fromto')?.value||'').trim(),           // 区間(どこからどこまで)
     stopCount:parseInt($('rt-stop-count')?.value)||1,    // 立ち寄り件数
-    customers:_rtSelCusts.map(c=>c.id),
+    customers:_rtSelCusts.map(c=>c.id),                  // 立寄り順=配列順
     taxType:$('rt-tax')?.value||'ex',
     itemPrices:null,
     steps:null,
     note:$('rt-note')?.value||'',
     ownerType:_rtOwnerType,
+    // 新規追加
+    weekdays: finalWeekdays,                             // 稼働曜日(0=日〜6=土)
+    rounds: parseInt($('rt-rounds')?.value)||1,          // 1日あたりの実施回数
   };
 
   if(_rtEditId){
@@ -13116,6 +13294,1260 @@ function syncColRoutesToFirebase(){
     });
   });
   fbSet('col_routes',allRoutes);
+}
+
+// ══════════════════════════════════════════════════
+// 休業調査システム 保存ヘルパー(Phase 1: 2026/05/01)
+// ══════════════════════════════════════════════════
+
+/** SCHEDULE_OVERRIDES を保存(localStorage + Firebase) */
+async function saveScheduleOverrides(){
+  lsSet(LS_KEYS.SCHEDULE_OVERRIDES, SCHEDULE_OVERRIDES);
+  try{ await fbSet('schedule_overrides', SCHEDULE_OVERRIDES); }catch(e){ console.warn('Firebase同期失敗:', e); }
+}
+
+/** SCHEDULE_SURVEYS を保存 */
+async function saveScheduleSurveys(){
+  lsSet(LS_KEYS.SCHEDULE_SURVEYS, SCHEDULE_SURVEYS);
+  try{ await fbSet('schedule_surveys', SCHEDULE_SURVEYS); }catch(e){ console.warn('Firebase同期失敗:', e); }
+}
+
+/** SURVEY_RESPONSES を保存 */
+async function saveSurveyResponses(){
+  lsSet(LS_KEYS.SURVEY_RESPONSES, SURVEY_RESPONSES);
+  try{ await fbSet('survey_responses', SURVEY_RESPONSES); }catch(e){ console.warn('Firebase同期失敗:', e); }
+}
+
+/** SCHEDULE_LOGS を保存 */
+async function saveScheduleLogs(){
+  // 1年以上古いログは自動削除
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 1);
+  SCHEDULE_LOGS = SCHEDULE_LOGS.filter(l => {
+    try { return new Date(l.timestamp) > cutoff; } catch { return true; }
+  });
+  lsSet(LS_KEYS.SCHEDULE_LOGS, SCHEDULE_LOGS);
+  try{ await fbSet('schedule_logs', SCHEDULE_LOGS); }catch(e){ console.warn('Firebase同期失敗:', e); }
+}
+
+/** ログ記録ヘルパー */
+async function recordScheduleLog(action, scheduleRecord, oldValue, actor){
+  const log = {
+    id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    scheduleId: scheduleRecord?.id || null,
+    action: action,  // 'create' | 'update' | 'delete'
+    oldValue: oldValue || null,
+    newValue: scheduleRecord || null,
+    diffSummary: _buildScheduleDiffSummary(action, scheduleRecord, oldValue),
+    actorId: actor?.id || 'unknown',
+    actorName: actor?.name || 'システム',
+    actorRole: actor?.role || 'staff',  // 'driver' | 'staff' | 'system'
+    timestamp: new Date().toISOString(),
+  };
+  SCHEDULE_LOGS.push(log);
+  await saveScheduleLogs();
+  return log;
+}
+
+/** ログの差分サマリを生成 */
+function _buildScheduleDiffSummary(action, newVal, oldVal){
+  if(action === 'create'){
+    if(!newVal) return '新規登録';
+    const target = newVal.targetType === 'route' ? `ルート「${newVal.routeName||''}」` : `顧客「${newVal.customerName||''}」`;
+    const kind = newVal.kind === 'rest' ? '休業' : (newVal.kind === 'time' ? '時間変更' : '');
+    return `${target} ${newVal.date} に${kind}を登録`;
+  }
+  if(action === 'delete'){
+    if(!oldVal) return '削除';
+    const target = oldVal.targetType === 'route' ? `ルート「${oldVal.routeName||''}」` : `顧客「${oldVal.customerName||''}」`;
+    return `${target} ${oldVal.date} の登録を削除`;
+  }
+  if(action === 'update'){
+    const parts = [];
+    if(oldVal?.kind !== newVal?.kind) parts.push(`種類: ${oldVal?.kind||''}→${newVal?.kind||''}`);
+    if(oldVal?.date !== newVal?.date) parts.push(`日付: ${oldVal?.date||''}→${newVal?.date||''}`);
+    if(oldVal?.startTime !== newVal?.startTime) parts.push(`開始: ${oldVal?.startTime||''}→${newVal?.startTime||''}`);
+    if(oldVal?.endTime !== newVal?.endTime) parts.push(`終了: ${oldVal?.endTime||''}→${newVal?.endTime||''}`);
+    if(oldVal?.note !== newVal?.note) parts.push(`備考変更`);
+    return parts.length ? parts.join(' / ') : '内容変更';
+  }
+  return action;
+}
+
+// ══════════════════════════════════════════════════
+// 休業日管理 画面 (Phase 1: 2026/05/01)
+// ══════════════════════════════════════════════════
+
+let _smState = {
+  view: 'calendar',  // 'calendar' | 'list' | 'log'
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1,  // 1-12
+};
+
+function setScheduleMgmtView(v){
+  _smState.view = v;
+  ['cal','list','log'].forEach(k=>{
+    const btn = document.getElementById('btn-sm-view-'+k);
+    if(btn){
+      btn.classList.toggle('b-prim', k === v || (k === 'cal' && v === 'calendar'));
+      btn.classList.toggle('b-gh', !(k === v || (k === 'cal' && v === 'calendar')));
+    }
+  });
+  renderScheduleMgmt();
+}
+
+function changeScheduleMgmtMonth(delta){
+  let m = _smState.month + delta;
+  let y = _smState.year;
+  if(m < 1){ m = 12; y--; }
+  if(m > 12){ m = 1; y++; }
+  _smState.month = m;
+  _smState.year = y;
+  renderScheduleMgmt();
+}
+
+function resetScheduleMgmtMonth(){
+  _smState.year = new Date().getFullYear();
+  _smState.month = new Date().getMonth() + 1;
+  renderScheduleMgmt();
+}
+
+function renderScheduleMgmt(){
+  if(!document.getElementById('s-schedule-mgmt')) return;
+  // 月表示
+  const lbl = document.getElementById('sm-current-month');
+  if(lbl) lbl.textContent = `${_smState.year}年 ${_smState.month}月`;
+  // 営業所セレクトを埋める
+  _populateOfficeFilter();
+  // ビュー別レンダー
+  const content = document.getElementById('sm-content');
+  if(!content) return;
+  if(_smState.view === 'calendar'){
+    content.innerHTML = _renderScheduleCalendar();
+  } else if(_smState.view === 'list'){
+    content.innerHTML = _renderScheduleList();
+  } else if(_smState.view === 'log'){
+    content.innerHTML = _renderScheduleLogView();
+  }
+}
+
+function _populateOfficeFilter(){
+  const sel = document.getElementById('sm-office-filter');
+  if(!sel) return;
+  const cur = sel.value;
+  const offices = [...new Set((D.offices||[]).map(o=>o.name).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">全営業所</option>' + offices.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  if(cur) sel.value = cur;
+}
+
+/** 時間範囲のラベルを安全に生成(空対応・nikki側_fmtSchedTimeLabelと整合) */
+function _formatTimeRange(startTime, endTime){
+  const s = String(startTime||'').trim();
+  const e = String(endTime||'').trim();
+  if(s && e) return `${s}〜${e}`;
+  if(s) return `${s}以降`;
+  if(e) return `${e}まで`;
+  return '';
+}
+
+/** 集荷顧客判定(集荷単価が1つでも設定されているか) */
+function _isColCustomer(c){
+  if(!c) return false;
+  // 既存実装(L9738)に合わせ colPrices と prices 両対応
+  const cp = c.colPrices || c.prices || {};
+  if(typeof cp !== 'object') return false;
+  // p60〜p160, p_kuripos, p_case, etc 全フィールドをチェック
+  return Object.values(cp).some(v => Number(v) > 0);
+}
+
+/** 対象月の SCHEDULE_OVERRIDES を取得(フィルタ適用) */
+function _getScheduleOverridesForMonth(){
+  const y = _smState.year, m = _smState.month;
+  const ymPrefix = `${y}-${String(m).padStart(2,'0')}`;
+  const officeFilter = document.getElementById('sm-office-filter')?.value || '';
+  const targetFilter = document.getElementById('sm-target-filter')?.value || 'all';
+  let list = (SCHEDULE_OVERRIDES||[]).filter(s => String(s.date||'').startsWith(ymPrefix));
+  // 種別フィルタ
+  if(targetFilter !== 'all'){
+    list = list.filter(s => (s.targetType||'customer') === targetFilter);
+  }
+  // 営業所フィルタ(顧客の場合のみ)
+  if(officeFilter){
+    list = list.filter(s => {
+      if((s.targetType||'customer') === 'customer'){
+        const cu = (D.customers||[]).find(c=>String(c.id)===String(s.customerId));
+        return cu && (cu.officeName === officeFilter || cu.office === officeFilter);
+      }
+      return true;  // ルートはエリアフィルタ非対応(全表示)
+    });
+  }
+  return list;
+}
+
+/** カレンダー表示 */
+function _renderScheduleCalendar(){
+  const items = _getScheduleOverridesForMonth();
+  if(items.length === 0){
+    return `<div class="card" style="padding:32px;text-align:center;color:var(--gray2);">${_smState.year}年${_smState.month}月の休業登録はありません</div>`;
+  }
+  // 対象別 × 日付の表を作る
+  const byTarget = {};  // key: targetKey -> {targetType, name, byDate:{date:{kind, ...}}}
+  items.forEach(s => {
+    const isRoute = (s.targetType||'customer') === 'route';
+    const key = isRoute ? `r:${s.routeId||''}` : `c:${s.customerId||''}`;
+    if(!byTarget[key]){
+      byTarget[key] = {
+        targetType: s.targetType || 'customer',
+        targetId: isRoute ? s.routeId : s.customerId,
+        name: isRoute ? (s.routeName||'(ルート)') : (s.customerName||'(顧客)'),
+        byDate: {},
+      };
+    }
+    byTarget[key].byDate[s.date] = s;
+  });
+  // 日数
+  const daysInMonth = new Date(_smState.year, _smState.month, 0).getDate();
+  const dates = [];
+  for(let d=1; d<=daysInMonth; d++) dates.push(d);
+  // ヘッダー行
+  const dowLabels = ['日','月','火','水','木','金','土'];
+  const headerCells = dates.map(d=>{
+    const dt = new Date(_smState.year, _smState.month-1, d);
+    const dow = dt.getDay();
+    const cls = dow === 0 ? 'color:var(--red2);' : (dow === 6 ? 'color:#1e40af;' : '');
+    return `<th style="font-size:9px;font-weight:600;padding:2px;border:1px solid var(--gray3);min-width:18px;text-align:center;${cls}">${d}<br><span style="font-size:7px;">${dowLabels[dow]}</span></th>`;
+  }).join('');
+  // 各対象の行
+  const sortedKeys = Object.keys(byTarget).sort();
+  const bodyRows = sortedKeys.map(k => {
+    const t = byTarget[k];
+    const isRoute = t.targetType === 'route';
+    const targetIcon = isRoute ? '🚚' : '🏢';
+    const labelStyle = isRoute ? 'background:#e0e7ff;color:#3730a3;' : 'background:#fef3c7;color:#78350f;';
+    const cells = dates.map(d => {
+      const dateStr = `${_smState.year}-${String(_smState.month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const s = t.byDate[dateStr];
+      if(!s) return `<td style="padding:0;border:1px solid var(--gray3);min-width:18px;height:24px;"></td>`;
+      let bg = '#fee2e2', txt = '休', tip = '休業';
+      if(s.kind === 'time'){
+        bg = '#fef3c7'; txt = '時'; 
+        const range = _formatTimeRange(s.startTime, s.endTime);
+        tip = range ? `時間変更 ${range}` : '時間変更';
+      }
+      return `<td style="padding:0;border:1px solid var(--gray3);background:${bg};text-align:center;cursor:pointer;font-size:9px;font-weight:700;height:24px;" onclick="openScheduleEditModal('${esc(s.id)}')" title="${esc(tip)}">${txt}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:4px 8px;border:1px solid var(--gray3);white-space:nowrap;font-size:11px;${labelStyle}">${targetIcon} ${esc(t.name)}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+  return `<div class="card" style="padding:8px;overflow-x:auto;">
+    <table style="border-collapse:collapse;font-size:10px;width:100%;">
+      <thead>
+        <tr><th style="padding:4px 8px;border:1px solid var(--gray3);background:#f4f6fa;text-align:left;min-width:140px;">対象</th>${headerCells}</tr>
+      </thead>
+      <tbody>${bodyRows}</tbody>
+    </table>
+    <div style="margin-top:8px;font-size:11px;color:var(--gray2);">
+      <span style="background:#fee2e2;padding:1px 6px;border-radius:3px;">休</span> 休業 / 
+      <span style="background:#fef3c7;padding:1px 6px;border-radius:3px;">時</span> 時間変更 / 
+      クリックで編集
+    </div>
+  </div>`;
+}
+
+/** リスト表示 */
+function _renderScheduleList(){
+  const items = _getScheduleOverridesForMonth();
+  if(items.length === 0){
+    return `<div class="card" style="padding:32px;text-align:center;color:var(--gray2);">${_smState.year}年${_smState.month}月の休業登録はありません</div>`;
+  }
+  // 日付昇順
+  items.sort((a,b)=> String(a.date||'').localeCompare(b.date||''));
+  const rows = items.map(s => {
+    const isRoute = (s.targetType||'customer') === 'route';
+    const targetLabel = isRoute ? `🚚 ${esc(s.routeName||'')}` : `🏢 ${esc(s.customerName||'')}`;
+    const kindLabel = s.kind === 'rest' ? '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:10px;font-weight:700;">休業</span>' :
+      s.kind === 'time' ? (()=>{
+        const range = _formatTimeRange(s.startTime, s.endTime);
+        return `<span style="background:#fef3c7;color:#78350f;padding:2px 8px;border-radius:10px;font-weight:700;">時間変更${range?' '+esc(range):''}</span>`;
+      })() : '-';
+    const role = s.createdRole === 'driver' ? 'ドライバー' : (s.createdRole === 'staff' ? '内勤' : (s.createdRole === 'system' ? 'システム' : ''));
+    return `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);">${esc(s.date||'')}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);">${targetLabel}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);">${kindLabel}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--gray2);">${esc(s.note||'')}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--gray2);">${esc(s.createdByName||'')} ${role?`<span style="font-size:9px;color:var(--gray3);">(${role})</span>`:''}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);text-align:right;">
+        <button class="btn b-gh btn-sm" onclick="openScheduleEditModal('${esc(s.id)}')">編集</button>
+      </td>
+    </tr>`;
+  }).join('');
+  return `<div class="card" style="padding:0;overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#f4f6fa;">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">日付</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">対象</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">種別</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">備考</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">登録者</th>
+          <th style="padding:8px 10px;border-bottom:2px solid var(--gray3);"></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+/** ログ表示 */
+function _renderScheduleLogView(){
+  const y = _smState.year, m = _smState.month;
+  const ymPrefix = `${y}-${String(m).padStart(2,'0')}`;
+  const logs = (SCHEDULE_LOGS||[]).filter(l => String(l.timestamp||'').startsWith(ymPrefix.replace('-','-')) || true)
+    .filter(l => {
+      // 当月のログ全件
+      try{ const t = new Date(l.timestamp); return t.getFullYear() === y && (t.getMonth()+1) === m; }catch{ return false; }
+    })
+    .sort((a,b)=> String(b.timestamp).localeCompare(a.timestamp));
+  if(logs.length === 0){
+    return `<div class="card" style="padding:32px;text-align:center;color:var(--gray2);">${y}年${m}月のログはありません</div>`;
+  }
+  const rows = logs.map(l => {
+    const t = new Date(l.timestamp);
+    const ts = `${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;
+    const actionColor = l.action === 'create' ? '#10b981' : (l.action === 'update' ? '#f59e0b' : '#ef4444');
+    const actionLabel = l.action === 'create' ? '追加' : (l.action === 'update' ? '更新' : '削除');
+    const role = l.actorRole === 'driver' ? 'ドライバー' : (l.actorRole === 'staff' ? '内勤' : 'システム');
+    return `<tr>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-family:monospace;font-size:11px;">${ts}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);"><span style="background:${actionColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">${actionLabel}</span></td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;">${esc(l.diffSummary||'')}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--gray2);">${esc(l.actorName||'')} <span style="font-size:9px;color:var(--gray3);">(${role})</span></td>
+    </tr>`;
+  }).join('');
+  return `<div class="card" style="padding:0;overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#f4f6fa;">
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">日時</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">操作</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">内容</th>
+          <th style="padding:8px 10px;text-align:left;border-bottom:2px solid var(--gray3);">実行者</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════
+// 休業日 追加/編集モーダル
+// ══════════════════════════════════════════════════
+
+let _schEditId = null;
+let _schTargetType = 'customer';
+let _schKind = 'rest';
+
+function _setSchTargetType(t){
+  _schTargetType = t;
+  document.getElementById('m-sch-tab-customer').className = 'btn btn-sm ' + (t==='customer'?'b-prim':'b-gh');
+  document.getElementById('m-sch-tab-route').className = 'btn btn-sm ' + (t==='route'?'b-prim':'b-gh');
+  document.getElementById('m-sch-customer-wrap').style.display = (t==='customer') ? '' : 'none';
+  document.getElementById('m-sch-route-wrap').style.display = (t==='route') ? '' : 'none';
+}
+
+function _setSchKind(k){
+  _schKind = k;
+  document.getElementById('m-sch-kind-rest').className = 'btn btn-sm ' + (k==='rest'?'b-prim':'b-gh');
+  document.getElementById('m-sch-kind-time').className = 'btn btn-sm ' + (k==='time'?'b-prim':'b-gh');
+  document.getElementById('m-sch-time-wrap').style.display = (k==='time') ? '' : 'none';
+}
+
+function _toggleSchRange(){
+  const mode = document.querySelector('input[name="m-sch-range-mode"]:checked')?.value;
+  const isRange = mode === 'range';
+  document.getElementById('m-sch-range-sep').style.display = isRange ? 'inline' : 'none';
+  document.getElementById('m-sch-date-end').style.display = isRange ? '' : 'none';
+}
+
+function _populateScheduleCustomerSelect(){
+  const sel = document.getElementById('m-sch-customer');
+  if(!sel) return;
+  const list = (D.customers||[]).filter(_isColCustomer)
+    .sort((a,b)=> String(a.name||'').localeCompare(b.name||'','ja'));
+  sel.innerHTML = '<option value="">選択してください</option>' + list.map(c => `<option value="${esc(c.id)}">${esc(c.name||'')} (${esc(c.officeName||c.office||'')})</option>`).join('');
+}
+
+function _populateScheduleRouteSelect(){
+  const sel = document.getElementById('m-sch-route');
+  if(!sel) return;
+  const seen = {};
+  const routes = [];
+  (D.staff||[]).forEach(s => {
+    (s.colRoutes||[]).forEach(r => {
+      if(!seen[r.id]){ seen[r.id] = true; routes.push(r); }
+    });
+  });
+  routes.sort((a,b)=> String(a.name||'').localeCompare(b.name||'','ja'));
+  sel.innerHTML = '<option value="">選択してください</option>' + routes.map(r => `<option value="${esc(r.id)}">${esc(r.name||'')}</option>`).join('');
+}
+
+function openScheduleAddModal(targetType){
+  _schEditId = null;
+  _schTargetType = targetType || 'customer';
+  _schKind = 'rest';
+  document.getElementById('m-schedule-title').textContent = '📅 休業日登録(新規)';
+  document.getElementById('m-sch-delete-btn').style.display = 'none';
+  // 新規モードでは期間一括削除ボタンを表示
+  const bulkBtn = document.getElementById('m-sch-bulk-delete-btn');
+  if(bulkBtn) bulkBtn.style.display = '';
+  _populateScheduleCustomerSelect();
+  _populateScheduleRouteSelect();
+  document.getElementById('m-sch-customer').value = '';
+  document.getElementById('m-sch-route').value = '';
+  document.getElementById('m-sch-date-start').value = '';
+  document.getElementById('m-sch-date-end').value = '';
+  document.getElementById('m-sch-time-start').value = '';
+  document.getElementById('m-sch-time-end').value = '';
+  document.getElementById('m-sch-note').value = '';
+  document.querySelector('input[name="m-sch-range-mode"][value="single"]').checked = true;
+  _setSchTargetType(_schTargetType);
+  _setSchKind(_schKind);
+  _toggleSchRange();
+  openM('m-schedule');
+}
+
+function openScheduleEditModal(scheduleId){
+  const s = (SCHEDULE_OVERRIDES||[]).find(x => String(x.id) === String(scheduleId));
+  if(!s){ alert('レコードが見つかりません'); return; }
+  _schEditId = scheduleId;
+  _schTargetType = s.targetType || 'customer';
+  _schKind = s.kind || 'rest';
+  document.getElementById('m-schedule-title').textContent = '📅 休業日 編集';
+  document.getElementById('m-sch-delete-btn').style.display = '';
+  // 編集モードでは期間一括削除ボタンを隠す(個別削除のみ)
+  const bulkBtn = document.getElementById('m-sch-bulk-delete-btn');
+  if(bulkBtn) bulkBtn.style.display = 'none';
+  _populateScheduleCustomerSelect();
+  _populateScheduleRouteSelect();
+  if(_schTargetType === 'customer') document.getElementById('m-sch-customer').value = s.customerId || '';
+  else document.getElementById('m-sch-route').value = s.routeId || '';
+  document.getElementById('m-sch-date-start').value = s.date || '';
+  document.getElementById('m-sch-date-end').value = '';
+  document.getElementById('m-sch-time-start').value = s.startTime || '';
+  document.getElementById('m-sch-time-end').value = s.endTime || '';
+  document.getElementById('m-sch-note').value = s.note || '';
+  document.querySelector('input[name="m-sch-range-mode"][value="single"]').checked = true;
+  _setSchTargetType(_schTargetType);
+  _setSchKind(_schKind);
+  _toggleSchRange();
+  openM('m-schedule');
+}
+
+async function saveScheduleOverride(){
+  const targetType = _schTargetType;
+  const kind = _schKind;
+  let customerId = '', customerName = '', routeId = '', routeName = '';
+  if(targetType === 'customer'){
+    customerId = document.getElementById('m-sch-customer').value;
+    if(!customerId){ alert('顧客を選択してください'); return; }
+    const cu = (D.customers||[]).find(c => String(c.id) === String(customerId));
+    customerName = cu?.name || '';
+  } else {
+    routeId = document.getElementById('m-sch-route').value;
+    if(!routeId){ alert('ルートを選択してください'); return; }
+    (D.staff||[]).forEach(s => {
+      (s.colRoutes||[]).forEach(r => { if(String(r.id) === String(routeId)) routeName = r.name || ''; });
+    });
+  }
+  const dateStart = document.getElementById('m-sch-date-start').value;
+  if(!dateStart){ alert('日付を選択してください'); return; }
+  const rangeMode = document.querySelector('input[name="m-sch-range-mode"]:checked')?.value;
+  let dateList = [dateStart];
+  if(rangeMode === 'range'){
+    const dateEnd = document.getElementById('m-sch-date-end').value;
+    if(!dateEnd){ alert('終了日を選択してください'); return; }
+    if(dateEnd < dateStart){ alert('終了日が開始日より前です'); return; }
+    dateList = [];
+    const d1 = new Date(dateStart + 'T00:00:00');
+    const d2 = new Date(dateEnd + 'T00:00:00');
+    for(let dt = new Date(d1); dt <= d2; dt.setDate(dt.getDate()+1)){
+      const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0'), d = String(dt.getDate()).padStart(2,'0');
+      dateList.push(`${y}-${m}-${d}`);
+    }
+  }
+  const startTime = kind === 'time' ? document.getElementById('m-sch-time-start').value : '';
+  const endTime = kind === 'time' ? document.getElementById('m-sch-time-end').value : '';
+  const note = document.getElementById('m-sch-note').value.trim();
+  const actor = { id: 'staff', name: '内勤', role: 'staff' };
+
+  if(_schEditId){
+    const idx = SCHEDULE_OVERRIDES.findIndex(x => String(x.id) === String(_schEditId));
+    if(idx < 0){ alert('レコードが見つかりません'); return; }
+    const oldVal = JSON.parse(JSON.stringify(SCHEDULE_OVERRIDES[idx]));
+    const newVal = {
+      ...oldVal,
+      targetType, customerId, customerName, routeId, routeName,
+      date: dateStart, kind, startTime, endTime, note,
+      updatedBy: actor.id, updatedByName: actor.name, updatedRole: actor.role,
+      updatedAt: new Date().toISOString(),
+    };
+    SCHEDULE_OVERRIDES[idx] = newVal;
+    await saveScheduleOverrides();
+    await recordScheduleLog('update', newVal, oldVal, actor);
+    closeM('m-schedule');
+    renderScheduleMgmt();
+    if(typeof toast === 'function') toast('更新しました', 'ok'); else alert('更新しました');
+    return;
+  }
+
+  for(const dateStr of dateList){
+    const newRec = {
+      id: 'ovr_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+      targetType, customerId, customerName, routeId, routeName,
+      date: dateStr, kind, startTime, endTime, note,
+      surveyId: null,
+      createdBy: actor.id, createdByName: actor.name, createdRole: actor.role,
+      createdAt: new Date().toISOString(),
+      updatedBy: actor.id, updatedByName: actor.name, updatedRole: actor.role,
+      updatedAt: new Date().toISOString(),
+    };
+    SCHEDULE_OVERRIDES.push(newRec);
+    await recordScheduleLog('create', newRec, null, actor);
+  }
+  await saveScheduleOverrides();
+  closeM('m-schedule');
+  renderScheduleMgmt();
+  if(typeof toast === 'function') toast(`${dateList.length}件登録しました`, 'ok'); else alert(`${dateList.length}件登録しました`);
+}
+
+async function deleteScheduleOverride(){
+  if(!_schEditId) return;
+  const idx = SCHEDULE_OVERRIDES.findIndex(x => String(x.id) === String(_schEditId));
+  if(idx < 0) return;
+  if(!confirm('この休業登録を削除しますか?')) return;
+  const oldVal = SCHEDULE_OVERRIDES[idx];
+  SCHEDULE_OVERRIDES.splice(idx, 1);
+  await saveScheduleOverrides();
+  const actor = { id: 'staff', name: '内勤', role: 'staff' };
+  await recordScheduleLog('delete', null, oldVal, actor);
+  closeM('m-schedule');
+  renderScheduleMgmt();
+  if(typeof toast === 'function') toast('削除しました', 'ok'); else alert('削除しました');
+}
+
+/** 期間一括削除(モーダル内のフォーム値を使用) */
+async function bulkDeleteScheduleOverrides(){
+  const targetType = _schTargetType;
+  // 対象(顧客 or ルート)取得
+  let customerId = '', customerName = '', routeId = '', routeName = '';
+  if(targetType === 'customer'){
+    customerId = document.getElementById('m-sch-customer').value;
+    if(!customerId){ alert('対象顧客を選択してください'); return; }
+    const cu = (D.customers||[]).find(c => String(c.id) === String(customerId));
+    customerName = cu?.name || '';
+  } else {
+    routeId = document.getElementById('m-sch-route').value;
+    if(!routeId){ alert('対象ルートを選択してください'); return; }
+    (D.staff||[]).forEach(s => {
+      (s.colRoutes||[]).forEach(r => { if(String(r.id) === String(routeId)) routeName = r.name || ''; });
+    });
+  }
+  // 期間取得
+  const dateStart = document.getElementById('m-sch-date-start').value;
+  if(!dateStart){ alert('開始日を選択してください'); return; }
+  // 期間モードに自動切替(単日でもOK)
+  const rangeMode = document.querySelector('input[name="m-sch-range-mode"]:checked')?.value;
+  let dateEnd = dateStart;
+  if(rangeMode === 'range'){
+    dateEnd = document.getElementById('m-sch-date-end').value;
+    if(!dateEnd){ alert('終了日を選択してください'); return; }
+    if(dateEnd < dateStart){ alert('終了日が開始日より前です'); return; }
+  }
+  // 該当する SCHEDULE_OVERRIDES を抽出
+  const targets = SCHEDULE_OVERRIDES.filter(s => {
+    if((s.targetType||'customer') !== targetType) return false;
+    if(targetType === 'customer' && String(s.customerId) !== String(customerId)) return false;
+    if(targetType === 'route' && String(s.routeId) !== String(routeId)) return false;
+    return s.date >= dateStart && s.date <= dateEnd;
+  });
+  if(targets.length === 0){
+    alert('該当する休業登録はありません');
+    return;
+  }
+  const targetName = targetType === 'customer' ? customerName : routeName;
+  const periodLabel = dateStart === dateEnd ? dateStart : `${dateStart} 〜 ${dateEnd}`;
+  if(!confirm(`「${targetName}」の${periodLabel}に登録された休業 ${targets.length}件をまとめて削除しますか?\n\nこの操作は取り消せません。`)) return;
+
+  // 削除実行
+  const actor = { id: 'staff', name: '内勤', role: 'staff' };
+  const targetIds = new Set(targets.map(t => String(t.id)));
+  const removed = [];
+  SCHEDULE_OVERRIDES = SCHEDULE_OVERRIDES.filter(s => {
+    if(targetIds.has(String(s.id))){
+      removed.push(s);
+      return false;
+    }
+    return true;
+  });
+  await saveScheduleOverrides();
+  // ログ記録(各レコードごと)
+  for(const r of removed){
+    await recordScheduleLog('delete', null, r, actor);
+  }
+  closeM('m-schedule');
+  renderScheduleMgmt();
+  if(typeof toast === 'function') toast(`${removed.length}件を一括削除しました`, 'ok');
+  else alert(`${removed.length}件を一括削除しました`);
+}
+
+// ══════════════════════════════════════════════════
+// 休業調査(Phase 1: 2026/05/01)
+// ══════════════════════════════════════════════════
+
+function renderScheduleSurvey(){
+  if(!document.getElementById('s-schedule-survey')) return;
+  const content = document.getElementById('ss-content');
+  if(!content) return;
+  const active = (SCHEDULE_SURVEYS||[]).filter(s => s.status === 'active' || s.status === 'draft');
+  const closed = (SCHEDULE_SURVEYS||[]).filter(s => s.status === 'closed');
+  // バッジ更新
+  const badge = document.getElementById('nb-survey');
+  if(badge){ badge.textContent = active.length; badge.style.display = active.length > 0 ? '' : 'none'; }
+
+  // 緊急警告(期日3日以内 or 当日 + 未回答ありの調査)
+  const today = new Date();
+  const urgentSurveys = active.filter(s => {
+    if(s.status !== 'active' || !s.dueDate) return false;
+    const due = new Date(s.dueDate + 'T23:59:59');
+    const daysLeft = Math.floor((due - today) / 86400000);
+    if(daysLeft > 3) return false;
+    // 未回答が1件以上あれば緊急
+    const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(s.id));
+    const pending = responses.filter(r => r.status === 'pending').length;
+    return pending > 0;
+  });
+
+  let html = '';
+  // 緊急警告バナー
+  if(urgentSurveys.length > 0){
+    const totalPending = urgentSurveys.reduce((acc, s) => {
+      const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(s.id));
+      return acc + responses.filter(r => r.status === 'pending').length;
+    }, 0);
+    html += `<div style="background:rgba(220,38,38,.08);border:2px solid rgba(220,38,38,.4);border-radius:8px;padding:14px 18px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <div style="background:#dc2626;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#dc2626;">期日が迫っている調査があります</div>
+          <div style="font-size:11px;color:var(--gray2);margin-top:2px;">${urgentSurveys.length}件の調査で計 ${totalPending}社が未回答</div>
+        </div>
+      </div>
+      ${urgentSurveys.map(s => {
+        const due = new Date(s.dueDate + 'T23:59:59');
+        const daysLeft = Math.floor((due - today) / 86400000);
+        const dueLabel = daysLeft < 0 ? `<span style="color:#dc2626;font-weight:700;">期限超過 ${-daysLeft}日</span>` :
+                         daysLeft === 0 ? '<span style="color:#dc2626;font-weight:700;">本日まで!</span>' :
+                         `<span style="color:#f59e0b;font-weight:700;">あと ${daysLeft}日</span>`;
+        const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(s.id));
+        const pending = responses.filter(r => r.status === 'pending').length;
+        return `<div onclick="openSurveyDetailModal('${esc(s.id)}')" style="background:#fff;border:1px solid rgba(220,38,38,.3);border-radius:6px;padding:8px 12px;margin-bottom:6px;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div>
+              <div style="font-size:12px;font-weight:700;">${esc(s.title||'')}</div>
+              <div style="font-size:10px;color:var(--gray2);margin-top:2px;">期限: ${esc(s.dueDate||'')} ${dueLabel} / 未回答: <strong style="color:#dc2626;">${pending}社</strong></div>
+            </div>
+            <div style="font-size:10px;color:var(--gray2);">クリックで詳細 →</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // 進行中
+  html += `<div class="card" style="margin-bottom:12px;">
+    <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;">進行中の調査 (${active.length})</h3>`;
+  if(active.length === 0){
+    html += `<div style="padding:24px;text-align:center;color:var(--gray2);font-size:12px;">進行中の調査はありません</div>`;
+  } else {
+    html += `<div style="display:flex;flex-direction:column;gap:8px;">${active.map(s => _renderSurveyCard(s)).join('')}</div>`;
+  }
+  html += `</div>`;
+  // 過去の調査
+  if(closed.length > 0){
+    html += `<div class="card">
+      <h3 style="margin:0 0 10px;font-size:14px;font-weight:700;">過去の調査 (${closed.length})</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;">${closed.slice(0,10).map(s => _renderSurveyCard(s)).join('')}</div>
+    </div>`;
+  }
+  content.innerHTML = html;
+}
+
+function _renderSurveyCard(s){
+  const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(s.id));
+  const replied = responses.filter(r => r.status === 'replied' || r.status === 'no_change').length;
+  const total = (s.targetCustomerIds||[]).length;
+  const progress = total > 0 ? Math.round(replied / total * 100) : 0;
+  const statusLabel = s.status === 'draft' ? '<span style="background:#e5e7eb;padding:2px 8px;border-radius:10px;font-size:10px;">下書き</span>' :
+    s.status === 'active' ? '<span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">実施中</span>' :
+    '<span style="background:#9ca3af;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;">締切済</span>';
+  const due = s.dueDate || '';
+  const today = new Date();
+  let dueColor = 'var(--gray2)';
+  if(s.status === 'active' && due){
+    const dueDate = new Date(due + 'T23:59:59');
+    const daysLeft = Math.floor((dueDate - today) / 86400000);
+    if(daysLeft < 0) dueColor = 'var(--red2)';
+    else if(daysLeft <= 3) dueColor = '#f59e0b';
+  }
+  return `<div style="border:1px solid var(--gray3);border-radius:6px;padding:10px 12px;background:#fff;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;min-width:200px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${esc(s.title||'')} ${statusLabel}</div>
+        <div style="font-size:11px;color:var(--gray2);line-height:1.7;">
+          対象期間: ${esc(s.periodStart||'')} 〜 ${esc(s.periodEnd||'')}<br>
+          回答期日: <span style="color:${dueColor};font-weight:600;">${esc(due)}</span> / 進捗: ${replied}/${total}社 (${progress}%)
+        </div>
+        <div style="background:var(--gray3);height:4px;border-radius:2px;margin-top:6px;overflow:hidden;">
+          <div style="height:100%;background:${progress >= 100 ? '#10b981' : (progress >= 50 ? '#3b82f6' : '#f59e0b')};width:${progress}%;"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn b-gh btn-sm" onclick="openSurveyDetailModal('${esc(s.id)}')">詳細</button>
+        ${s.status === 'active' ? `<button class="btn b-gh btn-sm" onclick="sendSurveyReminder('${esc(s.id)}')">督促</button>` : ''}
+        ${s.status === 'active' ? `<button class="btn b-gh btn-sm" style="color:var(--red2);" onclick="closeSurvey('${esc(s.id)}')">締切</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+/** 新規調査作成モーダルを開く */
+function openSurveyCreateModal(){
+  // 集荷顧客のみ
+  const customers = (D.customers||[]).filter(_isColCustomer);
+  // 営業所別グルーピング
+  const byOffice = {};
+  customers.forEach(c => {
+    const off = c.officeName || c.office || '(未分類)';
+    if(!byOffice[off]) byOffice[off] = [];
+    byOffice[off].push(c);
+  });
+  const officeNames = Object.keys(byOffice).sort();
+  // モーダルHTML生成
+  const today = new Date();
+  const yy = today.getFullYear();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  const todayStr = `${yy}-${mm}-${dd}`;
+  // 30日後をデフォルト期日
+  const due = new Date(today); due.setDate(due.getDate()+30);
+  const dueStr = `${due.getFullYear()}-${String(due.getMonth()+1).padStart(2,'0')}-${String(due.getDate()).padStart(2,'0')}`;
+  const customerListHtml = officeNames.map(off => `
+    <div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--gray2);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
+        <span>${esc(off)} (${byOffice[off].length}社)</span>
+        <span>
+          <button type="button" class="btn b-gh btn-sm" onclick="_surveyToggleOffice('${esc(off)}', true)" style="padding:2px 8px;font-size:10px;">全選択</button>
+          <button type="button" class="btn b-gh btn-sm" onclick="_surveyToggleOffice('${esc(off)}', false)" style="padding:2px 8px;font-size:10px;">解除</button>
+        </span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:#f4f6fa;border-radius:4px;">
+        ${byOffice[off].map(c => `
+          <label style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#fff;border-radius:4px;font-size:11px;cursor:pointer;">
+            <input type="checkbox" class="srv-cust-cb" data-office="${esc(off)}" value="${esc(c.id)}" data-name="${esc(c.name||'')}"> ${esc(c.name||'')}
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  const modalHtml = `<div id="m-survey-create" class="mbg" style="display:flex;">
+    <div class="modal" style="width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+      <div class="mhd"><div class="mtt">📨 新規 休業調査作成</div><button class="mx" onclick="document.getElementById('m-survey-create').remove()">×</button></div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label style="font-size:12px;font-weight:700;">タイトル <span style="color:var(--red2);">*</span></label>
+        <input type="text" id="srv-title" class="fi" style="font-size:13px;padding:7px 10px;margin-top:4px;" placeholder="例:2026年8月 休業予定調査" value="${yy}年${parseInt(mm)+1>12?1:parseInt(mm)+1}月 休業予定調査">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div class="fg">
+          <label style="font-size:12px;font-weight:700;">期間開始 <span style="color:var(--red2);">*</span></label>
+          <input type="date" id="srv-period-start" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
+        </div>
+        <div class="fg">
+          <label style="font-size:12px;font-weight:700;">期間終了 <span style="color:var(--red2);">*</span></label>
+          <input type="date" id="srv-period-end" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
+        </div>
+        <div class="fg">
+          <label style="font-size:12px;font-weight:700;">回答期日 <span style="color:var(--red2);">*</span></label>
+          <input type="date" id="srv-due-date" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;" value="${dueStr}">
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label style="font-size:12px;font-weight:700;">対象顧客 <span style="color:var(--red2);">*</span> <span id="srv-cust-count" style="color:var(--gray2);font-weight:400;">(0社選択)</span></label>
+        <div style="margin-top:6px;display:flex;gap:6px;">
+          <button type="button" class="btn b-gh btn-sm" onclick="_surveyToggleAll(true)">全選択</button>
+          <button type="button" class="btn b-gh btn-sm" onclick="_surveyToggleAll(false)">全解除</button>
+        </div>
+        <div style="max-height:280px;overflow-y:auto;border:1px solid var(--gray3);border-radius:4px;padding:8px;margin-top:6px;background:#fafbfc;" id="srv-cust-list">
+          ${customerListHtml || '<div style="text-align:center;color:var(--gray2);padding:16px;">集荷顧客が見つかりません</div>'}
+        </div>
+      </div>
+      <div class="fg" style="margin-bottom:10px;">
+        <label style="font-size:12px;font-weight:700;">メッセージ本文</label>
+        <select id="srv-template-preset" class="fi" style="font-size:12px;padding:6px 8px;margin-top:4px;" onchange="_surveyApplyTemplate()">
+          <option value="">テンプレート選択(任意)</option>
+          <option value="long">長期休暇調査(標準)</option>
+          <option value="newyear">年末年始調査</option>
+          <option value="gw">GW(ゴールデンウィーク)調査</option>
+        </select>
+        <textarea id="srv-template-body" class="fi" style="font-size:12px;padding:8px 10px;margin-top:6px;min-height:120px;" placeholder="メッセージを入力(任意)。&#10;\${period}, \${dueDate}, \${customerName} は自動置換されます"></textarea>
+      </div>
+      <div class="fg" style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;">通知方法</label>
+        <div style="display:flex;gap:14px;margin-top:6px;">
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="srv-notify-app" checked> ドライバーへのアプリ内通知
+          </label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="srv-notify-email"> 顧客へのメール送信(将来対応)
+          </label>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn b-gh" onclick="document.getElementById('m-survey-create').remove()">キャンセル</button>
+        <button class="btn" style="background:#e5e7eb;" onclick="saveSurvey('draft')">下書き保存</button>
+        <button class="btn b-prim" onclick="saveSurvey('active')">調査開始</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  // チェック数のリアルタイム表示
+  document.querySelectorAll('.srv-cust-cb').forEach(cb => {
+    cb.addEventListener('change', _surveyUpdateCount);
+  });
+  _surveyUpdateCount();
+}
+
+function _surveyUpdateCount(){
+  const n = document.querySelectorAll('.srv-cust-cb:checked').length;
+  const el = document.getElementById('srv-cust-count');
+  if(el) el.textContent = `(${n}社選択)`;
+}
+
+function _surveyToggleAll(check){
+  document.querySelectorAll('.srv-cust-cb').forEach(cb => cb.checked = check);
+  _surveyUpdateCount();
+}
+
+function _surveyToggleOffice(office, check){
+  document.querySelectorAll(`.srv-cust-cb[data-office="${office}"]`).forEach(cb => cb.checked = check);
+  _surveyUpdateCount();
+}
+
+function _surveyApplyTemplate(){
+  const preset = document.getElementById('srv-template-preset').value;
+  const ta = document.getElementById('srv-template-body');
+  if(!ta || !preset) return;
+  const templates = {
+    long: `\${customerName} 御中
+
+いつも大変お世話になっております。
+大阪急配株式会社 集荷管理担当でございます。
+
+下記期間中の貴社の休業予定および営業時間変更について、
+ご回答いただきたくご連絡いたしました。
+
+調査対象期間: \${period}
+回答期日: \${dueDate}
+
+ご担当のドライバーが直接お伺いした際にお答えいただくか、
+お電話・メールにてご連絡くださいませ。
+
+ご協力のほどよろしくお願い申し上げます。`,
+    newyear: `\${customerName} 御中
+
+平素より大変お世話になっております。
+年末年始の集荷業務に関するご案内です。
+
+\${period} の営業/休業予定をお知らせいただきたくご連絡いたしました。
+回答期日: \${dueDate}
+
+担当ドライバーが直接お伺いした際にお答えください。
+
+何卒よろしくお願い申し上げます。`,
+    gw: `\${customerName} 御中
+
+ゴールデンウィーク期間中の休業予定確認のご連絡です。
+
+調査期間: \${period}
+回答期日: \${dueDate}
+
+担当ドライバーがお伺いした際にお知らせください。
+
+よろしくお願いいたします。`,
+  };
+  if(templates[preset]) ta.value = templates[preset];
+}
+
+async function saveSurvey(status){
+  const title = document.getElementById('srv-title').value.trim();
+  if(!title){ alert('タイトルを入力してください'); return; }
+  const periodStart = document.getElementById('srv-period-start').value;
+  const periodEnd = document.getElementById('srv-period-end').value;
+  if(!periodStart || !periodEnd){ alert('対象期間を入力してください'); return; }
+  if(periodEnd < periodStart){ alert('期間が逆です'); return; }
+  const dueDate = document.getElementById('srv-due-date').value;
+  if(!dueDate){ alert('回答期日を入力してください'); return; }
+  const targetIds = Array.from(document.querySelectorAll('.srv-cust-cb:checked')).map(cb => cb.value);
+  if(targetIds.length === 0){ alert('対象顧客を1社以上選択してください'); return; }
+  const templateBody = document.getElementById('srv-template-body').value.trim();
+  const notifyApp = document.getElementById('srv-notify-app').checked;
+  const notifyEmail = document.getElementById('srv-notify-email').checked;
+  const actor = { id: 'staff', name: '内勤', role: 'staff' };
+
+  const survey = {
+    id: 'srv_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+    title, periodStart, periodEnd, dueDate,
+    targetCustomerIds: targetIds,
+    templateBody,
+    notifyApp, notifyEmail,
+    status: status,  // 'draft' or 'active'
+    createdBy: actor.id, createdByName: actor.name,
+    createdAt: new Date().toISOString(),
+    closedAt: null,
+  };
+  SCHEDULE_SURVEYS.push(survey);
+  await saveScheduleSurveys();
+
+  // 回答エントリ作成(全対象顧客分)
+  if(status === 'active'){
+    targetIds.forEach(cid => {
+      const cu = (D.customers||[]).find(c => String(c.id) === String(cid));
+      const resp = {
+        id: 'res_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+        surveyId: survey.id,
+        customerId: cid,
+        customerName: cu?.name || '',
+        status: 'pending',
+        repliedBy: '', repliedByName: '', repliedAt: null,
+        overrideIds: [],
+        remindedAt: [],
+      };
+      SURVEY_RESPONSES.push(resp);
+    });
+    await saveSurveyResponses();
+  }
+
+  document.getElementById('m-survey-create').remove();
+  renderScheduleSurvey();
+  if(typeof toast === 'function') toast(status === 'draft' ? '下書き保存しました' : '調査を開始しました', 'ok');
+  else alert(status === 'draft' ? '下書き保存しました' : '調査を開始しました');
+}
+
+/** 調査詳細モーダル */
+function openSurveyDetailModal(surveyId){
+  const s = (SCHEDULE_SURVEYS||[]).find(x => String(x.id) === String(surveyId));
+  if(!s) return;
+  const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(surveyId));
+  const replied = responses.filter(r => r.status === 'replied' || r.status === 'no_change');
+  const pending = responses.filter(r => r.status === 'pending');
+  const total = responses.length;
+  const progress = total > 0 ? Math.round(replied.length / total * 100) : 0;
+
+  const repliedRows = replied.map(r => {
+    const overrides = (SCHEDULE_OVERRIDES||[]).filter(o => (r.overrideIds||[]).includes(o.id) || (o.surveyId === surveyId && String(o.customerId) === String(r.customerId)));
+    const summary = overrides.length === 0 ? '(変更なし)' : overrides.map(o => `${esc(o.date)}${o.kind==='rest'?'休':o.kind==='time'?'時間':''}`).join(', ');
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);">${esc(r.customerName||'')}</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;">${summary}</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--gray2);">${esc(r.repliedByName||'')}<br>${esc(String(r.repliedAt||'').slice(0,10))}</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);text-align:right;"><button class="btn b-gh btn-sm" onclick="_surveyManualRegister('${esc(surveyId)}', '${esc(r.customerId)}')">編集</button></td></tr>`;
+  }).join('');
+  const pendingRows = pending.map(r => {
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);">${esc(r.customerName||'')}</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--red2);">未回答</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);font-size:11px;color:var(--gray2);">督促:${(r.remindedAt||[]).length}回</td><td style="padding:6px 10px;border-bottom:1px solid var(--gray3);text-align:right;"><button class="btn b-prim btn-sm" onclick="_surveyManualRegister('${esc(surveyId)}', '${esc(r.customerId)}')">代理登録</button></td></tr>`;
+  }).join('');
+
+  const modalHtml = `<div id="m-survey-detail" class="mbg" style="display:flex;">
+    <div class="modal" style="width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+      <div class="mhd"><div class="mtt">📨 調査詳細</div><button class="mx" onclick="document.getElementById('m-survey-detail').remove()">×</button></div>
+      <div style="margin-bottom:14px;">
+        <h3 style="margin:0 0 6px;font-size:14px;">${esc(s.title||'')}</h3>
+        <div style="font-size:11px;color:var(--gray2);line-height:1.7;">
+          対象期間: ${esc(s.periodStart||'')} 〜 ${esc(s.periodEnd||'')}<br>
+          回答期日: ${esc(s.dueDate||'')}<br>
+          進捗: ${replied.length}/${total}社 (${progress}%)
+        </div>
+      </div>
+      ${s.status === 'active' ? `
+        <div style="background:rgba(193,114,76,.06);border:1px solid rgba(193,114,76,.2);border-radius:6px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:11px;color:var(--ink);">
+            <strong>📧 顧客にメールで調査依頼を送信</strong><br>
+            <span style="color:var(--gray2);font-size:10.5px;">対象顧客${total}社のうち、メールアドレス登録済みの顧客に一括送信します。</span>
+          </div>
+          <button class="btn b-prim btn-sm" onclick="openSurveyMailModal('${esc(s.id)}')">メール送信</button>
+        </div>` : ''}
+      ${pending.length > 0 ? `
+        <div style="margin-bottom:14px;">
+          <h4 style="margin:0 0 6px;font-size:13px;color:var(--red2);">未回答 (${pending.length}社)</h4>
+          <div style="border:1px solid var(--gray3);border-radius:4px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:#fef3c7;"><th style="padding:6px 10px;text-align:left;">顧客</th><th style="padding:6px 10px;text-align:left;">状態</th><th style="padding:6px 10px;text-align:left;">督促</th><th style="padding:6px 10px;"></th></tr></thead>
+              <tbody>${pendingRows}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+      ${replied.length > 0 ? `
+        <div>
+          <h4 style="margin:0 0 6px;font-size:13px;">回答済 (${replied.length}社)</h4>
+          <div style="border:1px solid var(--gray3);border-radius:4px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="background:#f4f6fa;"><th style="padding:6px 10px;text-align:left;">顧客</th><th style="padding:6px 10px;text-align:left;">回答内容</th><th style="padding:6px 10px;text-align:left;">回答者</th><th style="padding:6px 10px;"></th></tr></thead>
+              <tbody>${repliedRows}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/** 内勤による代理登録(調査詳細から呼ぶ) */
+function _surveyManualRegister(surveyId, customerId){
+  // 既存編集モーダルを開く流用 → ここは新規登録扱いで顧客固定
+  document.getElementById('m-survey-detail')?.remove();
+  openScheduleAddModal('customer');
+  // 顧客を固定
+  setTimeout(()=>{
+    const sel = document.getElementById('m-sch-customer');
+    if(sel) sel.value = customerId;
+    // surveyIdをグローバル退避(保存時にひも付け)
+    window._currentSurveyId = surveyId;
+  }, 100);
+}
+
+/** 調査締切 */
+async function closeSurvey(surveyId){
+  if(!confirm('この調査を締切しますか?(締切後は新規回答できません)')) return;
+  const idx = SCHEDULE_SURVEYS.findIndex(x => String(x.id) === String(surveyId));
+  if(idx < 0) return;
+  SCHEDULE_SURVEYS[idx].status = 'closed';
+  SCHEDULE_SURVEYS[idx].closedAt = new Date().toISOString();
+  await saveScheduleSurveys();
+  renderScheduleSurvey();
+  if(typeof toast === 'function') toast('締切しました', 'ok');
+  else alert('締切しました');
+}
+
+// ══════════════════════════════════════════════════
+// 顧客向けメール一括送信(Phase 1: 2026/05/01)
+// ══════════════════════════════════════════════════
+
+const SURVEY_RESPONSE_BASE_URL = 'https://osaka981.github.io/nikki/survey.html';
+
+/** メール送信モーダルを開く */
+function openSurveyMailModal(surveyId){
+  const s = (SCHEDULE_SURVEYS||[]).find(x => String(x.id) === String(surveyId));
+  if(!s){ alert('調査が見つかりません'); return; }
+  // 対象顧客のメール状況を分類
+  const targetIds = (s.targetCustomerIds||[]).map(String);
+  const customers = (D.customers||[]).filter(c => targetIds.includes(String(c.id)));
+  const withEmail = customers.filter(c => c.email && c.email.trim());
+  const withoutEmail = customers.filter(c => !c.email || !c.email.trim());
+
+  // 既存メール送信モーダル削除
+  document.getElementById('m-survey-mail')?.remove();
+
+  const modalHtml = `<div id="m-survey-mail" class="mbg" style="display:flex;">
+    <div class="modal" style="width:680px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+      <div class="mhd">
+        <div class="mtt">📧 顧客にメール送信</div>
+        <button class="mx" onclick="document.getElementById('m-survey-mail').remove()">×</button>
+      </div>
+      <div style="background:rgba(193,114,76,.06);border:1px solid rgba(193,114,76,.2);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px;">${esc(s.title||'')}</div>
+        <div style="font-size:11px;color:var(--gray2);line-height:1.7;">
+          対象期間: ${esc(s.periodStart||'')} 〜 ${esc(s.periodEnd||'')}<br>
+          回答期日: ${esc(s.dueDate||'')}
+        </div>
+      </div>
+
+      <!-- 送信対象 -->
+      <div style="margin-bottom:14px;">
+        <h4 style="margin:0 0 8px;font-size:13px;">送信対象</h4>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">
+          <div style="background:rgba(16,185,129,.1);color:#065f46;padding:4px 12px;border-radius:14px;font-weight:700;">
+            送信可能 ${withEmail.length}社
+          </div>
+          ${withoutEmail.length > 0 ? `<div style="background:rgba(239,68,68,.1);color:#991b1b;padding:4px 12px;border-radius:14px;font-weight:700;">
+            メール未登録 ${withoutEmail.length}社(送信されません)
+          </div>` : ''}
+        </div>
+        ${withoutEmail.length > 0 ? `<div style="margin-top:8px;font-size:10.5px;color:var(--gray2);">
+          ※ メール未登録の顧客は <a href="javascript:void(0)" onclick="document.getElementById('m-survey-mail').remove();_jumpToCustomerPage()" style="color:var(--clay);">顧客管理画面</a> で登録してください
+        </div>` : ''}
+      </div>
+
+      <!-- カスタムメッセージ -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">追加メッセージ(任意)</label>
+        <textarea id="survey-mail-custom" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--gray3);border-radius:4px;font-size:12px;font-family:inherit;box-sizing:border-box;resize:vertical;" placeholder="例: 長期休暇シーズンが近づいてまいりました。各社様の休業日を事前に把握させていただき、円滑な集荷業務を行うため、ご回答をお願いいたします。"></textarea>
+      </div>
+
+      <!-- CC -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">CC(社内控え用、任意)</label>
+        <input type="email" id="survey-mail-cc" style="width:100%;padding:8px 10px;border:1px solid var(--gray3);border-radius:4px;font-size:12px;box-sizing:border-box;" placeholder="kawamura_taka@osaka981.co.jp">
+      </div>
+
+      <!-- プレビュー -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px;">プレビュー(${withEmail.length>0 ? withEmail[0].name : '(対象なし)'} の場合)</label>
+        <div id="survey-mail-preview" style="background:#fafbfc;border:1px solid var(--gray3);border-radius:4px;padding:10px 14px;font-size:11px;color:var(--ink);line-height:1.7;max-height:200px;overflow-y:auto;white-space:pre-wrap;">
+${withEmail.length > 0 ? _buildPreviewMail(s, withEmail[0]) : '送信可能な顧客がいません'}
+        </div>
+      </div>
+
+      <!-- 送信対象顧客一覧 -->
+      <details style="margin-bottom:14px;">
+        <summary style="font-size:12px;font-weight:700;cursor:pointer;color:var(--clay);">送信対象顧客一覧 ▼</summary>
+        <div style="border:1px solid var(--gray3);border-radius:4px;margin-top:6px;max-height:200px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead><tr style="background:#f4f6fa;"><th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--gray3);">顧客名</th><th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--gray3);">メールアドレス</th></tr></thead>
+            <tbody>
+              ${withEmail.map(c => `<tr><td style="padding:5px 10px;border-bottom:1px solid var(--gray3);">${esc(c.name||'')}</td><td style="padding:5px 10px;border-bottom:1px solid var(--gray3);font-family:monospace;color:var(--gray2);">${esc(c.email)}</td></tr>`).join('')}
+              ${withoutEmail.map(c => `<tr style="background:rgba(239,68,68,.04);"><td style="padding:5px 10px;border-bottom:1px solid var(--gray3);color:var(--gray2);">${esc(c.name||'')}</td><td style="padding:5px 10px;border-bottom:1px solid var(--gray3);color:var(--red2);font-style:italic;">未登録</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <!-- 送信ボタン -->
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn b-gh" onclick="document.getElementById('m-survey-mail').remove()">キャンセル</button>
+        <button class="btn b-prim" id="survey-mail-send-btn" ${withEmail.length === 0 ? 'disabled' : ''} onclick="executeSurveyMailSend('${esc(surveyId)}')">${withEmail.length}社にメール送信</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/** プレビュー用メール文面生成 */
+function _buildPreviewMail(s, c){
+  const fmt = (str) => str ? String(str).replace(/-/g, '/') : '';
+  const url = SURVEY_RESPONSE_BASE_URL + '?id=' + encodeURIComponent(s.id) + '&cust=' + encodeURIComponent(c.id);
+  return (c.name || 'お客様') + ' 御中\n\n' +
+    'いつも大阪急配株式会社をご利用いただき、誠にありがとうございます。\n\n' +
+    '下記の通り、休業予定の調査を実施しております。\n' +
+    'お手数をおかけしますが、回答期日までに以下のリンクよりご回答ください。\n\n' +
+    '■ 調査内容\n   ' + (s.title || '休業予定調査') + '\n\n' +
+    '■ 対象期間\n   ' + fmt(s.periodStart) + ' 〜 ' + fmt(s.periodEnd) + '\n\n' +
+    '■ 回答期日\n   ' + fmt(s.dueDate) + ' まで\n\n' +
+    '■ 回答ページ\n   ' + url + '\n\n' +
+    '※ 上記URLにアクセスし、休業予定の日程をご入力ください。\n' +
+    '※ 休業予定がない場合も「変更なし」として送信していただけますと幸いです。\n\n' +
+    '──────────────\n大阪急配株式会社\nTEL: 072-258-9811\n──────────────';
+}
+
+/** 顧客管理画面にジャンプ */
+function _jumpToCustomerPage(){
+  // pu-cust タブに移動
+  if(typeof selectTab === 'function') selectTab('col');
+  setTimeout(() => {
+    const ev = document.querySelector('[data-s="pu-cust"]');
+    if(ev && typeof nav === 'function') nav(ev);
+  }, 100);
+}
+
+/** メール送信実行 */
+async function executeSurveyMailSend(surveyId){
+  const s = (SCHEDULE_SURVEYS||[]).find(x => String(x.id) === String(surveyId));
+  if(!s){ alert('調査が見つかりません'); return; }
+  const targetIds = (s.targetCustomerIds||[]).map(String);
+  const customers = (D.customers||[]).filter(c => targetIds.includes(String(c.id)));
+  const withEmail = customers.filter(c => c.email && c.email.trim());
+  if(withEmail.length === 0){ alert('送信先メールアドレスがありません'); return; }
+
+  const customMessage = (document.getElementById('survey-mail-custom')?.value || '').trim();
+  const ccEmail = (document.getElementById('survey-mail-cc')?.value || '').trim();
+
+  if(!confirm(`${withEmail.length}社にメールを送信します。よろしいですか?\n\n対象期間: ${s.periodStart}〜${s.periodEnd}\n回答期日: ${s.dueDate}`)) return;
+
+  const btn = document.getElementById('survey-mail-send-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '送信中...'; }
+
+  try{
+    const recipients = withEmail.map(c => ({
+      customerId: c.id,
+      customerName: c.name,
+      email: c.email
+    }));
+    const res = await fetch(FLEET_GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'sendSurveyEmails',
+        surveyId: s.id,
+        surveyTitle: s.title || '',
+        periodStart: s.periodStart || '',
+        periodEnd: s.periodEnd || '',
+        dueDate: s.dueDate || '',
+        surveyUrl: SURVEY_RESPONSE_BASE_URL,
+        recipients: recipients,
+        ccEmail: ccEmail,
+        customMessage: customMessage
+      })
+    });
+    const data = await res.json();
+    if(data.ok){
+      // 送信履歴を調査に保存
+      s.lastMailSentAt = new Date().toISOString();
+      s.lastMailSentCount = data.successCount;
+      await saveScheduleSurveys();
+      // SURVEY_RESPONSESに送信履歴記録
+      recipients.forEach(r => {
+        const idx = SURVEY_RESPONSES.findIndex(x => 
+          String(x.surveyId) === String(s.id) && 
+          String(x.customerId) === String(r.customerId)
+        );
+        if(idx >= 0){
+          SURVEY_RESPONSES[idx].mailSentAt = SURVEY_RESPONSES[idx].mailSentAt || [];
+          SURVEY_RESPONSES[idx].mailSentAt.push(new Date().toISOString());
+        }
+      });
+      await saveSurveyResponses();
+      
+      let msg = `✓ ${data.successCount}/${data.totalCount}社にメール送信完了`;
+      if(data.errors && data.errors.length > 0){
+        msg += `\n\n[エラー]\n` + data.errors.join('\n');
+      }
+      alert(msg);
+      document.getElementById('m-survey-mail')?.remove();
+      document.getElementById('m-survey-detail')?.remove();
+      renderScheduleSurvey();
+    } else {
+      alert('送信失敗: ' + (data.error || '不明なエラー'));
+      if(btn){ btn.disabled = false; btn.textContent = `${withEmail.length}社にメール送信`; }
+    }
+  } catch(err){
+    alert('送信エラー: ' + err.message);
+    if(btn){ btn.disabled = false; btn.textContent = `${withEmail.length}社にメール送信`; }
+  }
+}
+
+/** 督促アラート手動送信 */
+async function sendSurveyReminder(surveyId){
+  const responses = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) === String(surveyId) && r.status === 'pending');
+  if(responses.length === 0){ alert('未回答の顧客はいません'); return; }
+  if(!confirm(`未回答の${responses.length}社に督促アラートを送信しますか?`)) return;
+  const now = new Date().toISOString();
+  responses.forEach(r => {
+    r.remindedAt = r.remindedAt || [];
+    r.remindedAt.push(now);
+  });
+  await saveSurveyResponses();
+  renderScheduleSurvey();
+  if(typeof toast === 'function') toast(`${responses.length}件 督促送信`, 'ok');
+  else alert(`${responses.length}件 督促送信`);
 }
 
 function deleteRoute(routeId){
@@ -21018,7 +22450,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合','del-inv':'宅配請求書',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合','del-inv':'宅配請求書',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -22073,6 +23505,8 @@ function nav(el){
   if(s==='pu-cust')      { /* onValue自動更新 */ }
   if(s==='billing')      { if(typeof renderBilling==='function') renderBilling(); }
   if(s==='dashboard')    { if(typeof renderDash==='function') renderDash(); }
+  if(s==='schedule-mgmt'){ if(typeof renderScheduleMgmt==='function') renderScheduleMgmt(); }
+  if(s==='schedule-survey'){ if(typeof renderScheduleSurvey==='function') renderScheduleSurvey(); }
   // 上部ナビのトップタブ・サブタブを同期
   const topTab=_PAGE_TO_TAB?.[s];
   if(topTab&&topTab!==_currentTopTab){ switchTopTab(topTab, true); }
@@ -22471,7 +23905,7 @@ function openM(id){
 }
 
 function editStaff(id){
-  // 実装は下の別のeditStaff定義を使う(重複定義問題の修正・こちらは空)
+  // ID型不一致対応(数字/文字列どちらでもヒットさせる)
   return _editStaffImpl(id);
 }
 
@@ -22894,10 +24328,14 @@ async function resetOwnerPin(){
 }
 
 function _editStaffImpl(id){
-  const s=D.staff.find(x=>x.id===id);if(!s)return;
+  // ID型不一致対応: 厳密比較(===)だと数字↔文字列で見つからないため、両方試す
+  let s = D.staff.find(x=>x.id===id);
+  if(!s) s = D.staff.find(x=>String(x.id)===String(id));
+  if(!s) return;
   resetStaffModal();
   openM('m-staff');
-  $('m-staff')._editId = id;
+  // ★ 元の型のIDを保存(他の関数が x.id===editId で比較するため)
+  $('m-staff')._editId = s.id;
   // 基本情報をセット
   if($('st-kbn'))$('st-kbn').value=s.kubun||'個人事業主（歩合）';
   if($('st-off'))$('st-off').value=s.office||'';
@@ -24775,6 +26213,28 @@ window.dqImportJson = function(){
     <label style="font-size:12px;font-weight:700;">ルート件数 <span style="font-size:10px;color:var(--txt2);font-weight:400;">(立ち寄り箇所の数。例: 引取+引渡で2件)</span></label>
     <input type="number" id="rt-stop-count" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;width:140px;" placeholder="2" min="1" value="1">
   </div>
+
+  <!-- 稼働曜日 + 1日あたり実施回数 -->
+  <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px 14px;margin-bottom:14px;">
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:14px;align-items:start;">
+      <div>
+        <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;">稼働曜日 <span style="font-size:10px;color:var(--txt2);font-weight:400;">(チップで選択。土日祝はルート解体されることが多い)</span></label>
+        <div id="rt-weekdays" style="display:flex;gap:5px;flex-wrap:wrap;">
+          <!-- 動的生成 -->
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="rtSetWeekdaysPreset('weekday')">平日のみ</button>
+          <button type="button" class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="rtSetWeekdaysPreset('all')">毎日</button>
+          <button type="button" class="btn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="rtSetWeekdaysPreset('weekend')">土日のみ</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;font-weight:700;">1日あたり実施回数</label>
+        <input type="number" id="rt-rounds" class="fi" style="font-size:14px;padding:7px 10px;margin-top:4px;" min="1" value="1">
+        <div style="font-size:9.5px;color:var(--txt2);margin-top:4px;line-height:1.5;">複数回ルートを回る場合は2以上に</div>
+      </div>
+    </div>
+  </div>
   <!-- 単価（車建のみ） -->
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:14px 16px;margin-bottom:14px;">
     <div style="font-size:12px;font-weight:700;color:var(--grn2);margin-bottom:10px;">
@@ -24967,5 +26427,86 @@ window.dqImportJson = function(){
   }
 })();
 </script>
+
+<!-- ══ 休業日 追加/編集モーダル(Phase 1: 2026/05/01) ══ -->
+<div id="m-schedule" class="mbg">
+<div class="modal" style="width:520px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+  <div class="mhd"><div class="mtt" id="m-schedule-title">📅 休業日登録</div><button class="mx" onclick="closeM('m-schedule')">×</button></div>
+
+  <!-- 対象種別 -->
+  <div class="fg" style="margin-bottom:10px;">
+    <label style="font-size:12px;font-weight:700;">対象</label>
+    <div style="display:flex;gap:6px;margin-top:4px;" id="m-sch-target-tabs">
+      <button type="button" class="btn btn-sm b-prim" onclick="_setSchTargetType('customer')" id="m-sch-tab-customer">🏢 顧客</button>
+      <button type="button" class="btn btn-sm b-gh" onclick="_setSchTargetType('route')" id="m-sch-tab-route">🚚 ルート</button>
+    </div>
+  </div>
+
+  <!-- 顧客選択 -->
+  <div class="fg" id="m-sch-customer-wrap" style="margin-bottom:10px;">
+    <label style="font-size:12px;font-weight:700;">顧客 <span style="color:var(--red2);">*</span></label>
+    <select id="m-sch-customer" class="fi" style="font-size:13px;padding:7px 10px;margin-top:4px;"></select>
+  </div>
+
+  <!-- ルート選択 -->
+  <div class="fg" id="m-sch-route-wrap" style="margin-bottom:10px;display:none;">
+    <label style="font-size:12px;font-weight:700;">ルート <span style="color:var(--red2);">*</span></label>
+    <select id="m-sch-route" class="fi" style="font-size:13px;padding:7px 10px;margin-top:4px;"></select>
+  </div>
+
+  <!-- 種別 -->
+  <div class="fg" style="margin-bottom:10px;">
+    <label style="font-size:12px;font-weight:700;">種別 <span style="color:var(--red2);">*</span></label>
+    <div style="display:flex;gap:6px;margin-top:4px;">
+      <button type="button" class="btn btn-sm b-prim" onclick="_setSchKind('rest')" id="m-sch-kind-rest">休業(全休)</button>
+      <button type="button" class="btn btn-sm b-gh" onclick="_setSchKind('time')" id="m-sch-kind-time">時間変更</button>
+    </div>
+  </div>
+
+  <!-- 期間入力 -->
+  <div class="fg" style="margin-bottom:10px;">
+    <label style="font-size:12px;font-weight:700;">日付 <span style="color:var(--red2);">*</span></label>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;">
+        <input type="radio" name="m-sch-range-mode" value="single" checked onchange="_toggleSchRange()"> 単日
+      </label>
+      <label style="font-size:11px;display:flex;align-items:center;gap:4px;">
+        <input type="radio" name="m-sch-range-mode" value="range" onchange="_toggleSchRange()"> 期間
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+      <input type="date" id="m-sch-date-start" class="fi" style="font-size:13px;padding:6px 8px;flex:1;">
+      <span id="m-sch-range-sep" style="display:none;">〜</span>
+      <input type="date" id="m-sch-date-end" class="fi" style="font-size:13px;padding:6px 8px;flex:1;display:none;">
+    </div>
+  </div>
+
+  <!-- 時間入力(timeのみ) -->
+  <div class="fg" id="m-sch-time-wrap" style="margin-bottom:10px;display:none;">
+    <label style="font-size:12px;font-weight:700;">時間 <span style="color:var(--gray2);font-weight:400;font-size:10px;">(片方のみでもOK / 例:「14:00〜」「〜12:00」)</span></label>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+      <input type="time" id="m-sch-time-start" class="fi" style="font-size:13px;padding:6px 8px;flex:1;" placeholder="--:--">
+      <span>〜</span>
+      <input type="time" id="m-sch-time-end" class="fi" style="font-size:13px;padding:6px 8px;flex:1;" placeholder="--:--">
+    </div>
+    <div style="font-size:10px;color:var(--gray2);margin-top:4px;">空欄にすればその時刻は指定なし扱いになります</div>
+  </div>
+
+  <!-- 備考 -->
+  <div class="fg" style="margin-bottom:14px;">
+    <label style="font-size:12px;font-weight:700;">備考</label>
+    <input type="text" id="m-sch-note" class="fi" style="font-size:13px;padding:7px 10px;margin-top:4px;" placeholder="例:お盆休み、年末年始">
+  </div>
+
+  <!-- ボタン -->
+  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+    <button class="btn b-gh" onclick="closeM('m-schedule')">キャンセル</button>
+    <button class="btn" id="m-sch-bulk-delete-btn" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);" onclick="bulkDeleteScheduleOverrides()">期間一括削除</button>
+    <button class="btn" id="m-sch-delete-btn" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;" onclick="deleteScheduleOverride()">削除</button>
+    <button class="btn b-prim" id="m-sch-save-btn" onclick="saveScheduleOverride()">保存</button>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
