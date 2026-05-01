@@ -14254,14 +14254,27 @@ function _renderSurveyCard(s){
 
 /** 新規調査作成モーダルを開く */
 function openSurveyCreateModal(){
-  // 集荷顧客のみ
-  const customers = (D.customers||[]).filter(_isColCustomer);
-  // 営業所別グルーピング
+  // 顧客番号がある顧客のみ(集荷顧客で絞り込まない:メール送信は宅配顧客にも可能性あり)
+  const allCustomers = (D.customers||[]).filter(c => {
+    if(c.status === '終了') return false;
+    if(!c.custNo || !_normalizeCustNo(c.custNo)) return false; // 顧客番号がない顧客は除外
+    return true;
+  });
+  const customers = allCustomers; // 集荷顧客フィルタを廃止
+  // 営業所別グルーピング(担当営業所がない顧客は「(未分類)」へ)
   const byOffice = {};
   customers.forEach(c => {
     const off = c.officeName || c.office || '(未分類)';
     if(!byOffice[off]) byOffice[off] = [];
     byOffice[off].push(c);
+  });
+  // 各グループ内で顧客番号順にソート
+  Object.keys(byOffice).forEach(off => {
+    byOffice[off].sort((a,b) => {
+      const na = parseInt(_normalizeCustNo(a.custNo)) || 0;
+      const nb = parseInt(_normalizeCustNo(b.custNo)) || 0;
+      return na - nb;
+    });
   });
   const officeNames = Object.keys(byOffice).sort();
   // モーダルHTML生成
@@ -14283,11 +14296,17 @@ function openSurveyCreateModal(){
         </span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px;background:#f4f6fa;border-radius:4px;">
-        ${byOffice[off].map(c => `
-          <label style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#fff;border-radius:4px;font-size:11px;cursor:pointer;">
-            <input type="checkbox" class="srv-cust-cb" data-office="${esc(off)}" value="${esc(c.id)}" data-name="${esc(c.name||'')}"> ${esc(c.name||'')}
+        ${byOffice[off].map(c => {
+          const noStr = _normalizeCustNo(c.custNo) || c.custNo || '-';
+          const hasEmail = c.email && c.email.trim();
+          return `
+          <label style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#fff;border-radius:4px;font-size:11px;cursor:pointer;${hasEmail ? '' : 'opacity:0.6;'}">
+            <input type="checkbox" class="srv-cust-cb" data-office="${esc(off)}" value="${esc(c.id)}" data-name="${esc(c.name||'')}">
+            <span style="color:var(--gray2);font-family:monospace;font-size:10px;">${esc(noStr)}</span>
+            <span>${esc(c.name||'')}</span>
+            ${hasEmail ? '<span style="color:#10b981;font-size:9px;" title="メール登録済">✉</span>' : '<span style="color:#dc2626;font-size:9px;" title="メール未登録">✗</span>'}
           </label>
-        `).join('')}
+        `;}).join('')}
       </div>
     </div>
   `).join('');
