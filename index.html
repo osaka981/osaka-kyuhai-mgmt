@@ -4851,16 +4851,51 @@ function applyFirebaseData() {
     D.staff = merged;
   }
 
-  // 顧客（CUSTOMERS → D.customers）
+  // 顧客(CUSTOMERS → D.customers)
   const fbCusts = lsGet(LS_KEYS.CUSTOMERS, null);
   if (fbCusts && fbCusts.length) {
     const fbNames = fbCusts.map(c => c.name);
     const newCusts = fbCusts.map(c => ({
       id: c.id,
+      custNo: c.custNo || '',
       name: c.name,
       region: c.region || '',
-      start: '',
-      prices: buildDefaultPrices(),
+      start: c.start || '',
+      // 集荷単価(colPricesがあればそれを優先、なければデフォルト)
+      colPrices: c.colPrices || {},
+      prices: c.prices || buildDefaultPrices(),
+      // 顧客詳細
+      zip: c.zip || '',
+      addr: c.addr || '',
+      repName: c.repName || '',
+      dept: c.dept || '',
+      contact: c.contact || '',
+      title: c.title || '',
+      tel: c.tel || '',
+      fax: c.fax || '',
+      email: c.email || '',
+      invoiceNo: c.invoiceNo || '',
+      industry: c.industry || '',
+      // 締め・支払
+      closeDay: c.closeDay || '末',
+      payMonth: c.payMonth || '翌月',
+      payDay: c.payDay || '末',
+      payMethod: c.payMethod || '銀行振込',
+      // 書類発行
+      invoiceEnabled: c.invoiceEnabled !== false,
+      invoiceNote: c.invoiceNote || '',
+      bankSetId: c.bankSetId || '',
+      priceType: c.priceType || 'tax_excluded',
+      // 取引状態
+      status: c.status || '稼働中',
+      statusReason: c.statusReason || '',
+      statusChangedAt: c.statusChangedAt || null,
+      archivedAt: c.archivedAt || null,
+      archiveExpiresAt: c.archiveExpiresAt || null,
+      // チャーター・その他・相殺
+      charter: c.charter || [],
+      otherItems: c.otherItems || [],
+      offset: c.offset || null,
     }));
     D.customers = [...D.customers.filter(c => !fbNames.includes(c.name)), ...newCusts];
     // 集荷日報モーダルの顧客プルダウンを更新
@@ -8650,7 +8685,7 @@ function saveCust(){
   const fbCusts=lsGet(LS_KEYS.CUSTOMERS,[])||[];
   const cu=D.customers.find(c=>c.custNo===custNo);
   if(cu){
-    // Firebase顧客データを完全保存（日報アプリで使えるよう custNo・region・colPrices含む）
+    // Firebase顧客データを完全保存(全フィールドを含める)
     const fbRec={
       id:cu.id,
       custNo:cu.custNo||'',
@@ -8658,6 +8693,38 @@ function saveCust(){
       region:cu.region||'',
       start:cu.start||'',
       colPrices:cu.colPrices||{},
+      // 顧客詳細(編集モーダルで入力する情報全て)
+      zip:cu.zip||'',
+      addr:cu.addr||'',
+      repName:cu.repName||'',
+      dept:cu.dept||'',
+      contact:cu.contact||'',
+      title:cu.title||'',
+      tel:cu.tel||'',
+      fax:cu.fax||'',
+      email:cu.email||'',
+      invoiceNo:cu.invoiceNo||'',
+      industry:cu.industry||'',
+      // 締め・支払
+      closeDay:cu.closeDay||'末',
+      payMonth:cu.payMonth||'翌月',
+      payDay:cu.payDay||'末',
+      payMethod:cu.payMethod||'銀行振込',
+      // 書類発行
+      invoiceEnabled:cu.invoiceEnabled!==false,
+      invoiceNote:cu.invoiceNote||'',
+      bankSetId:cu.bankSetId||'',
+      priceType:cu.priceType||'tax_excluded',
+      // 取引状態
+      status:cu.status||'稼働中',
+      statusReason:cu.statusReason||'',
+      statusChangedAt:cu.statusChangedAt||null,
+      archivedAt:cu.archivedAt||null,
+      archiveExpiresAt:cu.archiveExpiresAt||null,
+      // チャーター・その他・相殺
+      charter:cu.charter||[],
+      otherItems:cu.otherItems||[],
+      offset:cu.offset||null,
     };
     const fi=fbCusts.findIndex(x=>x.id===cu.id);
     if(fi>=0) fbCusts[fi]={...fbCusts[fi],...fbRec};
