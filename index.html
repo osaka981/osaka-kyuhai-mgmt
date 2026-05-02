@@ -697,6 +697,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="nc">
     <div class="nl sb-grp" onclick="toggleSbGrp(this)"><span class="sb-arrow">▾</span>💴 給与</div>
     <div class="sb-items">
+      <div class="ni" data-s="monthly-confirm" onclick="nav(this)"><span class="ni-ico">📋</span>月次確認・承認<span class="nbadge" id="nb-monthly-confirm">0</span></div>
       <div class="ni" data-s="staff" onclick="nav(this)"><span class="ni-ico">👥</span>従業員管理</div>
       <div class="ni" data-s="company" onclick="nav(this)"><span class="ni-ico">🏭</span>委託会社管理</div>
       <div class="ni" data-s="salary" onclick="nav(this)"><span class="ni-ico">💴</span>給与計算</div>
@@ -1567,6 +1568,32 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
       <div id="ss-content"></div>
+    </div>
+
+    <!-- ══ 月次確認・承認(Phase B: 2026/05/02) ══ -->
+    <div id="s-monthly-confirm" class="sec">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:16px;font-weight:700;">📋 月次確認・承認</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input type="month" id="mc-month" onchange="renderMonthlyConfirmList()" style="padding:6px 10px;font-size:12px;border:1px solid var(--brd);border-radius:6px;">
+            <select id="mc-status-filter" onchange="renderMonthlyConfirmList()" style="padding:6px 10px;font-size:12px;border:1px solid var(--brd);border-radius:6px;">
+              <option value="">全員</option>
+              <option value="未確認">未確認のみ</option>
+              <option value="確認済">確認済のみ</option>
+              <option value="承認済">承認済のみ</option>
+            </select>
+            <select id="mc-type-filter" onchange="renderMonthlyConfirmList()" style="padding:6px 10px;font-size:12px;border:1px solid var(--brd);border-radius:6px;">
+              <option value="">全種別</option>
+              <option value="personal">個人直属</option>
+              <option value="corporate">委託会社</option>
+            </select>
+            <button class="btn b-prim btn-sm" onclick="bulkApproveMonthlyConfirm()">確認済を一括承認</button>
+          </div>
+        </div>
+        <div id="mc-summary" style="font-size:11px;color:var(--gray2);"></div>
+      </div>
+      <div id="mc-content"></div>
     </div>
 
     <!-- CSVインポート -->
@@ -4232,6 +4259,7 @@ const LS_KEYS = {
 let SCHEDULE_OVERRIDES = [];
 let SCHEDULE_SURVEYS = [];
 let SURVEY_RESPONSES = [];
+let MONTHLY_CONFIRMATIONS = []; // 月次確認データ Phase B (2026/05/02追加)
 let SCHEDULE_LOGS = [];
 let CUSTOMER_NOTES = [];
 
@@ -4256,6 +4284,7 @@ const lsSet = (k, v) => {
 SCHEDULE_OVERRIDES = lsGet(LS_KEYS.SCHEDULE_OVERRIDES, []);
 SCHEDULE_SURVEYS = lsGet(LS_KEYS.SCHEDULE_SURVEYS, []);
 SURVEY_RESPONSES = lsGet(LS_KEYS.SURVEY_RESPONSES, []);
+MONTHLY_CONFIRMATIONS = lsGet('nikki_monthly_confirmations', []);
 SCHEDULE_LOGS = lsGet(LS_KEYS.SCHEDULE_LOGS, []);
 CUSTOMER_NOTES = lsGet(LS_KEYS.CUSTOMER_NOTES, []);
 
@@ -5287,6 +5316,19 @@ function setupRealtimeSync() {
     SURVEY_RESPONSES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet(LS_KEYS.SURVEY_RESPONSES, SURVEY_RESPONSES);
     if (typeof renderScheduleSurvey === 'function' && document.getElementById('scr-schedule-survey')) renderScheduleSurvey();
+  });
+  // 月次確認(Phase B: 2026/05/02)
+  onValue(ref(fbDB, 'nikki/monthly_confirmations'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    MONTHLY_CONFIRMATIONS = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet('nikki_monthly_confirmations', MONTHLY_CONFIRMATIONS);
+    // バッジ更新
+    if (typeof _refreshMonthlyConfirmBadge === 'function') _refreshMonthlyConfirmBadge();
+    // 画面開いていれば再描画
+    if (typeof renderMonthlyConfirmList === 'function' && document.getElementById('s-monthly-confirm')?.classList.contains('on')) {
+      renderMonthlyConfirmList();
+    }
   });
   onValue(ref(fbDB, 'nikki/schedule_logs'), snap => {
     if (!snap.exists()) return;
@@ -6594,6 +6636,7 @@ function renderAll() {
   renderSalary();
   renderSum();
   renderPUInv();
+  if(typeof _refreshMonthlyConfirmBadge === 'function') _refreshMonthlyConfirmBadge();
 }
 
 // ── 欠落関数のスタブ（Firebase未接続時のエラー防止）──
@@ -15331,6 +15374,378 @@ async function _executeImport(allItems){
     alert('取り込みエラー: ' + err.message);
     if(btn){ btn.disabled = false; btn.textContent = 'この内容で反映する'; }
   }
+}
+
+// ══════════════════════════════════════════════════
+// 月次確認・承認(Phase B: 2026/05/02)
+// ══════════════════════════════════════════════════
+
+/** バッジ更新(未承認件数) */
+function _refreshMonthlyConfirmBadge(){
+  const badge = document.getElementById('nb-monthly-confirm');
+  if(!badge) return;
+  const pending = (MONTHLY_CONFIRMATIONS||[]).filter(c => c.status === 'confirmed').length;
+  if(pending > 0){
+    badge.textContent = pending;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.textContent = '0';
+    badge.style.display = 'none';
+  }
+}
+
+/** 確認期限を取得 */
+function _getMcDeadline(yearMonth, driverType){
+  const [y, m] = yearMonth.split('-').map(Number);
+  const days = driverType === 'corporate' ? 7 : 3;
+  return new Date(y, m, days, 23, 59, 59); // 翌月N日まで
+}
+
+/** 月選択の初期値を「前月」にセット */
+function _initMcMonthInput(){
+  const inp = document.getElementById('mc-month');
+  if(!inp || inp.value) return;
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth(); // 当月→前月にすると m-1
+  m = m - 1;
+  if(m < 0){ m = 11; y--; }
+  inp.value = `${y}-${String(m+1).padStart(2,'0')}`;
+}
+
+/** ドライバー種別判定(D.staffから取得) */
+function _getDriverTypeMc(driverId){
+  if(!driverId) return 'unknown';
+  // D.staffから検索
+  const s = (D.staff||[]).find(s => 
+    String(s.empNo) === String(driverId) || 
+    String(s.id) === String(driverId)
+  );
+  if(s){
+    if(s.kubun === '委託ドライバー' || s.companyId) return 'corporate';
+    return 'personal';
+  }
+  // ID形式で判定
+  if(/^\d{5}-\d{3}$/.test(String(driverId))) return 'corporate';
+  return 'personal';
+}
+
+/** 月次確認一覧を描画 */
+function renderMonthlyConfirmList(){
+  if(!document.getElementById('s-monthly-confirm')) return;
+  _initMcMonthInput();
+  
+  const ymInput = document.getElementById('mc-month')?.value || '';
+  const statusFilter = document.getElementById('mc-status-filter')?.value || '';
+  const typeFilter = document.getElementById('mc-type-filter')?.value || '';
+  const content = document.getElementById('mc-content');
+  if(!content) return;
+  
+  if(!ymInput){
+    content.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:var(--gray2);">月を選択してください</div>';
+    return;
+  }
+  
+  // 全ドライバー(現役のみ、終了除外)を取得
+  const allDrivers = (D.staff||[]).filter(s => s.status !== '終了');
+  
+  // 各ドライバーごとに月次確認データを取得
+  const rows = allDrivers.map(s => {
+    const driverId = String(s.empNo || s.id);
+    const driverType = (s.kubun === '委託ドライバー' || s.companyId) ? 'corporate' : 'personal';
+    const conf = (MONTHLY_CONFIRMATIONS||[]).find(c => 
+      c.yearMonth === ymInput && String(c.driverId) === driverId
+    );
+    return {
+      driverId,
+      driverName: s.name || '',
+      driverType,
+      driverTypeLabel: driverType === 'corporate' ? '委託会社' : '個人直属',
+      companyId: s.companyId || null,
+      companyName: s.companyId ? ((D.companies||[]).find(c => c.id === s.companyId)?.name || '') : '',
+      empNo: s.empNo || '',
+      conf,
+      status: conf?.status || 'pending',
+      statusLabel: !conf ? '未確認' : (conf.status === 'approved' ? '承認済' : (conf.status === 'confirmed' ? '確認済' : '未確認')),
+    };
+  });
+  
+  // フィルタ
+  let filtered = rows;
+  if(statusFilter){
+    filtered = filtered.filter(r => r.statusLabel === statusFilter);
+  }
+  if(typeFilter){
+    filtered = filtered.filter(r => r.driverType === typeFilter);
+  }
+  
+  // ソート: 状態順(確認済→未確認→承認済) 内勤側で確認済を優先的に処理しやすくする
+  const statusOrder = {'確認済': 0, '未確認': 1, '承認済': 2};
+  filtered.sort((a, b) => {
+    const sa = statusOrder[a.statusLabel] ?? 3;
+    const sb = statusOrder[b.statusLabel] ?? 3;
+    if(sa !== sb) return sa - sb;
+    return String(a.empNo || '').localeCompare(String(b.empNo || ''));
+  });
+  
+  // サマリー
+  const total = rows.length;
+  const confirmedCount = rows.filter(r => r.statusLabel === '確認済').length;
+  const approvedCount = rows.filter(r => r.statusLabel === '承認済').length;
+  const pendingCount = rows.filter(r => r.statusLabel === '未確認').length;
+  
+  // 期限超過チェック
+  const now = new Date();
+  const overDue = rows.filter(r => {
+    if(r.status === 'approved' || r.status === 'confirmed') return false;
+    const dl = _getMcDeadline(ymInput, r.driverType);
+    return now > dl;
+  }).length;
+  
+  const summaryEl = document.getElementById('mc-summary');
+  if(summaryEl){
+    summaryEl.innerHTML = `
+      合計 <strong>${total}名</strong> | 
+      <span style="color:#f59e0b;">未確認 ${pendingCount}名</span> | 
+      <span style="color:#3b82f6;">確認済 ${confirmedCount}名</span> | 
+      <span style="color:#10b981;">承認済 ${approvedCount}名</span>
+      ${overDue > 0 ? ` | <span style="color:#dc2626;font-weight:700;">⚠ 期限超過 ${overDue}名</span>` : ''}
+    `;
+  }
+  
+  // 一覧
+  if(filtered.length === 0){
+    content.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:var(--gray2);">該当するドライバーがいません</div>';
+    return;
+  }
+  
+  const cards = filtered.map(r => {
+    const conf = r.conf;
+    const isOverdue = !['approved','confirmed'].includes(r.status) && now > _getMcDeadline(ymInput, r.driverType);
+    
+    let statusBadge;
+    if(r.statusLabel === '承認済'){
+      statusBadge = '<span style="background:#10b981;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">✓ 承認済(締め確定)</span>';
+    } else if(r.statusLabel === '確認済'){
+      statusBadge = '<span style="background:#3b82f6;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">✓ 確認済(承認待ち)</span>';
+    } else if(isOverdue){
+      statusBadge = '<span style="background:#dc2626;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">⚠ 期限超過</span>';
+    } else {
+      statusBadge = '<span style="background:#f59e0b;color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;">未確認</span>';
+    }
+    
+    const dl = _getMcDeadline(ymInput, r.driverType);
+    const deadlineStr = `${dl.getMonth()+1}月${dl.getDate()}日まで`;
+    
+    return `<div class="card" style="margin-bottom:8px;padding:14px 18px;${isOverdue?'border-left:4px solid #dc2626;':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+            <span style="font-family:monospace;font-size:11px;color:var(--gray2);background:var(--bg3);padding:2px 8px;border-radius:3px;">${esc(r.empNo)}</span>
+            <span style="font-size:14px;font-weight:700;color:var(--ink);">${esc(r.driverName)}</span>
+            <span style="font-size:10px;color:var(--gray2);background:var(--bg3);padding:2px 6px;border-radius:3px;">${r.driverTypeLabel}</span>
+            ${r.companyName ? `<span style="font-size:11px;color:var(--gray2);">所属: ${esc(r.companyName)}</span>` : ''}
+            ${statusBadge}
+          </div>
+          <div style="font-size:11px;color:var(--gray2);">期限: ${deadlineStr}</div>
+          ${conf ? `
+            <div style="margin-top:8px;font-size:11px;color:var(--ink);background:var(--bg3);padding:8px 12px;border-radius:6px;">
+              <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                <span>配達: <strong>${(conf.totalDel||0).toLocaleString()}</strong></span>
+                <span>集荷: <strong>${(conf.totalCol||0).toLocaleString()}</strong></span>
+                <span>定時集荷: <strong>${(conf.totalShu||0).toLocaleString()}</strong></span>
+                <span>稼働: <strong>${conf.workDays||0}日</strong></span>
+              </div>
+              ${conf.confirmedAt ? `<div style="margin-top:4px;color:var(--gray2);font-size:10px;">確認日時: ${new Date(conf.confirmedAt).toLocaleString('ja-JP')}</div>` : ''}
+              ${conf.approvedAt ? `<div style="margin-top:2px;color:#10b981;font-size:10px;">承認日時: ${new Date(conf.approvedAt).toLocaleString('ja-JP')}${conf.approvedBy?' by '+esc(conf.approvedBy):''}</div>` : ''}
+              ${conf.correctionText ? `
+                <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--brd);">
+                  <div style="font-weight:700;font-size:11px;color:#c1724c;margin-bottom:4px;">📝 ドライバーからの修正・備考:</div>
+                  <div style="font-size:11px;line-height:1.6;white-space:pre-wrap;color:var(--ink);">${esc(conf.correctionText)}</div>
+                </div>
+              ` : ''}
+            </div>
+          ` : '<div style="margin-top:8px;font-size:11px;color:var(--gray3);font-style:italic;">月次確認の入力がありません</div>'}
+        </div>
+        <div style="display:flex;gap:6px;flex-direction:column;flex-shrink:0;">
+          ${r.status === 'confirmed' ? `<button class="btn b-prim btn-sm" onclick="approveMonthlyConfirm('${esc(r.driverId)}', '${ymInput}')" style="white-space:nowrap;">✓ 承認</button>` : ''}
+          ${r.status === 'approved' ? `<button class="btn b-gh btn-sm" onclick="unapproveMonthlyConfirm('${esc(r.driverId)}', '${ymInput}')" style="white-space:nowrap;">承認取消</button>` : ''}
+          <button class="btn b-gh btn-sm" onclick="openMonthlyConfirmDetail('${esc(r.driverId)}', '${ymInput}')" style="white-space:nowrap;">詳細</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  
+  content.innerHTML = cards;
+}
+
+/** 個別承認 */
+async function approveMonthlyConfirm(driverId, ym){
+  const idx = MONTHLY_CONFIRMATIONS.findIndex(c => 
+    String(c.driverId) === String(driverId) && c.yearMonth === ym
+  );
+  if(idx < 0){ alert('対象の確認データが見つかりません'); return; }
+  if(MONTHLY_CONFIRMATIONS[idx].status !== 'confirmed'){
+    alert('「確認済」状態のデータのみ承認できます');
+    return;
+  }
+  if(!confirm(`${MONTHLY_CONFIRMATIONS[idx].driverName} の ${ym} を承認しますか?\n承認後はドライバー側で編集できなくなります。`)) return;
+  
+  MONTHLY_CONFIRMATIONS[idx].status = 'approved';
+  MONTHLY_CONFIRMATIONS[idx].approvedAt = new Date().toISOString();
+  MONTHLY_CONFIRMATIONS[idx].approvedBy = 'mgmt';
+  
+  lsSet('nikki_monthly_confirmations', MONTHLY_CONFIRMATIONS);
+  if(typeof fbSet === 'function'){
+    try{ await fbSet('monthly_confirmations', MONTHLY_CONFIRMATIONS); }catch(e){ console.warn(e); }
+  }
+  renderMonthlyConfirmList();
+  _refreshMonthlyConfirmBadge();
+}
+
+/** 承認取消 */
+async function unapproveMonthlyConfirm(driverId, ym){
+  const idx = MONTHLY_CONFIRMATIONS.findIndex(c => 
+    String(c.driverId) === String(driverId) && c.yearMonth === ym
+  );
+  if(idx < 0) return;
+  if(!confirm(`${MONTHLY_CONFIRMATIONS[idx].driverName} の ${ym} の承認を取り消しますか?`)) return;
+  
+  MONTHLY_CONFIRMATIONS[idx].status = 'confirmed';
+  MONTHLY_CONFIRMATIONS[idx].approvedAt = null;
+  MONTHLY_CONFIRMATIONS[idx].approvedBy = null;
+  
+  lsSet('nikki_monthly_confirmations', MONTHLY_CONFIRMATIONS);
+  if(typeof fbSet === 'function'){
+    try{ await fbSet('monthly_confirmations', MONTHLY_CONFIRMATIONS); }catch(e){ console.warn(e); }
+  }
+  renderMonthlyConfirmList();
+  _refreshMonthlyConfirmBadge();
+}
+
+/** 一括承認(確認済の全員) */
+async function bulkApproveMonthlyConfirm(){
+  const ym = document.getElementById('mc-month')?.value;
+  if(!ym){ alert('月を選択してください'); return; }
+  
+  const targets = (MONTHLY_CONFIRMATIONS||[]).filter(c => 
+    c.yearMonth === ym && c.status === 'confirmed'
+  );
+  if(targets.length === 0){
+    alert('「確認済」状態のドライバーがいません');
+    return;
+  }
+  
+  if(!confirm(`${ym} の確認済 ${targets.length}名 を一括承認しますか?\n承認後はドライバー側で編集できなくなります。`)) return;
+  
+  const now = new Date().toISOString();
+  targets.forEach(c => {
+    c.status = 'approved';
+    c.approvedAt = now;
+    c.approvedBy = 'mgmt';
+  });
+  
+  lsSet('nikki_monthly_confirmations', MONTHLY_CONFIRMATIONS);
+  if(typeof fbSet === 'function'){
+    try{ await fbSet('monthly_confirmations', MONTHLY_CONFIRMATIONS); }catch(e){ console.warn(e); }
+  }
+  
+  alert(`✓ ${targets.length}名 を承認しました`);
+  renderMonthlyConfirmList();
+  _refreshMonthlyConfirmBadge();
+}
+
+/** 詳細表示(モーダル) */
+function openMonthlyConfirmDetail(driverId, ym){
+  const conf = (MONTHLY_CONFIRMATIONS||[]).find(c => 
+    String(c.driverId) === String(driverId) && c.yearMonth === ym
+  );
+  const driver = (D.staff||[]).find(s => 
+    String(s.empNo || s.id) === String(driverId)
+  );
+  if(!driver){ alert('ドライバーが見つかりません'); return; }
+  
+  // 該当月の日次集計を取得(D.delivery / D.pickup から)
+  const [y, m] = ym.split('-');
+  const ymPrefix = `${y}-${m}`;
+  const dailyData = {};
+  (D.delivery||[]).forEach(r => {
+    if(r.date && r.date.startsWith(ymPrefix) && String(r.driverId || r.empNo) === String(driverId)){
+      if(!dailyData[r.date]) dailyData[r.date] = {del:0, col:0};
+      dailyData[r.date].del += (r.kanryo||0) + (r.tenso||0) + (r.kangenpu||0);
+    }
+  });
+  (D.pickup||[]).forEach(r => {
+    if(r.date && r.date.startsWith(ymPrefix) && String(r.driverId || r.empNo) === String(driverId)){
+      if(!dailyData[r.date]) dailyData[r.date] = {del:0, col:0};
+      dailyData[r.date].col += r.qty || 0;
+    }
+  });
+  
+  document.getElementById('m-mc-detail')?.remove();
+  
+  const sortedDates = Object.keys(dailyData).sort();
+  const tableRows = sortedDates.map(d => `
+    <tr>
+      <td style="padding:5px 8px;border:1px solid var(--gray3);">${d}</td>
+      <td style="padding:5px 8px;border:1px solid var(--gray3);text-align:right;">${dailyData[d].del.toLocaleString()}</td>
+      <td style="padding:5px 8px;border:1px solid var(--gray3);text-align:right;">${dailyData[d].col.toLocaleString()}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--gray3);">この月のデータはありません</td></tr>';
+  
+  const html = `<div id="m-mc-detail" class="mbg" style="display:flex;">
+    <div class="modal" style="width:680px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+      <div class="mhd">
+        <div class="mtt">📋 月次確認 詳細 - ${esc(driver.name)}(${ym})</div>
+        <button class="mx" onclick="document.getElementById('m-mc-detail').remove()">×</button>
+      </div>
+      
+      <div style="background:var(--bg3);padding:10px 14px;border-radius:6px;margin-bottom:14px;font-size:11px;">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <span><strong>社員番号:</strong> ${esc(driver.empNo||'')}</span>
+          <span><strong>区分:</strong> ${esc(driver.kubun||'')}</span>
+          ${driver.companyId ? `<span><strong>所属:</strong> ${esc((D.companies||[]).find(c=>c.id===driver.companyId)?.name||'')}</span>` : ''}
+        </div>
+      </div>
+      
+      ${conf ? `
+        <div style="margin-bottom:14px;padding:10px 14px;background:rgba(59,130,246,.05);border-radius:6px;border:1px solid rgba(59,130,246,.2);">
+          <div style="font-weight:700;font-size:12px;margin-bottom:6px;">確認データ</div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;">
+            <span>配達: <strong>${(conf.totalDel||0).toLocaleString()}</strong></span>
+            <span>集荷: <strong>${(conf.totalCol||0).toLocaleString()}</strong></span>
+            <span>定時集荷: <strong>${(conf.totalShu||0).toLocaleString()}</strong></span>
+            <span>稼働: <strong>${conf.workDays||0}日</strong></span>
+          </div>
+          ${conf.confirmedAt ? `<div style="margin-top:6px;font-size:11px;color:var(--gray2);">確認日時: ${new Date(conf.confirmedAt).toLocaleString('ja-JP')}</div>` : ''}
+          ${conf.correctionText ? `
+            <div style="margin-top:10px;padding:8px 12px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:4px;">
+              <div style="font-weight:700;font-size:11px;color:#92400e;margin-bottom:4px;">📝 ドライバーからの修正・備考:</div>
+              <div style="font-size:11px;line-height:1.6;white-space:pre-wrap;">${esc(conf.correctionText)}</div>
+            </div>
+          ` : ''}
+        </div>
+      ` : '<div style="margin-bottom:14px;padding:10px;color:var(--gray3);font-style:italic;">月次確認の入力はまだありません</div>'}
+      
+      <div style="font-weight:700;font-size:12px;margin-bottom:6px;">日別集計(管理側データ)</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--bg3);">
+            <th style="padding:6px 8px;border:1px solid var(--gray3);text-align:left;">日付</th>
+            <th style="padding:6px 8px;border:1px solid var(--gray3);text-align:right;">配達</th>
+            <th style="padding:6px 8px;border:1px solid var(--gray3);text-align:right;">集荷</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;">
+        ${conf?.status === 'confirmed' ? `<button class="btn b-prim" onclick="document.getElementById('m-mc-detail').remove(); approveMonthlyConfirm('${esc(driverId)}', '${ym}')">✓ 承認する</button>` : ''}
+        <button class="btn b-gh" onclick="document.getElementById('m-mc-detail').remove()">閉じる</button>
+      </div>
+    </div>
+  </div>`;
+  
+  document.body.insertAdjacentHTML('beforeend', html);
 }
 
 /** 督促アラート手動送信 */
@@ -24311,6 +24726,7 @@ function nav(el){
   if(s==='dashboard')    { if(typeof renderDash==='function') renderDash(); }
   if(s==='schedule-mgmt'){ if(typeof renderScheduleMgmt==='function') renderScheduleMgmt(); }
   if(s==='schedule-survey'){ if(typeof renderScheduleSurvey==='function') renderScheduleSurvey(); }
+  if(s==='monthly-confirm'){ if(typeof renderMonthlyConfirmList==='function') renderMonthlyConfirmList(); }
   // 上部ナビのトップタブ・サブタブを同期
   const topTab=_PAGE_TO_TAB?.[s];
   if(topTab&&topTab!==_currentTopTab){ switchTopTab(topTab, true); }
