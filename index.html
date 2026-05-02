@@ -4819,7 +4819,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -4835,26 +4835,31 @@ async function syncFromFirebase() {
   console.log('Firebase同期完了');
 }
 
-// Firebaseデータ → D に反映（データ変換含む）
+// Firebaseデータ → D に反映(データ変換含む)
 function applyFirebaseData() {
-  // ドライバー（DRIVERS → D.staff）
-  const fbDrivers = lsGet(LS_KEYS.DRIVERS, null);
-  if (fbDrivers && fbDrivers.length) {
-    // 既存スタッフを保持しつつFBのドライバーをマージ
-    const fbNames = fbDrivers.map(d => d.name);
-    const newStaff = fbDrivers.map(d => ({
-      id: d.id,
-      empNo: d.id || '',   // 日報アプリのid（例:1001）をempNoとして使用
-      name: d.name,
-      kubun: d.officeType === 'collection' ? '集荷担当' : '個人事業主',
-      office: d.office || '',
-      tel: '',
-      kyuyo: '個数制（歩合）',
-      tanka: 145,
-    }));
-    // 元のサンプルデータを残しつつFBのものを上書き
-    const merged = [...D.staff.filter(s => !fbNames.includes(s.name)), ...newStaff];
-    D.staff = merged;
+  // ① 全フィールド版を優先(staff_full)
+  const fbStaffFull = lsGet('nikki_staff_full', null);
+  if(fbStaffFull && fbStaffFull.length){
+    // staff_full は全フィールドを含むので、そのまま D.staff に反映
+    D.staff = fbStaffFull;
+  } else {
+    // ② 簡略版(drivers)へのフォールバック(後方互換)
+    const fbDrivers = lsGet(LS_KEYS.DRIVERS, null);
+    if (fbDrivers && fbDrivers.length) {
+      const fbNames = fbDrivers.map(d => d.name);
+      const newStaff = fbDrivers.map(d => ({
+        id: d.id,
+        empNo: d.id || '',
+        name: d.name,
+        kubun: d.officeType === 'collection' ? '集荷担当' : '個人事業主',
+        office: d.office || '',
+        tel: '',
+        kyuyo: '個数制(歩合)',
+        tanka: 145,
+      }));
+      const merged = [...D.staff.filter(s => !fbNames.includes(s.name)), ...newStaff];
+      D.staff = merged;
+    }
   }
 
   // 顧客(CUSTOMERS → D.customers)
@@ -4916,6 +4921,10 @@ function applyFirebaseData() {
   if((!fbCompanies || !fbCompanies.length) && D.companies && D.companies.length){
     lsSet(LS_KEYS.COMPANIES, D.companies);
   }
+  // 委託会社の復元(全フィールド)
+  if(fbCompanies && fbCompanies.length){
+    D.companies = fbCompanies;
+  }
   if (fbOffices && fbOffices.length) {
     const fbNames = fbOffices.map(o => o.name);
     const newOffices = fbOffices.map(o => ({
@@ -4929,8 +4938,13 @@ function applyFirebaseData() {
       typesDel: o.typesDel || false,
       typesCol: o.typesCol || false,
       postPrices: o.postPrices || null,
+      // 取引状態関連
+      status: o.status || '稼働',
+      statusReason: o.statusReason || '',
+      archivedAt: o.archivedAt || null,
+      archiveExpiresAt: o.archiveExpiresAt || null,
     }));
-    // FBデータで完全に上書き（初期サンプルデータは除去）
+    // FBデータで完全に上書き(初期サンプルデータは除去)
     D.offices = newOffices;
   }
 
@@ -5208,6 +5222,23 @@ function setupRealtimeSync() {
     lsSet(LS_KEYS.CUSTOMERS, snap.val());
     applyFirebaseData();
     updOffSels();
+  });
+  // 従業員全フィールド版(個人直属・役員・委託ドライバーすべて含む)
+  onValue(ref(fbDB, 'nikki/staff_full'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    const staffArr = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet('nikki_staff_full', staffArr);
+    applyFirebaseData();
+  });
+  // 委託会社マスタ
+  onValue(ref(fbDB, 'nikki/companies'), snap => {
+    if (!snap.exists()) return;
+    const v = snap.val();
+    const arr = Array.isArray(v) ? v : (v ? Object.values(v) : []);
+    lsSet(LS_KEYS.COMPANIES, arr);
+    applyFirebaseData();
+    if(typeof renderCompanyPage === 'function' && document.getElementById('s-company')) renderCompanyPage();
   });
   onValue(ref(fbDB, 'nikki/offices'), snap => {
     if (!snap.exists()) return;
@@ -6851,7 +6882,127 @@ function updOffSels() {
 }
 
 // ─── ダッシュボード ───
+// ══════════════════════════════════════════════════
+// 未登録ドライバー検出 (Dashboard アラート)
+// ══════════════════════════════════════════════════
+
+/** 日報提出されたが従業員マスタに未登録のドライバーを検出
+ *  対象:
+ *   - 個人直属(4桁数字 1001 等) → 対象
+ *   - 役員(4桁文字列 9102 等) → 対象
+ *   - 委託ドライバー(8桁ハイフン 10001-001〜998) → 対象
+ *  除外:
+ *   - 委託オーナー(5桁 10001) → 除外
+ *   - 委託管理者(10001-999) → 除外
+ */
+function _findUnregisteredDrivers(){
+  // 日報からドライバーIDを収集
+  const idsFromLogs = new Set();
+  const idNameMap = new Map(); // id → name
+  // YP/COL/ATT ログ全部から
+  [D.delivery||[], D.pickup||[], D.attendance||[]].forEach(arr => {
+    arr.forEach(r => {
+      const id = r.driverId || r.empNo || r.staffId;
+      const name = r.driverName || r.staffName || r.name;
+      if(id){
+        idsFromLogs.add(String(id));
+        if(name && !idNameMap.has(String(id))) idNameMap.set(String(id), name);
+      }
+    });
+  });
+  if(idsFromLogs.size === 0) return [];
+
+  // 既存マスタID一覧
+  const registered = new Set();
+  (D.staff||[]).forEach(s => {
+    if(s.empNo) registered.add(String(s.empNo));
+    if(s.driverNo) registered.add(String(s.driverNo));
+    if(s.id) registered.add(String(s.id));
+  });
+
+  // 未登録ID + 除外条件
+  const unregistered = [];
+  idsFromLogs.forEach(id => {
+    if(registered.has(id)) return; // 登録済
+    // 除外条件
+    // ① 委託管理者(10001-999 形式)
+    if(/^\d{5}-999$/.test(id)) return;
+    // ② 委託オーナー(5桁 10001 等、ハイフンなし)
+    if(/^\d{5}$/.test(id)) return;
+    
+    // 対象判定
+    // ① 個人直属(4桁数字)
+    // ② 役員(4桁、9で始まる)
+    // ③ 委託ドライバー(8桁ハイフン形式 NNNNN-NNN、NNNは001-998)
+    const isPersonal = /^\d{4}$/.test(id);
+    const isCorpDriver = /^\d{5}-(\d{3})$/.test(id);
+    if(isCorpDriver){
+      const seq = parseInt(id.split('-')[1]);
+      if(seq < 1 || seq > 998) return; // 999は管理者なので除外
+    }
+    if(!isPersonal && !isCorpDriver) return; // 想定外形式は除外
+    
+    unregistered.push({
+      id,
+      name: idNameMap.get(id) || '',
+      type: isPersonal 
+        ? (id.startsWith('9') ? '役員' : '個人直属')
+        : '委託ドライバー',
+    });
+  });
+  return unregistered;
+}
+
+/** ダッシュボードに未登録ドライバーアラートを表示 */
+function _renderUnregisteredDriversAlert(){
+  const el = document.getElementById('d-alerts');
+  if(!el) return;
+  const items = _findUnregisteredDrivers();
+  if(items.length === 0){
+    el.innerHTML = '';
+    return;
+  }
+  // 種別ごとに集計
+  const byType = {};
+  items.forEach(it => {
+    if(!byType[it.type]) byType[it.type] = [];
+    byType[it.type].push(it);
+  });
+  
+  const typeOrder = ['個人直属', '役員', '委託ドライバー'];
+  const sections = typeOrder.filter(t => byType[t]).map(t => {
+    const list = byType[t];
+    return `<div style="margin-top:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px;">${t} (${list.length}名)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${list.map(it => `
+          <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 8px;font-size:11px;">
+            <span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
+            ${it.name ? ' <span style="color:var(--txt);">'+esc(it.name)+'</span>' : ' <span style="color:var(--txt3);">(氏名不明)</span>'}
+          </span>
+        `).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  
+  el.innerHTML = `
+    <div class="card mb12" style="background:#fffbf0;border:1px solid rgba(230,126,34,.3);">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:700;color:#c2410c;margin-bottom:4px;">⚠️ 日報提出があるが従業員マスタに未登録のドライバー (${items.length}名)</div>
+          <div style="font-size:11px;color:var(--txt2);">明細・給与計算が正しく行われない可能性があります。下記から登録してください。</div>
+        </div>
+        <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
+      </div>
+      ${sections}
+    </div>
+  `;
+}
+
 function renderDash() {
+  // 未登録ドライバーアラート
+  _renderUnregisteredDriversAlert();
+  
   const tm = toYM($('del-mon')?.value || '');
   const mDel = D.delivery.filter(r=>r.date.startsWith(tm));
   const mPU  = D.pickup.filter(r=>r.date.startsWith(tm));
@@ -13089,24 +13240,47 @@ function saveStaff(continueAdd=false){
     newDrv.archiveExpiresAt=exp.toISOString().slice(0,10);
   }
 
-  D.staff.push(newDrv);
+  // 編集中なら既存レコードを上書き、新規なら追加
+  const editId = $('m-staff')?._editId;
+  if(editId){
+    const idx = D.staff.findIndex(x => x.id === editId || String(x.id) === String(editId));
+    if(idx >= 0){
+      // 既存IDを保持して全フィールド更新(PIN等の保存済みフィールドはマージ)
+      newDrv.id = D.staff[idx].id;
+      newDrv.pinHash = D.staff[idx].pinHash;
+      newDrv.initialPinHash = D.staff[idx].initialPinHash;
+      newDrv.pinInitialized = D.staff[idx].pinInitialized;
+      newDrv.pinInitializedAt = D.staff[idx].pinInitializedAt;
+      newDrv.pinChangedAt = D.staff[idx].pinChangedAt;
+      newDrv.pinIsPersonalFixed = D.staff[idx].pinIsPersonalFixed;
+      D.staff[idx] = newDrv;
+    } else {
+      D.staff.push(newDrv);
+    }
+    $('m-staff')._editId = null;
+  } else {
+    D.staff.push(newDrv);
+  }
 
-  // Firebaseのnikki_driversにも追加(お知らせ送信権限フラグも含める)
-  const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
-  // 既存ドライバー削除(empNo一致)→新規追加で重複防止
-  const filteredFb = fbDrivers.filter(d => String(d.id)!==String(empNo));
-  filteredFb.push({
-    id:String(empNo),
-    name:newDrv.name,
-    company:companyName,
-    officeType,
-    office:officeName,
-    subOffices,
-    kyuyo:newDrv.kyuyo||'',
-    canSendNotification: !!newDrv.canSendNotification,
-  });
-  fbSet('drivers', filteredFb);
-  lsSet(LS_KEYS.DRIVERS, filteredFb);
+  // === Firebase保存 ===
+  // ① nikki/drivers (日報アプリ用、簡略版・全社員分)
+  const fbDrivers = D.staff
+    .filter(s => s.status !== '終了')
+    .map(s => ({
+      id: String(s.empNo || s.id),
+      name: s.name || '',
+      company: s.company || '',
+      officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
+      office: s.office || '',
+      subOffices: s.subOffices || [],
+      kyuyo: s.kyuyo || '',
+      canSendNotification: !!s.canSendNotification,
+    }));
+  fbSet('drivers', fbDrivers);
+  lsSet(LS_KEYS.DRIVERS, fbDrivers);
+  // ② nikki/staff_full (経営管理用、全フィールド)
+  fbSet('staff_full', D.staff);
+  lsSet('nikki_staff_full', D.staff);
 
   // フォームリセット
   const keepCompany=kbn==='会社委託'&&continueAdd;
@@ -15239,82 +15413,36 @@ function renderCompanyPage(){
   cards.innerHTML=list.map(co=>{
     const drivers=D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===co.id);
     const routes=co.colRoutes||[];
-    const offNames=(co.offices||[]).map(oid=>{
-      const o=D.offices.find(x=>x.id===oid);
-      return o?`<span style="background:rgba(92,107,192,.12);color:#5c6bc0;border:1px solid rgba(92,107,192,.3);border-radius:3px;padding:1px 6px;font-size:9px;font-weight:700;">${o.name}</span>`:''
-    }).join(' ');
-
-    // ドライバーカード
-    const driverHtml = drivers.length
-      ? drivers.map(d=>{
-          const doffs=(d.driverOffices||[]).map(oid=>{const o=D.offices.find(x=>x.id===oid);return o?o.name:'?';}).join('・');
-          const isAdmin=String(d.driverNo||'').endsWith('-999');
-          return `<div onclick="openDriverModal(${d.id},${co.id})" style="cursor:pointer;background:var(--bg3);border:1px solid ${isAdmin?'rgba(192,57,43,.4)':'var(--brd)'};border-left:3px solid ${isAdmin?'var(--red2)':'#5c6bc0'};border-radius:5px;padding:8px 12px;min-width:140px;transition:box-shadow .15s;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.15)'" onmouseout="this.style.boxShadow='none'">
-            <div style="font-size:12px;font-weight:700;margin-bottom:3px;">${isAdmin?'👑 ':''}<span style="color:var(--txt);">${d.name}</span></div>
-            <div style="font-size:10px;color:var(--txt2);">ID: <span style="font-family:monospace;">${d.driverNo||'−'}</span></div>
-            ${doffs?`<div style="font-size:9px;color:var(--txt3);margin-top:2px;">🏢 ${doffs}</div>`:''}
-          </div>`;
-        }).join('')
-      : `<div style="padding:12px 0;color:var(--txt3);font-size:11px;">ドライバー未登録</div>`;
-
-    // ルートバッジ
-    const routeHtml = routes.length
-      ? routes.map(r=>`<span onclick="openCompanyRouteModal(${co.id},'${r.id}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--brd);border-radius:4px;padding:4px 10px;font-size:11px;transition:border-color .15s;" onmouseover="this.style.borderColor='#5c6bc0'" onmouseout="this.style.borderColor='var(--brd)'">
-          <span style="background:${ptColor[r.pattern]||'#777'};color:#fff;font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700;">${r.pattern}</span>
-          <span>${r.name}</span>
-        </span>`).join('')
-      : `<span style="color:var(--txt3);font-size:11px;">集荷ルート未登録</span>`;
+    const adminCount=drivers.filter(d=>String(d.driverNo||'').endsWith('-999')).length;
+    const ownerLoginId=co.ownerLoginId||(co.companyCode?`9${co.companyCode}`:'');
 
     return `
-    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:10px;padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
 
-      <!-- ヘッダー：会社名・コード・操作ボタン -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:16px 20px 12px;background:var(--bg3);border-bottom:2px solid #5c6bc0;">
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-            ${co.companyCode?`<span style="font-family:monospace;font-size:10px;color:var(--amb2);font-weight:700;background:var(--sur);border:1px solid rgba(230,126,34,.4);padding:2px 8px;border-radius:3px;">${co.companyCode}</span>`:''}
-            <span onclick="openFS('company','${esc(co.name||'')}')" style="font-size:16px;font-weight:700;color:var(--txt);cursor:pointer;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'" title="クリックで詳細画面を開く">${co.name||'（名称未設定）'}</span>
-            ${offNames?`<div style="display:inline-flex;gap:4px;flex-wrap:wrap;">${offNames}</div>`:''}
-          </div>
-          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--txt2);">
-            ${co.tel?`<span>📞 <span style="font-family:monospace;">${co.tel}</span></span>`:''}
-            ${co.contact?`<span>👤 ${co.contact}</span>`:''}
-            ${co.fax?`<span>📠 ${co.fax}</span>`:''}
-            ${co.addr?`<span>📍 ${co.addr}</span>`:''}
-          </div>
-          ${co.note?`<div style="margin-top:4px;font-size:10px;color:var(--txt3);font-style:italic;">📝 ${co.note}</div>`:''}
-          ${co.memo?.text?`<div style="margin-top:4px;font-size:10px;color:var(--amb2);font-weight:700;">⚠️ 当月メモ（${co.memo.month||''}）: ${co.memo.text}</div>`:''}
+      <!-- ヘッダー: 会社名 + コード + 操作 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;flex:1;">
+          ${co.companyCode?`<span style="font-family:monospace;font-size:11px;color:var(--amb2);font-weight:700;background:var(--bg3);border:1px solid rgba(230,126,34,.3);padding:2px 8px;border-radius:3px;">${co.companyCode}</span>`:''}
+          <span onclick="openFS('company','${esc(co.name||'')}')" style="font-size:15px;font-weight:700;color:var(--txt);cursor:pointer;" title="クリックで詳細画面を開く">${co.name||'(名称未設定)'}</span>
+          ${ownerLoginId?`<span style="font-size:10px;color:var(--txt3);font-family:monospace;">ログイン: ${ownerLoginId}</span>`:''}
         </div>
-        <!-- 操作ボタン群 -->
-        <div style="display:flex;gap:6px;flex-shrink:0;margin-left:16px;align-items:flex-start;">
-          <button class="btn b-blu btn-sm" onclick="openFS('company','${esc(co.name||'')}')" style="font-size:11px;">📋 詳細・書類</button>
-          <button class="btn b-gh btn-sm" onclick="openCompanyModal(${co.id})" style="font-size:11px;">✏️ 編集</button>
-          <button class="btn b-grn btn-sm" onclick="openDriverModal(null,${co.id})" style="font-size:11px;">＋ ドライバー</button>
-          <button class="btn btn-sm" onclick="openCoMonthlyInput(${co.id})" style="background:rgba(192,57,43,.1);color:var(--red2);border:1px solid rgba(192,57,43,.3);font-size:11px;">⚠️ 当月入力</button>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn b-blu btn-sm" onclick="openFS('company','${esc(co.name||'')}')" style="font-size:11px;padding:4px 10px;">詳細</button>
+          <button class="btn b-gh btn-sm" onclick="openCompanyModal(${co.id})" style="font-size:11px;padding:4px 10px;">編集</button>
         </div>
       </div>
 
-      <!-- ボディ：ドライバー＋ルートを横並び -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:none;">
-
-        <!-- 🚗 ドライバー -->
-        <div style="padding:14px 20px;border-right:1px solid var(--brd);">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <div style="font-size:12px;font-weight:700;color:var(--txt);">🚗 ドライバー <span style="font-size:11px;color:var(--txt2);">${drivers.length}名</span></div>
-            <button class="btn b-gh btn-sm" onclick="openDriverModal(null,${co.id})" style="font-size:10px;padding:2px 8px;">＋ 追加</button>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">${driverHtml}</div>
-        </div>
-
-        <!-- 🗺️ 集荷ルート -->
-        <div style="padding:14px 20px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <div style="font-size:12px;font-weight:700;color:var(--txt);">🗺️ 集荷ルート <span style="font-size:11px;color:var(--txt2);">${routes.length}件</span></div>
-            <button class="btn b-gh btn-sm" onclick="openCoRouteModal(${co.id},null)" style="font-size:10px;padding:2px 8px;">＋ 追加</button>
-          </div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px;">${routeHtml}</div>
-        </div>
-
+      <!-- 統計バー -->
+      <div style="display:flex;gap:14px;padding:8px 12px;background:var(--bg3);border-radius:6px;font-size:11px;">
+        <span><strong style="color:var(--txt);">${drivers.length}</strong><span style="color:var(--txt2);">名</span> ドライバー</span>
+        ${adminCount?`<span style="color:var(--txt2);">(うち管理者${adminCount}名)</span>`:''}
+        <span style="color:var(--txt3);">|</span>
+        <span><strong style="color:var(--txt);">${routes.length}</strong><span style="color:var(--txt2);">件</span> 集荷ルート</span>
+        <span style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn b-grn btn-sm" onclick="openDriverModal(null,${co.id})" style="font-size:10px;padding:2px 8px;">＋ ドライバー</button>
+          <button class="btn b-gh btn-sm" onclick="openCoRouteModal(${co.id},null)" style="font-size:10px;padding:2px 8px;">＋ ルート</button>
+          ${co.memo?.text?'<button class="btn btn-sm" onclick="openCoMonthlyInput('+co.id+')" style="background:rgba(192,57,43,.1);color:var(--red2);border:1px solid rgba(192,57,43,.3);font-size:10px;padding:2px 8px;">⚠️ 当月メモあり</button>':'<button class="btn b-gh btn-sm" onclick="openCoMonthlyInput('+co.id+')" style="font-size:10px;padding:2px 8px;">当月入力</button>'}
+        </span>
       </div>
     </div>`;
   }).join('');
@@ -16179,7 +16307,7 @@ function saveCompany(){
   if(_coEditId){
     const idx=D.companies.findIndex(x=>x.id===_coEditId);
     if(idx>=0)D.companies[idx]=newCo;else D.companies.push(newCo);
-    // ドライバーの fixedPrices を会社単価で上書き（任意）
+    // ドライバーの fixedPrices を会社単価で上書き(任意)
     D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===id).forEach(s=>{
       s.fixedPrices={del:prices.del, col:prices.col, charter:s.fixedPrices?.charter||[]};
     });
@@ -16187,6 +16315,15 @@ function saveCompany(){
     D.companies.push(newCo);
   }
   lsSet(LS_KEYS.COMPANIES, D.companies);
+  // Firebase 同期(全フィールド)
+  if(typeof fbSet === 'function'){
+    try{ fbSet('companies', D.companies); }catch(e){ console.warn('委託会社FB保存失敗:', e); }
+  }
+  // 委託ドライバーは D.staff に含まれるので staff_full も更新
+  if(typeof fbSet === 'function'){
+    try{ fbSet('staff_full', D.staff); }catch(e){ console.warn('staff_full FB保存失敗:', e); }
+    lsSet('nikki_staff_full', D.staff);
+  }
   closeM('m-company');renderCompanyPage();
 }
 
@@ -16287,6 +16424,25 @@ function saveDriver(){
   };
   if(_drvEditId){const idx=D.staff.findIndex(x=>x.id===_drvEditId);if(idx>=0)D.staff[idx]={...D.staff[idx],...newDrv};else D.staff.push(newDrv);}
   else D.staff.push(newDrv);
+  // Firebase 同期(staff_full + drivers簡略版)
+  if(typeof fbSet === 'function'){
+    try{ fbSet('staff_full', D.staff); }catch(e){ console.warn('staff_full FB保存失敗:', e); }
+    lsSet('nikki_staff_full', D.staff);
+    // drivers簡略版も更新
+    const fbDrivers = D.staff
+      .filter(s => s.status !== '終了')
+      .map(s => ({
+        id: String(s.empNo || s.id),
+        name: s.name || '',
+        company: s.company || (s.companyId ? (D.companies.find(c=>c.id===s.companyId)?.name||'') : ''),
+        officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
+        office: s.office || '',
+        subOffices: s.subOffices || [],
+        kyuyo: s.kyuyo || '',
+        canSendNotification: !!s.canSendNotification,
+      }));
+    try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
+  }
   closeM('m-driver');renderCompanyPage();
 }
 
@@ -16307,8 +16463,26 @@ function onDrvWorkTypeChange(){
 function deleteDriver(){
   if(!_drvEditId)return;
   const d=D.staff.find(x=>x.id===_drvEditId);
-  showConfirm(`「${d?.name}」を削除しますか？`,()=>{
+  showConfirm(`「${d?.name}」を削除しますか?`,()=>{
     D.staff=D.staff.filter(x=>x.id!==_drvEditId);
+    // Firebase 同期
+    if(typeof fbSet === 'function'){
+      try{ fbSet('staff_full', D.staff); }catch(e){ console.warn(e); }
+      lsSet('nikki_staff_full', D.staff);
+      const fbDrivers = D.staff
+        .filter(s => s.status !== '終了')
+        .map(s => ({
+          id: String(s.empNo || s.id),
+          name: s.name || '',
+          company: s.company || (s.companyId ? (D.companies.find(c=>c.id===s.companyId)?.name||'') : ''),
+          officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
+          office: s.office || '',
+          subOffices: s.subOffices || [],
+          kyuyo: s.kyuyo || '',
+          canSendNotification: !!s.canSendNotification,
+        }));
+      try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
+    }
     closeM('m-driver');renderCompanyPage();
   });
 }
@@ -17281,12 +17455,17 @@ function addOffice(){
     D.offices.push({ id:Date.now(), ...offData, postPrices });
   }
 
-  // Firebase保存（全フィールドを保存）
+  // Firebase保存(全フィールドを保存)
   fbSet('offices', D.offices.map(o=>({
     id:o.id, officeCode:o.officeCode, name:o.name,
-    addr:o.addr, tel:o.tel, fax:o.fax, head:o.head,
+    addr:o.addr||'', tel:o.tel||'', fax:o.fax||'', head:o.head||'',
     typesDel:o.typesDel||false, typesCol:o.typesCol||false,
-    postPrices:o.postPrices||null
+    postPrices:o.postPrices||null,
+    // 取引状態関連(漏れていた)
+    status:o.status||'稼働',
+    statusReason:o.statusReason||'',
+    archivedAt:o.archivedAt||null,
+    archiveExpiresAt:o.archiveExpiresAt||null,
   })));
 
   // ── D.locations 同期更新 (Phase 2統合モーダル) ──
