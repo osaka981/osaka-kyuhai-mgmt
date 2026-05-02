@@ -1557,7 +1557,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
           <h2 style="margin:0;font-size:16px;font-weight:700;">📨 休業調査</h2>
-          <button class="btn b-prim btn-sm" onclick="openSurveyCreateModal()">+ 新規調査作成</button>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn b-gh btn-sm" id="survey-fetch-btn" onclick="manualFetchSurveyResponses()" style="position:relative;">
+              📥 回答取り込み
+              <span id="survey-inbox-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;min-width:14px;text-align:center;"></span>
+            </button>
+            <button class="btn b-prim btn-sm" onclick="openSurveyCreateModal()">+ 新規調査作成</button>
+          </div>
         </div>
       </div>
       <div id="ss-content"></div>
@@ -14138,6 +14144,12 @@ function renderScheduleSurvey(){
   if(!document.getElementById('s-schedule-survey')) return;
   const content = document.getElementById('ss-content');
   if(!content) return;
+  
+  // 自動取り込み(画面開いた時に裏でGAS呼び出し → バッジ表示)
+  if(typeof autoFetchSurveyResponses === 'function'){
+    autoFetchSurveyResponses();
+  }
+  
   const active = (SCHEDULE_SURVEYS||[]).filter(s => s.status === 'active' || s.status === 'draft');
   const closed = (SCHEDULE_SURVEYS||[]).filter(s => s.status === 'closed');
   // バッジ更新
@@ -14777,6 +14789,278 @@ async function executeSurveyMailSend(surveyId){
   } catch(err){
     alert('送信エラー: ' + err.message);
     if(btn){ btn.disabled = false; btn.textContent = `${withEmail.length}社にメール送信`; }
+  }
+}
+
+// ══════════════════════════════════════════════════
+// 顧客回答取り込み(survey_inbox → SCHEDULE_OVERRIDES)
+// ══════════════════════════════════════════════════
+
+let _autoFetchInProgress = false;
+let _lastAutoFetchAt = 0;
+
+/** 自動取り込み(休業調査画面を開いた時に呼ばれる) */
+async function autoFetchSurveyResponses(){
+  // 5分以内の連続呼び出しは抑制
+  const now = Date.now();
+  if(now - _lastAutoFetchAt < 5 * 60 * 1000) return;
+  if(_autoFetchInProgress) return;
+  _autoFetchInProgress = true;
+  _lastAutoFetchAt = now;
+  try{
+    const items = await _fetchSurveyInbox();
+    if(items && items.length > 0){
+      // 自動取り込み: バッジに件数表示
+      _showInboxNotification(items.length);
+    }
+  }catch(e){
+    console.error('自動取り込みエラー:', e);
+  }finally{
+    _autoFetchInProgress = false;
+  }
+}
+
+/** GAS から未処理の顧客回答を取得 */
+async function _fetchSurveyInbox(){
+  const url = FLEET_GAS_URL + '?action=getSurveyInbox';
+  try{
+    const res = await fetch(url, { method: 'GET' });
+    const data = await res.json();
+    if(data.ok) return data.items || [];
+    return [];
+  }catch(e){
+    console.error('受信箱取得エラー:', e);
+    return [];
+  }
+}
+
+/** バッジ通知表示 */
+function _showInboxNotification(count){
+  const badge = document.getElementById('survey-inbox-badge');
+  if(badge){
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+  }
+}
+
+/** 手動取り込みボタン */
+async function manualFetchSurveyResponses(){
+  const btn = document.getElementById('survey-fetch-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '取得中...'; }
+  try{
+    const items = await _fetchSurveyInbox();
+    if(!items || items.length === 0){
+      alert('未処理の顧客回答はありません。');
+      return;
+    }
+    // 顧客IDごとに最新の回答のみ残す(同じ顧客から複数回答時は最新を優先)
+    const latestByKey = {};
+    items.forEach(item => {
+      const key = `${item.surveyId}_${item.customerId}`;
+      const existing = latestByKey[key];
+      if(!existing || new Date(item.timestamp) > new Date(existing.timestamp)){
+        latestByKey[key] = item;
+      }
+    });
+    const latestItems = Object.values(latestByKey);
+    // プレビュー表示
+    _showImportPreview(latestItems, items);
+  }catch(e){
+    alert('取り込み失敗: ' + e.message);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '回答取り込み'; }
+  }
+}
+
+/** プレビューモーダル表示 */
+function _showImportPreview(latestItems, allItems){
+  document.getElementById('m-survey-import')?.remove();
+  
+  // 顧客名・調査名を解決
+  const itemsByCustomer = latestItems.map(item => {
+    const survey = (SCHEDULE_SURVEYS||[]).find(s => String(s.id) === String(item.surveyId));
+    const cust = (D.customers||[]).find(c => String(c.id) === String(item.customerId));
+    return {
+      ...item,
+      surveyTitle: survey?.title || '(不明な調査)',
+      customerName: item.customerName || cust?.name || '(不明な顧客)',
+      hasNewer: false,
+    };
+  });
+  
+  // 多重回答(同じ顧客から複数)があった場合の警告
+  const duplicateCount = allItems.length - latestItems.length;
+  
+  const totalSchedules = itemsByCustomer.reduce((sum, it) => sum + (it.schedules?.length || 0), 0);
+  const noChangeCount = itemsByCustomer.filter(it => it.noChange === 'TRUE' || it.noChange === true).length;
+  const withScheduleCount = itemsByCustomer.length - noChangeCount;
+  
+  const fmt = (s) => s ? String(s).replace(/-/g,'/') : '';
+  
+  const previewRows = itemsByCustomer.map((item, idx) => {
+    const isNoChange = item.noChange === 'TRUE' || item.noChange === true;
+    if(isNoChange){
+      return `<tr style="background:#f0f9ff;">
+        <td style="padding:6px 8px;border:1px solid var(--gray3);">${esc(item.customerName)}</td>
+        <td style="padding:6px 8px;border:1px solid var(--gray3);font-size:11px;color:var(--gray2);">${esc(item.surveyTitle)}</td>
+        <td colspan="3" style="padding:6px 8px;border:1px solid var(--gray3);color:#0369a1;font-style:italic;">変更なし</td>
+        <td style="padding:6px 8px;border:1px solid var(--gray3);font-size:10px;color:var(--gray2);">${esc(item.timestamp ? new Date(item.timestamp).toLocaleString('ja-JP') : '')}</td>
+      </tr>`;
+    }
+    const schedules = item.schedules || [];
+    if(schedules.length === 0){
+      return `<tr><td colspan="6" style="padding:6px 8px;border:1px solid var(--gray3);color:var(--gray2);">${esc(item.customerName)} - 予定なし</td></tr>`;
+    }
+    return schedules.map((sc, sidx) => `<tr>
+      ${sidx === 0 ? `<td rowspan="${schedules.length}" style="padding:6px 8px;border:1px solid var(--gray3);vertical-align:top;font-weight:700;">${esc(item.customerName)}</td>` : ''}
+      ${sidx === 0 ? `<td rowspan="${schedules.length}" style="padding:6px 8px;border:1px solid var(--gray3);vertical-align:top;font-size:11px;color:var(--gray2);">${esc(item.surveyTitle)}</td>` : ''}
+      <td style="padding:6px 8px;border:1px solid var(--gray3);font-family:monospace;">${esc(fmt(sc.date))}</td>
+      <td style="padding:6px 8px;border:1px solid var(--gray3);">${sc.kind === 'rest' ? '<span style="color:#dc2626;font-weight:700;">休業</span>' : '<span style="color:#f59e0b;font-weight:700;">時間変更</span>'}</td>
+      <td style="padding:6px 8px;border:1px solid var(--gray3);font-size:11px;">${sc.kind === 'time' ? esc((sc.startTime||'') + (sc.startTime && sc.endTime ? '〜' : '') + (sc.endTime||'')) : ''}${sc.note ? ' <span style="color:var(--gray2);">'+esc(sc.note)+'</span>' : ''}</td>
+      ${sidx === 0 ? `<td rowspan="${schedules.length}" style="padding:6px 8px;border:1px solid var(--gray3);font-size:10px;color:var(--gray2);vertical-align:top;">${esc(item.timestamp ? new Date(item.timestamp).toLocaleString('ja-JP') : '')}</td>` : ''}
+    </tr>`).join('');
+  }).join('');
+
+  const modalHtml = `<div id="m-survey-import" class="mbg" style="display:flex;">
+    <div class="modal" style="width:920px;max-width:96vw;max-height:92vh;overflow-y:auto;">
+      <div class="mhd">
+        <div class="mtt">📥 顧客回答の取り込み</div>
+        <button class="mx" onclick="document.getElementById('m-survey-import').remove()">×</button>
+      </div>
+      <div style="background:rgba(193,114,76,.06);border:1px solid rgba(193,114,76,.2);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px;">取り込み内容のプレビュー</div>
+        <div style="font-size:11px;color:var(--gray2);line-height:1.7;">
+          回答顧客数: <strong>${itemsByCustomer.length}社</strong>(うち休業予定あり: ${withScheduleCount}社、変更なし: ${noChangeCount}社)<br>
+          休業予定エントリ合計: <strong>${totalSchedules}件</strong>${duplicateCount > 0 ? `<br><span style="color:#f59e0b;">※ ${duplicateCount}件の多重回答は最新の内容で上書きします</span>` : ''}
+        </div>
+      </div>
+      
+      <div style="border:1px solid var(--gray3);border-radius:4px;overflow:hidden;margin-bottom:14px;max-height:400px;overflow-y:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead style="position:sticky;top:0;background:#f4f6fa;z-index:1;">
+            <tr>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">顧客名</th>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">調査</th>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">日付</th>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">種別</th>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">時間/備考</th>
+              <th style="padding:8px;border:1px solid var(--gray3);text-align:left;">回答日時</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${previewRows}
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn b-gh" onclick="document.getElementById('m-survey-import').remove()">キャンセル</button>
+        <button class="btn b-prim" id="survey-import-btn" onclick='_executeImport(${JSON.stringify(allItems).replace(/'/g, "&#39;")})'>この内容で反映する</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+/** 取り込み実行 */
+async function _executeImport(allItems){
+  const btn = document.getElementById('survey-import-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '反映中...'; }
+
+  try{
+    // 顧客IDごとに最新のみ残す
+    const latestByKey = {};
+    allItems.forEach(item => {
+      const key = `${item.surveyId}_${item.customerId}`;
+      const existing = latestByKey[key];
+      if(!existing || new Date(item.timestamp) > new Date(existing.timestamp)){
+        latestByKey[key] = item;
+      }
+    });
+    const latestItems = Object.values(latestByKey);
+
+    let scheduleCount = 0;
+    let responseCount = 0;
+    
+    // 各回答を処理
+    for(const item of latestItems){
+      const surveyId = item.surveyId;
+      const customerId = item.customerId;
+      const isNoChange = item.noChange === 'TRUE' || item.noChange === true;
+      
+      // 既存の同じ顧客×同じ調査のSCHEDULE_OVERRIDESを削除(上書き対応)
+      const beforeLen = SCHEDULE_OVERRIDES.length;
+      SCHEDULE_OVERRIDES = SCHEDULE_OVERRIDES.filter(s => 
+        !(String(s.customerId) === String(customerId) && String(s.surveySourceId) === String(surveyId))
+      );
+      
+      // 「変更なし」でなければ、SCHEDULE_OVERRIDESに追加
+      if(!isNoChange){
+        const cust = (D.customers||[]).find(c => String(c.id) === String(customerId));
+        const customerName = item.customerName || cust?.name || '';
+        (item.schedules || []).forEach(sc => {
+          SCHEDULE_OVERRIDES.push({
+            id: 'srv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            date: sc.date,
+            targetType: 'customer',
+            customerId: customerId,
+            customerName: customerName,
+            kind: sc.kind, // 'rest' or 'time'
+            startTime: sc.startTime || '',
+            endTime: sc.endTime || '',
+            note: sc.note || '',
+            surveySourceId: surveyId, // 後で再取り込み時の上書き用
+            createdAt: new Date().toISOString(),
+            createdBy: '顧客回答',
+          });
+          scheduleCount++;
+        });
+      }
+      
+      // SURVEY_RESPONSESのstatusを更新
+      const respIdx = SURVEY_RESPONSES.findIndex(r => 
+        String(r.surveyId) === String(surveyId) && 
+        String(r.customerId) === String(customerId)
+      );
+      if(respIdx >= 0){
+        SURVEY_RESPONSES[respIdx].status = isNoChange ? 'no_change' : 'replied';
+        SURVEY_RESPONSES[respIdx].repliedAt = item.timestamp;
+        SURVEY_RESPONSES[respIdx].schedules = item.schedules || [];
+        SURVEY_RESPONSES[respIdx].source = 'customer_email';
+        responseCount++;
+      }
+    }
+    
+    // 保存
+    await saveScheduleOverrides();
+    await saveSurveyResponses();
+    
+    // GAS側を処理済みにマーク
+    const timestamps = allItems.map(item => item.timestamp);
+    try{
+      await fetch(FLEET_GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'markSurveyInboxProcessed',
+          timestamps: timestamps,
+        })
+      });
+    }catch(e){
+      console.error('処理済みマークエラー:', e);
+    }
+    
+    // バッジクリア
+    _showInboxNotification(0);
+    
+    document.getElementById('m-survey-import').remove();
+    renderScheduleSurvey();
+    
+    alert(`✓ 取り込み完了\n\n回答: ${responseCount}件 を反映\n休業予定: ${scheduleCount}件 を登録\n\nカレンダーで確認できます。`);
+    
+  }catch(err){
+    alert('取り込みエラー: ' + err.message);
+    if(btn){ btn.disabled = false; btn.textContent = 'この内容で反映する'; }
   }
 }
 
