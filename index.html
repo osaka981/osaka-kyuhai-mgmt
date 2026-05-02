@@ -14871,8 +14871,51 @@ async function manualFetchSurveyResponses(){
       }
     });
     const latestItems = Object.values(latestByKey);
-    // プレビュー表示
-    _showImportPreview(latestItems, items);
+    
+    // 既に反映済みのデータをチェック(SURVEY_RESPONSES の repliedAt で判定)
+    const newItems = []; // 未反映
+    const alreadyImported = []; // 反映済み
+    latestItems.forEach(item => {
+      const resp = (SURVEY_RESPONSES||[]).find(r => 
+        String(r.surveyId) === String(item.surveyId) && 
+        String(r.customerId) === String(item.customerId)
+      );
+      if(resp && (resp.status === 'replied' || resp.status === 'no_change')){
+        // すでに反映されているかチェック(repliedAt と timestamp が同じ or 反映後)
+        const respTime = new Date(resp.repliedAt || 0).getTime();
+        const itemTime = new Date(item.timestamp || 0).getTime();
+        if(respTime >= itemTime){
+          alreadyImported.push(item);
+        } else {
+          // 顧客が再回答した可能性 → 未反映として扱う
+          newItems.push(item);
+        }
+      } else {
+        newItems.push(item);
+      }
+    });
+    
+    if(newItems.length === 0){
+      // 全件反映済み
+      let msg = `✓ 取得した ${latestItems.length}件 はすべて反映済みです。`;
+      if(alreadyImported.length > 0){
+        const sample = alreadyImported.slice(0, 5).map(it => `・${it.customerName || it.customerId}`).join('\n');
+        msg += `\n\n反映済み一覧(最大5件):\n${sample}`;
+        if(alreadyImported.length > 5) msg += `\n... 他${alreadyImported.length - 5}件`;
+      }
+      msg += `\n\n※ GAS側の処理済みマークが機能していない場合、同じ内容が再表示される可能性があります。\n「すべて処理済みにする」ボタンで強制クリーンアップできます。`;
+      
+      // 強制クリーンアップの選択肢
+      if(confirm(msg + '\n\n[OK] すべて処理済みとしてGAS側に通知\n[キャンセル] 何もしない')){
+        await _markAllAsProcessed(items.map(it => it.timestamp));
+        _showInboxNotification(0);
+        alert('✓ GAS側を処理済みとしてマークしました。\n次回からは未処理の回答のみが表示されます。');
+      }
+      return;
+    }
+    
+    // プレビュー表示(全件)
+    _showImportPreview(newItems, items, alreadyImported);
   }catch(e){
     alert('取り込み失敗: ' + e.message);
   }finally{
@@ -14880,9 +14923,26 @@ async function manualFetchSurveyResponses(){
   }
 }
 
+/** 全件をGAS側で処理済みマーク */
+async function _markAllAsProcessed(timestamps){
+  try{
+    await fetch(FLEET_GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'markSurveyInboxProcessed',
+        timestamps: timestamps,
+      })
+    });
+  }catch(e){
+    console.error('処理済みマーク失敗:', e);
+  }
+}
+
 /** プレビューモーダル表示 */
-function _showImportPreview(latestItems, allItems){
+function _showImportPreview(latestItems, allItems, alreadyImported){
   document.getElementById('m-survey-import')?.remove();
+  alreadyImported = alreadyImported || [];
   
   // 顧客名・調査名を解決
   const itemsByCustomer = latestItems.map(item => {
@@ -14938,8 +14998,9 @@ function _showImportPreview(latestItems, allItems){
       <div style="background:rgba(193,114,76,.06);border:1px solid rgba(193,114,76,.2);border-radius:6px;padding:10px 14px;margin-bottom:14px;">
         <div style="font-size:13px;font-weight:700;margin-bottom:4px;">取り込み内容のプレビュー</div>
         <div style="font-size:11px;color:var(--gray2);line-height:1.7;">
-          回答顧客数: <strong>${itemsByCustomer.length}社</strong>(うち休業予定あり: ${withScheduleCount}社、変更なし: ${noChangeCount}社)<br>
+          <span style="color:#059669;font-weight:700;">📥 未反映: ${itemsByCustomer.length}社</span>(うち休業予定あり: ${withScheduleCount}社、変更なし: ${noChangeCount}社)<br>
           休業予定エントリ合計: <strong>${totalSchedules}件</strong>${duplicateCount > 0 ? `<br><span style="color:#f59e0b;">※ ${duplicateCount}件の多重回答は最新の内容で上書きします</span>` : ''}
+          ${alreadyImported.length > 0 ? `<br><span style="color:var(--gray3);">✓ 反映済み: ${alreadyImported.length}社(取り込み対象外)</span>` : ''}
         </div>
       </div>
       
