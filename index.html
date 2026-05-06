@@ -3238,14 +3238,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <!-- ■ 担当郵便局（バッジ選択UI） -->
-  <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
-  <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
-    <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">タップして追加・もう一度タップで削除</div>
-    <div id="sub-office-badges" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px;"></div>
-    <div style="font-size:10px;color:var(--txt2);">メイン郵便局以外に担当する場合は上のバッジをタップしてください</div>
-  </div>
-
   <!-- ■ 所属部署（複数選択 Phase 3追加） -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 所属部署（複数選択可）</div>
   <div style="background:rgba(14,165,164,.05);border:1px solid rgba(14,165,164,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
@@ -3257,9 +3249,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </select>
     </div>
     <div style="font-size:10px;color:var(--txt2);margin-top:6px;">
-      例: 社員=管理部 / 宅配ドライバー=宅配事業部 / 兼務者は複数チェック
+      例: 社員=管理部 / 宅配ドライバー=宅配事業部 / 集荷ドライバー=集荷事業部 / 兼務者は複数チェック
     </div>
   </div>
+
+  <!-- ■ 担当郵便局（宅配選択時のみ表示） -->
+  <div id="st-sub-offices-section">
+    <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 担当郵便局（複数対応）</div>
+    <div style="background:rgba(92,107,192,.05);border:1px solid rgba(92,107,192,.2);border-radius:7px;padding:10px;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">タップして追加・もう一度タップで削除</div>
+      <div id="sub-office-badges" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:28px;"></div>
+      <div style="font-size:10px;color:var(--txt2);">メイン郵便局以外に担当する場合は上のバッジをタップしてください</div>
+    </div>
+  </div>
+
 
   <!-- 委託会社情報 -->
   <div id="st-company-area" style="display:none;">
@@ -4249,6 +4252,41 @@ function dispCode(code) {
 // 社員番号生成: 表示コード(1〜2桁) + 連番3桁 = 4〜5桁
 // 例: 営業所01(表示1) → '1001', '1002'...
 //     営業所10(表示10) → '10001', '10002'...
+
+// ── 日報アプリ(nikki)向けドライバーレコード生成ヘルパー ──
+// 経営管理側の従業員レコード(s)から日報アプリ用の簡略レコードを作成する
+// officeTypeは「明示値 > 所属部署 > 旧kubun判定」の順で導出
+function _deriveOfficeTypeFromStaff(s){
+  if(!s) return 'delivery';
+  if(s.officeType==='collection' || s.officeType==='delivery') return s.officeType;
+  const deptIds = s.deptIds || [];
+  let hasDel=false, hasCol=false;
+  deptIds.forEach(id=>{
+    const d = (typeof getDepartmentById==='function') ? getDepartmentById(id) : null;
+    if(d?.type==='del') hasDel=true;
+    if(d?.type==='col') hasCol=true;
+  });
+  if(hasCol && !hasDel) return 'collection';
+  if(hasDel) return 'delivery';
+  // 旧データ互換: '集荷担当'は実在しないkbnなので実質効かないが安全側フォールバック
+  return s.kubun==='集荷担当' ? 'collection' : 'delivery';
+}
+function _buildFbDriverEntry(s){
+  return {
+    id: String(s.empNo || s.id),
+    name: s.name || '',
+    company: s.company || (s.companyId ? ((D.companies||[]).find(c=>c.id===s.companyId)?.name||'') : ''),
+    officeType: _deriveOfficeTypeFromStaff(s),
+    office: s.office || '',
+    subOffices: s.subOffices || [],
+    // 所属部署IDも連携(日報アプリ側で部署別フィルタリング・UIヒントに使用可能)
+    deptIds: s.deptIds || [],
+    primaryDeptId: s.primaryDeptId || null,
+    kyuyo: s.kyuyo || '',
+    canSendNotification: !!s.canSendNotification,
+  };
+}
+
 function genEmpNo(officeName) {
   const off = D.offices.find(o => o.name === officeName);
   if (!off || !off.officeCode) return '';
@@ -5547,6 +5585,8 @@ function renderStDeptCheckboxes(selectedDeptIds, primaryDeptId){
 
   // 主所属ドロップダウンを更新
   updateStPrimaryDeptOptions(primaryDeptId);
+  // 郵便局フィールドの可視性を同期(初期描画時はユーザー入力ではないので fromUserChange=false)
+  if(typeof applyDeptToOfficeFields === 'function') applyDeptToOfficeFields(false);
 }
 
 // チェック変更時: 主所属ドロップダウンを更新
@@ -5556,6 +5596,46 @@ function onStDeptChange(){
   const selIds = getStSelectedDeptIds();
   const primary = document.getElementById('st-primary-dept')?.value || '';
   renderStDeptCheckboxes(selIds, primary);
+  // 郵便局フィールドの連動
+  applyDeptToOfficeFields(true /* fromUserChange */);
+}
+
+// 所属部署選択に応じてメイン郵便局・担当郵便局UIを連動更新
+//   - 宅配が選択されている: 担当郵便局セクション表示
+//   - 集荷のみ選択(宅配なし): 担当郵便局セクション非表示、メイン郵便局を「なし」に
+//   - 何も選択なし or 管理のみ: 担当郵便局非表示
+function applyDeptToOfficeFields(fromUserChange){
+  const selIds = (typeof getStSelectedDeptIds==='function') ? getStSelectedDeptIds() : [];
+  const types = selIds.map(id=>{
+    const d = (typeof getDepartmentById==='function') ? getDepartmentById(id) : null;
+    return d?.type || '';
+  });
+  const hasDel = types.includes('del');
+  const hasCol = types.includes('col');
+  const onlyCol = hasCol && !hasDel; // 集荷のみ
+
+  // 担当郵便局セクションの表示制御(宅配選択時のみ表示)
+  const subSec = document.getElementById('st-sub-offices-section');
+  if(subSec) subSec.style.display = hasDel ? '' : 'none';
+
+  // 集荷専属(集荷のみ)の場合、ユーザー操作起因の変更時にメイン郵便局を「なし」に切替
+  // 既存編集データの自動上書きは避ける(fromUserChange=true のみ)
+  if(onlyCol && fromUserChange){
+    const offEl = $('st-off');
+    if(offEl && offEl.value !== ''){
+      offEl.value = '';
+      // 自動採番表示もクリア
+      if(typeof prevEmpNo==='function') prevEmpNo();
+    }
+    // 担当郵便局もクリア
+    if(typeof setSubOffices==='function') setSubOffices([]);
+    if(typeof renderSubOfficeBadges==='function') renderSubOfficeBadges();
+  }
+
+  // 宅配選択時に担当郵便局バッジを再描画(候補リスト更新)
+  if(hasDel && typeof renderSubOfficeBadges==='function'){
+    renderSubOfficeBadges();
+  }
 }
 
 // 主所属ドロップダウンのオプションを更新
@@ -6952,7 +7032,9 @@ function updOffSels() {
   ids.forEach(id => {
     const el = $(id); if (!el) return;
     const isFilter = id === 'cmp-off';
-    el.innerHTML = isFilter ? '<option value="">全営業所</option>' : '';
+    const isStaffMain = id === 'st-off';
+    el.innerHTML = isFilter ? '<option value="">全営業所</option>' :
+                   isStaffMain ? '<option value="">なし（集荷専属など）</option>' : '';
     // 宅配日報(dd-off)・請求(inv-off)は typesDel=true の営業所のみ
     // 集荷日報(pu-off)は typesCol=true の営業所のみ
     // 従事員(st-off)・比較(cmp-off)は全営業所
@@ -10431,7 +10513,24 @@ function renderStaff(flt){
 function prevEmpNo(){
   const off=$('st-off')?.value;
   const disp=$('st-empno-disp');
-  if(!off||!disp){if(disp)disp.value='';return;}
+  const manual=$('st-empno-manual')?.checked;
+  if(!disp) return;
+  // メイン郵便局が「なし」の場合は手入力強制
+  if(!off){
+    // 自動モードのままなら手入力に切替
+    if(!manual){
+      const m=$('st-empno-manual');
+      if(m){
+        m.checked = true;
+        if(typeof onEmpNoManual==='function') onEmpNoManual();
+      }
+    }
+    // 値はクリアせずユーザー入力を尊重
+    return;
+  }
+  if(!off){disp.value='';return;}
+  // 手入力中は自動上書きしない
+  if(manual) return;
   const no=genEmpNo(off);
   if(no){disp.value=no;}else{disp.value='';}
 }
@@ -13247,17 +13346,44 @@ function restoreAreaPrices(rows){
 function saveStaff(continueAdd=false){
   const name=$('st-name')?.value.trim();
   if(!name){alert('氏名を入力してください');return;}
-  const officeName=$('st-off')?.value;
-  if(!officeName){alert('担当営業所を選択してください');return;}
+  const officeName=$('st-off')?.value || ''; // 'なし'の場合は空文字
+  // 所属部署から事業区分を判定
+  const _deptIds = (typeof getStSelectedDeptIds==='function') ? getStSelectedDeptIds() : [];
+  const _deptTypes = _deptIds.map(id=>{
+    const d = (typeof getDepartmentById==='function') ? getDepartmentById(id) : null;
+    return d?.type || '';
+  });
+  const _hasDel = _deptTypes.includes('del');
+  const _hasCol = _deptTypes.includes('col');
+  const _onlyCol = _hasCol && !_hasDel;
+  // 宅配を含む場合はメイン郵便局必須
+  if(_hasDel && !officeName){alert('宅配を担当する場合はメイン郵便局を選択してください');return;}
+  // 集荷専属(集荷のみ)で郵便局選択あり → 警告だけしてそのまま許可
   // 社員番号：手入力 or 自動
   const manual=$('st-empno-manual')?.checked;
   let empNo=$('st-empno-disp')?.value.trim();
-  if(!manual){empNo=genEmpNo(officeName);}
+  if(!manual){
+    if(officeName){
+      empNo=genEmpNo(officeName);
+    } else {
+      // メイン郵便局なしの場合は自動採番不可 → 手入力を促す
+      alert('メイン郵便局が「なし」の場合は社員番号を手入力してください\n（手入力チェックをONにしてください）');
+      return;
+    }
+  }
   if(!empNo){alert('社員番号を入力または営業所を選択してください');return;}
-  // 重複チェック（現役のみ）
-  if(D.staff.find(s=>s.empNo===empNo && s.status!=='終了')){alert(`社員番号 ${empNo} は現役の従事員で使用されています`);return;}
+  // 重複チェック（現役のみ・編集中の自分自身は除外）
+  const _editIdForDup = $('m-staff')?._editId;
+  const _dupHit = D.staff.find(s =>
+    s.empNo===empNo &&
+    s.status!=='終了' &&
+    !(_editIdForDup && (s.id===_editIdForDup || String(s.id)===String(_editIdForDup)))
+  );
+  if(_dupHit){alert(`社員番号 ${empNo} は現役の従事員「${_dupHit.name||''}」で使用されています`);return;}
   const kbn=$('st-kbn')?.value;
-  const officeType=kbn==='集荷担当'?'collection':'delivery';
+  // officeTypeは所属部署から導出(以前は kbn==='集荷担当' という存在しない条件で常に'delivery'になるバグあり)
+  // 宅配が選択されていれば 'delivery'、集荷のみなら 'collection'、どちらもなければ 'delivery'(後方互換デフォルト)
+  const officeType = _onlyCol ? 'collection' : 'delivery';
 
   // 委託会社情報の処理
   let companyId=0, companyName='';
@@ -13469,16 +13595,7 @@ function saveStaff(continueAdd=false){
   // ① nikki/drivers (日報アプリ用、簡略版・全社員分)
   const fbDrivers = D.staff
     .filter(s => s.status !== '終了')
-    .map(s => ({
-      id: String(s.empNo || s.id),
-      name: s.name || '',
-      company: s.company || '',
-      officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
-      office: s.office || '',
-      subOffices: s.subOffices || [],
-      kyuyo: s.kyuyo || '',
-      canSendNotification: !!s.canSendNotification,
-    }));
+    .map(s => _buildFbDriverEntry(s));
   fbSet('drivers', fbDrivers);
   lsSet(LS_KEYS.DRIVERS, fbDrivers);
   // ② nikki/staff_full (経営管理用、全フィールド)
@@ -18088,16 +18205,7 @@ function saveDriver(){
     // drivers簡略版も更新
     const fbDrivers = D.staff
       .filter(s => s.status !== '終了')
-      .map(s => ({
-        id: String(s.empNo || s.id),
-        name: s.name || '',
-        company: s.company || (s.companyId ? (D.companies.find(c=>c.id===s.companyId)?.name||'') : ''),
-        officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
-        office: s.office || '',
-        subOffices: s.subOffices || [],
-        kyuyo: s.kyuyo || '',
-        canSendNotification: !!s.canSendNotification,
-      }));
+      .map(s => _buildFbDriverEntry(s));
     try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
   }
   closeM('m-driver');renderCompanyPage();
@@ -18128,16 +18236,7 @@ function deleteDriver(){
       lsSet('nikki_staff_full', D.staff);
       const fbDrivers = D.staff
         .filter(s => s.status !== '終了')
-        .map(s => ({
-          id: String(s.empNo || s.id),
-          name: s.name || '',
-          company: s.company || (s.companyId ? (D.companies.find(c=>c.id===s.companyId)?.name||'') : ''),
-          officeType: s.officeType || (s.kubun==='集荷担当'?'collection':'delivery'),
-          office: s.office || '',
-          subOffices: s.subOffices || [],
-          kyuyo: s.kyuyo || '',
-          canSendNotification: !!s.canSendNotification,
-        }));
+        .map(s => _buildFbDriverEntry(s));
       try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
     }
     closeM('m-driver');renderCompanyPage();
@@ -26299,7 +26398,8 @@ function openM(id){
   }
   if(['m-pu','m-cust','m-inv','m-staff'].includes(id))updOffSels();
   if(id==='m-staff'){
-    if($('st-kbn'))$('st-kbn').value='個人事業主';
+    // 既定値: 必ずselect optionに存在する値を入れる(無効値は空文字化される)
+    if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
     if($('st-ky'))$('st-ky').value='個数制（歩合）';
     onStKbnChange();
     onKyuChange();
@@ -26940,9 +27040,36 @@ function _editStaffImpl(id){
       if($('st-ps4'))$('st-ps4').value=d.s4||0;
       // 集荷個別単価
       if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
+      // 税込/税別トグル復元(del)
+      if(d._tax && typeof setItemTax==='function'){
+        const delMap = {kanryo:'st-pkanryo',tenso:'st-ptenso',night:'st-pnight',ogata:'st-pogata',shukka:'st-pshukka',s1:'st-ps1',s2:'st-ps2',s3:'st-ps3',s4:'st-ps4'};
+        Object.keys(delMap).forEach(k=>{ if(d._tax[k]) setItemTax(delMap[k], d._tax[k]); });
+      }
     }
-    if($('st-pnight'))$('st-pnight').value=s.fixedPrices.night||0;
-    if($('st-pogata'))$('st-pogata').value=s.fixedPrices.ogata||0;
+    // ★集荷タブ単価の復元(以前は欠落していた)
+    if(s.fixedPrices?.col){const c=s.fixedPrices.col;
+      if($('st-cp60'))$('st-cp60').value=c.p60||0;
+      if($('st-cp80'))$('st-cp80').value=c.p80||0;
+      if($('st-cp100'))$('st-cp100').value=c.p100||0;
+      if($('st-cp120'))$('st-cp120').value=c.p120||0;
+      if($('st-cp140'))$('st-cp140').value=c.p140||0;
+      if($('st-cp160'))$('st-cp160').value=c.p160||0;
+      if($('st-cpk1'))$('st-cpk1').value=c.pk1||0;
+      if($('st-cpk2'))$('st-cpk2').value=c.pk2||0;
+      if($('st-ccp'))$('st-ccp').value=c.cp||0;
+      if($('st-cke'))$('st-cke').value=c.ke||0;
+      if($('st-cte'))$('st-cte').value=c.te||0;
+      // 税込/税別トグル復元(col)
+      if(c._tax && typeof setItemTax==='function'){
+        const colMap = {p60:'st-cp60',p80:'st-cp80',p100:'st-cp100',p120:'st-cp120',p140:'st-cp140',p160:'st-cp160',pk1:'st-cpk1',pk2:'st-cpk2',cp:'st-ccp',ke:'st-cke',te:'st-cte'};
+        Object.keys(colMap).forEach(k=>{ if(c._tax[k]) setItemTax(colMap[k], c._tax[k]); });
+      }
+    }
+    // チャーター行復元
+    if(Array.isArray(s.fixedPrices?.charter) && typeof addCharterRow==='function'){
+      const list=$('st-charter-list');
+      if(list){ list.innerHTML=''; s.fixedPrices.charter.forEach(r=>addCharterRow(r)); }
+    }
   } else {
     // 初期化時も空にしておく
     if(typeof restoreStDelColCmp==='function') restoreStDelColCmp([], s);
