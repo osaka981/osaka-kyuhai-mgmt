@@ -5537,13 +5537,26 @@ function onStAddrInput(inp){
 function renderSubOfficeBadges(){
   const wrap=$('sub-office-badges');if(!wrap)return;
   const mainOff=$('st-off')?.value||'';
-  // 宅配事業チェックが入った郵便局のみ対象
-  const offices=(D.offices||[]).filter(o=>o.typesDel);
+  // 宅配または集荷のいずれかが有効な営業所すべてを候補に
+  // (typesDel/typesColどちらもfalseの拠点は対象外)
+  const offices=(D.offices||[]).filter(o=>o.typesDel || o.typesCol);
   const allNames=[...new Set(offices.map(o=>o.name))].filter(Boolean).sort();
+  const candidates = allNames.filter(n=>n!==mainOff); // メイン郵便局は除外
   const selected = getSubOffices(); // [{name, del, col}]
   const findSel = nm => selected.find(s=>s.name===nm);
 
-  wrap.innerHTML=allNames.filter(n=>n!==mainOff).map(name=>{
+  if(candidates.length===0){
+    // 候補ゼロ時はその旨を表示してユーザーが原因を理解できるように
+    const reason = (D.offices||[]).length===0
+      ? '営業所マスタが未登録です'
+      : (mainOff
+          ? `メイン郵便局「${esc(mainOff)}」以外の営業所が登録されていません`
+          : '宅配または集荷可能な営業所が登録されていません');
+    wrap.innerHTML = `<span style="font-size:10px;color:var(--txt2);font-style:italic;padding:4px 0;">${reason}</span>`;
+    return;
+  }
+
+  wrap.innerHTML=candidates.map(name=>{
     const sel = findSel(name);
     const on = !!sel;
     const isDel = !!sel?.del;
