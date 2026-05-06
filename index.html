@@ -1876,7 +1876,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div style="font-size:14px;font-weight:700;">拠点マスタ</div>
           <div style="font-size:10.5px;color:var(--txt2);">物理的な業務拠点(本社/郵便局/集荷営業所)を管理します</div>
         </div>
-        <button class="btn b-grn btn-sm" onclick="openOfficeFromLocation(null)">＋ 拠点を追加</button>
+        <button class="btn b-grn btn-sm" onclick="openLocModal(null)">＋ 拠点を追加</button>
       </div>
       <!-- 部署タブでフィルタ -->
       <div id="loc-dept-tabs" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
@@ -3963,6 +3963,28 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="loc-dept-checkboxes" style="display:flex;flex-wrap:wrap;gap:10px;padding:8px;background:var(--bg3);border-radius:6px;"></div>
   </div>
 
+  <!-- 事業種別 (郵便局・集荷営業所のみ表示。担当郵便局バッジ抽出条件) -->
+  <div id="loc-business-types-section" class="fg mb8">
+    <label>事業種別</label>
+    <div style="display:flex;gap:10px;">
+      <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--brd2);border-radius:5px;cursor:pointer;flex:1;">
+        <input type="checkbox" id="loc-type-del" style="width:14px;height:14px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--blu2);">🚛 宅配事業</div>
+          <div style="font-size:9.5px;color:var(--txt2);">この拠点で宅配業務を行う</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--brd2);border-radius:5px;cursor:pointer;flex:1;">
+        <input type="checkbox" id="loc-type-col" style="width:14px;height:14px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--tel2);">📦 集荷事業</div>
+          <div style="font-size:9.5px;color:var(--txt2);">この拠点で集荷業務を行う</div>
+        </div>
+      </label>
+    </div>
+    <div style="font-size:10px;color:var(--txt2);margin-top:4px;">担当郵便局バッジ表示・従業員フィルタの条件として使用されます</div>
+  </div>
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
     <div class="fg"><label>電話</label><input type="tel" id="loc-tel" class="fi"></div>
     <div class="fg"><label>FAX</label><input type="tel" id="loc-fax" class="fi"></div>
@@ -4638,13 +4660,14 @@ function renderLocCards(){
     // 単価情報(郵便局のみ)
     const hasPrice = l.prices && Object.values(l.prices).some(v=>v>0);
     const priceText = l.type==='post_office' ? (hasPrice?'単価登録済':'<span style="color:var(--red2);">単価未設定</span>') : '';
-    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openOfficeFromLocation(${l.id})">
+    return `<div class="ch" style="border-left:4px solid ${col};padding:12px 14px;cursor:pointer;" onclick="openLocModal(${l.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
         <div>
           <div style="font-size:14px;font-weight:700;">${esc(l.name)}${inactiveMark}${billingBadge}</div>
           <div style="font-size:10px;color:var(--txt2);margin-top:2px;">
             <span style="font-family:monospace;color:${col};font-weight:700;">${esc(l.code||'--')}</span>
             · ${typeLabels[l.type]||l.type}
+            ${(l.typesDel||l.typesCol)?'<span style="margin-left:6px;">':''}${l.typesDel?'<span style="background:rgba(59,130,246,.15);color:#2563eb;padding:1px 6px;border-radius:3px;font-size:9.5px;font-weight:700;margin-right:3px;">🚛宅配</span>':''}${l.typesCol?'<span style="background:rgba(16,185,129,.15);color:#059669;padding:1px 6px;border-radius:3px;font-size:9.5px;font-weight:700;">📦集荷</span>':''}${(l.typesDel||l.typesCol)?'</span>':''}
           </div>
         </div>
         <div style="font-size:10px;color:var(--txt3);text-align:right;">
@@ -4773,6 +4796,33 @@ function openLocModal(id){
     </label>`;
   }).join('');
 
+  // 事業種別 (typesDel/typesCol) を復元
+  // 拠点マスタに値があればそれを優先、なければ対応する D.offices レコードから引く
+  // どちらもなければ拠点種別から推定 (post_office→typesDel=true, col_office→typesCol=true)
+  const btDel = document.getElementById('loc-type-del');
+  const btCol = document.getElementById('loc-type-col');
+  let initDel = false, initCol = false;
+  if(l){
+    if(typeof l.typesDel === 'boolean' || typeof l.typesCol === 'boolean'){
+      initDel = !!l.typesDel;
+      initCol = !!l.typesCol;
+    } else {
+      // 旧データ: 対応する D.offices から引く
+      const ofRec = (D.offices||[]).find(o=>o.name===l.name);
+      if(ofRec){
+        initDel = !!ofRec.typesDel;
+        initCol = !!ofRec.typesCol;
+      }
+      // それでも両方falseなら拠点種別から推定
+      if(!initDel && !initCol){
+        if(l.type==='post_office') initDel = true;
+        else if(l.type==='col_office') initCol = true;
+      }
+    }
+  }
+  if(btDel) btDel.checked = initDel;
+  if(btCol) btCol.checked = initCol;
+
   document.getElementById('loc-delete-btn').style.display = isEdit ? '' : 'none';
 
   // PIN認証状態に応じて請求情報セクションを表示制御(新規追加)
@@ -4816,6 +4866,24 @@ function onLocTypeChange(){
   // 郵便局以外ならisBilling強制OFF
   if(type !== 'post_office'){
     document.getElementById('loc-isBilling').checked = false;
+  }
+  // 事業種別エリアの表示制御 + デフォルト値
+  const btSec = document.getElementById('loc-business-types-section');
+  const btDel = document.getElementById('loc-type-del');
+  const btCol = document.getElementById('loc-type-col');
+  if(btSec) btSec.style.display = (type === 'head') ? 'none' : '';
+  // 拠点種別変更時、事業種別がどちらも未選択ならデフォルトをONに(編集中の値を保護するため、両方OFF時のみ)
+  if(btDel && btCol){
+    if(!btDel.checked && !btCol.checked){
+      if(type === 'post_office') btDel.checked = true;
+      else if(type === 'col_office') btCol.checked = true;
+      // head はどちらもOFFのまま
+    }
+    if(type === 'head'){
+      // 本社は両方強制OFF
+      btDel.checked = false;
+      btCol.checked = false;
+    }
   }
 }
 
@@ -4869,6 +4937,14 @@ function saveLocation(){
     prices        = existingLoc?.prices || ((type === 'post_office') ? {} : null);
   }
 
+  // 事業種別 (拠点モーダルから直接編集可能になったため、ここで読み取り)
+  // 本社 (head) の場合は両方false強制
+  let typesDel = false, typesCol = false;
+  if(type !== 'head'){
+    typesDel = !!document.getElementById('loc-type-del')?.checked;
+    typesCol = !!document.getElementById('loc-type-col')?.checked;
+  }
+
   const data = {
     code, name, type, deptIds,
     tel:  document.getElementById('loc-tel').value.trim(),
@@ -4877,6 +4953,7 @@ function saveLocation(){
     head: document.getElementById('loc-head').value.trim(),
     order: parseInt(document.getElementById('loc-order').value) || 50,
     active: document.getElementById('loc-active').checked,
+    typesDel, typesCol,
     isBilling,
     clientCompany,
     clientBranch,
@@ -4896,6 +4973,53 @@ function saveLocation(){
   }
   lsSet(LS_KEYS.LOCATIONS, D.locations);
   if(typeof fbSet==='function') fbSet('locations', D.locations);
+
+  // 対応する D.offices レコードがあれば事業種別 (typesDel/typesCol) を同期
+  // (拠点モーダルからの編集を営業所マスタに反映 → 担当郵便局バッジ表示が即座に正しくなる)
+  // ※ 営業所マスタは廃止予定だが、内部参照(93箇所)が残っているため互換維持目的で同期
+  if(Array.isArray(D.offices)){
+    let ofRec = D.offices.find(o=>o.name===name);
+    if(!ofRec){
+      // 拠点マスタから新規追加された場合、対応する営業所レコードがなければ自動作成
+      // (営業所コード = 拠点コード 数字部分または連番)
+      const maxC = D.offices.reduce((m,o)=>Math.max(m,parseInt(o.officeCode)||0),0);
+      const officeCode = code || String(maxC+1).padStart(2,'0');
+      ofRec = {
+        id: Date.now(),
+        officeCode,
+        name,
+        addr: data.addr || '',
+        tel: data.tel || '',
+        fax: data.fax || '',
+        head: data.head || '',
+        typesDel: data.typesDel || false,
+        typesCol: data.typesCol || false,
+        postPrices: null,
+        status: '稼働',
+        statusReason: '',
+      };
+      D.offices.push(ofRec);
+    } else {
+      // 既存レコードを拠点マスタの値で更新
+      ofRec.typesDel = data.typesDel || false;
+      ofRec.typesCol = data.typesCol || false;
+      // 連絡先・住所も同期 (拠点マスタを正とする)
+      if(data.addr) ofRec.addr = data.addr;
+      if(data.tel)  ofRec.tel  = data.tel;
+      if(data.fax)  ofRec.fax  = data.fax;
+      if(data.head) ofRec.head = data.head;
+    }
+    lsSet(LS_KEYS.OFFICES, D.offices);
+    if(typeof fbSet==='function'){
+      fbSet('offices', D.offices.map(o=>({
+        id:o.id, officeCode:o.officeCode, name:o.name,
+        addr:o.addr||'', tel:o.tel||'', fax:o.fax||'', head:o.head||'',
+        typesDel:o.typesDel||false, typesCol:o.typesCol||false,
+        postPrices:o.postPrices||null
+      })));
+    }
+  }
+
   closeM('m-loc');
   renderLocCards();
   toast(id?'拠点を更新しました':'拠点を追加しました');
@@ -4909,7 +5033,9 @@ function deleteLocation(){
   // 参照チェック(主拠点・応援拠点として使用中か)
   const staffsPrimary = (D.staff||[]).filter(s=>String(s.primaryLocationId)===String(id));
   const staffsSub = (D.staff||[]).filter(s=>(s.subLocationIds||[]).map(String).includes(String(id)));
-  const totalRef = staffsPrimary.length + staffsSub.length;
+  // 営業所名ベースでの参照チェック (旧 office フィールドを使う日報等を考慮)
+  const staffByOfficeName = (D.staff||[]).filter(s=>s.office===l.name && s.status!=='終了');
+  const totalRef = staffsPrimary.length + staffsSub.length + staffByOfficeName.length;
   if(totalRef){
     showAlert({msg:`この拠点は${totalRef}名のスタッフで使用されています。先に紐付けを解除してください。`});
     return;
@@ -4918,6 +5044,19 @@ function deleteLocation(){
   D.locations = D.locations.filter(x=>String(x.id)!==String(id));
   lsSet(LS_KEYS.LOCATIONS, D.locations);
   if(typeof fbSet==='function') fbSet('locations', D.locations);
+  // 対応する営業所マスタも削除 (互換維持のため D.offices を裏側で同期)
+  if(Array.isArray(D.offices)){
+    D.offices = D.offices.filter(o=>o.name!==l.name);
+    lsSet(LS_KEYS.OFFICES, D.offices);
+    if(typeof fbSet==='function'){
+      fbSet('offices', D.offices.map(o=>({
+        id:o.id, officeCode:o.officeCode, name:o.name,
+        addr:o.addr||'', tel:o.tel||'', fax:o.fax||'', head:o.head||'',
+        typesDel:o.typesDel||false, typesCol:o.typesCol||false,
+        postPrices:o.postPrices||null
+      })));
+    }
+  }
   closeM('m-loc');
   renderLocCards();
   toast('拠点を削除しました');
@@ -5083,6 +5222,33 @@ function applyFirebaseData() {
   // D.locationsに「郵便局拠点」が不足していたら、D.officesからマイグレーション
   _migrateOfficesToLocations();
 
+  // 既存データのマイグレーション: typesDel/typesColがどちらも未設定の営業所に対し、
+  // 拠点マスタ(D.locations)の type から自動補完
+  //   post_office → typesDel=true
+  //   col_office  → typesCol=true
+  // 旧データで「事業種別」のチェックを入れずに保存された営業所があると、
+  // 担当郵便局バッジ表示時に候補から外れてしまう不具合を防ぐ
+  if(Array.isArray(D.offices) && D.offices.length){
+    let migrated = false;
+    D.offices.forEach(o=>{
+      if(!o.typesDel && !o.typesCol){
+        const loc = (D.locations||[]).find(l=>l.name===o.name);
+        if(loc){
+          if(loc.type==='post_office'){ o.typesDel = true; migrated = true; }
+          else if(loc.type==='col_office'){ o.typesCol = true; migrated = true; }
+          // head(本社)は両方falseのまま維持
+        } else {
+          // 拠点マスタがない場合、名前から推定: 「郵便局」を含めば宅配可
+          if(o.name && o.name.includes('郵便局')){ o.typesDel = true; migrated = true; }
+        }
+      }
+    });
+    if(migrated){
+      lsSet(LS_KEYS.OFFICES, D.offices);
+      console.info('[migration] typesDel/typesColを拠点種別から自動補完しました');
+    }
+  }
+
   // 委託ドライバーNo の 2桁→3桁マイグレーション(Step B準備)
   _migrateDriverNoTo3Digits();
 
@@ -5143,6 +5309,9 @@ function applyFirebaseData() {
           head: o.head || '',
           order: parseInt(o.officeCode)||99,
           active: true,
+          // 事業種別 (新設: 拠点マスタで一元管理)
+          typesDel: !!o.typesDel || !!isPostOffice,
+          typesCol: !!o.typesCol,
           isBilling: !!isPostOffice,
           // 郵便局請求書用の契約情報(デフォルト空)
           clientCompany: isPostOffice ? '日本郵便株式会社' : '',
@@ -5537,21 +5706,36 @@ function onStAddrInput(inp){
 function renderSubOfficeBadges(){
   const wrap=$('sub-office-badges');if(!wrap)return;
   const mainOff=$('st-off')?.value||'';
-  // 宅配または集荷のいずれかが有効な営業所すべてを候補に
-  // (typesDel/typesColどちらもfalseの拠点は対象外)
-  const offices=(D.offices||[]).filter(o=>o.typesDel || o.typesCol);
-  const allNames=[...new Set(offices.map(o=>o.name))].filter(Boolean).sort();
+  // 候補抽出: 拠点マスタ(D.locations)を主データソースとする (営業所マスタは段階的廃止予定)
+  // 拠点マスタにレコードがあれば typesDel/typesCol を見て、
+  // 拠点マスタに無い場合のみ営業所マスタにフォールバック
+  const candidateSet = new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l.active===false) return;
+    if(l.typesDel || l.typesCol) candidateSet.add(l.name);
+    else if(l.type==='post_office' || l.type==='col_office'){
+      // フラグ未設定でも拠点種別から推定して候補に含める
+      candidateSet.add(l.name);
+    }
+  });
+  // 営業所マスタからのフォールバック (拠点マスタに無い名前のみ)
+  (D.offices||[]).forEach(o=>{
+    if(!o.name) return;
+    if(candidateSet.has(o.name)) return;
+    if(o.typesDel || o.typesCol) candidateSet.add(o.name);
+  });
+  const allNames = [...candidateSet].sort();
   const candidates = allNames.filter(n=>n!==mainOff); // メイン郵便局は除外
   const selected = getSubOffices(); // [{name, del, col}]
   const findSel = nm => selected.find(s=>s.name===nm);
 
   if(candidates.length===0){
-    // 候補ゼロ時はその旨を表示してユーザーが原因を理解できるように
-    const reason = (D.offices||[]).length===0
-      ? '営業所マスタが未登録です'
+    const totalLocs = (D.locations||[]).filter(l=>l.active!==false && (l.type==='post_office'||l.type==='col_office')).length;
+    const reason = totalLocs===0
+      ? '拠点マスタが未登録です (管理 › 拠点管理から登録してください)'
       : (mainOff
-          ? `メイン郵便局「${esc(mainOff)}」以外の営業所が登録されていません`
-          : '宅配または集荷可能な営業所が登録されていません');
+          ? `メイン郵便局「${esc(mainOff)}」以外の拠点が登録されていません`
+          : '宅配または集荷可能な拠点が登録されていません');
     wrap.innerHTML = `<span style="font-size:10px;color:var(--txt2);font-style:italic;padding:4px 0;">${reason}</span>`;
     return;
   }
@@ -6194,7 +6378,6 @@ const _TOP_TABS = {
   admin:    { subs: [
     { s:'departments', label:'部署管理' },
     { s:'locations',   label:'拠点管理' },
-    { s:'offices',     label:'営業所管理(旧)' },
     { s:'import',      label:'CSVインポート' },
     { s:'archive',     label:'アーカイブ' },
     { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
@@ -7042,19 +7225,52 @@ function getAllOfficesForDriver(s){
 
 function updOffSels() {
   const ids = ['dd-off','pu-off','inv-off','st-off','cmp-off'];
+  // 候補名一覧を構築 (拠点マスタ優先、営業所マスタはフォールバック)
+  // 各select用に適切なフィルタを適用
+  // 宅配対応 (typesDel) 候補
+  const _delNames = new Set();
+  // 集荷対応 (typesCol) 候補
+  const _colNames = new Set();
+  // 全候補 (st-off / cmp-off用)
+  const _allNames = new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l.active===false) return;
+    if(!l.name) return;
+    _allNames.add(l.name);
+    if(l.typesDel) _delNames.add(l.name);
+    if(l.typesCol) _colNames.add(l.name);
+    // フラグ未設定でも拠点種別から推定
+    if(!l.typesDel && !l.typesCol){
+      if(l.type==='post_office') _delNames.add(l.name);
+      else if(l.type==='col_office') _colNames.add(l.name);
+    }
+  });
+  // 営業所マスタからのフォールバック (拠点マスタに無い名前のみ)
+  (D.offices||[]).forEach(o=>{
+    if(!o.name) return;
+    _allNames.add(o.name);
+    if(o.typesDel) _delNames.add(o.name);
+    if(o.typesCol) _colNames.add(o.name);
+  });
+
   ids.forEach(id => {
     const el = $(id); if (!el) return;
     const isFilter = id === 'cmp-off';
     const isStaffMain = id === 'st-off';
     el.innerHTML = isFilter ? '<option value="">全営業所</option>' :
-                   isStaffMain ? '<option value="">なし（集荷専属など）</option>' : '';
-    // 宅配日報(dd-off)・請求(inv-off)は typesDel=true の営業所のみ
-    // 集荷日報(pu-off)は typesCol=true の営業所のみ
-    // 従事員(st-off)・比較(cmp-off)は全営業所
-    D.offices.forEach(o => {
-      if(id==='dd-off'||id==='inv-off'){if(!o.typesDel)return;}
-      if(id==='pu-off'){if(!o.typesCol)return;}
-      el.innerHTML += `<option value="${o.name}">${o.name}</option>`;
+                   isStaffMain ? '<option value="">なし(集荷専属など)</option>' : '';
+
+    // それぞれのselectに対応する候補名セットを選択
+    let names;
+    if(id==='dd-off' || id==='inv-off'){
+      names = _delNames;
+    } else if(id==='pu-off'){
+      names = _colNames;
+    } else {
+      names = _allNames; // st-off / cmp-off
+    }
+    [...names].sort().forEach(name=>{
+      el.innerHTML += `<option value="${name}">${name}</option>`;
     });
   });
   // 集荷モーダルの顧客セレクト
@@ -19088,6 +19304,17 @@ function editOffice(id){
   if($('of-head'))$('of-head').value=o.head||'';
   if($('of-type-del'))$('of-type-del').checked=o.typesDel||false;
   if($('of-type-col'))$('of-type-col').checked=o.typesCol||false;
+  // typesDel/typesColがどちらも未設定の場合、対応する拠点マスタの拠点種別から推定
+  if(!o.typesDel && !o.typesCol){
+    const relLoc = (D.locations||[]).find(l=>l.name===o.name);
+    if(relLoc){
+      if(relLoc.type==='post_office' && $('of-type-del')) $('of-type-del').checked = true;
+      else if(relLoc.type==='col_office' && $('of-type-col')) $('of-type-col').checked = true;
+    } else if(o.name && o.name.includes('郵便局') && $('of-type-del')){
+      // 名前ベースのフォールバック
+      $('of-type-del').checked = true;
+    }
+  }
   onOfTypeChange();
   // 取引状態復元
   if($('of-status'))$('of-status').value=o.status||'稼働';
