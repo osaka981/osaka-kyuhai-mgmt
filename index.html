@@ -26488,11 +26488,11 @@ function _isPersonalStaff(s){
 async function issueInitialPin(){
   const editId = document.getElementById('m-staff')?._editId;
   if(!editId){
-    await showAlert('先に従業員を保存してからPINを発行してください');
+    await showAlert({msg:'先に従業員を保存してからPINを発行してください'});
     return;
   }
   const s = D.staff.find(x=>x.id===editId);
-  if(!s){ await showAlert('従業員が見つかりません'); return; }
+  if(!s){ await showAlert({msg:'従業員が見つかりません'}); return; }
 
   const isPersonal = _isPersonalStaff(s);
 
@@ -26504,8 +26504,9 @@ async function issueInitialPin(){
 
   const ok = await showDialog({
     title: '初期PIN発行',
-    message: confirmMsg,
-    confirmText: '発行する',
+    msg: confirmMsg,
+    okText: '発行する',
+    okClass: 'grn',
     cancelText: 'キャンセル',
   });
   if(!ok) return;
@@ -26553,8 +26554,9 @@ async function resetStaffPin(){
 
   const ok = await showDialog({
     title: 'PINリセット',
-    message: `「${s.name}」のPINをリセットし、新しい初期PINを発行します。本人が再度ログイン時にPINを設定する必要があります。`,
-    confirmText: 'リセット',
+    msg: `「${s.name}」のPINをリセットし、新しい初期PINを発行します。本人が再度ログイン時にPINを設定する必要があります。`,
+    okText: 'リセット',
+    okClass: 'amb',
     cancelText: 'キャンセル',
   });
   if(!ok) return;
@@ -26593,12 +26595,16 @@ function _syncPinToDriversNode(staffRec, hash, mode){
 // 個人直属の固定PIN(000000)通知ダイアログ(シンプル)
 async function showPinInfoDialog(name, pin, isPersonal){
   return new Promise((resolve)=>{
+    // 既存の同種オーバーレイを除去(連続発行時の取り残し対策)
+    document.querySelectorAll('.pin-info-overlay,.pin-display-overlay').forEach(el=>{ try{ el.remove(); }catch(_){} });
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.className = 'pin-info-overlay';
+    // showDialog(z-index:2147483647)以上に出すため最大値を使用
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;';
     const box = document.createElement('div');
-    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;';
+    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;position:relative;z-index:2147483647;';
     box.innerHTML = `
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--ink);">初期PIN設定完了</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--txt);">初期PIN設定完了</div>
       <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">${esc(name)} さんの初期PIN:</div>
       <div style="background:var(--bg3);border:2px solid var(--grn2);border-radius:8px;padding:14px 16px;text-align:center;font-family:'DM Mono',monospace;font-size:32px;font-weight:700;letter-spacing:.4em;color:var(--grn2);margin-bottom:10px;user-select:all;">${pin}</div>
       <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:12px;background:rgba(46,139,87,.08);border:1px solid rgba(46,139,87,.25);padding:8px 10px;border-radius:6px;">
@@ -26608,56 +26614,88 @@ async function showPinInfoDialog(name, pin, isPersonal){
         その後は<strong>3ヶ月ごとに強制変更</strong>が促されます。
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="pin-info-close-btn" class="btn b-grn btn-sm">確認しました</button>
+        <button type="button" class="pin-info-close-btn btn b-grn btn-sm" style="position:relative;z-index:2147483647;cursor:pointer;">確認しました</button>
       </div>
     `;
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    document.getElementById('pin-info-close-btn').onclick = ()=>{
-      document.body.removeChild(overlay);
+    let done = false;
+    const closeFn = (e)=>{
+      if(done) return; done = true;
+      if(e){ try{ e.stopPropagation(); e.preventDefault(); }catch(_){} }
+      try{ overlay.remove(); }catch(_){}
+      document.removeEventListener('keydown', keyHandler, true);
       resolve();
     };
+    const btn = box.querySelector('.pin-info-close-btn');
+    // 二重に保険: addEventListener と onclick の両方
+    btn.addEventListener('click', closeFn, false);
+    btn.onclick = closeFn;
+    // Enter/Escape でも閉じる
+    const keyHandler = (e)=>{
+      if(e.key==='Enter' || e.key==='Escape'){ closeFn(e); }
+    };
+    document.addEventListener('keydown', keyHandler, true);
+    // フォーカスを当ててEnter押下で閉じれるように
+    setTimeout(()=>{ try{ btn.focus(); }catch(_){} }, 50);
   });
 }
 
 async function showPinDisplayDialog(name, pin){
   return new Promise((resolve)=>{
+    // 既存の同種オーバーレイを除去
+    document.querySelectorAll('.pin-info-overlay,.pin-display-overlay').forEach(el=>{ try{ el.remove(); }catch(_){} });
     // 専用モーダルを動的生成
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    overlay.className = 'pin-display-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;';
     const box = document.createElement('div');
-    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;';
+    box.style.cssText = 'background:var(--bg2);border:1px solid var(--brd);border-radius:12px;padding:24px 28px;max-width:400px;width:90%;position:relative;z-index:2147483647;';
     box.innerHTML = `
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--ink);">初期PIN発行完了</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--txt);">初期PIN発行完了</div>
       <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">${esc(name)} さんの初期PIN:</div>
-      <div id="pin-display-val" style="background:var(--bg3);border:2px solid var(--amb2);border-radius:8px;padding:14px 16px;text-align:center;font-family:'DM Mono',monospace;font-size:28px;font-weight:700;letter-spacing:.4em;color:var(--amb2);margin-bottom:10px;user-select:all;cursor:text;">${pin}</div>
+      <div class="pin-display-val" style="background:var(--bg3);border:2px solid var(--amb2);border-radius:8px;padding:14px 16px;text-align:center;font-family:'DM Mono',monospace;font-size:28px;font-weight:700;letter-spacing:.4em;color:var(--amb2);margin-bottom:10px;user-select:all;cursor:text;">${pin}</div>
       <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:12px;background:rgba(184,134,11,.08);border:1px solid rgba(184,134,11,.25);padding:8px 10px;border-radius:6px;">
         <strong style="color:var(--amb2);">注意:</strong> このPINは<strong>一度しか表示されません</strong>。<br>
         ドライバーに直接伝達してください(電話/紙/対面)。<br>
         初回ログイン時に本人がPINを変更します。
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button id="pin-copy-btn" class="btn b-blu btn-sm">コピー</button>
-        <button id="pin-print-btn" class="btn b-gh btn-sm">印刷</button>
-        <button id="pin-close-btn" class="btn b-grn btn-sm">確認しました</button>
+        <button type="button" class="pin-copy-btn btn b-blu btn-sm" style="position:relative;z-index:2147483647;cursor:pointer;">コピー</button>
+        <button type="button" class="pin-print-btn btn b-gh btn-sm" style="position:relative;z-index:2147483647;cursor:pointer;">印刷</button>
+        <button type="button" class="pin-close-btn btn b-grn btn-sm" style="position:relative;z-index:2147483647;cursor:pointer;">確認しました</button>
       </div>
     `;
     overlay.appendChild(box);
     document.body.appendChild(overlay);
 
-    document.getElementById('pin-copy-btn').onclick = async ()=>{
+    let done = false;
+    const closeFn = (e)=>{
+      if(done) return; done = true;
+      if(e){ try{ e.stopPropagation(); e.preventDefault(); }catch(_){} }
+      try{ overlay.remove(); }catch(_){}
+      document.removeEventListener('keydown', keyHandler, true);
+      resolve();
+    };
+
+    const copyBtn = box.querySelector('.pin-copy-btn');
+    const printBtn = box.querySelector('.pin-print-btn');
+    const closeBtn = box.querySelector('.pin-close-btn');
+
+    const copyFn = async (e)=>{
+      if(e){ try{ e.stopPropagation(); e.preventDefault(); }catch(_){} }
       try{
         await navigator.clipboard.writeText(pin);
-        const btn = document.getElementById('pin-copy-btn');
-        const prev = btn.textContent;
-        btn.textContent = 'コピー済み';
-        setTimeout(()=>{ btn.textContent = prev; }, 1500);
-      }catch(e){
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = 'コピー済み';
+        setTimeout(()=>{ try{ copyBtn.textContent = prev; }catch(_){} }, 1500);
+      }catch(_){
         alert('コピーに失敗しました。手動でコピーしてください');
       }
     };
-    document.getElementById('pin-print-btn').onclick = ()=>{
+    const printFn = (e)=>{
+      if(e){ try{ e.stopPropagation(); e.preventDefault(); }catch(_){} }
       const w = window.open('', '_blank');
       if(!w){ alert('ポップアップがブロックされました'); return; }
       w.document.write(`<html><head><title>初期PIN通知</title><style>body{font-family:sans-serif;padding:40px;}h1{font-size:18px;}.pin{font-size:48px;letter-spacing:.4em;font-weight:700;margin:20px 0;padding:16px;border:2px solid #333;text-align:center;font-family:monospace;}</style></head><body>
@@ -26671,10 +26709,16 @@ async function showPinDisplayDialog(name, pin){
       w.document.close();
       w.print();
     };
-    document.getElementById('pin-close-btn').onclick = ()=>{
-      document.body.removeChild(overlay);
-      resolve();
+
+    copyBtn.addEventListener('click', copyFn, false); copyBtn.onclick = copyFn;
+    printBtn.addEventListener('click', printFn, false); printBtn.onclick = printFn;
+    closeBtn.addEventListener('click', closeFn, false); closeBtn.onclick = closeFn;
+
+    const keyHandler = (e)=>{
+      if(e.key==='Enter' || e.key==='Escape'){ closeFn(e); }
     };
+    document.addEventListener('keydown', keyHandler, true);
+    setTimeout(()=>{ try{ closeBtn.focus(); }catch(_){} }, 50);
   });
 }
 
@@ -26745,12 +26789,12 @@ function _refreshOwnerPinUI(co){
 async function issueOwnerPin(){
   const editId = document.getElementById('m-company')?._editId;
   if(!editId){
-    await showAlert('先に会社を保存してからPINを発行してください');
+    await showAlert({msg:'先に会社を保存してからPINを発行してください'});
     return;
   }
   const co = D.companies.find(x=>x.id===editId);
-  if(!co){ await showAlert('会社が見つかりません'); return; }
-  if(!co.companyCode){ await showAlert('会社コードが未設定です'); return; }
+  if(!co){ await showAlert({msg:'会社が見つかりません'}); return; }
+  if(!co.companyCode){ await showAlert({msg:'会社コードが未設定です'}); return; }
 
   const ownerLoginId = _buildOwnerLoginId(co.companyCode);
   const confirmMsg = co.ownerInitialPinHash
@@ -26759,8 +26803,9 @@ async function issueOwnerPin(){
 
   const ok = await showDialog({
     title: 'オーナーPIN発行',
-    message: confirmMsg,
-    confirmText: '発行する',
+    msg: confirmMsg,
+    okText: '発行する',
+    okClass: 'grn',
     cancelText: 'キャンセル',
   });
   if(!ok) return;
@@ -26794,8 +26839,9 @@ async function resetOwnerPin(){
 
   const ok = await showDialog({
     title: 'オーナーPINリセット',
-    message: `${co.name} のオーナーPINをリセットし、新しい初期PINを発行します。`,
-    confirmText: 'リセット',
+    msg: `${co.name} のオーナーPINをリセットし、新しい初期PINを発行します。`,
+    okText: 'リセット',
+    okClass: 'amb',
     cancelText: 'キャンセル',
   });
   if(!ok) return;
