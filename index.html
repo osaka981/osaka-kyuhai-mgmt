@@ -5074,12 +5074,27 @@ function deleteLocation(){
 }
 
 // Firebase に書き込み（ls も同時更新）
+// 自分が書き込んだ直後にFirebaseリスナーが同じキーで再受信して
+// ローカルの変更を上書きしてしまう問題を防ぐためのガード
+// key単位で「書込中」「書込直後の猶予期間」を管理
+window._fbWritingGuard = window._fbWritingGuard || {};
+
 async function fbSet(key, value) {
   lsSet('nikki_' + key, value);
   if (!fbDB) return;
   const { ref, set } = window._fbImports;
-  try { await set(ref(fbDB, 'nikki/' + key), value); }
-  catch(e) { console.warn('fb write error:', e); }
+  try {
+    // 書込前にフラグを立て、リスナーが自分の書込結果で逆同期するのを防ぐ
+    window._fbWritingGuard[key] = Date.now();
+    await set(ref(fbDB, 'nikki/' + key), value);
+    // 書込完了後も2秒間は逆同期をブロック(伝播・echo対策)
+    setTimeout(()=>{
+      if(window._fbWritingGuard[key] && Date.now() - window._fbWritingGuard[key] >= 1900){
+        delete window._fbWritingGuard[key];
+      }
+    }, 2000);
+  }
+  catch(e) { console.warn('fb write error:', e); delete window._fbWritingGuard[key]; }
 }
 
 // Firebaseから全データをロードしてDに反映
@@ -5511,6 +5526,10 @@ function setupRealtimeSync() {
   });
   onValue(ref(fbDB, 'nikki/drivers'), snap => {
     if (!snap.exists()) return;
+    if(window._fbWritingGuard && window._fbWritingGuard['drivers']){
+      console.log('[fb listener] drivers: 自己書込中のためスキップ');
+      return;
+    }
     lsSet(LS_KEYS.DRIVERS, snap.val());
     applyFirebaseData();
     updOffSels();
@@ -5524,6 +5543,11 @@ function setupRealtimeSync() {
   // 従業員全フィールド版(個人直属・役員・委託ドライバーすべて含む)
   onValue(ref(fbDB, 'nikki/staff_full'), snap => {
     if (!snap.exists()) return;
+    // 直前に自分が書き込んだ結果が返ってきた場合はスキップ(自己エコー防止)
+    if(window._fbWritingGuard && window._fbWritingGuard['staff_full']){
+      console.log('[fb listener] staff_full: 自己書込中のためスキップ');
+      return;
+    }
     const v = snap.val();
     const staffArr = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet('nikki_staff_full', staffArr);
@@ -13955,8 +13979,10 @@ function saveStaff(continueAdd=false){
 
   // 編集中なら既存レコードを上書き、新規なら追加
   const editId = $('m-staff')?._editId;
+  console.log('[saveStaff] editId=', editId, 'D.staff.length(前)=', D.staff.length);
   if(editId){
     const idx = D.staff.findIndex(x => x.id === editId || String(x.id) === String(editId));
+    console.log('[saveStaff] 編集モード idx=', idx);
     if(idx >= 0){
       // ─── マージ保存(完全置換ではなく既存フィールドを保持) ───
       // 完全置換 (D.staff[idx] = newDrv) はUI上に描画されていないフィールドが消える危険があり、
@@ -14015,12 +14041,15 @@ function saveStaff(continueAdd=false){
       newDrv.hoshoC = { ...(D.staff[idx].hoshoC||{}), ...(newDrv.hoshoC||{}) };
 
       D.staff[idx] = {...D.staff[idx], ...newDrv};
+      console.log('[saveStaff] 編集マージ完了 idx=', idx);
     } else {
       D.staff.push(newDrv);
+      console.log('[saveStaff] editId指定だが該当なし→pushで追加');
     }
     $('m-staff')._editId = null;
   } else {
     D.staff.push(newDrv);
+    console.log('[saveStaff] 新規追加完了 newDrv.empNo=', newDrv.empNo, 'D.staff.length(後)=', D.staff.length);
   }
 
   // === Firebase保存 ===
@@ -14028,11 +14057,13 @@ function saveStaff(continueAdd=false){
   const fbDrivers = D.staff
     .filter(s => s.status !== '終了')
     .map(s => _buildFbDriverEntry(s));
+  console.log('[saveStaff] Firebase書き込み開始 fbDrivers.length=', fbDrivers.length);
   fbSet('drivers', fbDrivers);
   lsSet(LS_KEYS.DRIVERS, fbDrivers);
   // ② nikki/staff_full (経営管理用、全フィールド)
   fbSet('staff_full', D.staff);
   lsSet('nikki_staff_full', D.staff);
+  console.log('[saveStaff] Firebase書き込み完了 D.staff.length=', D.staff.length);
 
   // フォームリセット
   const keepCompany=kbn==='会社委託'&&continueAdd;
