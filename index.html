@@ -10819,7 +10819,8 @@ function renderStaff(flt){
   const searchEl=$('staff-search');
   const q=(searchEl?.value||'').trim().toLowerCase();
   if(searchEl) searchEl._flt=flt;
-  let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||s.kubun.includes(flt));
+  // s.kubun が undefined/null でもクラッシュしないよう防御
+  let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||(s.kubun||'').includes(flt));
   if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
   let h='';
   rows.forEach(s=>{
@@ -13693,6 +13694,9 @@ function restoreAreaPrices(rows){
 }
 
 function saveStaff(continueAdd=false){
+  // デバッグ: 保存処理の進行状況をConsoleに出力(原因切り分けのため)
+  // 一覧に追加されない問題が解消したら除去可
+  console.log('[saveStaff] 開始 continueAdd=', continueAdd);
   // 入力中の値を確定させる(type=numberの手入力で値が拾われない問題への対策)
   // フォーカス中の要素から blur することで、ブラウザの「入力確定」処理を発火
   try{
@@ -13701,19 +13705,22 @@ function saveStaff(continueAdd=false){
     }
   }catch(_){}
   const name=$('st-name')?.value.trim();
-  if(!name){alert('氏名を入力してください');return;}
+  console.log('[saveStaff] name=', name);
+  if(!name){console.log('[saveStaff] 中断: 氏名なし');alert('氏名を入力してください');return;}
   const officeName=$('st-off')?.value || ''; // 'なし'の場合は空文字
+  console.log('[saveStaff] officeName=', officeName);
   // 所属部署から事業区分を判定
   const _deptIds = (typeof getStSelectedDeptIds==='function') ? getStSelectedDeptIds() : [];
   const _deptTypes = _deptIds.map(id=>{
     const d = (typeof getDepartmentById==='function') ? getDepartmentById(id) : null;
     return d?.type || '';
   });
+  console.log('[saveStaff] deptIds=', _deptIds, 'deptTypes=', _deptTypes);
   const _hasDel = _deptTypes.includes('del');
   const _hasCol = _deptTypes.includes('col');
   const _onlyCol = _hasCol && !_hasDel;
   // 宅配を含む場合はメイン郵便局必須
-  if(_hasDel && !officeName){alert('宅配を担当する場合はメイン郵便局を選択してください');return;}
+  if(_hasDel && !officeName){console.log('[saveStaff] 中断: 宅配なのに郵便局未選択');alert('宅配を担当する場合はメイン郵便局を選択してください');return;}
   // 集荷専属(集荷のみ)で郵便局選択あり → 警告だけしてそのまま許可
   // 社員番号：手入力 or 自動
   // ★編集モードでは原則 empNo を変更しない(既存値を維持)
@@ -13726,20 +13733,24 @@ function saveStaff(continueAdd=false){
     : null;
   const manual=$('st-empno-manual')?.checked;
   let empNo=$('st-empno-disp')?.value.trim();
+  console.log('[saveStaff] manual=', manual, 'empNo(form)=', empNo);
   if(!manual){
     if(_existingStaff && _existingStaff.empNo){
       // 編集中: 既存の empNo を維持(自動採番で上書きしない)
       empNo = _existingStaff.empNo;
+      console.log('[saveStaff] 編集モード: 既存empNo維持=', empNo);
     } else if(officeName){
       // 新規追加: 自動採番
       empNo=genEmpNo(officeName);
+      console.log('[saveStaff] 新規: 自動採番=', empNo);
     } else {
       // メイン郵便局なしの場合は自動採番不可 → 手入力を促す
+      console.log('[saveStaff] 中断: 郵便局なしで自動モード');
       alert('メイン郵便局が「なし」の場合は社員番号を手入力してください\n（手入力チェックをONにしてください）');
       return;
     }
   }
-  if(!empNo){alert('社員番号を入力または営業所を選択してください');return;}
+  if(!empNo){console.log('[saveStaff] 中断: empNo空');alert('社員番号を入力または営業所を選択してください');return;}
   // 重複チェック（現役のみ・編集中の自分自身は除外）
   const _editIdForDup = $('m-staff')?._editId;
   const _dupHit = D.staff.find(s =>
@@ -13747,7 +13758,12 @@ function saveStaff(continueAdd=false){
     s.status!=='終了' &&
     !(_editIdForDup && (s.id===_editIdForDup || String(s.id)===String(_editIdForDup)))
   );
-  if(_dupHit){alert(`社員番号 ${empNo} は現役の従事員「${_dupHit.name||''}」で使用されています`);return;}
+  if(_dupHit){
+    console.log('[saveStaff] 中断: 社員番号重複', _dupHit);
+    alert(`社員番号 ${empNo} は現役の従事員「${_dupHit.name||''}」で使用されています`);
+    return;
+  }
+  console.log('[saveStaff] バリデーション通過、保存処理開始');
   const kbn=$('st-kbn')?.value;
   // officeTypeは所属部署から導出(以前は kbn==='集荷担当' という存在しない条件で常に'delivery'になるバグあり)
   // 宅配が選択されていれば 'delivery'、集荷のみなら 'collection'、どちらもなければ 'delivery'(後方互換デフォルト)
