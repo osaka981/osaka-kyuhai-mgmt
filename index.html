@@ -4313,13 +4313,24 @@ function genEmpNo(officeName) {
   const off = D.offices.find(o => o.name === officeName);
   if (!off || !off.officeCode) return '';
   const disp = dispCode(off.officeCode);
-  // 現役（在籍）のみから最大連番+1を採番
-  const existing = D.staff
-    .filter(s => s.office === officeName && s.empNo && s.empNo.startsWith(disp))
-    .filter(s => s.status!=='退職' && s.status!=='終了') // 退職・終了は除外
-    .map(s => parseInt(s.empNo.slice(disp.length)) || 0);
-  const next = existing.length ? Math.max(...existing) + 1 : 1;
-  if (next > 999) { alert('この営業所の連番が上限（999）に達しています'); return ''; }
+  // 重複防止のため、status を問わず empNo prefix が一致するすべてのレコードから連番を抽出
+  // (s.office フィールドが未設定の旧データもカバーするため、empNo の prefix だけで判定)
+  // 過去の不具合で同じ番号が複数レコードに存在する可能性も考慮し、最大値+1を採番
+  const used = new Set();
+  (D.staff||[]).forEach(s=>{
+    if(!s.empNo) return;
+    const en = String(s.empNo);
+    if(!en.startsWith(disp)) return;
+    const tail = en.slice(disp.length);
+    // 末尾が3桁の数字でない場合はスキップ(例: '6002' に対して disp='6' なら tail='002')
+    if(!/^\d{3}$/.test(tail)) return;
+    const n = parseInt(tail, 10);
+    if(!isNaN(n)) used.add(n);
+  });
+  // 連番のうち未使用の最小値を探す(歯抜けがあれば埋める)
+  let next = 1;
+  while(used.has(next) && next <= 999) next++;
+  if (next > 999) { alert('この営業所の連番が上限(999)に達しています'); return ''; }
   return disp + String(next).padStart(3, '0');
 }
 
