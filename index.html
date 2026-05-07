@@ -8986,12 +8986,14 @@ function addCuOtherRow(name, amt, unit){
 function renderStCustomItems(){
   const wrap = document.getElementById('st-customitems-list');
   if(!wrap) return;
-  
+
   // 編集中の従業員ID
   const editId = document.getElementById('m-staff')?._editId;
   const staff = editId ? D.staff.find(s => s.id === editId) : null;
-  const customItems = (staff?.fixedPrices?.customItems) || {};
-  
+  // customItemsの取得 - Firebase経由で配列化される場合があるので正規化
+  const rawCustomItems = staff?.fixedPrices?.customItems;
+  const customItems = _normalizeCustomItemsMap(rawCustomItems);
+
   // カスタム品目を持つ顧客一覧
   const targets = (D.customers||[])
     .filter(c => c.status !== '終了')
@@ -9001,17 +9003,18 @@ function renderStCustomItems(){
       const nb = parseInt(_normalizeCustNo(b.custNo)) || 9999;
       return na - nb;
     });
-  
+
   if(targets.length === 0){
     wrap.innerHTML = '<div style="font-size:10.5px;color:var(--txt3);padding:8px;text-align:center;font-style:italic;">カスタム品目を登録した顧客がありません</div>';
     return;
   }
-  
+
   wrap.innerHTML = targets.map(c => {
     const cId = c.id;
-    const customerCustomItems = customItems[cId] || {};
+    // 数値キー・文字列キー両対応で取得
+    const customerCustomItems = customItems[String(cId)] || customItems[cId] || {};
     const items = (c.otherItems || []).filter(o => o.name);
-    
+
     return `<div style="border:1px solid var(--brd);border-radius:6px;padding:8px 10px;background:var(--sur);">
       <div style="font-size:11px;font-weight:700;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:8px;">
         ${c.custNo ? `<span style="font-family:monospace;font-size:9.5px;color:var(--gray2);background:var(--bg3);padding:1px 6px;border-radius:3px;">${esc(_normalizeCustNo(c.custNo)||c.custNo)}</span>` : ''}
@@ -9020,15 +9023,17 @@ function renderStCustomItems(){
       <div style="display:flex;flex-direction:column;gap:4px;">
         ${items.map(item => {
           const setting = customerCustomItems[item.name] || {};
+          // amt が 0 や undefined の場合は空欄にして編集しやすくする
+          const amtVal = (setting.amt && setting.amt > 0) ? setting.amt : '';
           return `<div style="display:grid;grid-template-columns:1.4fr 100px 100px;gap:5px;align-items:center;font-size:10.5px;">
             <span style="padding:3px 6px;color:var(--ink);">${esc(item.name)} <span style="color:var(--gray3);font-size:9.5px;">[${esc(item.unit||'月額')}]</span></span>
-            <input type="number" 
-              class="fi st-customitem-amt" 
-              data-customer-id="${cId}" 
-              data-item-name="${esc(item.name)}" 
+            <input type="number"
+              class="fi st-customitem-amt"
+              data-customer-id="${cId}"
+              data-item-name="${esc(item.name)}"
               data-item-unit="${esc(item.unit||'月額')}"
-              style="font-size:10px;padding:3px 6px;text-align:right;" 
-              value="${setting.amt || ''}" 
+              style="font-size:10px;padding:3px 6px;text-align:right;"
+              value="${amtVal}"
               placeholder="支払単価">
             <span style="font-size:9px;color:var(--gray3);">顧客請求 ¥${(item.amt||0).toLocaleString()}</span>
           </div>`;
@@ -9038,18 +9043,70 @@ function renderStCustomItems(){
   }).join('');
 }
 
-/** 保存: カスタム品目の支払単価を収集 */
+// カスタム品目マップを正規化(Firebase経由で配列化される問題への対応)
+// 期待形式: {custId: {itemName: {amt, unit}}}
+// Firebase経由で {0: ..., 5: ...} → [..., null, null, null, null, ..., ...] になる場合がある
+function _normalizeCustomItemsMap(raw){
+  if(!raw) return {};
+  // 配列の場合: indexを文字列キーに変換
+  if(Array.isArray(raw)){
+    const obj = {};
+    raw.forEach((v, i)=>{
+      if(v && typeof v === 'object' && Object.keys(v).length){
+        obj[String(i)] = v;
+      }
+    });
+    return obj;
+  }
+  // 既にオブジェクト形式ならそのまま返す
+  if(typeof raw === 'object') return raw;
+  return {};
+}
+
+/** 保存: カスタム品目の支払単価を収集
+ *  画面にinputが描画されていない場合(集荷タブ未表示+renderが間に合わない等)、
+ *  既存保存値を失わないようにマージする
+ */
 function _collectStCustomItems(){
+  // 既存保存値を取得(編集中の従業員のもの)
+  const editId = document.getElementById('m-staff')?._editId;
+  const staff = editId ? (D.staff||[]).find(s => s.id === editId) : null;
+  const existing = _normalizeCustomItemsMap(staff?.fixedPrices?.customItems);
+
+  // input要素から現在のフォーム値を収集
+  const inputs = document.querySelectorAll('.st-customitem-amt');
+
+  // inputが1つも描画されていない=フォーム表示前に保存された場合は既存値をそのまま返す
+  if(inputs.length === 0) return existing;
+
+  // フォーム値を優先しつつ、フォームに無い既存値も保持
   const result = {};
-  document.querySelectorAll('.st-customitem-amt').forEach(input => {
-    const cId = input.dataset.customerId;
+  // ① まずフォームから値を取り出し
+  inputs.forEach(input => {
+    // キー型を文字列で統一(Firebase保存時の挙動を安定させる)
+    const cId = String(input.dataset.customerId || '');
     const itemName = input.dataset.itemName;
     const itemUnit = input.dataset.itemUnit;
     const amt = parseInt(input.value) || 0;
-    if(amt > 0){
+    if(cId && itemName && amt > 0){
       if(!result[cId]) result[cId] = {};
       result[cId][itemName] = { amt, unit: itemUnit };
     }
+  });
+  // ② 既存値のうち、現在フォームに描画されていない顧客/品目はそのまま保持
+  //    (該当顧客が「終了」になってフォームから消えた等)
+  Object.keys(existing).forEach(cId => {
+    const items = existing[cId];
+    if(!items || typeof items !== 'object') return;
+    Object.keys(items).forEach(itemName => {
+      // フォームに同じcId+itemNameのinputが存在するか
+      const hasInput = !!document.querySelector(`.st-customitem-amt[data-customer-id="${cId}"][data-item-name="${itemName.replace(/"/g,'\\"')}"]`);
+      if(!hasInput && items[itemName] && items[itemName].amt > 0){
+        // フォーム外で生き残っている既存値 → 保持
+        if(!result[cId]) result[cId] = {};
+        result[cId][itemName] = items[itemName];
+      }
+    });
   });
   return result;
 }
