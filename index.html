@@ -5787,14 +5787,30 @@ function renderStDeptCheckboxes(selectedDeptIds, primaryDeptId){
 }
 
 // チェック変更時: 主所属ドロップダウンを更新
+//   注意: ここで renderStDeptCheckboxes() を呼ぶと DOM 全再生成によって
+//   他のフォーム入力中の値が消失する可能性があるため、ラベルの見た目だけ更新する
 function onStDeptChange(){
   updateStPrimaryDeptOptions();
-  // 再描画(チェック状態反映)
-  const selIds = getStSelectedDeptIds();
-  const primary = document.getElementById('st-primary-dept')?.value || '';
-  renderStDeptCheckboxes(selIds, primary);
+  // ラベルのスタイル(色・太字)だけを動的更新(DOMは再生成しない)
+  _updateStDeptLabelStyles();
   // 郵便局フィールドの連動
   applyDeptToOfficeFields(true /* fromUserChange */);
+}
+
+// チェック状態に応じてラベルの見た目だけ更新(DOM再生成を避ける)
+function _updateStDeptLabelStyles(){
+  const typeColors = {mgmt:'#6b7280', del:'#3b82f6', col:'#10b981', other:'#9ca3af'};
+  document.querySelectorAll('.st-dept-chk').forEach(cb=>{
+    const label = cb.closest('label');
+    if(!label) return;
+    const checked = cb.checked;
+    const type = cb.dataset.type || 'other';
+    const col = typeColors[type] || '#9ca3af';
+    label.style.borderColor = checked ? col : 'var(--brd2)';
+    label.style.background  = checked ? (col+'15') : 'transparent';
+    label.style.fontWeight  = checked ? '700' : '500';
+    label.style.color       = checked ? col : 'var(--txt2)';
+  });
 }
 
 // 所属部署選択に応じてメイン郵便局・担当郵便局UIを連動更新
@@ -9034,13 +9050,25 @@ function renderStCustomItems(){
               data-item-unit="${esc(item.unit||'月額')}"
               style="font-size:10px;padding:3px 6px;text-align:right;"
               value="${amtVal}"
-              placeholder="支払単価">
+              placeholder="支払単価"
+              oninput="_markStCustomItemDirty(this)"
+              onchange="_markStCustomItemDirty(this)">
             <span style="font-size:9px;color:var(--gray3);">顧客請求 ¥${(item.amt||0).toLocaleString()}</span>
           </div>`;
         }).join('')}
       </div>
     </div>`;
   }).join('');
+}
+
+// カスタム品目の入力値を data 属性にも保存(保険として)
+// type=number の手入力が拾われない問題への二重対策
+function _markStCustomItemDirty(input){
+  if(!input) return;
+  const v = input.value;
+  if(v !== undefined && v !== null){
+    input.dataset.lastValue = String(v);
+  }
 }
 
 // カスタム品目マップを正規化(Firebase経由で配列化される問題への対応)
@@ -9087,7 +9115,12 @@ function _collectStCustomItems(){
     const cId = String(input.dataset.customerId || '');
     const itemName = input.dataset.itemName;
     const itemUnit = input.dataset.itemUnit;
-    const amt = parseInt(input.value) || 0;
+    // input.value 優先、失敗したら data-last-value にフォールバック
+    let rawVal = input.value;
+    if(!rawVal && input.dataset.lastValue){
+      rawVal = input.dataset.lastValue;
+    }
+    const amt = parseInt(rawVal) || 0;
     if(cId && itemName && amt > 0){
       if(!result[cId]) result[cId] = {};
       result[cId][itemName] = { amt, unit: itemUnit };
@@ -13630,6 +13663,13 @@ function restoreAreaPrices(rows){
 }
 
 function saveStaff(continueAdd=false){
+  // 入力中の値を確定させる(type=numberの手入力で値が拾われない問題への対策)
+  // フォーカス中の要素から blur することで、ブラウザの「入力確定」処理を発火
+  try{
+    if(document.activeElement && typeof document.activeElement.blur === 'function'){
+      document.activeElement.blur();
+    }
+  }catch(_){}
   const name=$('st-name')?.value.trim();
   if(!name){alert('氏名を入力してください');return;}
   const officeName=$('st-off')?.value || ''; // 'なし'の場合は空文字
@@ -27325,16 +27365,24 @@ function _editStaffImpl(id){
   if($('st-note'))$('st-note').value=s.note||'';
   // 固定単価
   if(s.fixedPrices){
+    // 税別保存値を編集UI表示用の値に逆変換するヘルパー
+    // 保存時に税込→税別変換(÷1.1)されているため、税込モードならその逆変換(×1.1)で元の表示値を復元
+    const _displayPrice = (val, taxFlag) => {
+      if(!val) return 0;
+      if(taxFlag === 'in') return Math.round(val * 1.1);
+      return val;
+    };
     if(s.fixedPrices?.del){const d=s.fixedPrices.del;
-      if($('st-pkanryo'))$('st-pkanryo').value=d.kanryo||0;
-      if($('st-ptenso'))$('st-ptenso').value=d.tenso||0;
-      if($('st-pnight'))$('st-pnight').value=d.night||0;
-      if($('st-pogata'))$('st-pogata').value=d.ogata||0;
-      if($('st-pshukka'))$('st-pshukka').value=d.shukka||0;
-      if($('st-ps1'))$('st-ps1').value=d.s1||0;
-      if($('st-ps2'))$('st-ps2').value=d.s2||0;
-      if($('st-ps3'))$('st-ps3').value=d.s3||0;
-      if($('st-ps4'))$('st-ps4').value=d.s4||0;
+      const dt = d._tax || {};
+      if($('st-pkanryo'))$('st-pkanryo').value=_displayPrice(d.kanryo, dt.kanryo);
+      if($('st-ptenso'))$('st-ptenso').value=_displayPrice(d.tenso, dt.tenso);
+      if($('st-pnight'))$('st-pnight').value=_displayPrice(d.night, dt.night);
+      if($('st-pogata'))$('st-pogata').value=_displayPrice(d.ogata, dt.ogata);
+      if($('st-pshukka'))$('st-pshukka').value=_displayPrice(d.shukka, dt.shukka);
+      if($('st-ps1'))$('st-ps1').value=_displayPrice(d.s1, dt.s1);
+      if($('st-ps2'))$('st-ps2').value=_displayPrice(d.s2, dt.s2);
+      if($('st-ps3'))$('st-ps3').value=_displayPrice(d.s3, dt.s3);
+      if($('st-ps4'))$('st-ps4').value=_displayPrice(d.s4, dt.s4);
       // 集荷個別単価
       if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
       // 税込/税別トグル復元(del)
@@ -27345,17 +27393,18 @@ function _editStaffImpl(id){
     }
     // ★集荷タブ単価の復元(以前は欠落していた)
     if(s.fixedPrices?.col){const c=s.fixedPrices.col;
-      if($('st-cp60'))$('st-cp60').value=c.p60||0;
-      if($('st-cp80'))$('st-cp80').value=c.p80||0;
-      if($('st-cp100'))$('st-cp100').value=c.p100||0;
-      if($('st-cp120'))$('st-cp120').value=c.p120||0;
-      if($('st-cp140'))$('st-cp140').value=c.p140||0;
-      if($('st-cp160'))$('st-cp160').value=c.p160||0;
-      if($('st-cpk1'))$('st-cpk1').value=c.pk1||0;
-      if($('st-cpk2'))$('st-cpk2').value=c.pk2||0;
-      if($('st-ccp'))$('st-ccp').value=c.cp||0;
-      if($('st-cke'))$('st-cke').value=c.ke||0;
-      if($('st-cte'))$('st-cte').value=c.te||0;
+      const ct = c._tax || {};
+      if($('st-cp60'))$('st-cp60').value=_displayPrice(c.p60, ct.p60);
+      if($('st-cp80'))$('st-cp80').value=_displayPrice(c.p80, ct.p80);
+      if($('st-cp100'))$('st-cp100').value=_displayPrice(c.p100, ct.p100);
+      if($('st-cp120'))$('st-cp120').value=_displayPrice(c.p120, ct.p120);
+      if($('st-cp140'))$('st-cp140').value=_displayPrice(c.p140, ct.p140);
+      if($('st-cp160'))$('st-cp160').value=_displayPrice(c.p160, ct.p160);
+      if($('st-cpk1'))$('st-cpk1').value=_displayPrice(c.pk1, ct.pk1);
+      if($('st-cpk2'))$('st-cpk2').value=_displayPrice(c.pk2, ct.pk2);
+      if($('st-ccp'))$('st-ccp').value=_displayPrice(c.cp, ct.cp);
+      if($('st-cke'))$('st-cke').value=_displayPrice(c.ke, ct.ke);
+      if($('st-cte'))$('st-cte').value=_displayPrice(c.te, ct.te);
       // 税込/税別トグル復元(col)
       if(c._tax && typeof setItemTax==='function'){
         const colMap = {p60:'st-cp60',p80:'st-cp80',p100:'st-cp100',p120:'st-cp120',p140:'st-cp140',p160:'st-cp160',pk1:'st-cpk1',pk2:'st-cpk2',cp:'st-ccp',ke:'st-cke',te:'st-cte'};
