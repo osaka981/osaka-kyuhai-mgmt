@@ -13900,15 +13900,63 @@ function saveStaff(continueAdd=false){
   if(editId){
     const idx = D.staff.findIndex(x => x.id === editId || String(x.id) === String(editId));
     if(idx >= 0){
-      // 既存IDを保持して全フィールド更新(PIN等の保存済みフィールドはマージ)
+      // ─── マージ保存(完全置換ではなく既存フィールドを保持) ───
+      // 完全置換 (D.staff[idx] = newDrv) はUI上に描画されていないフィールドが消える危険があり、
+      // 「タブを開いていない部分の値が保存後に消える」問題の根本原因となる。
+      // フリート管理アプリでも同様の事例があり、以下のマージ方式に統一する。
+      // 既存IDを保持
       newDrv.id = D.staff[idx].id;
-      newDrv.pinHash = D.staff[idx].pinHash;
-      newDrv.initialPinHash = D.staff[idx].initialPinHash;
-      newDrv.pinInitialized = D.staff[idx].pinInitialized;
-      newDrv.pinInitializedAt = D.staff[idx].pinInitializedAt;
-      newDrv.pinChangedAt = D.staff[idx].pinChangedAt;
+      // PIN関連: 既存値を保持(明示的に上書きしない)
+      newDrv.pinHash         = D.staff[idx].pinHash;
+      newDrv.initialPinHash  = D.staff[idx].initialPinHash;
+      newDrv.pinInitialized  = D.staff[idx].pinInitialized;
+      newDrv.pinInitializedAt= D.staff[idx].pinInitializedAt;
+      newDrv.pinChangedAt    = D.staff[idx].pinChangedAt;
       newDrv.pinIsPersonalFixed = D.staff[idx].pinIsPersonalFixed;
-      D.staff[idx] = newDrv;
+      // === 既存値とマージ ===
+      // newDrv に明示的に含まれていないフィールドは既存値を保持
+      // (ただし newDrv で値があるフィールドは newDrv の値が優先される)
+      // 副作用: deleteで明示的に削除したい場合は別ロジックが必要だが、
+      // 従業員台帳では基本的に削除より更新の方が多いためマージで安全
+
+      // ★fixedPrices(ネスト構造)は深いマージが必要
+      //   通常のスプレッド演算子は1段目しかマージしないため、del/col/customItems等の
+      //   サブオブジェクトは newDrv 側で完全置換される。
+      //   タブ切替で描画されていない値の喪失を防ぐため、ネストオブジェクトもマージする。
+      const _existingFP = D.staff[idx].fixedPrices || {};
+      const _newFP = newDrv.fixedPrices || {};
+      newDrv.fixedPrices = {
+        ..._existingFP,
+        ..._newFP,
+        del: { ..._existingFP.del, ..._newFP.del },
+        col: { ..._existingFP.col, ..._newFP.col },
+        // charter / customItems は配列・オブジェクトだが newDrv 側に明示値が入っていれば置換、
+        // そうでなければ既存値を維持
+        charter: _newFP.charter !== undefined ? _newFP.charter : _existingFP.charter,
+        customItems: _newFP.customItems !== undefined ? _newFP.customItems : _existingFP.customItems,
+      };
+      // _tax (税込/税別フラグ) も del/col 配下のネストオブジェクトのため別途マージ
+      if(_existingFP.del?._tax || _newFP.del?._tax){
+        newDrv.fixedPrices.del._tax = { ...(_existingFP.del?._tax||{}), ...(_newFP.del?._tax||{}) };
+      }
+      if(_existingFP.col?._tax || _newFP.col?._tax){
+        newDrv.fixedPrices.col._tax = { ...(_existingFP.col?._tax||{}), ...(_newFP.col?._tax||{}) };
+      }
+      // colCompanies (集荷個別単価) も del 配下の配列。明示値があれば置換、なければ既存値維持
+      if(_newFP.del?.colCompanies !== undefined){
+        newDrv.fixedPrices.del.colCompanies = _newFP.del.colCompanies;
+      } else if(_existingFP.del?.colCompanies){
+        newDrv.fixedPrices.del.colCompanies = _existingFP.del.colCompanies;
+      }
+
+      // offset (オフセット控除設定) も同様にネスト構造があるためマージ
+      newDrv.offset = { ...(D.staff[idx].offset||{}), ...(newDrv.offset||{}) };
+      newDrv.socialIns = { ...(D.staff[idx].socialIns||{}), ...(newDrv.socialIns||{}) };
+      newDrv.bankInfo = { ...(D.staff[idx].bankInfo||{}), ...(newDrv.bankInfo||{}) };
+      newDrv.hoshoB = { ...(D.staff[idx].hoshoB||{}), ...(newDrv.hoshoB||{}) };
+      newDrv.hoshoC = { ...(D.staff[idx].hoshoC||{}), ...(newDrv.hoshoC||{}) };
+
+      D.staff[idx] = {...D.staff[idx], ...newDrv};
     } else {
       D.staff.push(newDrv);
     }
