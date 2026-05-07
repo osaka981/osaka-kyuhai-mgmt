@@ -13686,10 +13686,22 @@ function saveStaff(continueAdd=false){
   if(_hasDel && !officeName){alert('宅配を担当する場合はメイン郵便局を選択してください');return;}
   // 集荷専属(集荷のみ)で郵便局選択あり → 警告だけしてそのまま許可
   // 社員番号：手入力 or 自動
+  // ★編集モードでは原則 empNo を変更しない(既存値を維持)
+  //   自動採番は新規追加時のみ走らせる。これにより
+  //   「保存するたびに連番が +1 されて山田太郎が6001→6002→6003と変わってしまう」
+  //   問題を防ぐ
+  const _editIdForEmpNo = $('m-staff')?._editId;
+  const _existingStaff = _editIdForEmpNo
+    ? D.staff.find(s => s.id===_editIdForEmpNo || String(s.id)===String(_editIdForEmpNo))
+    : null;
   const manual=$('st-empno-manual')?.checked;
   let empNo=$('st-empno-disp')?.value.trim();
   if(!manual){
-    if(officeName){
+    if(_existingStaff && _existingStaff.empNo){
+      // 編集中: 既存の empNo を維持(自動採番で上書きしない)
+      empNo = _existingStaff.empNo;
+    } else if(officeName){
+      // 新規追加: 自動採番
       empNo=genEmpNo(officeName);
     } else {
       // メイン郵便局なしの場合は自動採番不可 → 手入力を促す
