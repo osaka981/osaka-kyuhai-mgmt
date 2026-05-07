@@ -6224,6 +6224,25 @@ function resetStaffModal(){
    'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
    'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // ★宅配単価フィールド (前回編集の値が残らないようクリア)
+  ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka',
+   'st-ps1','st-ps2','st-ps3','st-ps4'
+  ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // ★集荷単価フィールド (前回編集の値が残らないようクリア)
+  ['st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160',
+   'st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'
+  ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // チャーター/違約金などの行ベースリセット
+  ['st-charter-list','st-penalty-list','st-customitems-list'].forEach(id=>{
+    const e=$(id);if(e)e.innerHTML='';
+  });
+  // 税込/税別トグル状態を既定(税込:in)にリセット
+  // 過去の編集で「税別」になっていた項目が次の従業員にも引き継がれないようにする
+  if(typeof setItemTax === 'function'){
+    ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
+     'st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160','st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'
+    ].forEach(id=>{ try{ setItemTax(id, 'in'); }catch(_){} });
+  }
   // チェックボックス
   ['st-empno-manual','st-hosho-b-on','st-hosho-c-on','st-doc-payslip','st-doc-invproxy','st-stamp-request'].forEach(id=>{
     const e=$(id);if(e)e.checked=false;
@@ -27347,6 +27366,9 @@ async function resetOwnerPin(){
 }
 
 function _editStaffImpl(id){
+  // ★前回開いた従業員の値が残らないよう、編集前に必ずモーダルをリセット
+  //   (新規追加時と同様にすべてのフィールドを初期化してから既存値を読み込む)
+  if(typeof resetStaffModal === 'function') resetStaffModal();
   // ID型不一致対応: 厳密比較(===)だと数字↔文字列で見つからないため、両方試す
   let s = D.staff.find(x=>x.id===id);
   if(!s) s = D.staff.find(x=>String(x.id)===String(id));
