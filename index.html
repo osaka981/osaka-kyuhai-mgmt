@@ -3631,15 +3631,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <input type="hidden" id="st-del-tax-type" value="ex">
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-      <div class="fg"><label style="font-size:9px;">完了（円）<span class="tax-tog" id="tt-st-pkanryo" data-tax="in"><button onclick="setItemTax('st-pkanryo','in')" class="active-in">税込</button><button onclick="setItemTax('st-pkanryo','ex')" class="">税別</button></span></label><input type="number" id="st-pkanryo" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">転送（円）<span class="tax-tog" id="tt-st-ptenso" data-tax="in"><button onclick="setItemTax('st-ptenso','in')" class="active-in">税込</button><button onclick="setItemTax('st-ptenso','ex')" class="">税別</button></span></label><input type="number" id="st-ptenso" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">夜間（円）<span class="tax-tog" id="tt-st-pnight" data-tax="in"><button onclick="setItemTax('st-pnight','in')" class="active-in">税込</button><button onclick="setItemTax('st-pnight','ex')" class="">税別</button></span></label><input type="number" id="st-pnight" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">大型（円）<span class="tax-tog" id="tt-st-pogata" data-tax="in"><button onclick="setItemTax('st-pogata','in')" class="active-in">税込</button><button onclick="setItemTax('st-pogata','ex')" class="">税別</button></span></label><input type="number" id="st-pogata" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">集荷（円）<span class="tax-tog" id="tt-st-pshukka" data-tax="in"><button onclick="setItemTax('st-pshukka','in')" class="active-in">税込</button><button onclick="setItemTax('st-pshukka','ex')" class="">税別</button></span></label><input type="number" id="st-pshukka" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">その他1（円）<span class="tax-tog" id="tt-st-ps1" data-tax="in"><button onclick="setItemTax('st-ps1','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps1','ex')" class="">税別</button></span></label><input type="number" id="st-ps1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">その他2（円）<span class="tax-tog" id="tt-st-ps2" data-tax="in"><button onclick="setItemTax('st-ps2','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps2','ex')" class="">税別</button></span></label><input type="number" id="st-ps2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">その他3（円）<span class="tax-tog" id="tt-st-ps3" data-tax="in"><button onclick="setItemTax('st-ps3','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps3','ex')" class="">税別</button></span></label><input type="number" id="st-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:9px;">その他4（円）<span class="tax-tog" id="tt-st-ps4" data-tax="in"><button onclick="setItemTax('st-ps4','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps4','ex')" class="">税別</button></span></label><input type="number" id="st-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+      <div class="fg"><label style="font-size:9px;">完了（円）<span class="tax-tog" id="tt-st-pkanryo" data-tax="in"><button onclick="setItemTax('st-pkanryo','in')" class="active-in">税込</button><button onclick="setItemTax('st-pkanryo','ex')" class="">税別</button></span></label><input type="number" id="st-pkanryo" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">転送（円）<span class="tax-tog" id="tt-st-ptenso" data-tax="in"><button onclick="setItemTax('st-ptenso','in')" class="active-in">税込</button><button onclick="setItemTax('st-ptenso','ex')" class="">税別</button></span></label><input type="number" id="st-ptenso" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">夜間（円）<span class="tax-tog" id="tt-st-pnight" data-tax="in"><button onclick="setItemTax('st-pnight','in')" class="active-in">税込</button><button onclick="setItemTax('st-pnight','ex')" class="">税別</button></span></label><input type="number" id="st-pnight" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">大型（円）<span class="tax-tog" id="tt-st-pogata" data-tax="in"><button onclick="setItemTax('st-pogata','in')" class="active-in">税込</button><button onclick="setItemTax('st-pogata','ex')" class="">税別</button></span></label><input type="number" id="st-pogata" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">集荷（円）<span class="tax-tog" id="tt-st-pshukka" data-tax="in"><button onclick="setItemTax('st-pshukka','in')" class="active-in">税込</button><button onclick="setItemTax('st-pshukka','ex')" class="">税別</button></span></label><input type="number" id="st-pshukka" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">その他1（円）<span class="tax-tog" id="tt-st-ps1" data-tax="in"><button onclick="setItemTax('st-ps1','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps1','ex')" class="">税別</button></span></label><input type="number" id="st-ps1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">その他2（円）<span class="tax-tog" id="tt-st-ps2" data-tax="in"><button onclick="setItemTax('st-ps2','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps2','ex')" class="">税別</button></span></label><input type="number" id="st-ps2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">その他3（円）<span class="tax-tog" id="tt-st-ps3" data-tax="in"><button onclick="setItemTax('st-ps3','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps3','ex')" class="">税別</button></span></label><input type="number" id="st-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">その他4（円）<span class="tax-tog" id="tt-st-ps4" data-tax="in"><button onclick="setItemTax('st-ps4','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps4','ex')" class="">税別</button></span></label><input type="number" id="st-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
     </div>
     <!-- 集荷個別単価 -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
@@ -3663,17 +3663,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <span style="font-size:9px;color:var(--txt2);margin-left:4px;">個別変更も可能</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-      <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-st-cp60" data-tax="ex"><button onclick="setItemTax('st-cp60','in')" class="">税込</button><button onclick="setItemTax('st-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp60" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="150" oninput="onStCp60Change()"></div>
-      <div class="fg"><label class="c80" style="font-size:9px;">80サイズ（円）<span class="tax-tog" id="tt-st-cp80" data-tax="ex"><button onclick="setItemTax('st-cp80','in')" class="">税込</button><button onclick="setItemTax('st-cp80','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp80" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="180"></div>
-      <div class="fg"><label class="c100" style="font-size:9px;">100サイズ（円）<span class="tax-tog" id="tt-st-cp100" data-tax="ex"><button onclick="setItemTax('st-cp100','in')" class="">税込</button><button onclick="setItemTax('st-cp100','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp100" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="220"></div>
-      <div class="fg"><label class="c120" style="font-size:9px;">120サイズ（円）<span class="tax-tog" id="tt-st-cp120" data-tax="ex"><button onclick="setItemTax('st-cp120','in')" class="">税込</button><button onclick="setItemTax('st-cp120','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp120" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="260"></div>
-      <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-st-cp140" data-tax="ex"><button onclick="setItemTax('st-cp140','in')" class="">税込</button><button onclick="setItemTax('st-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp140" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="300"></div>
-      <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-st-cp160" data-tax="ex"><button onclick="setItemTax('st-cp160','in')" class="">税込</button><button onclick="setItemTax('st-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp160" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="350"></div>
-      <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-st-cpk1" data-tax="ex"><button onclick="setItemTax('st-cpk1','in')" class="">税込</button><button onclick="setItemTax('st-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="80" oninput="onStCpk1Change()"></div>
-      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット7cm〜<span class="tax-tog" id="tt-st-cpk2" data-tax="ex"><button onclick="setItemTax('st-cpk2','in')" class="">税込</button><button onclick="setItemTax('st-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="100"></div>
-      <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-st-ccp" data-tax="ex"><button onclick="setItemTax('st-ccp','in')" class="">税込</button><button onclick="setItemTax('st-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-ccp" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="60"></div>
-      <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-st-cke" data-tax="ex"><button onclick="setItemTax('st-cke','in')" class="">税込</button><button onclick="setItemTax('st-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cke" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="120"></div>
-      <div class="fg"><label class="cte" style="font-size:9px;">定形外<span class="tax-tog" id="tt-st-cte" data-tax="ex"><button onclick="setItemTax('st-cte','in')" class="">税込</button><button onclick="setItemTax('st-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cte" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="50"></div>
+      <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-st-cp60" data-tax="ex"><button onclick="setItemTax('st-cp60','in')" class="">税込</button><button onclick="setItemTax('st-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp60" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="150" oninput="onStCp60Change()" step="0.01"></div>
+      <div class="fg"><label class="c80" style="font-size:9px;">80サイズ（円）<span class="tax-tog" id="tt-st-cp80" data-tax="ex"><button onclick="setItemTax('st-cp80','in')" class="">税込</button><button onclick="setItemTax('st-cp80','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp80" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="180" step="0.01"></div>
+      <div class="fg"><label class="c100" style="font-size:9px;">100サイズ（円）<span class="tax-tog" id="tt-st-cp100" data-tax="ex"><button onclick="setItemTax('st-cp100','in')" class="">税込</button><button onclick="setItemTax('st-cp100','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp100" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="220" step="0.01"></div>
+      <div class="fg"><label class="c120" style="font-size:9px;">120サイズ（円）<span class="tax-tog" id="tt-st-cp120" data-tax="ex"><button onclick="setItemTax('st-cp120','in')" class="">税込</button><button onclick="setItemTax('st-cp120','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp120" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="260" step="0.01"></div>
+      <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-st-cp140" data-tax="ex"><button onclick="setItemTax('st-cp140','in')" class="">税込</button><button onclick="setItemTax('st-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp140" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="300" step="0.01"></div>
+      <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-st-cp160" data-tax="ex"><button onclick="setItemTax('st-cp160','in')" class="">税込</button><button onclick="setItemTax('st-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp160" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="350" step="0.01"></div>
+      <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-st-cpk1" data-tax="ex"><button onclick="setItemTax('st-cpk1','in')" class="">税込</button><button onclick="setItemTax('st-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="80" oninput="onStCpk1Change()" step="0.01"></div>
+      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット7cm〜<span class="tax-tog" id="tt-st-cpk2" data-tax="ex"><button onclick="setItemTax('st-cpk2','in')" class="">税込</button><button onclick="setItemTax('st-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="100" step="0.01"></div>
+      <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-st-ccp" data-tax="ex"><button onclick="setItemTax('st-ccp','in')" class="">税込</button><button onclick="setItemTax('st-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-ccp" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="60" step="0.01"></div>
+      <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-st-cke" data-tax="ex"><button onclick="setItemTax('st-cke','in')" class="">税込</button><button onclick="setItemTax('st-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cke" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="120" step="0.01"></div>
+      <div class="fg"><label class="cte" style="font-size:9px;">定形外<span class="tax-tog" id="tt-st-cte" data-tax="ex"><button onclick="setItemTax('st-cte','in')" class="">税込</button><button onclick="setItemTax('st-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cte" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="50" step="0.01"></div>
     </div>
     <!-- ルート（委託会社モーダルと同形式: B=日額連動 / C=都度チャーター） -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
@@ -8630,6 +8630,41 @@ function itemTaxConv(fieldId){
 // 一括で税設定（グループ設定用）
 function setGroupTax(ids, type){
   ids.forEach(id=>setItemTax(id, type));
+}
+
+// ─── 契約書準拠の単価×個数計算ヘルパー ───
+// 契約書: 単価を集荷個数で乗じて得た金額(1円未満の端数がある場合は切り捨て。
+//        また金額の全額が1円未満の場合は1円とする。)
+//
+// 引数:
+//   unitPrice: 単価(小数点許容)
+//   qty:       個数
+//   taxFlag:   '_tax'フラグ('in'=税込/'ex'=税別、計算結果のスケールを調整したい場合に使用)
+//   options:   { mode: 'raw'|'taxIn'|'taxEx' } どのスケールで返すか
+//              'raw'(デフォルト): 単価のスケールそのまま(税込単価×個数なら税込結果)
+//              'taxIn': 必ず税込スケールで返す
+//              'taxEx': 必ず税別スケールで返す
+function calcUnitTotal(unitPrice, qty, taxFlag, options){
+  const mode = (options && options.mode) || 'raw';
+  const u = Number(unitPrice) || 0;
+  const q = Number(qty) || 0;
+  if(u <= 0 || q <= 0) return 0;
+  let raw = u * q;
+  // モード変換
+  if(mode === 'taxEx' && taxFlag === 'in') raw = raw / 1.1;       // 税込→税別
+  else if(mode === 'taxIn' && taxFlag === 'ex') raw = raw * 1.1;  // 税別→税込
+  // 端数処理: 1円未満切り捨て、ただし計算結果が0より大きく1円未満なら1円
+  if(raw > 0 && raw < 1) return 1;
+  return Math.floor(raw);
+}
+
+// 単価1点の表示用に整数化(契約書計算の前段で表示するときに使用)
+// 小数点単価を「整数として丸める」用ではなく、表示時のフォーマットとして使う
+function fmtUnitPrice(v){
+  const n = Number(v) || 0;
+  if(n === Math.floor(n)) return String(Math.floor(n));
+  // 小数点以下を最大2桁で表示(末尾の0は省略)
+  return n.toFixed(2).replace(/\.?0+$/, '');
 }
 
 // ─── 集荷単価取得ヘルパー（colPrices対応） ───
@@ -13905,8 +13940,8 @@ function saveStaff(continueAdd=false){
     payHistory:collectPayHistory(),
     buai:0,
     fixedPrices:{
-      del:{kanryo:itemTaxConv('st-pkanryo'),tenso:itemTaxConv('st-ptenso'),night:itemTaxConv('st-pnight'),ogata:itemTaxConv('st-pogata'),shukka:itemTaxConv('st-pshukka'),s1:itemTaxConv('st-ps1'),s2:itemTaxConv('st-ps2'),s3:itemTaxConv('st-ps3'),s4:itemTaxConv('st-ps4'),colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')}},
-      col:{p60:itemTaxConv('st-cp60'),p80:itemTaxConv('st-cp80'),p100:itemTaxConv('st-cp100'),p120:itemTaxConv('st-cp120'),p140:itemTaxConv('st-cp140'),p160:itemTaxConv('st-cp160'),pk1:itemTaxConv('st-cpk1'),pk2:itemTaxConv('st-cpk2'),cp:itemTaxConv('st-ccp'),ke:itemTaxConv('st-cke'),te:itemTaxConv('st-cte'),_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')}},
+      del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')}},
+      col:{p60:parseFloat($('st-cp60')?.value)||0,p80:parseFloat($('st-cp80')?.value)||0,p100:parseFloat($('st-cp100')?.value)||0,p120:parseFloat($('st-cp120')?.value)||0,p140:parseFloat($('st-cp140')?.value)||0,p160:parseFloat($('st-cp160')?.value)||0,pk1:parseFloat($('st-cpk1')?.value)||0,pk2:parseFloat($('st-cpk2')?.value)||0,cp:parseFloat($('st-ccp')?.value)||0,ke:parseFloat($('st-cke')?.value)||0,te:parseFloat($('st-cte')?.value)||0,_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')}},
       charter:charterRows,
       customItems:_collectStCustomItems(), // 顧客別カスタム品目支払単価(Step 2: 2026/05/02)
     },
@@ -20873,8 +20908,10 @@ function _calcStaffPayment(name, monStr){
     ];
     delItems.forEach(({key,label,price})=>{
       if(delSum[key]>0&&price){
-        const amt=delSum[key]*price;
-        breakdown.push({label:`${label} ${delSum[key]}件×¥${price}`, amount:amt});
+        // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
+        const taxFlag = (dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
+        const amt = calcUnitTotal(price, delSum[key], taxFlag);
+        breakdown.push({label:`${label} ${delSum[key]}件×¥${fmtUnitPrice(price)}`, amount:amt});
         total+=amt;
       }
     });
@@ -20884,8 +20921,10 @@ function _calcStaffPayment(name, monStr){
     pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
     Object.entries(puSum).forEach(([k,q])=>{
       if(q>0&&cp[k]){
-        const amt=q*cp[k];
-        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${cp[k]}`, amount:amt});
+        // 契約書準拠の計算
+        const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
+        const amt = calcUnitTotal(cp[k], q, taxFlag);
+        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:amt});
         total+=amt;
       }
     });
@@ -27505,24 +27544,18 @@ function _editStaffImpl(id){
   if($('st-note'))$('st-note').value=s.note||'';
   // 固定単価
   if(s.fixedPrices){
-    // 税別保存値を編集UI表示用の値に逆変換するヘルパー
-    // 保存時に税込→税別変換(÷1.1)されているため、税込モードならその逆変換(×1.1)で元の表示値を復元
-    const _displayPrice = (val, taxFlag) => {
-      if(!val) return 0;
-      if(taxFlag === 'in') return Math.round(val * 1.1);
-      return val;
-    };
+    // ユーザーが入力した値をそのまま保存・表示する方針(税モードフラグは保存するが値変換しない)
+    // → 60円で保存→61円表示の四捨五入誤差を防ぐ
     if(s.fixedPrices?.del){const d=s.fixedPrices.del;
-      const dt = d._tax || {};
-      if($('st-pkanryo'))$('st-pkanryo').value=_displayPrice(d.kanryo, dt.kanryo);
-      if($('st-ptenso'))$('st-ptenso').value=_displayPrice(d.tenso, dt.tenso);
-      if($('st-pnight'))$('st-pnight').value=_displayPrice(d.night, dt.night);
-      if($('st-pogata'))$('st-pogata').value=_displayPrice(d.ogata, dt.ogata);
-      if($('st-pshukka'))$('st-pshukka').value=_displayPrice(d.shukka, dt.shukka);
-      if($('st-ps1'))$('st-ps1').value=_displayPrice(d.s1, dt.s1);
-      if($('st-ps2'))$('st-ps2').value=_displayPrice(d.s2, dt.s2);
-      if($('st-ps3'))$('st-ps3').value=_displayPrice(d.s3, dt.s3);
-      if($('st-ps4'))$('st-ps4').value=_displayPrice(d.s4, dt.s4);
+      if($('st-pkanryo'))$('st-pkanryo').value=d.kanryo||0;
+      if($('st-ptenso'))$('st-ptenso').value=d.tenso||0;
+      if($('st-pnight'))$('st-pnight').value=d.night||0;
+      if($('st-pogata'))$('st-pogata').value=d.ogata||0;
+      if($('st-pshukka'))$('st-pshukka').value=d.shukka||0;
+      if($('st-ps1'))$('st-ps1').value=d.s1||0;
+      if($('st-ps2'))$('st-ps2').value=d.s2||0;
+      if($('st-ps3'))$('st-ps3').value=d.s3||0;
+      if($('st-ps4'))$('st-ps4').value=d.s4||0;
       // 集荷個別単価
       if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
       // 税込/税別トグル復元(del)
@@ -27531,20 +27564,19 @@ function _editStaffImpl(id){
         Object.keys(delMap).forEach(k=>{ if(d._tax[k]) setItemTax(delMap[k], d._tax[k]); });
       }
     }
-    // ★集荷タブ単価の復元(以前は欠落していた)
+    // 集荷タブ単価の復元
     if(s.fixedPrices?.col){const c=s.fixedPrices.col;
-      const ct = c._tax || {};
-      if($('st-cp60'))$('st-cp60').value=_displayPrice(c.p60, ct.p60);
-      if($('st-cp80'))$('st-cp80').value=_displayPrice(c.p80, ct.p80);
-      if($('st-cp100'))$('st-cp100').value=_displayPrice(c.p100, ct.p100);
-      if($('st-cp120'))$('st-cp120').value=_displayPrice(c.p120, ct.p120);
-      if($('st-cp140'))$('st-cp140').value=_displayPrice(c.p140, ct.p140);
-      if($('st-cp160'))$('st-cp160').value=_displayPrice(c.p160, ct.p160);
-      if($('st-cpk1'))$('st-cpk1').value=_displayPrice(c.pk1, ct.pk1);
-      if($('st-cpk2'))$('st-cpk2').value=_displayPrice(c.pk2, ct.pk2);
-      if($('st-ccp'))$('st-ccp').value=_displayPrice(c.cp, ct.cp);
-      if($('st-cke'))$('st-cke').value=_displayPrice(c.ke, ct.ke);
-      if($('st-cte'))$('st-cte').value=_displayPrice(c.te, ct.te);
+      if($('st-cp60'))$('st-cp60').value=c.p60||0;
+      if($('st-cp80'))$('st-cp80').value=c.p80||0;
+      if($('st-cp100'))$('st-cp100').value=c.p100||0;
+      if($('st-cp120'))$('st-cp120').value=c.p120||0;
+      if($('st-cp140'))$('st-cp140').value=c.p140||0;
+      if($('st-cp160'))$('st-cp160').value=c.p160||0;
+      if($('st-cpk1'))$('st-cpk1').value=c.pk1||0;
+      if($('st-cpk2'))$('st-cpk2').value=c.pk2||0;
+      if($('st-ccp'))$('st-ccp').value=c.cp||0;
+      if($('st-cke'))$('st-cke').value=c.ke||0;
+      if($('st-cte'))$('st-cte').value=c.te||0;
       // 税込/税別トグル復元(col)
       if(c._tax && typeof setItemTax==='function'){
         const colMap = {p60:'st-cp60',p80:'st-cp80',p100:'st-cp100',p120:'st-cp120',p140:'st-cp140',p160:'st-cp160',pk1:'st-cpk1',pk2:'st-cpk2',cp:'st-ccp',ke:'st-cke',te:'st-cte'};
