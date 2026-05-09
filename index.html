@@ -4023,12 +4023,37 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 郵便局単価 -->
     <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 郵便局単価</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
-      <div class="fg"><label>完了</label><input type="number" id="loc-price-kanryo" class="fi" placeholder="0"></div>
-      <div class="fg"><label>転送</label><input type="number" id="loc-price-tenso" class="fi" placeholder="0"></div>
-      <div class="fg"><label>夜間</label><input type="number" id="loc-price-night" class="fi" placeholder="0"></div>
-      <div class="fg"><label>大型</label><input type="number" id="loc-price-ogata" class="fi" placeholder="0"></div>
-      <div class="fg"><label>集荷(委託)</label><input type="number" id="loc-price-shukka" class="fi" placeholder="0"></div>
-      <div class="fg"><label>持戻</label><input type="number" id="loc-price-mochi" class="fi" placeholder="0"></div>
+      <div class="fg"><label>完了</label><input type="number" id="loc-price-kanryo" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label>転送</label><input type="number" id="loc-price-tenso" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label>夜間</label><input type="number" id="loc-price-night" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label>大型</label><input type="number" id="loc-price-ogata" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label>集荷(定時)</label><input type="number" id="loc-price-shukka" class="fi" placeholder="0" step="0.01"></div>
+      <div class="fg"><label>持戻</label><input type="number" id="loc-price-mochi" class="fi" placeholder="0" step="0.01"></div>
+    </div>
+    <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;line-height:1.5;">
+      ※「集荷(定時)」単価は下記の定時集荷先全てに自動反映されます。指定事業所集荷の単価は会社ごとに個別設定できます。
+    </div>
+
+    <!-- 集荷先登録(定時集荷先・指定事業所集荷先) -->
+    <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 集荷先登録 (明細・支払表示用)</div>
+    <div style="font-size:10px;color:var(--txt2);margin-bottom:8px;line-height:1.5;">
+      明細書には集荷先名で件数表示。請求書・支払代行書では「集荷」(定時)で合算表示・指定事業所集荷は会社別に表示されます。
+    </div>
+    <!-- 定時集荷先 -->
+    <div style="background:rgba(46,139,87,.05);border:1px solid rgba(46,139,87,.25);border-radius:5px;padding:8px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:700;color:var(--grn2);">定時集荷先 <span style="font-weight:400;color:var(--txt2);">(単価は上記「集荷(定時)」を共有)</span></span>
+        <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="addLocShukkaCompany('teiji')">+ 集荷先追加</button>
+      </div>
+      <div id="loc-shukka-teiji-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+    <!-- 指定事業所集荷先 -->
+    <div style="background:rgba(184,134,11,.05);border:1px solid rgba(184,134,11,.25);border-radius:5px;padding:8px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:700;color:var(--amb2);">指定事業所集荷先 <span style="font-weight:400;color:var(--txt2);">(会社ごとに単価設定)</span></span>
+        <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="addLocShukkaCompany('shitei')">+ 集荷先追加</button>
+      </div>
+      <div id="loc-shukka-shitei-list" style="display:flex;flex-direction:column;gap:4px;"></div>
     </div>
     </div><!-- /loc-billing-content -->
   </div>
@@ -4795,6 +4820,9 @@ function openLocModal(id){
   document.getElementById('loc-price-shukka').value = p.shukka || '';
   document.getElementById('loc-price-mochi').value = p.mochimodoiri || '';
 
+  // 集荷先(定時/指定事業所)の復元
+  if(typeof loadLocShukkaCompanies === 'function') loadLocShukkaCompanies(l);
+
   // 部署チェックボックス
   const deptBox = document.getElementById('loc-dept-checkboxes');
   const depts = getActiveDepartments();
@@ -4898,6 +4926,90 @@ function onLocTypeChange(){
   }
 }
 
+// ─── 拠点モーダル: 集荷先(定時/指定事業所)の追加・削除・描画 ───
+// shukkaCompaniesTeiji: [{id, name, custId}]      定時集荷先(単価は拠点単価shukkaを共有)
+// shukkaCompaniesShitei: [{id, name, custId, price, _tax}]  指定事業所集荷先(会社ごと単価)
+
+function addLocShukkaCompany(type, data){
+  const listId = type === 'teiji' ? 'loc-shukka-teiji-list' : 'loc-shukka-shitei-list';
+  const list = document.getElementById(listId);
+  if(!list) return;
+  const rowId = 'lsc-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+  const row = document.createElement('div');
+  row.className = 'loc-shukka-row';
+  row.dataset.shukkaType = type;
+  row.dataset.rowId = rowId;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr ' + (type==='shitei'?'90px 70px ':'') + 'auto;gap:5px;align-items:center;';
+
+  // 顧客選択肢を生成(顧客マスタから取得)
+  const customers = (D.customers||[]).filter(c=>c.status!=='終了').sort((a,b)=>{
+    const na = parseInt(_normalizeCustNo?.(a.custNo)) || 9999;
+    const nb = parseInt(_normalizeCustNo?.(b.custNo)) || 9999;
+    return na - nb;
+  });
+  const custOpts = ['<option value="">-- 顧客を選択 (任意) --</option>']
+    .concat(customers.map(c=>`<option value="${c.id}" ${data?.custId==c.id?'selected':''}>${esc(c.name||'')}</option>`))
+    .join('');
+
+  if(type === 'teiji'){
+    row.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: A商事)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
+        <select class="fi loc-shukka-cust" style="font-size:11px;padding:3px 6px;">${custOpts}</select>
+      </div>
+      <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
+    `;
+  } else {
+    // 指定事業所集荷先(単価+税モード付き)
+    const taxFlag = data?._tax || 'ex';
+    row.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+        <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: C工業)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
+        <select class="fi loc-shukka-cust" style="font-size:11px;padding:3px 6px;">${custOpts}</select>
+      </div>
+      <input type="number" class="fi loc-shukka-price" placeholder="単価" value="${data?.price||''}" step="0.01" style="font-size:11px;padding:3px 6px;text-align:right;">
+      <select class="fi loc-shukka-tax" style="font-size:10px;padding:3px 4px;">
+        <option value="ex" ${taxFlag==='ex'?'selected':''}>税別</option>
+        <option value="in" ${taxFlag==='in'?'selected':''}>税込</option>
+      </select>
+      <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
+    `;
+  }
+  list.appendChild(row);
+}
+
+function clearLocShukkaCompanies(){
+  const teiji = document.getElementById('loc-shukka-teiji-list');
+  const shitei = document.getElementById('loc-shukka-shitei-list');
+  if(teiji) teiji.innerHTML = '';
+  if(shitei) shitei.innerHTML = '';
+}
+
+function loadLocShukkaCompanies(loc){
+  clearLocShukkaCompanies();
+  if(!loc) return;
+  (loc.shukkaCompaniesTeiji||[]).forEach(c=>addLocShukkaCompany('teiji', c));
+  (loc.shukkaCompaniesShitei||[]).forEach(c=>addLocShukkaCompany('shitei', c));
+}
+
+function collectLocShukkaCompanies(){
+  const teiji = [];
+  const shitei = [];
+  document.querySelectorAll('#loc-shukka-teiji-list .loc-shukka-row').forEach(row=>{
+    const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
+    const custId = parseInt(row.querySelector('.loc-shukka-cust')?.value) || null;
+    if(name) teiji.push({id:row.dataset.rowId, name, custId});
+  });
+  document.querySelectorAll('#loc-shukka-shitei-list .loc-shukka-row').forEach(row=>{
+    const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
+    const custId = parseInt(row.querySelector('.loc-shukka-cust')?.value) || null;
+    const price = parseFloat(row.querySelector('.loc-shukka-price')?.value) || 0;
+    const _tax = row.querySelector('.loc-shukka-tax')?.value || 'ex';
+    if(name) shitei.push({id:row.dataset.rowId, name, custId, price, _tax});
+  });
+  return { shukkaCompaniesTeiji: teiji, shukkaCompaniesShitei: shitei };
+}
+
 function saveLocation(){
   const id = document.getElementById('loc-edit-id').value;
   const code = document.getElementById('loc-code').value.trim();
@@ -4927,14 +5039,14 @@ function saveLocation(){
     clientBranch  = isBilling ? document.getElementById('loc-clientBranch').value.trim() : '';
     invoiceNo     = isBilling ? document.getElementById('loc-invoiceNo').value.trim() : '';
     const rawPrices = {
-      kanryo: parseInt(document.getElementById('loc-price-kanryo').value) || 0,
-      tenso:  parseInt(document.getElementById('loc-price-tenso').value) || 0,
-      night:  parseInt(document.getElementById('loc-price-night').value) || 0,
-      ogata:  parseInt(document.getElementById('loc-price-ogata').value) || 0,
-      shukka: parseInt(document.getElementById('loc-price-shukka').value) || 0,
-      mochimodoiri: parseInt(document.getElementById('loc-price-mochi').value) || 0,
+      kanryo: parseFloat(document.getElementById('loc-price-kanryo').value) || 0,
+      tenso:  parseFloat(document.getElementById('loc-price-tenso').value) || 0,
+      night:  parseFloat(document.getElementById('loc-price-night').value) || 0,
+      ogata:  parseFloat(document.getElementById('loc-price-ogata').value) || 0,
+      shukka: parseFloat(document.getElementById('loc-price-shukka').value) || 0,
+      mochimodoiri: parseFloat(document.getElementById('loc-price-mochi').value) || 0,
     };
-    // 既存のcolCompanies(指定事業所集荷単価)があれば保持
+    // 既存のcolCompanies(旧形式の指定事業所集荷単価)があれば保持
     if(existingLoc?.prices?.colCompanies){
       rawPrices.colCompanies = existingLoc.prices.colCompanies;
     }
@@ -4956,6 +5068,11 @@ function saveLocation(){
     typesCol = !!document.getElementById('loc-type-col')?.checked;
   }
 
+  // 集荷先(定時/指定事業所)を収集
+  const shukkaCompanies = (typeof collectLocShukkaCompanies === 'function')
+    ? collectLocShukkaCompanies()
+    : { shukkaCompaniesTeiji: [], shukkaCompaniesShitei: [] };
+
   const data = {
     code, name, type, deptIds,
     tel:  document.getElementById('loc-tel').value.trim(),
@@ -4970,6 +5087,9 @@ function saveLocation(){
     clientBranch,
     invoiceNo,
     prices,
+    // 集荷先登録(明細表示・支払代行書での合算/個別表示の判定に使用)
+    shukkaCompaniesTeiji: shukkaCompanies.shukkaCompaniesTeiji,
+    shukkaCompaniesShitei: shukkaCompanies.shukkaCompaniesShitei,
   };
 
   if(!D.locations) D.locations = [];
@@ -8996,16 +9116,42 @@ function getDelColPayEntry(staff, companyName, officeName){
     return null;
   };
 
+  // 拠点マスタからの単価解決(2026/05仕様: 拠点マスタが標準単価のソース)
+  // ・指定事業所集荷先 → shukkaCompaniesShitei[].price (会社別)
+  // ・定時集荷先       → prices.shukka (拠点共通)
+  // companyName が拠点マスタの集荷先一覧にあるかで判定
+  const resolveFromLocation = ()=>{
+    if(!officeName) return null;
+    const loc = (D.locations||[]).find(l=>l.name===officeName && l.type==='post_office');
+    if(!loc) return null;
+    // 指定事業所集荷先(会社別単価)
+    const shiteiHit = (loc.shukkaCompaniesShitei||[]).find(c=>c && c.name===companyName);
+    if(shiteiHit && shiteiHit.price != null && Number(shiteiHit.price) > 0){
+      return {price: Number(shiteiHit.price)||0, label: '指定事業所集荷', subLabel: companyName, isDefault:false, taxFlag: shiteiHit._tax || 'ex'};
+    }
+    // 定時集荷先(拠点共通の集荷単価)
+    const teijiHit = (loc.shukkaCompaniesTeiji||[]).find(c=>c && c.name===companyName);
+    if(teijiHit){
+      const shukkaPrice = loc.prices?.shukka;
+      if(shukkaPrice != null && Number(shukkaPrice) > 0){
+        return {price: Number(shukkaPrice)||0, label:'集荷', subLabel: companyName, isDefault:true, taxFlag: loc.prices?._tax?.shukka || 'ex'};
+      }
+    }
+    return null;
+  };
+
   // 区分による優先順位の分岐
   const kubun = staff.kubun || '';
   const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
 
+  // 優先順位: ドライバー個別 → 委託会社例外 → 拠点マスタ標準 → 0
+  // (より具体的な設定が優先される)
   if(isCompanyDriver){
-    // 委託会社所属: 委託会社単価が最優先、ドライバー個別はフォールバック
-    return resolveFromCompany() || resolveFromDriver() || {price:0, label:'集荷', isDefault:true};
+    // 委託会社所属: ドライバー個別 > 委託会社単価 > 拠点マスタ > 0
+    return resolveFromDriver() || resolveFromCompany() || resolveFromLocation() || {price:0, label:'集荷', isDefault:true};
   } else {
-    // 個人事業主・社員・パート: ドライバー個別のみ(委託会社単価は使わない)
-    return resolveFromDriver() || {price:0, label:'集荷', isDefault:true};
+    // 個人事業主・社員・パート: ドライバー個別 > 拠点マスタ > 0
+    return resolveFromDriver() || resolveFromLocation() || {price:0, label:'集荷', isDefault:true};
   }
 }
 
