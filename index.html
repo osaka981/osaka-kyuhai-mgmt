@@ -9019,7 +9019,10 @@ function calcStaffDelColPayment(staffName, monStr){
   let total = 0;
   entries.forEach(e=>{
     const res = getDelColPayEntry(st, e.company, e.postOffice);
-    const amount = (e.count||0) * res.price;
+    // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
+    const amount = (typeof calcUnitTotal === 'function')
+      ? calcUnitTotal(res.price, e.count||0, 'ex')
+      : Math.floor((e.count||0) * res.price);
     total += amount;
     breakdown.push({
       date: e.date,
@@ -21014,10 +21017,13 @@ function _calcStaffPayment(name, monStr){
 
 function _calcCustBilling(custName, monStr){
   const cu=(D.customers||[]).find(c=>c.name===custName);
-  if(!cu) return {total:0, breakdown:[], routes:[], charters:[]};
+  if(!cu) return {total:0, breakdown:[], routes:[], charters:[], subtotalEx:0, subtotalIn:0, tax:0};
   const rows=(D.pickup||[]).filter(r=>r.customerName===custName&&(r.date||'').startsWith(monStr));
   const breakdown=[];
   let total=0;
+  // 税別/税込の小計を分けて集計(税別合計×1.1+税込合計で誤差最小)
+  let subtotalEx=0; // 税別品目の小計(まだ消費税を加算していない)
+  let subtotalIn=0; // 税込品目の小計(消費税を含む)
 
   // ── Pattern A: 個建(品目別数量×単価) ──
   const itemSum={};
@@ -21025,9 +21031,13 @@ function _calcCustBilling(custName, monStr){
   Object.entries(itemSum).forEach(([k,q])=>{
     if(q>0){
       const price=cu.prices?.[k]||0;
-      const amt=q*price;
-      breakdown.push({label:ITEMS[k]?.label||k, qty:q, unit:price, amount:amt});
+      // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
+      const taxFlag = (cu.prices?._tax && cu.prices._tax[k]) || 'ex';
+      const amt = (typeof calcUnitTotal === 'function') ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
+      breakdown.push({label:ITEMS[k]?.label||k, qty:q, unit:price, amount:amt, taxFlag});
       total+=amt;
+      if(taxFlag==='in') subtotalIn += amt;
+      else subtotalEx += amt;
     }
   });
 
@@ -21046,6 +21056,8 @@ function _calcCustBilling(custName, monStr){
         fromTo: masterRt?.fromTo || r.route.fromTo || '',
         stopCount: masterRt?.stopCount || r.route.stopCount || 1,
         unitPrice: (masterRt?.routePrice || masterRt?.dailyAmt || r.route.unitPrice || 0),
+        // ルート単価の税モード(マスタの_tax.route or 既定'ex')
+        taxFlag: masterRt?._tax?.route || masterRt?.priceTax || 'ex',
         totalRounds: 0,
         workDays: new Set(),
         dates: [],
@@ -21058,14 +21070,18 @@ function _calcCustBilling(custName, monStr){
     rec.dates.push({date:r.date, rounds, stops:r.route.stops||[]});
   });
   const routes = Object.values(routeAgg).map(rt=>{
-    const amount = rt.totalRounds * rt.unitPrice;
+    // 契約書準拠: 単価×回数で1円未満切り捨て
+    const amount = (typeof calcUnitTotal === 'function') ? calcUnitTotal(rt.unitPrice, rt.totalRounds, rt.taxFlag) : Math.floor(rt.totalRounds * rt.unitPrice);
     total += amount;
+    if(rt.taxFlag==='in') subtotalIn += amount;
+    else subtotalEx += amount;
     return {
       routeId: rt.routeId,
       name: rt.name,
       fromTo: rt.fromTo,
       stopCount: rt.stopCount,
       unitPrice: rt.unitPrice,
+      taxFlag: rt.taxFlag,
       totalRounds: rt.totalRounds,
       workDays: rt.workDays.size,
       amount,
@@ -21073,13 +21089,17 @@ function _calcCustBilling(custName, monStr){
     };
   });
 
-  // ── Pattern C: チャーター(都度) ──
+  // ── Pattern C: チャーター(都度・金額固定) ──
   const charters = [];
   rows.forEach(r=>{
     if(!r.charter || !(r.charter.content || r.charter.from || r.charter.to)) return;
     const ch = r.charter;
     const amount = Number(ch.amount)||0;
+    // チャーターは金額直接入力、税モードはchの_tax(default 'ex')
+    const chTax = ch._tax || ch.taxFlag || 'ex';
     total += amount;
+    if(chTax==='in') subtotalIn += amount;
+    else subtotalEx += amount;
     charters.push({
       date: r.date,
       customerId: ch.customerId,
@@ -21088,11 +21108,40 @@ function _calcCustBilling(custName, monStr){
       to: ch.to,
       content: ch.content,
       amount,
+      taxFlag: chTax,
       isAmountSet: amount > 0,
     });
   });
 
-  return {total, breakdown, routes, charters, customer:cu, rowCount:rows.length};
+  // 税別小計に消費税10%を加算 → 税込小計と合算 → 1円未満切り捨て(契約書準拠)
+  // 例: 税別15円×10001個=150015円(税別) → 165016.5円(税込) → 切り捨て165016円
+  const tax = Math.floor(subtotalEx * 0.1);  // 消費税(税別小計×10%)
+  const taxIncOfEx = subtotalEx + tax;        // 税別品目の税込合計
+
+  // 税込品目の内訳(税込小計から税抜分と消費税分を逆算)
+  // 例: 税込60.5円×100個=6050円 → うち消費税=Math.floor(6050×10/110)=550円、税抜=5500円
+  const taxOfIn = Math.floor(subtotalIn * 10 / 110);  // 税込品目に含まれる消費税
+  const taxExOfIn = subtotalIn - taxOfIn;              // 税込品目の税抜分
+
+  // 全体集計(インボイス制度準拠)
+  const totalTax = tax + taxOfIn;             // 消費税合計
+  const totalEx  = subtotalEx + taxExOfIn;    // 税抜き合計(税別小計+税込品目の税抜分)
+  const grandTotal = taxIncOfEx + subtotalIn; // 全体の税込合計
+
+  return {
+    total: grandTotal,           // 最終税込合計(請求金額)
+    // 旧フィールド(後方互換)
+    subtotalEx,                  // 税別品目の小計(税抜き)
+    subtotalIn,                  // 税込品目の小計(税込み)
+    tax,                         // 税別品目に対する消費税
+    taxIncOfEx,                  // 税別品目を税込換算した小計
+    // 新フィールド(インボイス対応)
+    taxOfIn,                     // 税込品目に含まれる消費税(逆算)
+    taxExOfIn,                   // 税込品目の税抜分(逆算)
+    totalTax,                    // 消費税合計(税別の税+税込の税)
+    totalEx,                     // 全体の税抜合計
+    breakdown, routes, charters, customer:cu, rowCount:rows.length
+  };
 }
 
 // ── PDF生成（簡易印刷ベース） ──
