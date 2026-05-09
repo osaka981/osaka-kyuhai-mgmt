@@ -3652,10 +3652,42 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div id="st-delcol-companies" style="display:flex;flex-direction:column;gap:4px;"></div>
     </div>
+
+    <!-- 集荷先別単価(拠点マスタの集荷先から自動表示・手入力ミス防止) - 宅配事業内集荷 -->
+    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <div class="xs muted fw7">🏢 宅配事業内集荷の単価 (拠点マスタ連動)</div>
+          <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">郵便局の宅配事業として行う集荷の単価。拠点マスタで登録した集荷先と連動。空欄=拠点標準単価/委託会社例外を使用</div>
+        </div>
+        <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 8px;" onclick="renderStShukkaCompanies()">🔄 更新</button>
+      </div>
+      <!-- 顧客別の個別入力 (宅配事業内集荷は会社ごとに単価が異なるのが一般的) -->
+      <div id="st-shukka-percust" style="display:flex;flex-direction:column;gap:6px;">
+        <div id="st-shukka-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+        <div id="st-shukka-empty" style="font-size:10.5px;color:var(--txt2);font-style:italic;text-align:center;padding:10px;display:none;">
+          拠点マスタに集荷先が登録されていません。<br>
+          先に拠点管理で集荷先を登録してください。
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 集荷単価 -->
   <div id="ptab-content-col" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- 適用方式の選択 (集荷事業) -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
+      <span style="font-size:11px;font-weight:700;">📦 集荷単価 適用方式:</span>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;">
+        <input type="radio" name="st-col-cust-mode" value="uniform" checked onchange="onStColCustModeChange()"> すべて同額
+      </label>
+      <label style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;cursor:pointer;">
+        <input type="radio" name="st-col-cust-mode" value="perCustomer" onchange="onStColCustModeChange()"> 顧客別個別設定
+      </label>
+    </div>
+
+    <!-- すべて同額モード: 既存の単価入力UI -->
+    <div id="st-col-uniform-section">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
       <span style="font-size:9px;color:var(--txt2);font-weight:700;">集荷単価 一括:</span>
       <button type="button" onclick="setColTabTaxAll('ex')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
@@ -3686,7 +3718,54 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div id="st-route-list-inline" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
-    
+    </div><!-- end st-col-uniform-section -->
+
+    <!-- 顧客別個別設定モード(集荷事業) -->
+    <div id="st-col-percust-section" style="display:none;">
+      <div style="background:var(--sur);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div>
+            <div class="xs muted fw7">📦 集荷顧客別単価</div>
+            <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">顧客ごとに集荷単価セット(60サイズ・80サイズなど)を設定。空欄=支払なし</div>
+          </div>
+        </div>
+        <!-- 顧客選択 + 単価入力フォーム -->
+        <div style="background:var(--bg3);border-radius:5px;padding:8px 10px;margin-bottom:8px;">
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-bottom:6px;">
+            <select id="st-col-cust-sel" class="fi" style="font-size:11px;padding:4px 6px;">
+              <option value="">─ 顧客を選択 ─</option>
+            </select>
+            <select id="st-col-cust-tax" class="fi" style="font-size:11px;padding:4px 6px;width:80px;">
+              <option value="ex">税別</option>
+              <option value="in">税込</option>
+            </select>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;">
+            <div class="fg"><label style="font-size:9px;">60</label><input type="number" id="st-col-cust-p60"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">80</label><input type="number" id="st-col-cust-p80"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">100</label><input type="number" id="st-col-cust-p100" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">120</label><input type="number" id="st-col-cust-p120" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">140</label><input type="number" id="st-col-cust-p140" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">160</label><input type="number" id="st-col-cust-p160" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;">
+            <div class="fg"><label style="font-size:9px;">PKT通常</label><input type="number" id="st-col-cust-pk1" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">PKT7cm+</label><input type="number" id="st-col-cust-pk2" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">CP</label><input type="number" id="st-col-cust-cp"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">ケース</label><input type="number" id="st-col-cust-ke" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">定形外</label><input type="number" id="st-col-cust-te" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:6px;">
+            <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 10px;" onclick="clearStColCustForm()">クリア</button>
+            <button type="button" class="btn b-blu btn-sm" style="font-size:10px;padding:3px 10px;" onclick="addStColCustEntry()">＋追加・更新</button>
+          </div>
+        </div>
+        <!-- 登録済み顧客タブ -->
+        <div id="st-col-cust-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;"></div>
+        <div id="st-col-cust-summary" style="font-size:10px;color:var(--txt2);"></div>
+      </div>
+    </div>
+
     <!-- 顧客別カスタム品目単価(Step 2: 2026/05/02) -->
     <div style="margin-top:10px;border-top:1px solid var(--brd);padding-top:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -3697,47 +3776,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 8px;" onclick="renderStCustomItems()">🔄 更新</button>
       </div>
       <div id="st-customitems-list" style="display:flex;flex-direction:column;gap:6px;"></div>
-    </div>
-
-    <!-- 集荷先別単価(拠点マスタの集荷先から自動表示・手入力ミス防止) -->
-    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-top:8px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-        <div>
-          <div class="xs muted fw7">🏢 集荷先別単価 (拠点マスタ連動)</div>
-          <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">拠点マスタで登録した集荷先と連動。空欄=拠点標準単価/委託会社例外を使用</div>
-        </div>
-        <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 8px;" onclick="renderStShukkaCompanies()">🔄 更新</button>
-      </div>
-      <!-- 適用方式の選択 -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:6px 8px;background:var(--bg3);border-radius:4px;">
-        <span style="font-size:10.5px;font-weight:700;">適用方式:</span>
-        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;">
-          <input type="radio" name="st-shukka-mode" value="uniform" checked onchange="onStShukkaModeChange()"> すべて同額
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;">
-          <input type="radio" name="st-shukka-mode" value="perCustomer" onchange="onStShukkaModeChange()"> 顧客別個別設定
-        </label>
-      </div>
-      <!-- 同額モード時の一括入力 -->
-      <div id="st-shukka-uniform" style="display:flex;flex-direction:column;gap:6px;">
-        <div style="font-size:10.5px;color:var(--txt2);">登録された全集荷先に同じ単価を適用します</div>
-        <div style="display:grid;grid-template-columns:1fr 110px 80px;gap:6px;align-items:center;background:var(--bg3);padding:6px 8px;border-radius:4px;">
-          <label style="font-size:11px;font-weight:700;">全集荷先一括単価</label>
-          <input type="number" id="st-shukka-uniform-price" class="fi" placeholder="0" step="0.01" style="font-size:10.5px;padding:4px 6px;text-align:right;">
-          <span class="tax-tog" id="tt-st-shukka-uniform" data-tax="ex" style="display:flex;gap:1px;font-size:9px;">
-            <button type="button" onclick="setItemTax('st-shukka-uniform','in')" class="">税込</button>
-            <button type="button" onclick="setItemTax('st-shukka-uniform','ex')" class="active-ex">税別</button>
-          </span>
-        </div>
-      </div>
-      <!-- 顧客別モード時の個別入力 -->
-      <div id="st-shukka-percust" style="display:none;flex-direction:column;gap:6px;">
-        <div id="st-shukka-list" style="display:flex;flex-direction:column;gap:4px;"></div>
-        <div id="st-shukka-empty" style="font-size:10.5px;color:var(--txt2);font-style:italic;text-align:center;padding:10px;display:none;">
-          拠点マスタに集荷先が登録されていません。<br>
-          先に拠点管理で集荷先を登録してください。
-        </div>
-      </div>
     </div>
   </div>
 
@@ -9132,10 +9170,9 @@ function getDelColPayEntry(staff, companyName, officeName){
   // 各層の単価解決を関数化
   const resolveFromDriver = ()=>{
     // 2026/05/09 NEW: 集荷先別単価(拠点マスタ連動)を最優先でチェック
-    const shuMode = staff.fixedPrices?.del?.shukkaMode;
+    // 宅配事業内集荷は会社ごとに単価が異なるため顧客別固定
     const shuCompanies = staff.fixedPrices?.del?.shukkaCompanies || {};
-    const shuUniform = staff.fixedPrices?.del?.shukkaUniform;
-    if(shuMode === 'perCustomer' && officeName && companyName){
+    if(officeName && companyName){
       // 拠点ID解決(officeNameから拠点を逆引き)
       const loc = (D.locations||[]).find(l=>l.name===officeName && l.type==='post_office');
       if(loc){
@@ -9145,9 +9182,6 @@ function getDelColPayEntry(staff, companyName, officeName){
           return {price: Number(entry.price)||0, label: entry.type==='shitei'?'指定事業所集荷':'集荷', subLabel: companyName, isDefault:false, taxFlag: entry._tax || 'ex'};
         }
       }
-    } else if(shuMode === 'uniform' && shuUniform && shuUniform.price > 0){
-      // 一括単価モード: 全集荷先に同じ単価を適用
-      return {price: Number(shuUniform.price)||0, label:'集荷', subLabel: companyName, isDefault:false, taxFlag: shuUniform._tax || 'ex'};
     }
     // 旧: 集荷個別単価 (colCompanies)
     const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
@@ -9361,16 +9395,132 @@ function renderStCustomItems(){
 
 // カスタム品目の入力値を data 属性にも保存(保険として)
 // type=number の手入力が拾われない問題への二重対策
-// ─── 集荷先別単価(従業員台帳・集荷タブ) ───
-// 拠点マスタのshukkaCompaniesTeiji/Shiteiから集荷先一覧を取得し、
-// ドライバー個別単価を顧客別または一括で設定する
+// ─── 集荷顧客別単価(従業員台帳・集荷タブ) ───
+// 集荷事業: 顧客別に60サイズ・80サイズ等の単価セットを登録
+// 委託会社モーダルの集荷単価UIと同じ仕組み
+
+let _stColCustPrices = []; // [{custId, taxType, prices:{p60,p80,...}}]
+let _stColCustSelId = null;
+
+function onStColCustModeChange(){
+  const mode = document.querySelector('input[name="st-col-cust-mode"]:checked')?.value || 'uniform';
+  const uniBox = document.getElementById('st-col-uniform-section');
+  const perBox = document.getElementById('st-col-percust-section');
+  if(uniBox) uniBox.style.display = (mode==='uniform') ? '' : 'none';
+  if(perBox) perBox.style.display = (mode==='perCustomer') ? '' : 'none';
+}
+
+function _stColCustIdMap(){
+  return {p60:'st-col-cust-p60', p80:'st-col-cust-p80', p100:'st-col-cust-p100',
+          p120:'st-col-cust-p120', p140:'st-col-cust-p140', p160:'st-col-cust-p160',
+          pk1:'st-col-cust-pk1', pk2:'st-col-cust-pk2',
+          cp:'st-col-cust-cp', ke:'st-col-cust-ke', te:'st-col-cust-te'};
+}
+
+function clearStColCustForm(){
+  const sel = document.getElementById('st-col-cust-sel');
+  if(sel) sel.value = '';
+  const tax = document.getElementById('st-col-cust-tax');
+  if(tax) tax.value = 'ex';
+  const idMap = _stColCustIdMap();
+  Object.values(idMap).forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  _stColCustSelId = null;
+}
+
+function addStColCustEntry(){
+  const custId = parseInt(document.getElementById('st-col-cust-sel')?.value) || 0;
+  if(!custId){ alert('顧客を選択してください'); return; }
+  const taxType = document.getElementById('st-col-cust-tax')?.value || 'ex';
+  const idMap = _stColCustIdMap();
+  const prices = {};
+  Object.entries(idMap).forEach(([k,id])=>{ prices[k] = parseFloat(document.getElementById(id)?.value) || 0; });
+  const idx = _stColCustPrices.findIndex(e=>e.custId===custId);
+  if(idx>=0) _stColCustPrices[idx] = {custId, taxType, prices};
+  else _stColCustPrices.push({custId, taxType, prices});
+  _stColCustSelId = custId;
+  renderStColCustTabs();
+  clearStColCustForm();
+}
+
+function renderStColCustTabs(){
+  const tabsEl = document.getElementById('st-col-cust-tabs');
+  const summaryEl = document.getElementById('st-col-cust-summary');
+  if(!tabsEl) return;
+  if(!_stColCustPrices.length){
+    tabsEl.innerHTML = '<div style="font-size:10px;color:var(--txt2);">登録された顧客単価はありません</div>';
+    if(summaryEl) summaryEl.textContent = '';
+    return;
+  }
+  tabsEl.innerHTML = _stColCustPrices.map(e=>{
+    const cust = (D.customers||[]).find(c=>c.id===e.custId);
+    const cname = cust?.name || `顧客${e.custId}`;
+    const isActive = (e.custId===_stColCustSelId);
+    return `<button type="button" onclick="editStColCustEntry(${e.custId})" style="font-size:10.5px;padding:3px 10px;border:1px solid ${isActive?'var(--blu)':'var(--brd)'};background:${isActive?'rgba(74,122,155,.15)':'var(--sur)'};border-radius:4px;cursor:pointer;color:var(--ink);">${esc(cname)} <span style="color:var(--txt2);">[${e.taxType==='in'?'税込':'税別'}]</span></button>`;
+  }).join('') + `<button type="button" onclick="removeStColCustEntry()" style="font-size:10px;padding:3px 8px;border:1px solid rgba(220,53,69,.3);background:rgba(220,53,69,.1);color:#dc3545;border-radius:4px;cursor:pointer;">選択を削除</button>`;
+  if(summaryEl) summaryEl.textContent = `${_stColCustPrices.length}件の顧客に単価設定済み`;
+}
+
+function editStColCustEntry(custId){
+  const e = _stColCustPrices.find(x=>x.custId===custId);
+  if(!e) return;
+  _stColCustSelId = custId;
+  const sel = document.getElementById('st-col-cust-sel');
+  if(sel) sel.value = String(custId);
+  const tax = document.getElementById('st-col-cust-tax');
+  if(tax) tax.value = e.taxType || 'ex';
+  const idMap = _stColCustIdMap();
+  Object.entries(idMap).forEach(([k,id])=>{const el=document.getElementById(id);if(el)el.value=e.prices?.[k]||'';});
+  renderStColCustTabs();
+}
+
+function removeStColCustEntry(){
+  if(!_stColCustSelId) return;
+  if(!confirm('選択中の顧客単価を削除しますか?')) return;
+  _stColCustPrices = _stColCustPrices.filter(e=>e.custId!==_stColCustSelId);
+  _stColCustSelId = null;
+  clearStColCustForm();
+  renderStColCustTabs();
+}
+
+// 顧客選択肢を更新
+function updStColCustSelect(){
+  const sel = document.getElementById('st-col-cust-sel');
+  if(!sel) return;
+  const customers = (D.customers||[]).filter(c=>c.status!=='終了').sort((a,b)=>{
+    const na = parseInt(_normalizeCustNo?.(a.custNo)) || 9999;
+    const nb = parseInt(_normalizeCustNo?.(b.custNo)) || 9999;
+    return na - nb;
+  });
+  sel.innerHTML = '<option value="">─ 顧客を選択 ─</option>' +
+    customers.map(c=>`<option value="${c.id}">${esc(c.name||'')}${c.custNo?' ['+esc(_normalizeCustNo?.(c.custNo)||c.custNo)+']':''}</option>`).join('');
+}
+
+// 復元: スタッフから集荷顧客別単価を読み込み
+function loadStColCustomerPrices(staff){
+  _stColCustPrices = (staff?.fixedPrices?.col?.customerPrices || []).map(e=>({...e}));
+  _stColCustSelId = null;
+  // モード復元
+  const mode = staff?.fixedPrices?.col?.customerMode || 'uniform';
+  const radios = document.querySelectorAll('input[name="st-col-cust-mode"]');
+  radios.forEach(r=>{ r.checked = (r.value===mode); });
+  // 顧客リスト更新+タブ描画
+  updStColCustSelect();
+  clearStColCustForm();
+  renderStColCustTabs();
+  onStColCustModeChange();
+}
+
+// 保存: 集荷顧客別単価を取得
+function collectStColCustomerPrices(){
+  return _stColCustPrices.map(e=>({...e}));
+}
+
+// ─── 集荷先別単価(従業員台帳・宅配タブ) ───
+// 拠点マスタのshukkaCompaniesTeiji/Shiteiから集荷先一覧を取得
+// 宅配事業内集荷は会社ごとに単価が異なるため、常に顧客別表示
 
 function onStShukkaModeChange(){
-  const mode = document.querySelector('input[name="st-shukka-mode"]:checked')?.value || 'uniform';
-  const uniBox = document.getElementById('st-shukka-uniform');
-  const perBox = document.getElementById('st-shukka-percust');
-  if(uniBox) uniBox.style.display = (mode==='uniform') ? '' : 'none';
-  if(perBox) perBox.style.display = (mode==='perCustomer') ? 'flex' : 'none';
+  // モード切替UIは削除されたため、何もしない(後方互換のため関数は残す)
 }
 
 // 拠点マスタから全集荷先(定時+指定事業所)を取得
@@ -9486,38 +9636,15 @@ function _toggleStShukkaTax(btn, type){
   else tog.querySelector('button:last-child').className='active-ex';
 }
 
-// 適用方式と一括単価/個別単価の復元
+// 個別単価の復元
 function loadStShukkaCompanies(staff){
-  // モード復元
-  const mode = staff?.fixedPrices?.del?.shukkaMode || 'uniform';
-  const radios = document.querySelectorAll('input[name="st-shukka-mode"]');
-  radios.forEach(r=>{ r.checked = (r.value===mode); });
-  // 一括単価
-  const uniPrice = staff?.fixedPrices?.del?.shukkaUniform || {};
-  const uniInput = document.getElementById('st-shukka-uniform-price');
-  if(uniInput) uniInput.value = (uniPrice.price !== undefined && uniPrice.price !== '') ? uniPrice.price : '';
-  if(typeof setItemTax === 'function'){
-    setItemTax('st-shukka-uniform', uniPrice._tax || 'ex');
-  }
   // 個別単価UIを描画(staffから値を読んで反映)
   renderStShukkaCompanies();
-  // モード表示切替
-  onStShukkaModeChange();
 }
 
-// 保存時に集荷先別単価を収集
+// 保存時に集荷先別単価を収集 (宅配事業内集荷・顧客別固定)
 function collectStShukkaCompanies(){
-  const mode = document.querySelector('input[name="st-shukka-mode"]:checked')?.value || 'uniform';
-  const result = { shukkaMode: mode, shukkaUniform: null, shukkaCompanies: {} };
-
-  // 一括単価
-  const uniPrice = parseFloat(document.getElementById('st-shukka-uniform-price')?.value);
-  const uniTax = document.getElementById('tt-st-shukka-uniform')?.dataset.tax || 'ex';
-  if(!isNaN(uniPrice) && uniPrice > 0){
-    result.shukkaUniform = { price: uniPrice, _tax: uniTax };
-  }
-
-  // 顧客別個別
+  const result = { shukkaMode: 'perCustomer', shukkaCompanies: {} };
   document.querySelectorAll('#st-shukka-list .st-shukka-row').forEach(row=>{
     const key = row.dataset.key;
     const priceStr = row.querySelector('.st-shukka-price')?.value;
@@ -13814,6 +13941,12 @@ function switchStTab(t){
   if(t==='confirm') buildStConfirm();
   if(t==='advance') renderAdvanceTab();
   if(t==='docs')    renderStaffDocsFromFleet();
+  // 集荷タブを開いたときにモード状態を反映
+  if(t==='col' && typeof onStColCustModeChange==='function') onStColCustModeChange();
+  // 宅配タブを開いたときに集荷先別単価を再描画
+  if(t==='del' && typeof renderStShukkaCompanies==='function'){
+    setTimeout(()=>renderStShukkaCompanies(), 30);
+  }
   setTimeout(()=>updateTabNavBtns('staff'),30);
 }
 
@@ -14326,15 +14459,16 @@ function saveStaff(continueAdd=false){
     payHistory:collectPayHistory(),
     buai:0,
     fixedPrices:(function(){
-      // 集荷先別単価(拠点マスタ連動)を収集
-      const shu = (typeof collectStShukkaCompanies==='function') ? collectStShukkaCompanies() : {shukkaMode:'uniform', shukkaUniform:null, shukkaCompanies:{}};
+      // 集荷先別単価(拠点マスタ連動・宅配事業内集荷)を収集
+      const shu = (typeof collectStShukkaCompanies==='function') ? collectStShukkaCompanies() : {shukkaMode:'perCustomer', shukkaCompanies:{}};
       return {
       del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')},
-        // 集荷先別単価(2026/05/09 拠点マスタ連動)
-        shukkaMode: shu.shukkaMode,
-        shukkaUniform: shu.shukkaUniform,
+        // 集荷先別単価(2026/05/09 拠点マスタ連動・宅配事業内集荷)
         shukkaCompanies: shu.shukkaCompanies},
-      col:{p60:parseFloat($('st-cp60')?.value)||0,p80:parseFloat($('st-cp80')?.value)||0,p100:parseFloat($('st-cp100')?.value)||0,p120:parseFloat($('st-cp120')?.value)||0,p140:parseFloat($('st-cp140')?.value)||0,p160:parseFloat($('st-cp160')?.value)||0,pk1:parseFloat($('st-cpk1')?.value)||0,pk2:parseFloat($('st-cpk2')?.value)||0,cp:parseFloat($('st-ccp')?.value)||0,ke:parseFloat($('st-cke')?.value)||0,te:parseFloat($('st-cte')?.value)||0,_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')}},
+      col:{p60:parseFloat($('st-cp60')?.value)||0,p80:parseFloat($('st-cp80')?.value)||0,p100:parseFloat($('st-cp100')?.value)||0,p120:parseFloat($('st-cp120')?.value)||0,p140:parseFloat($('st-cp140')?.value)||0,p160:parseFloat($('st-cp160')?.value)||0,pk1:parseFloat($('st-cpk1')?.value)||0,pk2:parseFloat($('st-cpk2')?.value)||0,cp:parseFloat($('st-ccp')?.value)||0,ke:parseFloat($('st-cke')?.value)||0,te:parseFloat($('st-cte')?.value)||0,_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')},
+        // 集荷顧客別単価(2026/05/09 集荷事業)
+        customerMode: (function(){const r=document.querySelector('input[name="st-col-cust-mode"]:checked');return r?r.value:'uniform';})(),
+        customerPrices: (typeof collectStColCustomerPrices==='function' ? collectStColCustomerPrices() : [])},
       charter:charterRows,
       customItems:_collectStCustomItems(), // 顧客別カスタム品目支払単価(Step 2: 2026/05/02)
     };})(),
@@ -27363,6 +27497,8 @@ function openM(id){
     setTimeout(()=>{ if(typeof renderStCustomItems==='function') renderStCustomItems(); }, 100);
     // 新規時も集荷先別単価UIを描画(空状態)
     setTimeout(()=>{ if(typeof loadStShukkaCompanies==='function') loadStShukkaCompanies(null); }, 110);
+    // 新規時も集荷顧客別単価を初期化
+    setTimeout(()=>{ if(typeof loadStColCustomerPrices==='function') loadStColCustomerPrices(null); }, 120);
   }
   if(id==='m-cust'){
     const isEdit = !!$('m-cust')?._editId;
@@ -28114,6 +28250,8 @@ function _editStaffImpl(id){
   setTimeout(()=>{ if(typeof renderStCustomItems==='function') renderStCustomItems(); }, 100);
   // 集荷先別単価(拠点マスタ連動)を描画(2026/05/09)
   setTimeout(()=>{ if(typeof loadStShukkaCompanies==='function') loadStShukkaCompanies(s); }, 110);
+  // 集荷顧客別単価を復元(2026/05/09)
+  setTimeout(()=>{ if(typeof loadStColCustomerPrices==='function') loadStColCustomerPrices(s); }, 120);
   // PIN状態反映(Step A)
   _refreshStaffPinUI(s);
 }
