@@ -9616,8 +9616,8 @@ function renderStShukkaCompanies(){
         const taxFlag = saved._tax || c.locTax || 'in';
         const ttId = `tt-st-shu-${c.locId}-${c.name.replace(/[^A-Za-z0-9]/g,'_')}`;
         html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="teiji" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
-          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点標準: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
-          <input type="number" class="fi st-shukka-price" placeholder="${fmtUnitPrice(c.locPrice)}" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
+          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}</span>
+          <input type="number" class="fi st-shukka-price" placeholder="支払単価" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
           <span class="tax-tog st-shukka-tax" data-tax="${taxFlag}" style="display:flex;gap:1px;font-size:9px;">
             <button type="button" onclick="_toggleStShukkaTax(this,'in')" class="${taxFlag==='in'?'active-in':''}">込</button>
             <button type="button" onclick="_toggleStShukkaTax(this,'ex')" class="${taxFlag==='ex'?'active-ex':''}">別</button>
@@ -9633,8 +9633,8 @@ function renderStShukkaCompanies(){
         const priceVal = (saved.price !== undefined && saved.price !== '') ? saved.price : '';
         const taxFlag = saved._tax || c.locTax || 'in';
         html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="shitei" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
-          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点単価: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
-          <input type="number" class="fi st-shukka-price" placeholder="${fmtUnitPrice(c.locPrice)}" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
+          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}</span>
+          <input type="number" class="fi st-shukka-price" placeholder="支払単価" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
           <span class="tax-tog st-shukka-tax" data-tax="${taxFlag}" style="display:flex;gap:1px;font-size:9px;">
             <button type="button" onclick="_toggleStShukkaTax(this,'in')" class="${taxFlag==='in'?'active-in':''}">込</button>
             <button type="button" onclick="_toggleStShukkaTax(this,'ex')" class="${taxFlag==='ex'?'active-ex':''}">別</button>
