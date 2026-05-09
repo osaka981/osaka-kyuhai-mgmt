@@ -3698,6 +3698,47 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div id="st-customitems-list" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
+
+    <!-- 集荷先別単価(拠点マスタの集荷先から自動表示・手入力ミス防止) -->
+    <div style="background:var(--sur);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-top:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div>
+          <div class="xs muted fw7">🏢 集荷先別単価 (拠点マスタ連動)</div>
+          <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">拠点マスタで登録した集荷先と連動。空欄=拠点標準単価/委託会社例外を使用</div>
+        </div>
+        <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 8px;" onclick="renderStShukkaCompanies()">🔄 更新</button>
+      </div>
+      <!-- 適用方式の選択 -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:6px 8px;background:var(--bg3);border-radius:4px;">
+        <span style="font-size:10.5px;font-weight:700;">適用方式:</span>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;">
+          <input type="radio" name="st-shukka-mode" value="uniform" checked onchange="onStShukkaModeChange()"> すべて同額
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;">
+          <input type="radio" name="st-shukka-mode" value="perCustomer" onchange="onStShukkaModeChange()"> 顧客別個別設定
+        </label>
+      </div>
+      <!-- 同額モード時の一括入力 -->
+      <div id="st-shukka-uniform" style="display:flex;flex-direction:column;gap:6px;">
+        <div style="font-size:10.5px;color:var(--txt2);">登録された全集荷先に同じ単価を適用します</div>
+        <div style="display:grid;grid-template-columns:1fr 110px 80px;gap:6px;align-items:center;background:var(--bg3);padding:6px 8px;border-radius:4px;">
+          <label style="font-size:11px;font-weight:700;">全集荷先一括単価</label>
+          <input type="number" id="st-shukka-uniform-price" class="fi" placeholder="0" step="0.01" style="font-size:10.5px;padding:4px 6px;text-align:right;">
+          <span class="tax-tog" id="tt-st-shukka-uniform" data-tax="ex" style="display:flex;gap:1px;font-size:9px;">
+            <button type="button" onclick="setItemTax('st-shukka-uniform','in')" class="">税込</button>
+            <button type="button" onclick="setItemTax('st-shukka-uniform','ex')" class="active-ex">税別</button>
+          </span>
+        </div>
+      </div>
+      <!-- 顧客別モード時の個別入力 -->
+      <div id="st-shukka-percust" style="display:none;flex-direction:column;gap:6px;">
+        <div id="st-shukka-list" style="display:flex;flex-direction:column;gap:4px;"></div>
+        <div id="st-shukka-empty" style="font-size:10.5px;color:var(--txt2);font-style:italic;text-align:center;padding:10px;display:none;">
+          拠点マスタに集荷先が登録されていません。<br>
+          先に拠点管理で集荷先を登録してください。
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- その他・立替（行追加方式） -->
@@ -9090,6 +9131,25 @@ function getDelColPayEntry(staff, companyName, officeName){
 
   // 各層の単価解決を関数化
   const resolveFromDriver = ()=>{
+    // 2026/05/09 NEW: 集荷先別単価(拠点マスタ連動)を最優先でチェック
+    const shuMode = staff.fixedPrices?.del?.shukkaMode;
+    const shuCompanies = staff.fixedPrices?.del?.shukkaCompanies || {};
+    const shuUniform = staff.fixedPrices?.del?.shukkaUniform;
+    if(shuMode === 'perCustomer' && officeName && companyName){
+      // 拠点ID解決(officeNameから拠点を逆引き)
+      const loc = (D.locations||[]).find(l=>l.name===officeName && l.type==='post_office');
+      if(loc){
+        const key = `${loc.id}::${companyName}`;
+        const entry = shuCompanies[key];
+        if(entry && entry.price != null && entry.price !== ''){
+          return {price: Number(entry.price)||0, label: entry.type==='shitei'?'指定事業所集荷':'集荷', subLabel: companyName, isDefault:false, taxFlag: entry._tax || 'ex'};
+        }
+      }
+    } else if(shuMode === 'uniform' && shuUniform && shuUniform.price > 0){
+      // 一括単価モード: 全集荷先に同じ単価を適用
+      return {price: Number(shuUniform.price)||0, label:'集荷', subLabel: companyName, isDefault:false, taxFlag: shuUniform._tax || 'ex'};
+    }
+    // 旧: 集荷個別単価 (colCompanies)
     const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
     if(dEntry && dEntry.price != null && dEntry.price !== ''){
       return {price: Number(dEntry.price)||0, label: dEntry.label || '集荷②', isDefault:false};
@@ -9301,6 +9361,183 @@ function renderStCustomItems(){
 
 // カスタム品目の入力値を data 属性にも保存(保険として)
 // type=number の手入力が拾われない問題への二重対策
+// ─── 集荷先別単価(従業員台帳・集荷タブ) ───
+// 拠点マスタのshukkaCompaniesTeiji/Shiteiから集荷先一覧を取得し、
+// ドライバー個別単価を顧客別または一括で設定する
+
+function onStShukkaModeChange(){
+  const mode = document.querySelector('input[name="st-shukka-mode"]:checked')?.value || 'uniform';
+  const uniBox = document.getElementById('st-shukka-uniform');
+  const perBox = document.getElementById('st-shukka-percust');
+  if(uniBox) uniBox.style.display = (mode==='uniform') ? '' : 'none';
+  if(perBox) perBox.style.display = (mode==='perCustomer') ? 'flex' : 'none';
+}
+
+// 拠点マスタから全集荷先(定時+指定事業所)を取得
+function _gatherAllShukkaCompaniesFromLocations(){
+  const result = []; // [{type:'teiji'|'shitei', name, custId, locName, locId, locPrice, locTax}]
+  (D.locations||[]).forEach(loc=>{
+    if(loc.type !== 'post_office') return;
+    (loc.shukkaCompaniesTeiji||[]).forEach(c=>{
+      if(!c?.name) return;
+      result.push({
+        type:'teiji',
+        name: c.name,
+        custId: c.custId || null,
+        locName: loc.name,
+        locId: loc.id,
+        locPrice: loc.prices?.shukka || 0,
+        locTax: loc.prices?._tax?.shukka || 'ex',
+      });
+    });
+    (loc.shukkaCompaniesShitei||[]).forEach(c=>{
+      if(!c?.name) return;
+      result.push({
+        type:'shitei',
+        name: c.name,
+        custId: c.custId || null,
+        locName: loc.name,
+        locId: loc.id,
+        locPrice: c.price || 0,
+        locTax: c._tax || 'ex',
+      });
+    });
+  });
+  return result;
+}
+
+function renderStShukkaCompanies(){
+  const wrap = document.getElementById('st-shukka-list');
+  const empty = document.getElementById('st-shukka-empty');
+  if(!wrap) return;
+
+  // 編集中のスタッフから既存設定を取得
+  const editId = document.getElementById('m-staff')?._editId;
+  const staff = editId ? (D.staff||[]).find(s=>s.id===editId || String(s.id)===String(editId)) : null;
+  const savedShukka = staff?.fixedPrices?.del?.shukkaCompanies || {};
+
+  const all = _gatherAllShukkaCompaniesFromLocations();
+  if(all.length === 0){
+    wrap.innerHTML = '';
+    if(empty) empty.style.display = '';
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+
+  // 拠点別→種別別にグループ化
+  const byLoc = {};
+  all.forEach(c=>{
+    if(!byLoc[c.locName]) byLoc[c.locName] = {teiji:[], shitei:[]};
+    byLoc[c.locName][c.type].push(c);
+  });
+
+  let html = '';
+  Object.keys(byLoc).forEach(locName=>{
+    const grp = byLoc[locName];
+    html += `<div style="border:1px solid var(--brd);border-radius:5px;padding:6px 8px;background:var(--bg3);">
+      <div style="font-size:10.5px;font-weight:700;color:var(--ink);margin-bottom:4px;">${esc(locName)}</div>`;
+    if(grp.teiji.length){
+      html += `<div style="font-size:9.5px;color:var(--grn2);font-weight:700;margin-top:4px;margin-bottom:2px;">▸ 定時集荷先</div>`;
+      grp.teiji.forEach(c=>{
+        const key = `${c.locId}::${c.name}`;
+        const saved = savedShukka[key] || {};
+        const priceVal = (saved.price !== undefined && saved.price !== '') ? saved.price : '';
+        const taxFlag = saved._tax || c.locTax;
+        const ttId = `tt-st-shu-${c.locId}-${c.name.replace(/[^A-Za-z0-9]/g,'_')}`;
+        html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="teiji" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
+          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点標準: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
+          <input type="number" class="fi st-shukka-price" placeholder="${fmtUnitPrice(c.locPrice)}" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
+          <span class="tax-tog st-shukka-tax" data-tax="${taxFlag}" style="display:flex;gap:1px;font-size:9px;">
+            <button type="button" onclick="_toggleStShukkaTax(this,'in')" class="${taxFlag==='in'?'active-in':''}">込</button>
+            <button type="button" onclick="_toggleStShukkaTax(this,'ex')" class="${taxFlag==='ex'?'active-ex':''}">別</button>
+          </span>
+        </div>`;
+      });
+    }
+    if(grp.shitei.length){
+      html += `<div style="font-size:9.5px;color:var(--amb2);font-weight:700;margin-top:4px;margin-bottom:2px;">▸ 指定事業所集荷先</div>`;
+      grp.shitei.forEach(c=>{
+        const key = `${c.locId}::${c.name}`;
+        const saved = savedShukka[key] || {};
+        const priceVal = (saved.price !== undefined && saved.price !== '') ? saved.price : '';
+        const taxFlag = saved._tax || c.locTax;
+        html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="shitei" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
+          <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点単価: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
+          <input type="number" class="fi st-shukka-price" placeholder="${fmtUnitPrice(c.locPrice)}" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
+          <span class="tax-tog st-shukka-tax" data-tax="${taxFlag}" style="display:flex;gap:1px;font-size:9px;">
+            <button type="button" onclick="_toggleStShukkaTax(this,'in')" class="${taxFlag==='in'?'active-in':''}">込</button>
+            <button type="button" onclick="_toggleStShukkaTax(this,'ex')" class="${taxFlag==='ex'?'active-ex':''}">別</button>
+          </span>
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+  wrap.innerHTML = html;
+}
+
+// 集荷先別単価行のtaxトグル(setItemTaxはfieldId+トグル要素のID連動なので別関数)
+function _toggleStShukkaTax(btn, type){
+  const tog = btn.closest('.tax-tog');
+  if(!tog) return;
+  tog.dataset.tax = type;
+  tog.querySelectorAll('button').forEach(b=>b.className='');
+  if(type==='in') tog.querySelector('button:first-child').className='active-in';
+  else tog.querySelector('button:last-child').className='active-ex';
+}
+
+// 適用方式と一括単価/個別単価の復元
+function loadStShukkaCompanies(staff){
+  // モード復元
+  const mode = staff?.fixedPrices?.del?.shukkaMode || 'uniform';
+  const radios = document.querySelectorAll('input[name="st-shukka-mode"]');
+  radios.forEach(r=>{ r.checked = (r.value===mode); });
+  // 一括単価
+  const uniPrice = staff?.fixedPrices?.del?.shukkaUniform || {};
+  const uniInput = document.getElementById('st-shukka-uniform-price');
+  if(uniInput) uniInput.value = (uniPrice.price !== undefined && uniPrice.price !== '') ? uniPrice.price : '';
+  if(typeof setItemTax === 'function'){
+    setItemTax('st-shukka-uniform', uniPrice._tax || 'ex');
+  }
+  // 個別単価UIを描画(staffから値を読んで反映)
+  renderStShukkaCompanies();
+  // モード表示切替
+  onStShukkaModeChange();
+}
+
+// 保存時に集荷先別単価を収集
+function collectStShukkaCompanies(){
+  const mode = document.querySelector('input[name="st-shukka-mode"]:checked')?.value || 'uniform';
+  const result = { shukkaMode: mode, shukkaUniform: null, shukkaCompanies: {} };
+
+  // 一括単価
+  const uniPrice = parseFloat(document.getElementById('st-shukka-uniform-price')?.value);
+  const uniTax = document.getElementById('tt-st-shukka-uniform')?.dataset.tax || 'ex';
+  if(!isNaN(uniPrice) && uniPrice > 0){
+    result.shukkaUniform = { price: uniPrice, _tax: uniTax };
+  }
+
+  // 顧客別個別
+  document.querySelectorAll('#st-shukka-list .st-shukka-row').forEach(row=>{
+    const key = row.dataset.key;
+    const priceStr = row.querySelector('.st-shukka-price')?.value;
+    const tax = row.querySelector('.st-shukka-tax')?.dataset.tax || 'ex';
+    if(priceStr !== undefined && priceStr !== ''){
+      const price = parseFloat(priceStr);
+      if(!isNaN(price) && price > 0){
+        result.shukkaCompanies[key] = {
+          price,
+          _tax: tax,
+          name: row.dataset.name,
+          locId: row.dataset.locId,
+          type: row.dataset.type,
+        };
+      }
+    }
+  });
+  return result;
+}
+
 function _markStCustomItemDirty(input){
   if(!input) return;
   const v = input.value;
@@ -14088,12 +14325,19 @@ function saveStaff(continueAdd=false){
     addColPrice:false,
     payHistory:collectPayHistory(),
     buai:0,
-    fixedPrices:{
-      del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')}},
+    fixedPrices:(function(){
+      // 集荷先別単価(拠点マスタ連動)を収集
+      const shu = (typeof collectStShukkaCompanies==='function') ? collectStShukkaCompanies() : {shukkaMode:'uniform', shukkaUniform:null, shukkaCompanies:{}};
+      return {
+      del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')},
+        // 集荷先別単価(2026/05/09 拠点マスタ連動)
+        shukkaMode: shu.shukkaMode,
+        shukkaUniform: shu.shukkaUniform,
+        shukkaCompanies: shu.shukkaCompanies},
       col:{p60:parseFloat($('st-cp60')?.value)||0,p80:parseFloat($('st-cp80')?.value)||0,p100:parseFloat($('st-cp100')?.value)||0,p120:parseFloat($('st-cp120')?.value)||0,p140:parseFloat($('st-cp140')?.value)||0,p160:parseFloat($('st-cp160')?.value)||0,pk1:parseFloat($('st-cpk1')?.value)||0,pk2:parseFloat($('st-cpk2')?.value)||0,cp:parseFloat($('st-ccp')?.value)||0,ke:parseFloat($('st-cke')?.value)||0,te:parseFloat($('st-cte')?.value)||0,_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')}},
       charter:charterRows,
       customItems:_collectStCustomItems(), // 顧客別カスタム品目支払単価(Step 2: 2026/05/02)
-    },
+    };})(),
     colRoutes:($('m-staff')?._editId?(D.staff.find(x=>x.id===$('m-staff')._editId)?.colRoutes||[]):[]),
     invoiceNo, bizName, bankInfo,
     docs: collectStaffDocsField(),
@@ -27117,6 +27361,8 @@ function openM(id){
     if($('st-empno-disp'))$('st-empno-disp').value='';
     // 新規時もカスタム品目を描画(空状態)
     setTimeout(()=>{ if(typeof renderStCustomItems==='function') renderStCustomItems(); }, 100);
+    // 新規時も集荷先別単価UIを描画(空状態)
+    setTimeout(()=>{ if(typeof loadStShukkaCompanies==='function') loadStShukkaCompanies(null); }, 110);
   }
   if(id==='m-cust'){
     const isEdit = !!$('m-cust')?._editId;
@@ -27866,6 +28112,8 @@ function _editStaffImpl(id){
   setTimeout(()=>{ if(typeof renderStaffRouteInline==='function') renderStaffRouteInline(); }, 50);
   // 顧客別カスタム品目単価を描画(Step 2: 2026/05/02)
   setTimeout(()=>{ if(typeof renderStCustomItems==='function') renderStCustomItems(); }, 100);
+  // 集荷先別単価(拠点マスタ連動)を描画(2026/05/09)
+  setTimeout(()=>{ if(typeof loadStShukkaCompanies==='function') loadStShukkaCompanies(s); }, 110);
   // PIN状態反映(Step A)
   _refreshStaffPinUI(s);
 }
