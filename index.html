@@ -27384,6 +27384,42 @@ function setupEnterNav(){
   // ─── フォーカス可能要素を取得 ───
   const FOCUSABLE='input:not([type=hidden]):not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled])';
 
+  // ─── type=date の Enter キーをキャプチャフェーズで横取り ───
+  // モーダル個別のkeydownリスナーより前に発火するため、ブラウザのセグメント移動を確実に抑止
+  if(!window._dateEnterCaptureSet){
+    document.addEventListener('keydown', function(e){
+      if(e.key !== 'Enter') return;
+      const tag = e.target?.tagName;
+      if(tag !== 'INPUT') return;
+      const t = (e.target.type || '').toLowerCase();
+      if(t === 'date' || t === 'month' || t === 'time' || t === 'datetime-local' || t === 'week'){
+        e.preventDefault();
+        e.stopPropagation();
+        try{ e.target.blur(); }catch(_){}
+        // 同じモーダル内の次のフォーカス可能要素へ
+        const m = e.target.closest('.modal') || e.target.closest('[id^="m-"]') || document;
+        const all = [...m.querySelectorAll(FOCUSABLE)].filter(el=>el.offsetParent!==null && el.tabIndex>=0);
+        const idx = all.indexOf(e.target);
+        if(idx >= 0 && idx < all.length - 1){
+          const nx = all[idx+1];
+          // 短い遅延後にフォーカス(blur処理が完了してから)
+          setTimeout(()=>{
+            nx.focus();
+            const isAddrField = (nx.id||'').toLowerCase().includes('addr');
+            if(nx.tagName !== 'BUTTON'){
+              if(isAddrField && nx.value){
+                try{ const len=nx.value.length; nx.setSelectionRange(len,len); }catch(_){}
+              } else if(nx.select){
+                nx.select();
+              }
+            }
+          }, 10);
+        }
+      }
+    }, true); // capture phase
+    window._dateEnterCaptureSet = true;
+  }
+
   // ─── 次のフォーカス可能要素へ移動 ───
   function genericNextFocus(cur, container){
     const all=[...container.querySelectorAll(FOCUSABLE)].filter(el=>el.offsetParent!==null&&el.tabIndex>=0);
