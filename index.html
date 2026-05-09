@@ -3315,11 +3315,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- フリガナ（姓・名・ひらがな自動変換） -->
     <div class="fg">
       <label>フリガナ（姓）</label>
-      <input type="text" id="st-kana-sei" class="fi" placeholder="やまだ" oninput="kanaToHira(this);syncStKana()">
+      <input type="text" id="st-kana-sei" class="fi" placeholder="ヤマダ" oninput="kanaToHira(this);syncStKana()">
     </div>
     <div class="fg">
       <label>フリガナ（名）</label>
-      <input type="text" id="st-kana-mei" class="fi" placeholder="たろう" oninput="kanaToHira(this);syncStKana()">
+      <input type="text" id="st-kana-mei" class="fi" placeholder="タロウ" oninput="kanaToHira(this);syncStKana()">
     </div>
     <input type="hidden" id="st-kana">
   </div>
@@ -5887,8 +5887,23 @@ function syncStKana(){
 }
 
 // フリガナをひらがなに自動変換
+// フリガナ入力: カタカナへ自動変換(ひらがな・半角カナ→全角カタカナ)
+// 旧kanaToHiraと逆挙動。新規実装ではこちらを使用。
+function hiraToKana(inp){
+  if(!inp) return;
+  let v = inp.value || '';
+  // ひらがな → カタカナ
+  v = v.replace(/[ぁ-ゖ]/g, ch=>String.fromCharCode(ch.charCodeAt(0)+0x60));
+  // 半角カナ → 全角カタカナ(濁点・半濁点も含めて単純化)
+  // 詳細な変換が必要な場合は別途辞書化推奨
+  inp.value = v;
+}
+
+// 旧名称(後方互換): カタカナ → ひらがな (使用箇所が残っている場合のため)
+// 仕様変更により、旧kanaToHiraを呼んでいる箇所も自動でカタカナに統一
 function kanaToHira(inp){
-  inp.value=inp.value.replace(/[ァ-ヶ]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0x60));
+  // 新仕様: 旧呼び出し元も自動でカタカナ化(逆変換しない)
+  hiraToKana(inp);
 }
 
 // 電話・郵便番号・数字フィールドを半角に自動変換
@@ -9373,7 +9388,8 @@ function renderStCustomItems(){
           const setting = customerCustomItems[item.name] || {};
           // amt が 0 や undefined の場合は空欄にして編集しやすくする
           const amtVal = (setting.amt && setting.amt > 0) ? setting.amt : '';
-          return `<div style="display:grid;grid-template-columns:1.4fr 100px 100px;gap:5px;align-items:center;font-size:10.5px;">
+          const taxFlag = setting._tax || 'in'; // デフォルト税込
+          return `<div style="display:grid;grid-template-columns:1.4fr 90px 60px 90px;gap:5px;align-items:center;font-size:10.5px;">
             <span style="padding:3px 6px;color:var(--ink);">${esc(item.name)} <span style="color:var(--gray3);font-size:9.5px;">[${esc(item.unit||'月額')}]</span></span>
             <input type="number"
               class="fi st-customitem-amt"
@@ -9383,8 +9399,13 @@ function renderStCustomItems(){
               style="font-size:10px;padding:3px 6px;text-align:right;"
               value="${amtVal}"
               placeholder="支払単価"
+              step="0.01"
               oninput="_markStCustomItemDirty(this)"
               onchange="_markStCustomItemDirty(this)">
+            <span class="tax-tog st-customitem-tax" data-tax="${taxFlag}" style="display:flex;gap:1px;font-size:9px;">
+              <button type="button" onclick="_toggleStCustItemTax(this,'in')" class="${taxFlag==='in'?'active-in':''}">込</button>
+              <button type="button" onclick="_toggleStCustItemTax(this,'ex')" class="${taxFlag==='ex'?'active-ex':''}">別</button>
+            </span>
             <span style="font-size:9px;color:var(--gray3);">顧客請求 ¥${(item.amt||0).toLocaleString()}</span>
           </div>`;
         }).join('')}
@@ -9537,7 +9558,7 @@ function _gatherAllShukkaCompaniesFromLocations(){
         locName: loc.name,
         locId: loc.id,
         locPrice: loc.prices?.shukka || 0,
-        locTax: loc.prices?._tax?.shukka || 'ex',
+        locTax: loc.prices?._tax?.shukka || 'in',
       });
     });
     (loc.shukkaCompaniesShitei||[]).forEach(c=>{
@@ -9549,7 +9570,7 @@ function _gatherAllShukkaCompaniesFromLocations(){
         locName: loc.name,
         locId: loc.id,
         locPrice: c.price || 0,
-        locTax: c._tax || 'ex',
+        locTax: c._tax || 'in',
       });
     });
   });
@@ -9592,7 +9613,7 @@ function renderStShukkaCompanies(){
         const key = `${c.locId}::${c.name}`;
         const saved = savedShukka[key] || {};
         const priceVal = (saved.price !== undefined && saved.price !== '') ? saved.price : '';
-        const taxFlag = saved._tax || c.locTax;
+        const taxFlag = saved._tax || c.locTax || 'in';
         const ttId = `tt-st-shu-${c.locId}-${c.name.replace(/[^A-Za-z0-9]/g,'_')}`;
         html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="teiji" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
           <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点標準: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
@@ -9610,7 +9631,7 @@ function renderStShukkaCompanies(){
         const key = `${c.locId}::${c.name}`;
         const saved = savedShukka[key] || {};
         const priceVal = (saved.price !== undefined && saved.price !== '') ? saved.price : '';
-        const taxFlag = saved._tax || c.locTax;
+        const taxFlag = saved._tax || c.locTax || 'in';
         html += `<div class="st-shukka-row" data-key="${esc(key)}" data-loc-id="${c.locId}" data-name="${esc(c.name)}" data-type="shitei" style="display:grid;grid-template-columns:1fr 100px 70px;gap:5px;align-items:center;font-size:10.5px;padding:2px 4px;">
           <span style="padding:2px 4px;color:var(--ink);">${esc(c.name)}<span style="font-size:9px;color:var(--txt2);margin-left:4px;">(拠点単価: ¥${fmtUnitPrice(c.locPrice)}/${c.locTax==='in'?'税込':'税別'})</span></span>
           <input type="number" class="fi st-shukka-price" placeholder="${fmtUnitPrice(c.locPrice)}" value="${priceVal}" step="0.01" style="font-size:10px;padding:3px 6px;text-align:right;">
@@ -9673,6 +9694,16 @@ function _markStCustomItemDirty(input){
   }
 }
 
+// カスタム品目の税込/税別トグル
+function _toggleStCustItemTax(btn, type){
+  const tog = btn.closest('.tax-tog');
+  if(!tog) return;
+  tog.dataset.tax = type;
+  tog.querySelectorAll('button').forEach(b=>b.className='');
+  if(type==='in') tog.querySelector('button:first-child').className='active-in';
+  else tog.querySelector('button:last-child').className='active-ex';
+}
+
 // カスタム品目マップを正規化(Firebase経由で配列化される問題への対応)
 // 期待形式: {custId: {itemName: {amt, unit}}}
 // Firebase経由で {0: ..., 5: ...} → [..., null, null, null, null, ..., ...] になる場合がある
@@ -9722,10 +9753,14 @@ function _collectStCustomItems(){
     if(!rawVal && input.dataset.lastValue){
       rawVal = input.dataset.lastValue;
     }
-    const amt = parseInt(rawVal) || 0;
+    const amt = parseFloat(rawVal) || 0;
     if(cId && itemName && amt > 0){
+      // 同じ行の税モードトグルを取得
+      const row = input.closest('div');
+      const taxTog = row?.querySelector('.st-customitem-tax');
+      const _tax = taxTog?.dataset.tax || 'in';
       if(!result[cId]) result[cId] = {};
-      result[cId][itemName] = { amt, unit: itemUnit };
+      result[cId][itemName] = { amt, unit: itemUnit, _tax };
     }
   });
   // ② 既存値のうち、現在フォームに描画されていない顧客/品目はそのまま保持
@@ -27353,7 +27388,28 @@ function setupEnterNav(){
   function genericNextFocus(cur, container){
     const all=[...container.querySelectorAll(FOCUSABLE)].filter(el=>el.offsetParent!==null&&el.tabIndex>=0);
     const idx=all.indexOf(cur);
-    if(idx>=0&&idx<all.length-1){const nx=all[idx+1];nx.focus();if(nx.tagName!=='BUTTON'&&nx.select)nx.select();}
+    if(idx>=0&&idx<all.length-1){
+      const nx=all[idx+1];
+      nx.focus();
+      // 住所系フィールドはselect()せず末尾にカーソルを移動(郵便番号自動入力後の続き入力対応)
+      // それ以外はselect()で全選択(数値入力欄など上書き入力しやすく)
+      if(nx.tagName!=='BUTTON'){
+        const isAddrField = (nx.id||'').toLowerCase().includes('addr') ||
+                            (nx.id||'').toLowerCase().includes('address');
+        if(isAddrField && nx.value){
+          // 末尾にカーソルを移動
+          try{
+            const len = nx.value.length;
+            nx.setSelectionRange(len, len);
+          }catch(_){
+            // 失敗時は select() フォールバック
+            if(nx.select) nx.select();
+          }
+        } else if(nx.select){
+          nx.select();
+        }
+      }
+    }
   }
   function genericPrevFocus(cur, container){
     const all=[...container.querySelectorAll(FOCUSABLE)].filter(el=>el.offsetParent!==null&&el.tabIndex>=0);
@@ -27367,8 +27423,37 @@ function setupEnterNav(){
     if(!m||m._enterNavSet)return;
     m.addEventListener('keydown',e=>{
       const tag=e.target.tagName;
+      const inputType = (tag==='INPUT') ? (e.target.type||'').toLowerCase() : '';
       // Shift+Tab: 前へ（デフォルト動作）
       if(e.key==='Tab')return;
+
+      // ── type=date の Enter: ブラウザ標準のセグメント間移動を抑止して次フィールドへ ──
+      // (Takaの要望: 年→Enter で月に移動せず緊急連絡先などへ飛ぶ)
+      if(e.key==='Enter' && (inputType==='date' || inputType==='month' || inputType==='time')){
+        e.preventDefault();
+        e.stopPropagation();
+        // フォーカスを外して値を確定させてから次フィールドへ
+        try{ e.target.blur(); }catch(_){}
+        // order指定されていればordered移動、なければ汎用次フィールド
+        if(order){
+          const idx=order.indexOf(e.target.id);
+          if(idx!==-1){
+            for(let i=idx+1;i<order.length;i++){
+              const id=order[i];
+              if(id==='__SAVE_DEL__'){confirmAndSave('del');return;}
+              if(id==='__SAVE_PU__'){confirmAndSave('pu');return;}
+              if(id==='__SAVE__'){if(saveAction)saveAction();return;}
+              const nx=$(id);if(nx&&nx.offsetParent!==null){nx.focus();if(nx.select)nx.select();return;}
+            }
+            if(saveAction){saveAction();return;}
+          } else {
+            genericNextFocus(e.target,m);return;
+          }
+        } else {
+          genericNextFocus(e.target,m);
+        }
+        return;
+      }
 
       // ── ↑↓ 矢印: select以外でフォーカス移動 ──
       if(e.key==='ArrowDown'&&tag!=='SELECT'){
