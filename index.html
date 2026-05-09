@@ -3331,7 +3331,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <input type="tel" id="st-tel" class="fi" placeholder="090-XXXX-XXXX"
         oninput="toHankakuField(this)" onblur="telField(this)">
     </div>
-    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi"></div>
+    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi" min="1900-01-01" max="2099-12-31"></div>
   </div>
 
   <!-- 緊急連絡先（続柄・氏名・電話） -->
@@ -3375,12 +3375,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 入退社日 -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-    <div class="fg"><label>入社日</label><input type="date" id="st-start" class="fi"></div>
+    <div class="fg"><label>入社日</label><input type="date" id="st-start" class="fi" min="1900-01-01" max="2099-12-31"></div>
     <div class="fg">
       <label>退社日
         <span style="font-size:9px;color:var(--tel2);margin-left:4px;">フリートと同期</span>
       </label>
-      <input type="date" id="st-end" class="fi" onchange="syncEndDateToFleet(this.value)">
+      <input type="date" id="st-end" class="fi" min="1900-01-01" max="2099-12-31" onchange="syncEndDateToFleet(this.value)">
     </div>
   </div>
 
@@ -27417,6 +27417,33 @@ function setupEnterNav(){
         }
       }
     }, true); // capture phase
+
+    // ─── type=date の不正な年(6桁等)を補正 ───
+    // 「1999」と打って Enter で月に移動できなかった時に「05」が続いて 199905 になる問題への対策
+    document.addEventListener('change', function(e){
+      const t = (e.target?.type || '').toLowerCase();
+      if(t !== 'date') return;
+      const v = e.target.value || '';
+      // YYYY-MM-DD 形式で年が4桁以外なら不正
+      const m = v.match(/^(\d+)-(\d{2})-(\d{2})$/);
+      if(!m) return;
+      const yearStr = m[1];
+      if(yearStr.length > 4){
+        // 6桁以上の年を4桁に切り詰め(先頭4桁を残す)
+        const fixedYear = yearStr.slice(0, 4);
+        const fixedDate = `${fixedYear}-${m[2]}-${m[3]}`;
+        // 年が極端な値なら現在年に補正
+        const yNum = parseInt(fixedYear, 10);
+        if(yNum < 1900 || yNum > 2099){
+          // 不正値: 入力をクリア
+          e.target.value = '';
+          alert('日付が正しくありません。再入力してください');
+          return;
+        }
+        e.target.value = fixedDate;
+      }
+    }, true);
+
     window._dateEnterCaptureSet = true;
   }
 
