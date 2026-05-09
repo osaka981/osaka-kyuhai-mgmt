@@ -14317,6 +14317,30 @@ function saveStaff(continueAdd=false){
       document.activeElement.blur();
     }
   }catch(_){}
+  // 全タブを一時的に表示状態にして、type=number の値を確実に拾えるようにする
+  // (display:none のタブの input は値が読めないことがあるブラウザ挙動への対策)
+  // 値の読み取りが完了した後、もとに戻す処理は saveStaff 関数の最後で行う
+  const _hiddenTabs = [];
+  document.querySelectorAll('#m-staff [id^="ptab-content-"]').forEach(el=>{
+    if(el.style.display === 'none' || getComputedStyle(el).display === 'none'){
+      _hiddenTabs.push({el, prev: el.style.display});
+      el.style.display = 'block';
+      el.style.visibility = 'hidden';
+      el.style.position = 'absolute';
+      el.style.left = '-9999px';
+    }
+  });
+  // 復元関数(関数末尾で必ず呼ぶ)
+  // setTimeout で次のタイベントループで復元(値読み取りが完了したタイミング)
+  // 100ms 以内に確実に値を読み取り終える前提
+  setTimeout(()=>{
+    _hiddenTabs.forEach(({el, prev})=>{
+      el.style.display = prev;
+      el.style.visibility = '';
+      el.style.position = '';
+      el.style.left = '';
+    });
+  }, 200);
   const name=$('st-name')?.value.trim();
   console.log('[saveStaff] name=', name);
   if(!name){console.log('[saveStaff] 中断: 氏名なし');alert('氏名を入力してください');return;}
