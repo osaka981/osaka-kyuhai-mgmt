@@ -14537,7 +14537,23 @@ function saveStaff(continueAdd=false){
     repairRows:collectRepairRows(),
     areaPrices:collectAreaPrices(),
     otherItems,
-    offset:{
+    offset:(function(){
+      // デバッグログ: 各フィールドの実値を出力
+      const debugVals = {
+        gasType: $('st-gas-type')?.value,
+        gasCard: $('st-gas-card')?.value,
+        gasAmt: $('st-gas-amt')?.value,
+        yoshaType: $('st-yosha-type')?.value,
+        yoshaAmt: $('st-yosha-amt')?.value,
+        commute: $('st-commute')?.value,
+        career: $('st-career')?.value,
+        position: $('st-position')?.value,
+        yokonoriUnit: $('st-yokonori-unit')?.value,
+        tokubetsuUnit: $('st-tokubetsu-unit')?.value,
+        teateOther: $('st-teate-other')?.value,
+      };
+      console.log('[saveStaff DEBUG offset 入力値]', debugVals);
+      return {
       gasType:$('st-gas-type')?.value||'',
       gasCard:$('st-gas-card')?.value||'',
       gasAmt:parseInt($('st-gas-amt')?.value)||0,
@@ -14551,7 +14567,7 @@ function saveStaff(continueAdd=false){
       commute:parseInt($('st-commute')?.value)||0,
       career:parseInt($('st-career')?.value)||0,
       position:parseInt($('st-position')?.value)||0,
-    },
+    };})(),
     socialIns:{
       health:parseInt($('st-si-health')?.value)||0,
       care:parseInt($('st-si-care')?.value)||0,
