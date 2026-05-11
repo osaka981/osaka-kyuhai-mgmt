@@ -14744,6 +14744,8 @@ function saveStaff(continueAdd=false){
 
       D.staff[idx] = {...D.staff[idx], ...newDrv};
       console.log('[saveStaff] 編集マージ完了 idx=', idx);
+      // カード車番が設定されていれば、過去の未紐付gasRecordsを自動再紐付け
+      if(typeof _reLinkGasRecords === 'function') _reLinkGasRecords(D.staff[idx]);
     } else {
       D.staff.push(newDrv);
       console.log('[saveStaff] editId指定だが該当なし→pushで追加');
@@ -14752,6 +14754,8 @@ function saveStaff(continueAdd=false){
   } else {
     D.staff.push(newDrv);
     console.log('[saveStaff] 新規追加完了 newDrv.empNo=', newDrv.empNo, 'D.staff.length(後)=', D.staff.length);
+    // 新規追加時も再紐付け
+    if(typeof _reLinkGasRecords === 'function') _reLinkGasRecords(newDrv);
   }
 
   // === Firebase保存 ===
@@ -18250,6 +18254,31 @@ function initGasMgmt(){
   renderGasMgmt();
 }
 
+// 従業員にカード車番が設定されたら、過去の未紐付gasRecordsを自動で再紐付け
+// (後から「カード車番だけ追加 → 過去データに自動で反映」運用を可能にする)
+function _reLinkGasRecords(staff){
+  if(!staff?.offset?.gasCardNo) return;
+  if(!Array.isArray(D.gasRecords) || D.gasRecords.length === 0) return;
+  const cardNo = String(staff.offset.gasCardNo).trim();
+  if(!cardNo) return;
+  let count = 0;
+  D.gasRecords.forEach(g => {
+    if(g.cardNo === cardNo && !g.staffId){
+      g.staffId = staff.id;
+      g.staffName = staff.name;
+      count++;
+    }
+  });
+  if(count > 0){
+    console.log(`[gasRelink] ${staff.name} に車番${cardNo}の燃料代${count}件を再紐付け`);
+    if(typeof fbSet === 'function'){
+      fbSet('gas_records', D.gasRecords).then(() => {
+        console.log('  ✅ gas_records 更新');
+      }).catch(e => console.warn('  ⚠ gas_records 更新失敗:', e));
+    }
+  }
+}
+
 // 車番→ドライバー紐付けロジック (3層フォールバック)
 function _resolveStaffByCardNo(cardNo){
   if(!cardNo) return null;
@@ -18477,9 +18506,12 @@ function _showGasImportPreview(aggList, fileName){
           </tbody>
         </table>
       </div>
-      <div style="display:flex;justify-content:space-between;gap:8px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
         <button class="btn b-gh btn-sm" onclick="document.getElementById('gas-import-modal').remove()">キャンセル</button>
-        <button class="btn b-prim btn-sm" onclick="_confirmGasImport()">${rows.length}件を保存</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn b-blu btn-sm" onclick="_confirmGasImport('matched')">紐付け済${matched}件のみ保存</button>
+          <button class="btn b-prim btn-sm" onclick="_confirmGasImport('all')">全${rows.length}件を保存</button>
+        </div>
       </div>
     </div>
   `;
@@ -18529,10 +18561,18 @@ function _applyGasAssign(rowIdx){
 }
 
 // 取込確定→D.gasRecords に保存
-function _confirmGasImport(){
+// mode: 'matched' = 紐付け済のみ / 'all' = 全件 (デフォルトall)
+function _confirmGasImport(mode){
   const pending = window._gasImportPending;
   if(!pending){ alert('取込中のデータがありません'); return; }
-  const records = pending.records;
+  let records = pending.records;
+  if(mode === 'matched'){
+    records = records.filter(r => r.resolved && r.resolved.staffId);
+    if(records.length === 0){
+      alert('紐付け済のデータがありません');
+      return;
+    }
+  }
   if(!D.gasRecords) D.gasRecords = [];
 
   let added = 0, updated = 0;
