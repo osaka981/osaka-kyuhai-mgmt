@@ -1653,9 +1653,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <button class="btn b-gh btn-sm" onclick="renderGasMgmt()">更新</button>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--txt2);line-height:1.6;">
+        <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:6px;">
           燃料カード会社(ENEOSなど)のCSVを取込み、カード車番ごとに月別集計します。<br>
           車番→ドライバーの紐付けは「カード車番」(従業員モーダル)で設定。
+        </div>
+        <!-- カード貸出料(マークアップ率) 設定 -->
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:5px;font-size:11px;">
+          <span style="font-weight:700;">カード貸出料:</span>
+          <input type="number" id="gas-markup-rate" step="0.1" min="0" max="100" style="width:70px;padding:3px 6px;font-size:11px;text-align:right;" onchange="saveGasMarkupRate()">
+          <span>%</span>
+          <span style="color:var(--txt2);margin-left:8px;font-size:10px;">単価を×(1+率/100)で換算してドライバー支払控除額に反映</span>
         </div>
       </div>
       <div id="gas-summary" style="margin-bottom:10px;"></div>
@@ -5823,6 +5830,20 @@ function setupRealtimeSync() {
     D.gasRecords = Array.isArray(v) ? v : Object.values(v).filter(x=>x);
     if(document.getElementById('s-gas-mgmt')?.style.display !== 'none' && typeof renderGasMgmt==='function'){
       renderGasMgmt();
+    }
+  });
+  // ══ 全社設定 (D.settings) ══
+  onValue(ref(fbDB, 'nikki/settings'), snap => {
+    if(window._fbWritingGuard?.['settings']){
+      console.log('[fb listener] settings: 自己書込中のためスキップ');
+      return;
+    }
+    if (!snap.exists()){ D.settings = D.settings || {}; return; }
+    D.settings = snap.val() || {};
+    // マークアップ率が変更されていれば反映
+    const rateInput = document.getElementById('gas-markup-rate');
+    if(rateInput && typeof getGasMarkupRate==='function'){
+      rateInput.value = getGasMarkupRate();
     }
   });
   onValue(ref(fbDB, 'nikki/att_logs'), snap => {
@@ -18251,7 +18272,78 @@ function initGasMgmt(){
     const ym = lastMonth.getFullYear() + '-' + String(lastMonth.getMonth()+1).padStart(2,'0');
     monInput.value = ym;
   }
+  // マークアップ率を復元
+  const rateInput = document.getElementById('gas-markup-rate');
+  if(rateInput) rateInput.value = getGasMarkupRate();
   renderGasMgmt();
+}
+
+// カード貸出料(マークアップ率)を取得 (デフォルト0%)
+function getGasMarkupRate(){
+  const r = D.settings?.gasMarkupRate;
+  if(r === undefined || r === null || r === '') return 0;
+  const n = parseFloat(r);
+  return isNaN(n) ? 0 : n;
+}
+
+// マークアップ率を保存
+function saveGasMarkupRate(){
+  const rateInput = document.getElementById('gas-markup-rate');
+  if(!rateInput) return;
+  const rate = parseFloat(rateInput.value) || 0;
+  if(!D.settings) D.settings = {};
+  D.settings.gasMarkupRate = rate;
+  console.log('[gasMarkupRate] 保存:', rate, '%');
+  if(typeof fbSet === 'function'){
+    fbSet('settings', D.settings).then(() => {
+      console.log('  ✅ settings 更新');
+      renderGasMgmt(); // 再描画
+    }).catch(e => console.warn('  ⚠ settings 更新失敗:', e));
+  } else {
+    renderGasMgmt();
+  }
+}
+
+// 燃料代に「カード貸出料」(マークアップ)を適用した金額を計算
+// 戻り値: {amount, amountEx, tax, qty, unitPriceAvg}
+function _applyGasMarkup(gasRec){
+  const rate = getGasMarkupRate();
+  const multiplier = 1 + rate / 100;
+  if(!gasRec || rate === 0){
+    return {
+      amount: gasRec?.amount || 0,
+      amountEx: gasRec?.amountEx || 0,
+      tax: gasRec?.tax || 0,
+      qty: gasRec?.qty || 0,
+      details: gasRec?.details || [],
+      markupRate: rate,
+    };
+  }
+  // 各明細の単価×個数を再計算(税込基準で、最後にfloor)
+  const details = (gasRec.details||[]).map(d => {
+    const unitInc = (d.unit||0) * multiplier;  // 税込単価×マークアップ
+    const subTotal = Math.floor(unitInc * (d.qty||0)); // 1円未満切り捨て
+    return {
+      ...d,
+      unitOrig: d.unit,
+      unit: Math.round(unitInc * 100) / 100, // 小数点2桁まで保持
+      amountOrig: d.amount,
+      amount: subTotal,
+    };
+  });
+  // 合計を再計算
+  const totalAmount = details.reduce((s,d) => s + (d.amount||0), 0);
+  const totalEx = Math.floor(totalAmount / 1.1); // 税抜逆算
+  const totalTax = totalAmount - totalEx;
+  return {
+    amount: totalAmount,
+    amountEx: totalEx,
+    tax: totalTax,
+    qty: gasRec.qty,
+    details,
+    markupRate: rate,
+    amountOrig: gasRec.amount, // 原価を保持
+  };
 }
 
 // 従業員にカード車番が設定されたら、過去の未紐付gasRecordsを自動で再紐付け
@@ -18643,18 +18735,34 @@ function renderGasMgmt(){
     return;
   }
 
+  const markupRate = getGasMarkupRate();
+  const hasMarkup = markupRate > 0;
+
   // 集計
-  const totalAmount = records.reduce((s,r) => s+r.amount, 0);
-  const totalQty = records.reduce((s,r) => s+r.qty, 0);
+  const totalAmountOrig = records.reduce((s,r) => s+(r.amount||0), 0);
+  const totalQty = records.reduce((s,r) => s+(r.qty||0), 0);
   const matched = records.filter(r => r.staffId).length;
   const unmatched = records.length - matched;
 
+  // マークアップ適用後の合計
+  let totalAmountMarked = 0;
+  records.forEach(r => {
+    const m = _applyGasMarkup(r);
+    totalAmountMarked += m.amount;
+  });
+  const totalMarkup = totalAmountMarked - totalAmountOrig;
+
   if(summaryEl){
+    const markupBadge = hasMarkup
+      ? `<span style="margin-left:10px;color:var(--blu);">カード貸出料 ${markupRate}% / 上乗せ ¥${totalMarkup.toLocaleString()}</span>`
+      : '';
     summaryEl.innerHTML = `
       <div class="card" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;">
         <div style="font-size:12px;">
           <strong>${ym}</strong> 集計: ${records.length}車番 / ${totalQty.toFixed(1)}L / 
-          <strong style="font-size:14px;">¥${totalAmount.toLocaleString()}</strong>
+          原価 ¥${totalAmountOrig.toLocaleString()} → 
+          <strong style="font-size:14px;">¥${totalAmountMarked.toLocaleString()}</strong>
+          ${markupBadge}
         </div>
         <div style="font-size:11px;">
           紐付け済 <strong style="color:var(--grn2);">${matched}</strong> / 未紐付 <strong style="color:var(--amb2);">${unmatched}</strong>
@@ -18663,7 +18771,7 @@ function renderGasMgmt(){
     `;
   }
 
-  // テーブル
+  // テーブル(マークアップ適用後)
   contentEl.innerHTML = `
     <div class="card" style="padding:0;overflow:hidden;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -18672,9 +18780,9 @@ function renderGasMgmt(){
             <th style="padding:8px;text-align:left;border-bottom:1px solid var(--brd);">車番</th>
             <th style="padding:8px;text-align:left;border-bottom:1px solid var(--brd);">ドライバー</th>
             <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">数量(L)</th>
-            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">税抜</th>
-            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">消費税</th>
-            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">税込合計</th>
+            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">原価</th>
+            ${hasMarkup ? `<th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">控除額(${markupRate}%適用)</th>
+            <th style="padding:8px;text-align:right;border-bottom:1px solid var(--brd);">差額</th>` : ''}
             <th style="padding:8px;text-align:center;border-bottom:1px solid var(--brd);">明細</th>
           </tr>
         </thead>
@@ -18683,13 +18791,15 @@ function renderGasMgmt(){
             const staffName = r.staffName || '<span style="color:var(--amb2);">未紐付</span>';
             const gasType = r.staffId ? ((D.staff||[]).find(s => String(s.id)===String(r.staffId))?.offset?.gasType || '') : '';
             const gasTypeLabel = gasType ? `<span style="font-size:9px;color:var(--txt2);">[${esc(gasType)}]</span>` : '';
+            const m = _applyGasMarkup(r);
+            const diff = m.amount - (r.amount||0);
             return `<tr style="border-bottom:1px solid var(--brd);">
               <td style="padding:6px 8px;font-family:monospace;font-weight:700;">${esc(r.cardNo)}</td>
               <td style="padding:6px 8px;">${staffName} ${gasTypeLabel}</td>
               <td style="padding:6px 8px;text-align:right;">${(r.qty||0).toFixed(2)}</td>
-              <td style="padding:6px 8px;text-align:right;">¥${(r.amountEx||0).toLocaleString()}</td>
-              <td style="padding:6px 8px;text-align:right;">¥${(r.tax||0).toLocaleString()}</td>
-              <td style="padding:6px 8px;text-align:right;font-weight:700;">¥${(r.amount||0).toLocaleString()}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--txt2);">¥${(r.amount||0).toLocaleString()}</td>
+              ${hasMarkup ? `<td style="padding:6px 8px;text-align:right;font-weight:700;">¥${m.amount.toLocaleString()}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--blu);">+¥${diff.toLocaleString()}</td>` : ''}
               <td style="padding:6px 8px;text-align:center;">
                 <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick='_showGasDetail("${r.id}")'>詳細</button>
               </td>
@@ -18705,13 +18815,18 @@ function renderGasMgmt(){
 function _showGasDetail(recId){
   const rec = (D.gasRecords||[]).find(g => g.id === recId);
   if(!rec){ alert('データが見つかりません'); return; }
-  const detailsHtml = (rec.details||[]).map(d => `
+  // マークアップ適用(明細書ドライバー支払い用)
+  const marked = _applyGasMarkup(rec);
+  const markupRate = getGasMarkupRate();
+  const hasMarkup = markupRate > 0;
+
+  const detailsHtml = (marked.details||[]).map(d => `
     <tr style="border-bottom:1px solid var(--brd);">
       <td style="padding:5px 6px;">${esc(d.date)}</td>
       <td style="padding:5px 6px;">${esc(d.ss||'')}</td>
       <td style="padding:5px 6px;">${esc(d.product||'')}</td>
       <td style="padding:5px 6px;text-align:right;">${(d.qty||0).toFixed(2)}L</td>
-      <td style="padding:5px 6px;text-align:right;">¥${(d.unit||0)}</td>
+      <td style="padding:5px 6px;text-align:right;">¥${(d.unit||0).toFixed(2)}</td>
       <td style="padding:5px 6px;text-align:right;font-weight:700;">¥${(d.amount||0).toLocaleString()}</td>
     </tr>
   `).join('');
@@ -18727,9 +18842,10 @@ function _showGasDetail(recId){
         <h3 style="margin:0;font-size:14px;">${esc(rec.ym)} 車番${esc(rec.cardNo)} 給油明細</h3>
         <button onclick="document.getElementById('gas-detail-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;">×</button>
       </div>
-      <div style="font-size:11px;margin-bottom:10px;">
-        ドライバー: <strong>${esc(rec.staffName||'未紐付')}</strong> / 
-        合計 ${(rec.qty||0).toFixed(1)}L / <strong>¥${(rec.amount||0).toLocaleString()}</strong> (税込)
+      <div style="font-size:11px;margin-bottom:10px;line-height:1.6;">
+        ドライバー: <strong>${esc(rec.staffName||'未紐付')}</strong><br>
+        合計 ${(marked.qty||0).toFixed(1)}L / <strong>¥${(marked.amount||0).toLocaleString()}</strong> (税込)
+        ${hasMarkup ? `<br><span style="color:var(--txt2);font-size:10px;">原価 ¥${(rec.amount||0).toLocaleString()} → カード貸出料(${markupRate}%)適用後 ¥${marked.amount.toLocaleString()}</span>` : ''}
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead style="background:var(--bg3);">
@@ -18744,6 +18860,9 @@ function _showGasDetail(recId){
         </thead>
         <tbody>${detailsHtml}</tbody>
       </table>
+      ${hasMarkup ? `<div style="margin-top:10px;padding:8px;background:var(--bg3);border-radius:4px;font-size:10px;color:var(--txt2);">
+        ※ 上記単価は「カード貸出料 ${markupRate}%」を含んだ金額です。原価単価×${(1+markupRate/100).toFixed(3)} = 表示単価
+      </div>` : ''}
     </div>
   `;
   document.body.appendChild(modal);
@@ -22197,11 +22316,13 @@ function _calcStaffPayment(name, monStr){
   switch(off.gasType){
     case 'カード貸出':
       if(gasRec && gasRec.amount > 0){
+        // カード貸出料(マークアップ率)を適用
+        const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(gasRec) : gasRec;
         breakdown.push({
-          label: `燃料費(カード実費) ${(gasRec.qty||0).toFixed(1)}L`,
-          amount: -gasRec.amount,
+          label: `燃料費(カード貸出) ${(marked.qty||0).toFixed(1)}L`,
+          amount: -marked.amount,
         });
-        total -= gasRec.amount;
+        total -= marked.amount;
       } else if(off.gasAmt > 0){
         // CSVが未取込でも、暫定的に固定額があれば使う(後方互換)
         breakdown.push({label:'燃料費(固定額・要CSV取込)', amount:-off.gasAmt});
