@@ -18450,6 +18450,10 @@ function _showGasImportPreview(aggList, fileName){
     const resolve = _resolveStaffByCardNo(a.cardNo);
     return { ...a, resolved: resolve };
   });
+  // 解決済みrowsをpendingに保存(_confirmGasImportでフィルタするため)
+  if(window._gasImportPending){
+    window._gasImportPending.records = rows;
+  }
 
   // 既存モーダルとは別に動的生成
   let existing = document.getElementById('gas-import-modal');
