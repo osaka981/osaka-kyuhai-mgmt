@@ -18468,18 +18468,27 @@ function parseGasCsv(csvText, fileName){
     const dateStr = (row[idx.date]||'').trim();
     const ym = dateStr.length === 8 ? `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}` : '';
     const dateFmt = dateStr.length === 8 ? `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}` : dateStr;
-    const amount = parseFloat(row[idx.amount]||0) || 0;
+    // CSV列の構造(ENEOS): 列11単価=列26税抜単価、列12金額=列27税抜金額 (全て税抜)
+    // 列29 消費税 を加算して「税込ベース」に変換して保存(全システム統一)
+    const amountEx = parseFloat(row[idx.amountEx]||row[idx.amount]||0) || 0;
+    const tax = parseFloat(row[idx.tax]||0) || 0;
+    const amount = amountEx + tax;  // 税込金額
     if(amount === 0) continue; // 0円明細はスキップ
+    const qty = parseFloat(row[idx.qty]||0) || 0;
+    const unitEx = parseFloat(row[idx.unit]||0) || 0;  // CSVの単価(税抜)
+    // 税込単価 = 税抜単価 × 1.1 (端数は2桁丸め)
+    const unit = Math.round(unitEx * 1.1 * 100) / 100;
     details.push({
       cardNo, ym, date: dateFmt,
       ss: (row[idx.ssName]||'').trim(),
       product: (row[idx.productName]||'').trim(),
       productCode,
-      qty: parseFloat(row[idx.qty]||0) || 0,
-      unit: parseFloat(row[idx.unit]||0) || 0,
-      amount,
-      amountEx: parseFloat(row[idx.amountEx]||0) || 0,
-      tax: parseFloat(row[idx.tax]||0) || 0,
+      qty,
+      unit,          // 税込単価
+      unitEx,        // 税抜単価(参考保持)
+      amount,        // 税込金額
+      amountEx,      // 税抜金額(参考保持)
+      tax,           // 消費税
     });
   }
 
