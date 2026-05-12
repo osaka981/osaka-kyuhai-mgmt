@@ -7796,7 +7796,7 @@ function renderPostList(){
       ? `<span style="display:inline-block;padding:2px 7px;background:rgba(255,170,0,.15);color:#cc8800;border-radius:3px;font-size:9.5px;font-weight:600;">未照合 ${un}件</span>`
       : `<span style="display:inline-block;padding:2px 7px;background:rgba(40,167,69,.15);color:#28a745;border-radius:3px;font-size:9.5px;font-weight:600;">正常</span>`;
 
-    return `<div class="card" style="cursor:pointer;padding:12px;transition:transform .15s;" onclick="openFS('office','${esc(p.name)}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 10px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+    return `<div class="card" style="cursor:pointer;padding:12px;transition:transform .15s;" onclick="openFS('office','${esc(p.name)}',{mon:'${monStr}'})" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 10px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:13px;font-weight:700;">${esc(p.name)}</div>
         ${statusBadge}
@@ -7834,7 +7834,8 @@ function renderDash() {
     {l:'照合差異・未照合',v:diffCnt+unCnt,u:'件',c:'--amb',s:'要確認'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div><div class="ks">${k.s}</div></div>`).join('');
 
-  // 営業所別
+  // 営業所別(当月)
+  const _dashMon = (new Date()).getFullYear()+'-'+String((new Date()).getMonth()+1).padStart(2,'0');
   let h='';
   D.offices.forEach(o => {
     const rs = D.delivery.filter(r=>r.office===o.name);
@@ -7843,7 +7844,7 @@ function renderDash() {
     const diff=rs.filter(r=>r.status==='差異あり').length;
     const un=rs.filter(r=>r.status==='未照合').length;
     const b=diff?`<span class="bdg ba">差異${diff}</span>`:un?`<span class="bdg bz">未照合${un}</span>`:`<span class="bdg bg">正常</span>`;
-    h+=`<tr><td class="fw7">${officeLink(o.name)}</td><td class="tr">${fmt(s.mochidashi)}</td><td class="tr">${fmt(s.kanryo)}</td><td class="tr" style="color:var(--blu2)">${s.yakan}</td><td class="tr">${s.tenso}</td><td class="tr">${s.mochimodoiri}</td><td class="tr">${s['翌日廻し']}</td><td>${b}</td></tr>`;
+    h+=`<tr><td class="fw7">${officeLink(o.name, _dashMon)}</td><td class="tr">${fmt(s.mochidashi)}</td><td class="tr">${fmt(s.kanryo)}</td><td class="tr" style="color:var(--blu2)">${s.yakan}</td><td class="tr">${s.tenso}</td><td class="tr">${s.mochimodoiri}</td><td class="tr">${s['翌日廻し']}</td><td>${b}</td></tr>`;
   });
   $('tb-os').innerHTML = h;
 
@@ -21588,10 +21589,11 @@ function renderOffCards(){
 // ═══════════════════════════════════════════════
 // ─── フルスクリーン集約ページ ───
 // ═══════════════════════════════════════════════
-let _fsType='', _fsId=null, _fsTab='';
+let _fsType='', _fsId=null, _fsTab='', _fsContextMon='';
 
-function openFS(type, id){
+function openFS(type, id, opts){
   _fsType=type; _fsId=id; _fsTab='';
+  _fsContextMon = (opts && opts.mon) ? opts.mon : '';
   const ov=$('fs-overlay');
   ov.style.display='block';
   document.body.style.overflow='hidden';
@@ -21603,7 +21605,7 @@ function openFS(type, id){
 function closeFS(){
   $('fs-overlay').style.display='none';
   document.body.style.overflow='';
-  _fsType=''; _fsId=null;
+  _fsType=''; _fsId=null; _fsContextMon='';
 }
 function setFSTabs(tabs, defaultTab){
   const el=$('fs-tabs');
@@ -21627,7 +21629,10 @@ function switchFSTab(key){
 // ── ヘルパー: リンク化テキスト生成 ──
 function staffLink(name){ return `<span class="staff-link" onclick="event.stopPropagation();openFS('staff','${esc(name)}')">${esc(name)}</span>`; }
 function custLink(name){ return `<span class="cust-link" onclick="event.stopPropagation();openFS('customer','${esc(name)}')">${esc(name)}</span>`; }
-function officeLink(name){ return `<span class="office-link" onclick="event.stopPropagation();openFS('office','${esc(name)}')">${esc(name)}</span>`; }
+function officeLink(name, mon){ 
+  const opts = mon ? `,{mon:'${esc(mon)}'}` : '';
+  return `<span class="office-link" onclick="event.stopPropagation();openFS('office','${esc(name)}'${opts})">${esc(name)}</span>`; 
+}
 function companyLink(name){ return `<span class="cust-link" onclick="event.stopPropagation();openFS('company','${esc(name)}')">${esc(name)}</span>`; }
 
 // ═══════════════════════════════════════════════
@@ -22133,7 +22138,8 @@ function renderOfficeFSTab(key){
 
 function renderOfficeDel(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  const mon=$('fs-of-del-mon')?.value||ym;
+  // 月優先順: ①既存セレクタ値 ②外部から指定された月 ③当月
+  const mon=$('fs-of-del-mon')?.value || _fsContextMon || ym;
   const rows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-del-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('del')"></div></div>
@@ -22151,7 +22157,8 @@ function renderOfficeDel(el, name){
 
 function renderOfficePU(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  const mon=$('fs-of-pu-mon')?.value||ym;
+  // 月優先順: ①既存セレクタ値 ②外部から指定された月 ③当月
+  const mon=$('fs-of-pu-mon')?.value || _fsContextMon || ym;
   const rows=(D.pickup||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-pu-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('pu')"></div></div>
