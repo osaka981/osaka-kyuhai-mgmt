@@ -7719,26 +7719,60 @@ function renderPostList(){
   // 検索キーワード
   const kw = (document.getElementById('post-list-search')?.value || '').trim().toLowerCase();
 
-  // 拠点マスタから配達事業(typesDel)を持つもの優先、なければD.offices全件
-  let posts = [];
-  if(D.locations && D.locations.length > 0){
-    posts = D.locations.filter(l => {
-      // 配達事業を行う拠点(typesDel フラグ or postPrices あり)
-      if(l.typesDel) return true;
-      if(l.prices?.kanryo || l.prices?.tenso) return true;
-      return false;
-    });
-    // 拠点マスタからは取得できなければD.offices全件にフォールバック
-    if(posts.length === 0) posts = D.locations;
-  }
-  if(posts.length === 0 && D.offices){
-    posts = D.offices.map(o => ({ id: o.id, name: o.name, address: o.address, prices: o.postPrices||{} }));
-  }
+  // ── 郵便局拠点の収集(複数ソースをマージ) ──
+  // ソース1: D.locations の typesDel=true の拠点
+  // ソース2: D.offices 全件(旧マスタ、配達拠点として扱う)
+  // ソース3: D.delivery で実際に office として登場した拠点
+  // 全てマージして重複排除(name基準)
+  const postsByName = new Map();
+
+  // ソース1: D.locations の typesDel=true
+  (D.locations||[]).forEach(l => {
+    if(!l.name) return;
+    if(l.typesDel === true || (l.prices?.kanryo > 0) || (l.prices?.tenso > 0)){
+      postsByName.set(l.name, {
+        id: l.id, name: l.name, address: l.address, prices: l.prices||{},
+        source: 'location',
+      });
+    }
+  });
+
+  // ソース2: D.offices(旧マスタ)
+  (D.offices||[]).forEach(o => {
+    if(!o.name) return;
+    // 本社は除外(配達拠点ではない)
+    if(o.name === '本社') return;
+    if(!postsByName.has(o.name)){
+      postsByName.set(o.name, {
+        id: o.id, name: o.name, address: o.address||'', prices: o.postPrices||{},
+        source: 'office',
+      });
+    }
+  });
+
+  // ソース3: D.delivery に登場した office(マスタ未登録でも拾う)
+  (D.delivery||[]).forEach(r => {
+    if(!r.office) return;
+    // 本社・営業所は除外(郵便局のみ)
+    if(r.office === '本社') return;
+    if(r.office.endsWith('営業所')) return;
+    if(!postsByName.has(r.office)){
+      postsByName.set(r.office, {
+        id: null, name: r.office, address: '', prices: {},
+        source: 'delivery',
+      });
+    }
+  });
+
+  let posts = [...postsByName.values()];
 
   // 検索フィルタ
   if(kw){
     posts = posts.filter(p => (p.name||'').toLowerCase().includes(kw));
   }
+
+  // 名前順ソート
+  posts.sort((a,b) => (a.name||'').localeCompare(b.name||'', 'ja'));
 
   if(posts.length === 0){
     cardsEl.innerHTML = '<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--txt2);font-size:11px;">郵便局データがありません</div>';
@@ -7754,7 +7788,9 @@ function renderPostList(){
     const un = rows.filter(r => r.status === '未照合').length;
     const drvSet = new Set(rows.map(r => r.staff).filter(Boolean));
 
-    const statusBadge = diff > 0
+    const statusBadge = rows.length === 0
+      ? `<span style="display:inline-block;padding:2px 7px;background:var(--bg3);color:var(--txt2);border-radius:3px;font-size:9.5px;font-weight:600;">データなし</span>`
+      : diff > 0
       ? `<span style="display:inline-block;padding:2px 7px;background:rgba(220,53,69,.15);color:#dc3545;border-radius:3px;font-size:9.5px;font-weight:600;">差異 ${diff}件</span>`
       : un > 0
       ? `<span style="display:inline-block;padding:2px 7px;background:rgba(255,170,0,.15);color:#cc8800;border-radius:3px;font-size:9.5px;font-weight:600;">未照合 ${un}件</span>`
