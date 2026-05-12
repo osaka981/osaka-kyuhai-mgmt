@@ -17888,7 +17888,10 @@ function renderInvoiceList(){
 /** 請求金額の計算 */
 function _calcInvoiceAmount(row, cust){
   const cp = cust?.colPrices || cust?.prices || {};
+  const cpTax = cp._tax || {}; // 集荷品目の税モード設定(p60: 'in'/'ex'等)
   const data = _getCustomerMonthlyData(row.customerName, document.getElementById('ig-month')?.value || '');
+  // 顧客のデフォルト税モード('in'=税込/'ex'=税別)
+  const defaultTax = (cust?.priceType === 'tax_included') ? 'in' : 'ex';
   
   // 単価マッピング(品目記号 → colPrices内のキー)
   const priceMap = {
@@ -17920,7 +17923,7 @@ function _calcInvoiceAmount(row, cust){
     '定形外(ゆうメール)': 'te',
   };
   
-  // 集荷品目別の金額計算
+  // 集荷品目別の金額計算(税モード混在対応)
   let colAmount = 0;
   const colDetails = [];
   const aggregated = {}; // 標準品目のみ集約
@@ -17931,14 +17934,16 @@ function _calcInvoiceAmount(row, cust){
   });
   Object.entries(aggregated).forEach(([k, count]) => {
     const unit = priceMap[k] || 0;
+    const taxFlag = cpTax[k] || defaultTax; // 品目ごとの税モード
+    // 単価×個数(端数なし)
     const subtotal = count * unit;
     colAmount += subtotal;
     if(count > 0){
-      colDetails.push({key: k, count, unit, subtotal, isCustom: false});
+      colDetails.push({key: k, count, unit, subtotal, isCustom: false, taxFlag});
     }
   });
   
-  // カスタム品目の金額計算
+  // カスタム品目の金額計算(税モード対応)
   let customAmount = 0;
   const customDetails = [];
   const customItems = (cust?.otherItems || []).filter(o => o.name);
@@ -17947,6 +17952,7 @@ function _calcInvoiceAmount(row, cust){
     const count = (data.collection.items || {})[rawKey] || 0;
     const unit = o.amt || 0;
     const itemUnit = o.unit || '月額';
+    const taxFlag = o._tax || defaultTax; // カスタム品目の税モード
     let subtotal = 0;
     let displayCount = count;
     
@@ -17967,6 +17973,7 @@ function _calcInvoiceAmount(row, cust){
         unitPrice: unit,
         subtotal,
         isCustom: true,
+        taxFlag,
       });
     }
   });
@@ -17975,16 +17982,42 @@ function _calcInvoiceAmount(row, cust){
   const delAmount = 0;
   const shuAmount = (data.shu || 0) * 0;
   
-  const subtotal = colAmount + delAmount + shuAmount + customAmount;
-  const taxRate = 0.10;
-  const tax = Math.floor(subtotal * taxRate);
-  const total = subtotal + tax;
+  // ── 税モード別の集計 ──
+  // 全項目をまとめて(colDetails + customDetails)、taxFlag別に分類
+  const allDetails = [...colDetails, ...customDetails.map(d => ({
+    ...d, subtotal: d.subtotal, taxFlag: d.taxFlag,
+  }))];
+  let subtotalEx = 0;  // 税別品目の小計(税別ベース)
+  let subtotalIn = 0;  // 税込品目の小計(税込ベース)
+  allDetails.forEach(d => {
+    if(d.taxFlag === 'in'){
+      subtotalIn += d.subtotal || 0;
+    } else {
+      subtotalEx += d.subtotal || 0;
+    }
+  });
+  // 税別品目を1.1倍して税込換算 → Math.floor (契約書準拠)
+  const subtotalExIncl = Math.floor(subtotalEx * 1.1);
+  const taxOfEx = subtotalExIncl - subtotalEx;
+  // 税込品目から消費税を逆算(税法上の参考)
+  const taxOfIn = subtotalIn - Math.floor(subtotalIn / 1.1);
+  const totalTax = taxOfEx + taxOfIn;
+  // 合計請求額 = 税別品目の税込換算 + 税込品目
+  const total = subtotalExIncl + subtotalIn;
+  const subtotal = subtotalEx + subtotalIn; // 表示用(税別+税込の合計)
   
   return {
     colAmount, delAmount, shuAmount, customAmount,
     colDetails, customDetails,
-    subtotal, tax, total,
+    subtotal,                  // 旧互換: subtotalEx + subtotalIn
+    subtotalEx, subtotalIn,    // 税モード別小計
+    subtotalExIncl,            // 税別品目の税込換算
+    taxOfEx, taxOfIn,          // 税別・税込ごとの消費税
+    tax: totalTax,             // 旧互換: 合計消費税
+    totalTax,                  // 合計消費税
+    total,                     // 合計請求額(全項目税込)
     data,
+    defaultTax,                // 顧客のデフォルト税モード
   };
 }
 
@@ -18114,59 +18147,89 @@ function _buildInvoiceHTML(customerName, ymInput){
     <thead>
       <tr style="background:#f0f0f0;">
         <th style="border:0.5pt solid #000;padding:2mm 3mm;text-align:left;">項目</th>
+        <th style="border:0.5pt solid #000;padding:2mm 3mm;text-align:center;width:40pt;">税区分</th>
         <th style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;width:60pt;">数量</th>
         <th style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;width:60pt;">単価</th>
         <th style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;width:90pt;">金額</th>
       </tr>
     </thead>
     <tbody>
-      ${priceInfo.colDetails.length > 0 ? priceInfo.colDetails.map(d => `
+      ${priceInfo.colDetails.length > 0 ? priceInfo.colDetails.map(d => {
+        const taxLabel = d.taxFlag === 'in' ? '税込' : '税別';
+        const taxColor = d.taxFlag === 'in' ? '#2e7d32' : '#1565c0';
+        // カスタムラベル優先、なければ標準
+        const labels = cust?.invoiceLabels || {};
+        const itemLabel = labels[d.key] || _getColItemLabel(d.key);
+        return `
         <tr>
-          <td style="border:0.5pt solid #000;padding:2mm 3mm;">${esc(_getColItemLabel(d.key))}</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;">${esc(itemLabel)}</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:center;font-size:8.5pt;color:${taxColor};">${taxLabel}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">${d.count.toLocaleString()}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${d.unit.toLocaleString()}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${d.subtotal.toLocaleString()}</td>
-        </tr>
-      `).join('') : ''}
+        </tr>`;
+      }).join('') : ''}
       ${(priceInfo.customDetails||[]).length > 0 ? priceInfo.customDetails.map(d => {
         const showCount = d.unit === '月額' ? `${d.count}回(月額)` : d.count.toLocaleString();
         const displayUnit = d.unit === '月額' ? '月額' : (d.unit === '日額' ? '日額' : d.unit);
+        const taxLabel = d.taxFlag === 'in' ? '税込' : '税別';
+        const taxColor = d.taxFlag === 'in' ? '#2e7d32' : '#1565c0';
         return `
         <tr>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;">${esc(d.name)}<span style="font-size:8pt;color:#666;"> [${esc(displayUnit)}]</span></td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:center;font-size:8.5pt;color:${taxColor};">${taxLabel}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">${showCount}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${(d.unitPrice||0).toLocaleString()}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${d.subtotal.toLocaleString()}</td>
         </tr>`;
       }).join('') : ''}
-      ${data.delivery.total > 0 ? `
+      ${data.delivery.total > 0 ? (() => {
+        const labels = cust?.invoiceLabels || {};
+        const delLabel = labels['__delivery__'] || `配達(完了+転送還付${data.delivery.yakan?'+夜間':''}${data.delivery.ogata?'+大型':''})`;
+        return `
         <tr>
-          <td style="border:0.5pt solid #000;padding:2mm 3mm;">配達(完了+転送還付${data.delivery.yakan?'+夜間':''}${data.delivery.ogata?'+大型':''})</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;">${esc(delLabel)}</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;"></td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">${data.delivery.total.toLocaleString()}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">-</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${priceInfo.delAmount.toLocaleString()}</td>
-        </tr>
-      ` : ''}
-      ${data.shu > 0 ? `
+        </tr>`;
+      })() : ''}
+      ${data.shu > 0 ? (() => {
+        const labels = cust?.invoiceLabels || {};
+        const shuLabel = labels['__shu__'] || '定時集荷';
+        return `
         <tr>
-          <td style="border:0.5pt solid #000;padding:2mm 3mm;">定時集荷</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;">${esc(shuLabel)}</td>
+          <td style="border:0.5pt solid #000;padding:2mm 3mm;"></td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">${data.shu.toLocaleString()}</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">-</td>
           <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;">¥${priceInfo.shuAmount.toLocaleString()}</td>
-        </tr>
-      ` : ''}
+        </tr>`;
+      })() : ''}
+      ${priceInfo.subtotalEx > 0 ? `
       <tr>
-        <td colspan="3" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">小計</td>
-        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">¥${priceInfo.subtotal.toLocaleString()}</td>
+        <td colspan="4" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;font-size:9pt;">税別品目 小計</td>
+        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">¥${priceInfo.subtotalEx.toLocaleString()}</td>
       </tr>
       <tr>
-        <td colspan="3" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">消費税(10%)</td>
-        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">¥${priceInfo.tax.toLocaleString()}</td>
-      </tr>
+        <td colspan="4" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;font-size:9pt;">消費税(10%)</td>
+        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">¥${priceInfo.taxOfEx.toLocaleString()}</td>
+      </tr>` : ''}
+      ${priceInfo.subtotalIn > 0 ? `
       <tr>
-        <td colspan="3" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#f0f0f0;font-weight:bold;">合計</td>
+        <td colspan="4" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;font-size:9pt;">税込品目 小計</td>
+        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#fafafa;">¥${priceInfo.subtotalIn.toLocaleString()}</td>
+      </tr>` : ''}
+      <tr>
+        <td colspan="4" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#f0f0f0;font-weight:bold;">合計(税込)</td>
         <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#f0f0f0;font-weight:bold;">¥${priceInfo.total.toLocaleString()}</td>
       </tr>
+      ${priceInfo.totalTax > 0 ? `
+      <tr>
+        <td colspan="4" style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#f0f0f0;font-size:8.5pt;color:#666;">(うち消費税 合計)</td>
+        <td style="border:0.5pt solid #000;padding:2mm 3mm;text-align:right;background:#f0f0f0;font-size:8.5pt;color:#666;">¥${priceInfo.totalTax.toLocaleString()}</td>
+      </tr>` : ''}
     </tbody>
   </table>
   
@@ -18195,7 +18258,7 @@ function previewInvoice(customerName, ymInput){
     <div id="m-invoice-preview" class="mbg" style="display:flex;">
       <div class="modal" style="width:230mm;max-width:96vw;max-height:96vh;overflow-y:auto;background:#e5e7eb;">
         <div class="mhd" style="background:#fff;">
-          <div class="mtt">📑 請求書プレビュー - ${esc(customerName)} (${ymInput})</div>
+          <div class="mtt">請求書プレビュー - ${esc(customerName)} (${ymInput})</div>
           <button class="mx" onclick="document.getElementById('m-invoice-preview').remove()">×</button>
         </div>
         <div style="padding:10mm 0;display:flex;justify-content:center;">
@@ -18203,11 +18266,104 @@ function previewInvoice(customerName, ymInput){
         </div>
         <div style="display:flex;gap:8px;padding:10px 14px;justify-content:flex-end;background:#fff;border-top:1px solid var(--gray3);">
           <button class="btn b-gh" onclick="document.getElementById('m-invoice-preview').remove()">閉じる</button>
-          <button class="btn b-prim" onclick="generateInvoicePDF('${esc(customerName)}', '${ymInput}')">📥 PDF出力</button>
+          <button class="btn b-gh" onclick="openInvoiceLabelEditor('${esc(customerName)}', '${ymInput}')">項目名編集</button>
+          <button class="btn b-prim" onclick="generateInvoicePDF('${esc(customerName)}', '${ymInput}')">PDF出力</button>
         </div>
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// 項目名編集モーダル(2026/05/12 Step4)
+// 顧客マスタに invoiceLabels: {key: 表示名} を保持し、請求書生成時に上書きする
+function openInvoiceLabelEditor(customerName, ymInput){
+  const cust = (D.customers||[]).find(c => c.name === customerName);
+  if(!cust){ alert('顧客マスタが見つかりません'); return; }
+  
+  // 標準品目のキー一覧
+  const standardKeys = [
+    {key:'p60',  label:'ゆうパック60'},
+    {key:'p80',  label:'ゆうパック80'},
+    {key:'p100', label:'ゆうパック100'},
+    {key:'p120', label:'ゆうパック120'},
+    {key:'p140', label:'ゆうパック140'},
+    {key:'p160', label:'ゆうパック160'},
+    {key:'pk1',  label:'ゆうパケット(通常)'},
+    {key:'pk2',  label:'ゆうパケット(7cm以上)'},
+    {key:'cp',   label:'クリックポスト'},
+    {key:'ke',   label:'ケース'},
+    {key:'te',   label:'定形外(ゆうメール)'},
+    {key:'__delivery__', label:'配達'},
+    {key:'__shu__', label:'定時集荷'},
+  ];
+  const labels = cust.invoiceLabels || {};
+  
+  document.getElementById('m-invoice-label-editor')?.remove();
+  const rowsHtml = standardKeys.map(s => {
+    const customLabel = labels[s.key] || '';
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid var(--brd);font-size:11px;">${esc(s.label)}</td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--brd);">
+        <input type="text" data-label-key="${esc(s.key)}" value="${esc(customLabel)}"
+          placeholder="${esc(s.label)}" 
+          style="width:100%;padding:4px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
+      </td>
+    </tr>`;
+  }).join('');
+  
+  const modalHtml = `
+    <div id="m-invoice-label-editor" class="mbg" style="display:flex;z-index:3500;">
+      <div class="modal" style="width:560px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+        <div class="mhd">
+          <div class="mtt">項目名編集 - ${esc(customerName)}</div>
+          <button class="mx" onclick="document.getElementById('m-invoice-label-editor').remove()">×</button>
+        </div>
+        <div style="padding:12px 16px;">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:10px;line-height:1.6;">
+            請求書に表示する項目名を編集できます。<br>
+            空欄のまま保存すると標準ラベルが使われます。この設定は<strong>${esc(customerName)}</strong>の請求書にのみ適用されます。
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+              <tr style="background:var(--bg3);">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd);width:40%;">標準ラベル</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd);">カスタム表示名(空欄=標準)</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px;padding:10px 14px;justify-content:flex-end;border-top:1px solid var(--gray3);">
+          <button class="btn b-gh btn-sm" onclick="document.getElementById('m-invoice-label-editor').remove()">キャンセル</button>
+          <button class="btn b-prim btn-sm" onclick="saveInvoiceLabels('${esc(customerName)}', '${ymInput}')">保存して再プレビュー</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// 項目名を保存して請求書を再生成
+function saveInvoiceLabels(customerName, ymInput){
+  const cust = (D.customers||[]).find(c => c.name === customerName);
+  if(!cust){ alert('顧客マスタが見つかりません'); return; }
+  const inputs = document.querySelectorAll('#m-invoice-label-editor input[data-label-key]');
+  const labels = {};
+  inputs.forEach(inp => {
+    const k = inp.dataset.labelKey;
+    const v = inp.value.trim();
+    if(v) labels[k] = v;
+  });
+  cust.invoiceLabels = labels;
+  
+  // Firebase反映
+  if(typeof fbSet === 'function'){
+    fbSet('customers', D.customers).then(() => {
+      console.log('[invoiceLabels] 保存完了:', customerName, labels);
+      document.getElementById('m-invoice-label-editor')?.remove();
+      document.getElementById('m-invoice-preview')?.remove();
+      previewInvoice(customerName, ymInput);
+    }).catch(e => alert('保存エラー: ' + e.message));
+  }
 }
 
 /** PDF出力(html2pdf.js を動的ロード) */
