@@ -768,7 +768,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="krow" id="d-kpi"></div>
       <div class="g2 mb12">
         <div class="card">
-          <div class="ch"><div class="ct"><div class="cbar"></div>営業所別 宅配実績</div></div>
+          <div class="ch"><div class="ct"><div class="cbar"></div>郵便局別 宅配実績</div></div>
           <div class="tw"><table>
             <thead><tr><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th>照合</th></tr></thead>
             <tbody id="tb-os"></tbody>
@@ -891,7 +891,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <!-- 営業所別ビュー -->
       <div id="rpt-view-office" style="display:none;">
         <div class="card">
-          <div class="ch"><div class="ct"><div class="cbar"></div>営業所別 宅配実績</div></div>
+          <div class="ch"><div class="ct"><div class="cbar"></div>郵便局別 宅配実績</div></div>
           <div class="tw"><table>
             <thead><tr>
               <th>営業所</th>
@@ -1363,6 +1363,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 宅配請求 -->
+
+    <!-- 郵便局一覧 (2026/05/13) -->
+    <div id="s-post-list" class="sec">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">郵便局一覧</div>
+          <div style="font-size:10px;color:var(--txt2);margin-top:2px;">配達事業を行う拠点の一覧。カードをクリックすると詳細ページが開きます。</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="search" id="post-list-search" placeholder="郵便局名で検索" style="padding:5px 8px;font-size:11px;border:1px solid var(--brd);border-radius:4px;width:160px;" oninput="renderPostList()">
+          <input type="month" id="post-list-mon" style="padding:5px 8px;font-size:11px;border:1px solid var(--brd);border-radius:4px;" onchange="renderPostList()">
+        </div>
+      </div>
+      <div id="post-list-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;"></div>
+    </div>
 
     <!-- 集荷日報一覧 -->
     <div id="s-pu" class="sec">
@@ -6630,6 +6645,7 @@ const _TOP_TABS = {
     { s:'del',        label:'日報一覧' },
     { s:'del-report', label:'日報レポート' },
     { s:'cmp',        label:'郵便局照合', badge:'diff' },
+    { s:'post-list',  label:'郵便局一覧' },
     { s:'ts-prices',  label:'郵便局単価', badge:'ts' },
     { s:'ts-inv',     label:'郵便局請求書', badge:'ts' },
   ]},
@@ -6739,6 +6755,7 @@ function navByS(s) {
   if (s==='del')         _call('renderDel');
   if (s==='del-report')  _call('renderDelReport');
   if (s==='cmp')         {} /* cmpはFirebaseのonValue監視で自動更新 */
+  if (s==='post-list')   _call('renderPostList');
   if (s==='pu')          _call('renderPU');
   if (s==='pu-report')   _call('renderPUReport');
   if (s==='pu-sum')      _call('renderSum');
@@ -7683,6 +7700,83 @@ function _renderUnregisteredDriversAlert(){
       ${sections}
     </div>
   `;
+}
+
+// 郵便局一覧の描画(2026/05/13)
+function renderPostList(){
+  const cardsEl = document.getElementById('post-list-cards');
+  if(!cardsEl) return;
+
+  // 月選択を初期化(初回のみ)
+  const monInp = document.getElementById('post-list-mon');
+  if(monInp && !monInp.value){
+    const now = new Date();
+    const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+    monInp.value = ym;
+  }
+  const monStr = monInp?.value || '';
+
+  // 検索キーワード
+  const kw = (document.getElementById('post-list-search')?.value || '').trim().toLowerCase();
+
+  // 拠点マスタから配達事業(typesDel)を持つもの優先、なければD.offices全件
+  let posts = [];
+  if(D.locations && D.locations.length > 0){
+    posts = D.locations.filter(l => {
+      // 配達事業を行う拠点(typesDel フラグ or postPrices あり)
+      if(l.typesDel) return true;
+      if(l.prices?.kanryo || l.prices?.tenso) return true;
+      return false;
+    });
+    // 拠点マスタからは取得できなければD.offices全件にフォールバック
+    if(posts.length === 0) posts = D.locations;
+  }
+  if(posts.length === 0 && D.offices){
+    posts = D.offices.map(o => ({ id: o.id, name: o.name, address: o.address, prices: o.postPrices||{} }));
+  }
+
+  // 検索フィルタ
+  if(kw){
+    posts = posts.filter(p => (p.name||'').toLowerCase().includes(kw));
+  }
+
+  if(posts.length === 0){
+    cardsEl.innerHTML = '<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--txt2);font-size:11px;">郵便局データがありません</div>';
+    return;
+  }
+
+  // カード描画(月別の実績集計付き)
+  const cardsHtml = posts.map(p => {
+    const rows = (D.delivery||[]).filter(r => r.office === p.name && (r.date||'').startsWith(monStr));
+    const s = { mochidashi:0, kanryo:0, yakan:0, tenso:0, mochimodoiri:0 };
+    rows.forEach(r => { for(const k in s) s[k] += r[k]||0; });
+    const diff = rows.filter(r => r.status === '差異あり').length;
+    const un = rows.filter(r => r.status === '未照合').length;
+    const drvSet = new Set(rows.map(r => r.staff).filter(Boolean));
+
+    const statusBadge = diff > 0
+      ? `<span style="display:inline-block;padding:2px 7px;background:rgba(220,53,69,.15);color:#dc3545;border-radius:3px;font-size:9.5px;font-weight:600;">差異 ${diff}件</span>`
+      : un > 0
+      ? `<span style="display:inline-block;padding:2px 7px;background:rgba(255,170,0,.15);color:#cc8800;border-radius:3px;font-size:9.5px;font-weight:600;">未照合 ${un}件</span>`
+      : `<span style="display:inline-block;padding:2px 7px;background:rgba(40,167,69,.15);color:#28a745;border-radius:3px;font-size:9.5px;font-weight:600;">正常</span>`;
+
+    return `<div class="card" style="cursor:pointer;padding:12px;transition:transform .15s;" onclick="openFS('office','${esc(p.name)}')" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 10px rgba(0,0,0,.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">${esc(p.name)}</div>
+        ${statusBadge}
+      </div>
+      ${p.address ? `<div style="font-size:10px;color:var(--txt2);margin-bottom:6px;">${esc(p.address)}</div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--brd);">
+        <div>持出 <strong>${fmt(s.mochidashi)}</strong></div>
+        <div>完了 <strong>${fmt(s.kanryo)}</strong></div>
+        <div style="color:var(--blu2);">夜間 ${s.yakan}</div>
+        <div>転送 ${s.tenso}</div>
+        <div style="grid-column:1/-1;color:var(--txt2);margin-top:4px;">ドライバー ${drvSet.size}名 / 日報 ${rows.length}件</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  cardsEl.innerHTML = cardsHtml;
 }
 
 function renderDash() {
@@ -28172,6 +28266,7 @@ function nav(el){
   if(s==='del')          { if(typeof renderDel==='function') renderDel(); }
   if(s==='del-report')   { if(typeof renderDelReport==='function') renderDelReport(); }
   if(s==='cmp')          renderCmp?.();
+  if(s==='post-list')    { if(typeof renderPostList==='function') renderPostList(); }
   if(s==='pu')           { if(typeof renderPU==='function') renderPU(); }
   if(s==='pu-report')    { if(typeof renderPUReport==='function') renderPUReport(); }
   if(s==='pu-cust')      { /* onValue自動更新 */ }
