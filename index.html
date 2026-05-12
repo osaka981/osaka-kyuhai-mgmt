@@ -675,7 +675,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="del" onclick="nav(this)"><span class="ni-ico">📋</span>日報一覧</div>
       <div class="ni" data-s="del-report" onclick="nav(this)"><span class="ni-ico">📊</span>日報レポート</div>
       <div class="ni" data-s="cmp" onclick="nav(this)"><span class="ni-ico">🔍</span>郵便局照合<span class="nbadge" id="nb-diff">0</span></div>
-      <div class="ni" data-s="del-inv" onclick="nav(this)"><span class="ni-ico">🧾</span>宅配請求書</div>
     </div>
   </div>
 
@@ -1364,72 +1363,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 宅配請求 -->
-    <div id="s-del-inv" class="sec">
-      <!-- タブ切替 -->
-      <div style="display:flex;gap:0;border:1px solid var(--brd2);border-radius:5px;overflow:hidden;margin-bottom:14px;width:fit-content;">
-        <button class="otab on" id="delinv-tab-emp" onclick="switchDelInvTab('emp')" style="padding:7px 18px;font-size:11.5px;">👤 従業員・委託会社用</button>
-        <button class="otab" id="delinv-tab-post" onclick="switchDelInvTab('post')" style="padding:7px 18px;font-size:11.5px;">📮 郵便局用</button>
-      </div>
-
-      <!-- 従業員用 -->
-      <div id="delinv-emp-area">
-        <div class="flbc mb12">
-          <div class="fla gap6">
-            <input type="month" id="delinv-emp-mon" class="fi">
-            <select id="delinv-emp-off" class="fi" style="width:160px;"><option value="">全局</option></select>
-            <select id="delinv-emp-target" class="fi" style="width:160px;">
-              <option value="">全従業員・委託</option>
-              <option value="staff">社員のみ</option>
-              <option value="company">委託会社のみ</option>
-            </select>
-          </div>
-          <div class="fla gap6">
-            <button class="btn b-gh btn-sm" onclick="genEmpInv()">📄 請求書生成</button>
-            <button class="btn b-grn btn-sm" onclick="openM('m-inv')">＋ 手動発行</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="ch"><div class="ct"><div class="cbar"></div>従業員・委託会社 請求書一覧</div></div>
-          <div class="tw"><table>
-            <thead><tr><th>番号</th><th>請求先</th><th>区分</th><th>対象期間</th><th class="tr">完了数</th><th class="tr">請求額</th><th class="tr" style="color:var(--red2)">相殺</th><th class="tr">支払額</th><th>状態</th><th></th></tr></thead>
-            <tbody id="tb-emp-inv"></tbody>
-          </table></div>
-        </div>
-      </div>
-
-      <!-- 郵便局用（要TS認証） -->
-      <div id="delinv-post-area" style="display:none;">
-        <div id="delinv-post-locked" style="text-align:center;padding:40px;">
-          <div style="font-size:32px;margin-bottom:12px;">🔐</div>
-          <div style="font-size:14px;font-weight:700;margin-bottom:6px;">郵便局向け請求書</div>
-          <div style="color:var(--txt2);font-size:11px;margin-bottom:16px;">このページを表示するにはPIN認証が必要です。</div>
-          <button class="btn b-gh" onclick="requireTSForPostInv()">PIN認証</button>
-        </div>
-        <div id="delinv-post-content" style="display:none;">
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--sur2);border-radius:5px;margin-bottom:12px;">
-            <span style="font-size:11px;color:var(--txt2);">郵便局向け請求書</span>
-            <button class="btn b-gh btn-sm" style="margin-left:auto;font-size:10px;" onclick="lockPostInv()">終了</button>
-          </div>
-          <div class="flbc mb12">
-            <div class="fla gap6">
-              <input type="month" id="delinv-post-mon" class="fi">
-              <select id="delinv-post-off" class="fi" style="width:160px;"><option value="">全局</option></select>
-            </div>
-            <button class="btn b-red btn-sm" onclick="genPostInv()">📄 郵便局請求書生成</button>
-          </div>
-          <div class="card">
-            <div class="ch"><div class="ct"><div class="cbar"></div>郵便局向け請求書一覧</div>
-            <div class="fla gap6">
-              <span class="bdg br" id="post-inv-total">合計 ¥0</span>
-            </div></div>
-            <div class="tw"><table>
-              <thead><tr><th>番号</th><th>請求先（郵便局）</th><th>営業所</th><th>対象期間</th><th class="tr">完了数</th><th class="tr" style="color:var(--tel2)">請求単価</th><th class="tr fw7">請求金額</th><th>状態</th><th></th></tr></thead>
-              <tbody id="tb-post-inv"></tbody>
-            </table></div>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 集荷日報一覧 -->
     <div id="s-pu" class="sec">
@@ -6697,7 +6630,6 @@ const _TOP_TABS = {
     { s:'del',        label:'日報一覧' },
     { s:'del-report', label:'日報レポート' },
     { s:'cmp',        label:'郵便局照合', badge:'diff' },
-    { s:'del-inv',    label:'請求書' },
     { s:'ts-prices',  label:'郵便局単価', badge:'ts' },
     { s:'ts-inv',     label:'郵便局請求書', badge:'ts' },
   ]},
@@ -6807,7 +6739,6 @@ function navByS(s) {
   if (s==='del')         _call('renderDel');
   if (s==='del-report')  _call('renderDelReport');
   if (s==='cmp')         {} /* cmpはFirebaseのonValue監視で自動更新 */
-  if (s==='del-inv')     _call('switchDelInvTab') || (()=>{ if(typeof switchDelInvTab==='function') switchDelInvTab('emp'); })();
   if (s==='pu')          _call('renderPU');
   if (s==='pu-report')   _call('renderPUReport');
   if (s==='pu-sum')      _call('renderSum');
@@ -27248,7 +27179,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合','del-inv':'宅配請求書',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -27287,31 +27218,6 @@ function requireTS(section, navEl){
 function requireTSForPrices(){
   // 営業所単価は毎回PIN認証（セッションキャッシュ使わない）
   tsPendingAction = {type:'prices'};
-  openTSOverlay();
-}
-
-function requireTSForPostInv(){
-  if(isTSAuthenticated()){
-    if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
-    if($('delinv-post-content'))$('delinv-post-content').style.display='block';
-    // 当月デフォルトを設定してリストを表示(Phase 5)
-    setTimeout(()=>{
-      const now = new Date();
-      const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-      const monInp = $('delinv-post-mon');
-      if(monInp && !monInp.value) monInp.value = ym;
-      if(monInp && !monInp.onchange){
-        monInp.onchange = ()=>renderPostInvList();
-      }
-      const offSel = $('delinv-post-off');
-      if(offSel && !offSel.onchange){
-        offSel.onchange = ()=>renderPostInvList();
-      }
-      if(typeof renderPostInvList==='function') renderPostInvList();
-    }, 50);
-    return;
-  }
-  tsPendingAction = {type:'postinv'};
   openTSOverlay();
 }
 
@@ -27382,17 +27288,6 @@ function executeTSAction(){
   } else if(a.type==='of-billing'){
     // 統合版の営業所モーダル内の請求情報セクション解除
     _updateOfBillingLock();
-  } else if(a.type==='postinv'){
-    if($('delinv-post-locked'))$('delinv-post-locked').style.display='none';
-    if($('delinv-post-content'))$('delinv-post-content').style.display='block';
-    // 初期描画(Phase 5)
-    setTimeout(()=>{
-      const now = new Date();
-      const ym = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-      const monInp = $('delinv-post-mon');
-      if(monInp && !monInp.value) monInp.value = ym;
-      if(typeof renderPostInvList==='function') renderPostInvList();
-    }, 50);
   } else if(a.type==='contract-template'){
     // PIN認証成功後、Driveの契約書雛形フォルダを開く
     _doOpenContractTemplateFolder();
@@ -27414,8 +27309,7 @@ function lockTS(){
 }
 
 function lockPostInv(){
-  if($('delinv-post-locked'))$('delinv-post-locked').style.display='block';
-  if($('delinv-post-content'))$('delinv-post-content').style.display='none';
+  // del-inv 削除に伴い空関数化(2026/05/13)
 }
 
 // ─────────────────────────────────────
@@ -27881,16 +27775,6 @@ function restoreCoDelColCmp(savedList, company){
 }
 
 // ── 宅配請求書タブ切替 ──
-function switchDelInvTab(t){
-  if(t==='post'&&!isTSAuthenticated()){
-    requireTSForPostInv();
-  }
-  $('delinv-tab-emp')?.classList.toggle('on',t==='emp');
-  $('delinv-tab-post')?.classList.toggle('on',t==='post');
-  $('delinv-emp-area').style.display=t==='emp'?'block':'none';
-  $('delinv-post-area').style.display=t==='post'?'block':'none';
-}
-
 // ── 郵便局請求書生成 ──
 // ══════════════════════════════════════════════════
 // 郵便局請求書 (Phase 5)
@@ -28236,16 +28120,6 @@ function renderPostInvList(){
   if($('post-inv-total')){
     $('post-inv-total').textContent = `合計(税抜) ¥${fmt(totalAmt)}`;
   }
-}
-
-// 旧genPostInvを新関数へのエイリアスに
-function genPostInv(){
-  renderPostInvList();
-}
-
-// 従業員請求書生成（簡易）
-function genEmpInv(){
-  renderPUInv(); // 既存の集荷請求書を流用
 }
 
 // ── addOffice に事業種別・単価を保存 ──
