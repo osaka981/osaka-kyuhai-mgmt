@@ -1708,11 +1708,40 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
       </div>
+      <!-- 一括設定ツールバー(2026/05/14) -->
+      <div id="staff-bulk-toolbar" style="display:none;padding:8px 12px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.25);border-radius:5px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:11px;">
+          <strong style="color:var(--blu2);">選択: <span id="staff-bulk-count">0</span>名</strong>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;">
+          <span style="color:var(--txt2);">一括設定:</span>
+          <select id="staff-bulk-office" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
+            <option value="">─ 拠点 ─</option>
+          </select>
+          <select id="staff-bulk-kubun" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
+            <option value="">─ 区分 ─</option>
+            <option value="社員">社員</option>
+            <option value="個人事業主">個人事業主</option>
+            <option value="委託会社所属">委託会社所属</option>
+          </select>
+          <select id="staff-bulk-company" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
+            <option value="">─ 委託会社 ─</option>
+            <option value="__none__">(なし)</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-left:auto;">
+          <button class="btn b-gh btn-sm" onclick="_clearStaffBulkSel()">選択解除</button>
+          <button class="btn b-blu btn-sm" onclick="_applyStaffBulkSet()">一括適用</button>
+        </div>
+      </div>
       <!-- フリート未登録ドライバー通知カード -->
       <div id="unregistered-fleet-card" class="card mb12" style="display:none;background:#fffbf0;border:1px solid rgba(230,126,34,.3);"></div>
       <div class="card">
         <div class="tw"><table>
-          <thead><tr><th>社員番号</th><th>氏名</th><th>区分</th><th>委託会社</th><th>営業所</th><th>連絡先</th><th>給与形態</th><th class="tr">単価/基本給</th><th class="tr">今月完了</th><th class="tr">今月給与(概算)</th><th></th></tr></thead>
+          <thead><tr>
+            <th style="width:28px;text-align:center;"><input type="checkbox" id="staff-sel-all" onchange="_toggleStaffSelAll(this.checked)"></th>
+            <th>社員番号</th><th>氏名</th><th>区分</th><th>委託会社</th><th>営業所</th><th>連絡先</th><th>給与形態</th><th class="tr">単価/基本給</th><th class="tr">今月完了</th><th class="tr">今月給与(概算)</th><th></th>
+          </tr></thead>
           <tbody id="tb-staff"></tbody>
         </table></div>
       </div>
@@ -11723,6 +11752,10 @@ function renderStaff(flt){
   // s.kubun が undefined/null でもクラッシュしないよう防御
   let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||(s.kubun||'').includes(flt));
   if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
+
+  // 一括設定ツールバーの拠点・委託会社プルダウンを更新
+  _populateStaffBulkSelects();
+
   let h='';
   rows.forEach(s=>{
     const kn=D.delivery.filter(r=>r.staff===s.name).reduce((a,r)=>a+r.kanryo,0);
@@ -11736,29 +11769,204 @@ function renderStaff(flt){
     } else {
       est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
     }
-    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='委託会社所属'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
-    const compBadge=s.companyName?`<span class="xs" style="color:var(--tel2);cursor:pointer;" onclick="event.stopPropagation();openFS('company','${esc(s.companyName)}')">${esc(s.companyName)}</span>`:'<span class="xs muted">−</span>';
+
+    // インライン編集: 区分select
+    const kubunOpts = ['', '社員', '個人事業主', '委託会社所属'].map(k => 
+      `<option value="${k}" ${(s.kubun||'')===k?'selected':''}>${k||'─'}</option>`
+    ).join('');
+    const kubunSelect = `<select class="staff-inline-sel" data-field="kubun" data-id="${s.id}" onchange="_updateStaffField('${s.id}','kubun',this.value)" onclick="event.stopPropagation()" style="padding:2px 4px;font-size:10.5px;border:1px solid var(--brd);border-radius:3px;background:transparent;max-width:110px;">${kubunOpts}</select>`;
+
+    // インライン編集: 委託会社select
+    const companyOpts = ['<option value="">─</option>', '<option value="__none__">(なし)</option>']
+      .concat((D.companies||[]).map(c => `<option value="${esc(c.name)}" ${(s.companyName||'')===c.name?'selected':''}>${esc(c.name)}</option>`))
+      .join('');
+    const companySelect = `<select class="staff-inline-sel" data-field="companyName" data-id="${s.id}" onchange="_updateStaffField('${s.id}','companyName',this.value)" onclick="event.stopPropagation()" style="padding:2px 4px;font-size:10.5px;border:1px solid var(--brd);border-radius:3px;background:transparent;max-width:130px;">${companyOpts}</select>`;
+
+    // インライン編集: 拠点(営業所)select
+    // 候補: D.locations(typesDelあり) ∪ D.offices ∪ D.delivery登場office
+    const officeOptsList = new Set();
+    (D.locations||[]).forEach(l => {
+      if(l.name && (l.typesDel || l.prices?.kanryo > 0)) officeOptsList.add(l.name);
+    });
+    (D.offices||[]).forEach(o => { if(o.name) officeOptsList.add(o.name); });
+    if(s.office) officeOptsList.add(s.office);
+    const officeOpts = ['<option value="">─</option>']
+      .concat([...officeOptsList].sort().map(name => `<option value="${esc(name)}" ${(s.office||'')===name?'selected':''}>${esc(name)}</option>`))
+      .join('');
+    const officeSelect = `<select class="staff-inline-sel" data-field="office" data-id="${s.id}" onchange="_updateStaffField('${s.id}','office',this.value)" onclick="event.stopPropagation()" style="padding:2px 4px;font-size:10.5px;border:1px solid var(--brd);border-radius:3px;background:transparent;max-width:130px;">${officeOpts}</select>`;
+
     h+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
+      <td style="text-align:center;" onclick="event.stopPropagation()"><input type="checkbox" class="staff-sel-chk" data-id="${s.id}" onchange="_updateStaffBulkCount()"></td>
       <td>${empBadge}</td>
       <td><div class="fw7 staff-link">${esc(s.name)}</div>${s.kana?`<div class="xs muted">${esc(s.kana)}</div>`:''}</td>
-      <td>${kb}</td>
-      <td>${compBadge}</td>
-      <td>${officeLink(s.office)}${s.subOffices?.length?` <span style='font-size:9px;color:#5c6bc0;'>+${s.subOffices.length}局</span>`:''}</td>
+      <td>${kubunSelect}</td>
+      <td>${companySelect}</td>
+      <td>${officeSelect}</td>
       <td class="mono xs">${s.tel||'−'}</td>
-      <td>${s.kyuyo}</td>
+      <td>${s.kyuyo||'−'}</td>
       <td class="tr mono xs">${s.kyuyo==='個数制（歩合）'?
         (s.fixedPrices?.del?.kanryo?'完了¥'+s.fixedPrices.del.kanryo:
          s.fixedPrices?.col?.p60?'60s¥'+s.fixedPrices.col.p60:'単価未設定'):
-        s.kyuyo==='月給'?'¥'+fmt(s.tanka)+'/月':'¥'+fmt(s.tanka)}</td>
+        s.kyuyo==='月給'?'¥'+fmt(s.tanka):s.kyuyo?'¥'+fmt(s.tanka):'−'}</td>
       <td class="tr">${fmt(kn)}</td>
       <td class="tr fw7">¥${fmt(est)}</td>
       <td><button class="btn b-gh btn-sm" onclick="event.stopPropagation();editStaff('${s.id}')">編集</button></td>
     </tr>`;
   });
   $('tb-staff').innerHTML=h;
+  // 一括設定ツールバーの件数表示更新
+  _updateStaffBulkCount();
   // フリート未登録ドライバー通知カード
   if(typeof renderUnregisteredFleetCard==='function') renderUnregisteredFleetCard();
+}
+
+// 一括設定ツールバーの拠点・委託会社プルダウンを動的に作成
+function _populateStaffBulkSelects(){
+  // 拠点
+  const offSel = document.getElementById('staff-bulk-office');
+  if(offSel){
+    const names = new Set();
+    (D.locations||[]).forEach(l => {
+      if(l.name && (l.typesDel || l.prices?.kanryo > 0)) names.add(l.name);
+    });
+    (D.offices||[]).forEach(o => { if(o.name) names.add(o.name); });
+    const opts = ['<option value="">─ 拠点 ─</option>']
+      .concat([...names].sort().map(n => `<option value="${esc(n)}">${esc(n)}</option>`))
+      .join('');
+    offSel.innerHTML = opts;
+  }
+  // 委託会社
+  const compSel = document.getElementById('staff-bulk-company');
+  if(compSel){
+    const opts = ['<option value="">─ 委託会社 ─</option>', '<option value="__none__">(なし)</option>']
+      .concat((D.companies||[]).map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`))
+      .join('');
+    compSel.innerHTML = opts;
+  }
+}
+
+// インライン編集: 1つのフィールドだけ更新
+async function _updateStaffField(staffId, field, value){
+  const idx = D.staff.findIndex(s => String(s.id) === String(staffId));
+  if(idx < 0){ console.warn('staff not found:', staffId); return; }
+  
+  // companyName で __none__ を選んだ場合は空に
+  if(field === 'companyName' && value === '__none__') value = '';
+  
+  // マージ保存(完全置換しない)
+  D.staff[idx] = {...D.staff[idx], [field]: value};
+  console.log(`[インライン] ${D.staff[idx].name}: ${field}=${value||'(空)'}`);
+
+  // 連動処理: 区分が変わった時の補助
+  // - 「社員」に変更 → companyName を空に
+  // - 「個人事業主」に変更 → companyName を空に
+  // - 「委託会社所属」に変更 → companyName が空なら警告のみ(自動補完なし)
+  if(field === 'kubun'){
+    if(value === '社員' || value === '個人事業主'){
+      if(D.staff[idx].companyName){
+        D.staff[idx].companyName = '';
+        // 画面の委託会社selectも空に
+        const sel = document.querySelector(`.staff-inline-sel[data-field="companyName"][data-id="${staffId}"]`);
+        if(sel) sel.value = '';
+      }
+    }
+  }
+
+  // Firebase反映
+  if(typeof fbSet === 'function' && typeof LS_KEYS !== 'undefined'){
+    const key = LS_KEYS.STAFF_FULL || 'staff_full';
+    try {
+      await fbSet(key, D.staff);
+      console.log(`  ✅ ${D.staff[idx].name} 保存完了`);
+    } catch(e) {
+      console.warn('  ⚠ 保存失敗:', e);
+    }
+  }
+}
+
+// チェックボックスの選択件数を更新
+function _updateStaffBulkCount(){
+  const checks = document.querySelectorAll('.staff-sel-chk:checked');
+  const cnt = checks.length;
+  const cntEl = document.getElementById('staff-bulk-count');
+  if(cntEl) cntEl.textContent = cnt;
+  const bar = document.getElementById('staff-bulk-toolbar');
+  if(bar) bar.style.display = cnt > 0 ? 'flex' : 'none';
+}
+
+// 全選択トグル
+function _toggleStaffSelAll(checked){
+  document.querySelectorAll('.staff-sel-chk').forEach(c => { c.checked = checked; });
+  _updateStaffBulkCount();
+}
+
+// 選択解除
+function _clearStaffBulkSel(){
+  document.querySelectorAll('.staff-sel-chk').forEach(c => { c.checked = false; });
+  const all = document.getElementById('staff-sel-all');
+  if(all) all.checked = false;
+  _updateStaffBulkCount();
+}
+
+// 一括適用
+async function _applyStaffBulkSet(){
+  const checks = [...document.querySelectorAll('.staff-sel-chk:checked')];
+  if(checks.length === 0){ alert('対象を選択してください'); return; }
+
+  const office = document.getElementById('staff-bulk-office')?.value || '';
+  const kubun = document.getElementById('staff-bulk-kubun')?.value || '';
+  let company = document.getElementById('staff-bulk-company')?.value || '';
+  if(!office && !kubun && !company){
+    alert('適用する項目を1つ以上選択してください'); return;
+  }
+  if(company === '__none__') company = '';
+
+  // 確認ダイアログ
+  const changes = [];
+  if(office) changes.push(`拠点: ${office}`);
+  if(kubun) changes.push(`区分: ${kubun}`);
+  if(company !== '' || document.getElementById('staff-bulk-company')?.value === '__none__'){
+    changes.push(`委託会社: ${company || '(なし)'}`);
+  }
+  if(!confirm(`${checks.length}名に以下を適用しますか?\n\n${changes.join('\n')}`)) return;
+
+  // 適用処理
+  let updated = 0;
+  checks.forEach(chk => {
+    const sid = chk.dataset.id;
+    const idx = D.staff.findIndex(s => String(s.id) === String(sid));
+    if(idx < 0) return;
+    if(office) D.staff[idx].office = office;
+    if(kubun){
+      D.staff[idx].kubun = kubun;
+      // 社員・個人事業主の場合は委託会社をクリア
+      if(kubun === '社員' || kubun === '個人事業主'){
+        D.staff[idx].companyName = '';
+      }
+    }
+    if(document.getElementById('staff-bulk-company')?.value){
+      D.staff[idx].companyName = company;
+    }
+    updated++;
+  });
+
+  // Firebase反映
+  if(typeof fbSet === 'function' && typeof LS_KEYS !== 'undefined'){
+    const key = LS_KEYS.STAFF_FULL || 'staff_full';
+    try {
+      await fbSet(key, D.staff);
+      console.log(`✅ ${updated}名に一括適用完了`);
+      alert(`${updated}名に適用しました`);
+      _clearStaffBulkSel();
+      renderStaff(document.getElementById('staff-search')?._flt || '');
+    } catch(e){
+      console.error('一括適用エラー:', e);
+      alert('保存エラー: ' + e.message);
+    }
+  } else {
+    renderStaff(document.getElementById('staff-search')?._flt || '');
+  }
 }
 
 function prevEmpNo(){
