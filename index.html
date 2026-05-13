@@ -11133,6 +11133,7 @@ function _renderInvoiceBulkHTML(){
       ${totalSelected>0 ? `<span style="color:var(--txt2);font-size:11px;margin-left:8px;">(個人${selByTab.personal} / 会社${selByTab.company} / 顧客${selByTab.customer})</span>` : ''}
     </div>
     <div style="display:flex;gap:8px;align-items:center;">
+      ${_ivBulkState.tab==='customer' ? `<button class="btn b-gh" onclick="_ivOpenLabelEditor()" style="border-color:var(--brd);">項目名編集</button>` : ''}
       <button class="btn b-gh" onclick="_ivBulkPreviewAll()" ${totalSelected===0?'disabled':''}>全員プレビュー</button>
       <button class="btn b-blu" onclick="_ivBulkIssue()" ${totalSelected===0?'disabled':''}>選択した${totalSelected}件を一括発行</button>
     </div>
@@ -11221,6 +11222,137 @@ window._ivBulkPreviewOne = function(key){
       if(!doc){ showAlert({msg:'データがありません'}); return; }
       _printDocWindow(doc.title, doc.html);
     }
+  }
+};
+
+// ── 請求書 項目名カスタマイズ機能 (2026/05/13 Step4) ──
+// 顧客ごとに invoiceLabels: {キー: 表示名} を保持
+window._ivOpenLabelEditor = function(){
+  // 顧客タブで選択されている顧客一覧
+  const selKeys = Object.keys(_ivBulkState.selected).filter(k => k.startsWith('customer:') && _ivBulkState.selected[k]);
+  let targetCusts;
+  if(selKeys.length > 0){
+    // 選択がある場合: 選択中の顧客のみ
+    targetCusts = selKeys.map(k => k.replace(/^customer:/, '')).map(name => (D.customers||[]).find(c => c.name === name)).filter(Boolean);
+  } else {
+    // 選択がない場合: 全顧客
+    targetCusts = D.customers || [];
+  }
+  if(targetCusts.length === 0){
+    showAlert({msg:'対象顧客がありません'});
+    return;
+  }
+  // 1顧客選択モーダルを表示
+  const opts = targetCusts.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+  
+  document.getElementById('m-iv-label-pick')?.remove();
+  const html = `
+    <div id="m-iv-label-pick" class="mbg" style="display:flex;z-index:3000;">
+      <div class="modal" style="width:400px;max-width:96vw;">
+        <div class="mhd">
+          <div class="mtt">項目名を編集する顧客を選択</div>
+          <button class="mx" onclick="document.getElementById('m-iv-label-pick').remove()">×</button>
+        </div>
+        <div style="padding:14px 16px;">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">
+            選択した顧客の請求書に表示される項目名をカスタマイズできます。
+          </div>
+          <select id="iv-label-pick-cust" style="width:100%;padding:6px;font-size:12px;margin-bottom:10px;">
+            ${opts}
+          </select>
+          <div style="display:flex;gap:6px;justify-content:flex-end;">
+            <button class="btn b-gh btn-sm" onclick="document.getElementById('m-iv-label-pick').remove()">キャンセル</button>
+            <button class="btn b-prim btn-sm" onclick="_ivOpenLabelEditorFor(document.getElementById('iv-label-pick-cust').value)">開く</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window._ivOpenLabelEditorFor = function(custName){
+  document.getElementById('m-iv-label-pick')?.remove();
+  const cust = (D.customers||[]).find(c => c.name === custName);
+  if(!cust){ showAlert({msg:'顧客が見つかりません'}); return; }
+  
+  // 標準ラベルの一覧(IK + ルート + チャーター)
+  const standardKeys = [];
+  // 集荷品目(IKから取得)
+  if(typeof IK !== 'undefined' && typeof ITEMS !== 'undefined'){
+    IK.forEach(k => standardKeys.push({key: k, label: ITEMS[k]?.label || k}));
+  }
+  standardKeys.push({key:'__route__',   label:'ルート配送'});
+  standardKeys.push({key:'__charter__', label:'チャーター'});
+  
+  const labels = cust.invoiceLabels || {};
+  
+  const rowsHtml = standardKeys.map(s => {
+    const customLabel = labels[s.key] || '';
+    return `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--brd);font-size:11px;width:45%;">${esc(s.label)}</td>
+      <td style="padding:3px 8px;border-bottom:1px solid var(--brd);">
+        <input type="text" data-label-key="${esc(s.key)}" value="${esc(customLabel)}"
+          placeholder="${esc(s.label)} (空欄で標準)"
+          style="width:100%;padding:4px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
+      </td>
+    </tr>`;
+  }).join('');
+  
+  document.getElementById('m-iv-label-editor')?.remove();
+  const html = `
+    <div id="m-iv-label-editor" class="mbg" style="display:flex;z-index:3000;">
+      <div class="modal" style="width:560px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+        <div class="mhd">
+          <div class="mtt">項目名編集: ${esc(custName)}</div>
+          <button class="mx" onclick="document.getElementById('m-iv-label-editor').remove()">×</button>
+        </div>
+        <div style="padding:12px 16px;">
+          <div style="font-size:11px;color:var(--txt2);margin-bottom:10px;line-height:1.6;">
+            この顧客の請求書に表示する項目名を編集できます。<br>
+            空欄のまま保存すると標準ラベルが使われます。
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+              <tr style="background:var(--bg3);">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd);">標準ラベル</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd);">カスタム表示名</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:8px;padding:10px 14px;justify-content:flex-end;border-top:1px solid var(--gray3);">
+          <button class="btn b-gh btn-sm" onclick="document.getElementById('m-iv-label-editor').remove()">キャンセル</button>
+          <button class="btn b-prim btn-sm" onclick="_ivSaveLabelEditor('${esc(custName)}')">保存</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window._ivSaveLabelEditor = function(custName){
+  const cust = (D.customers||[]).find(c => c.name === custName);
+  if(!cust){ showAlert({msg:'顧客が見つかりません'}); return; }
+  const inputs = document.querySelectorAll('#m-iv-label-editor input[data-label-key]');
+  const labels = {};
+  inputs.forEach(inp => {
+    const k = inp.dataset.labelKey;
+    const v = inp.value.trim();
+    if(v) labels[k] = v;
+  });
+  cust.invoiceLabels = labels;
+  
+  // Firebase反映
+  if(typeof fbSet === 'function' && typeof LS_KEYS !== 'undefined'){
+    const key = LS_KEYS.CUST || 'customers';
+    fbSet(key, D.customers).then(() => {
+      console.log('[invoiceLabels] 保存完了:', custName, labels);
+      document.getElementById('m-iv-label-editor')?.remove();
+      showAlert({msg: `${custName} の項目名を保存しました(${Object.keys(labels).length}件)`});
+    }).catch(e => showAlert({msg:'保存エラー: ' + e.message}));
+  } else {
+    document.getElementById('m-iv-label-editor')?.remove();
+    showAlert({msg:'保存しました(ローカルのみ)'});
   }
 };
 
@@ -22774,7 +22906,7 @@ function _calcCustBilling(custName, monStr){
       // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
       const taxFlag = (cu.prices?._tax && cu.prices._tax[k]) || 'ex';
       const amt = (typeof calcUnitTotal === 'function') ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
-      breakdown.push({label:ITEMS[k]?.label||k, qty:q, unit:price, amount:amt, taxFlag});
+      breakdown.push({label:ITEMS[k]?.label||k, itemKey: k, qty:q, unit:price, amount:amt, taxFlag});
       total+=amt;
       if(taxFlag==='in') subtotalIn += amt;
       else subtotalEx += amt;
@@ -24039,46 +24171,77 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   const today=(new Date()).toISOString().slice(0,10);
   const info=_getSystemInfo();
 
-  // 税区分: 顧客のpriceTypeが指定されていれば従う、未指定なら税抜扱い
-  const isTaxIncl = (cu.priceType==='tax_included');
-  const taxLabel = isTaxIncl?'税込':'税抜';
+  // 顧客のデフォルト税モード('in'=税込/'ex'=税別)
+  const defaultTax = (cu.priceType === 'tax_included') ? 'in' : 'ex';
 
-  // 金額計算（billは現状tax_excluded前提: total=税抜小計）
-  // 税込単価顧客の場合は _calcCustBilling が返すtotalを税込合計として扱い、税抜・消費税を逆算
-  let grand, taxEx, taxAmt;
-  if(isTaxIncl){
-    grand = bill.total;                       // 税込合計
-    taxAmt = Math.floor(grand*10/110);        // 消費税 切り捨て
-    taxEx = grand - taxAmt;                   // 税抜
-  } else {
-    taxEx = bill.total;                       // 税抜小計
-    taxAmt = Math.floor(taxEx*0.1);           // 消費税 切り捨て
-    grand = taxEx + taxAmt;                   // 税込合計
-  }
+  // 税混在を判定: breakdown/routes/charters の taxFlag が混在しているか
+  const allTaxFlags = [
+    ...(bill.breakdown||[]).map(b => b.taxFlag||defaultTax),
+    ...(bill.routes||[]).map(r => r.taxFlag||defaultTax),
+    ...(bill.charters||[]).map(c => c.taxFlag||defaultTax),
+  ];
+  const uniqueTaxes = [...new Set(allTaxFlags)];
+  const isMixedTax = uniqueTaxes.length > 1;
+
+  // 全体集計(_calcCustBilling から取得)
+  // - 税別品目の小計(税別) + 消費税(税別×10%) → 税込換算 = taxIncOfEx
+  // - 税込品目の小計(税込) = subtotalIn (内訳: 税抜分 taxExOfIn + 消費税 taxOfIn)
+  // - 全体税込合計 = taxIncOfEx + subtotalIn
+  const subtotalEx = bill.subtotalEx || 0;
+  const subtotalIn = bill.subtotalIn || 0;
+  const taxOfEx = bill.tax || 0;
+  const taxOfIn = bill.taxOfIn || 0;
+  const totalTax = bill.totalTax || (taxOfEx + taxOfIn);
+  const totalEx = bill.totalEx || (subtotalEx + (bill.taxExOfIn || 0));
+  const grand = bill.grandTotal || bill.total;
+  const taxEx = totalEx; // 表示用
+  const taxAmt = totalTax;
 
   // 支払期日
   const payDeadline = _calcPaymentDeadline(cu, monStr) || '';
 
+  // ── 項目名のカスタムラベル取得 ──
+  // 顧客マスタの invoiceLabels から取得(なければ標準ラベル)
+  const customLabels = cu.invoiceLabels || {};
+  function _getDisplayLabel(key, defaultLabel){
+    return customLabels[key] || defaultLabel;
+  }
+
+  // 税モードラベル生成(税混在時のみ表示)
+  function _taxBadge(taxFlag){
+    if(!isMixedTax) return ''; // 混在していなければ表示しない
+    const flag = taxFlag || defaultTax;
+    const label = flag === 'in' ? '税込' : '税別';
+    const color = flag === 'in' ? '#2e7d32' : '#1565c0';
+    return ` <span style="display:inline-block;padding:1px 5px;background:${color};color:#fff;border-radius:2px;font-size:8.5pt;font-weight:600;margin-left:4px;vertical-align:middle;">${label}</span>`;
+  }
+
   // 明細行(Pattern A: 個建)
-  const itemRows = bill.breakdown.map((b,i)=>`
+  const itemRows = (bill.breakdown||[]).map((b,i)=>{
+    const taxFlag = b.taxFlag || defaultTax;
+    const displayLabel = _getDisplayLabel(b.itemKey || b.label, b.label);
+    return `
     <tr>
       <td class="code">${i+1}</td>
-      <td>${esc(b.label)}</td>
+      <td>${esc(displayLabel)}${_taxBadge(taxFlag)}</td>
       <td class="num">${b.qty.toLocaleString()}</td>
       <td class="num">${b.unit.toLocaleString()}</td>
       <td class="num">${b.amount.toLocaleString()}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   // ルート配送行(Pattern B)
-  const routeStartNo = bill.breakdown.length + 1;
+  const routeStartNo = (bill.breakdown||[]).length + 1;
   const routeRows = (bill.routes||[]).map((rt, i)=>{
+    const taxFlag = rt.taxFlag || defaultTax;
+    const baseLabel = _getDisplayLabel('__route__', 'ルート配送');
     const label = rt.fromTo
       ? `${esc(rt.name)} <span style="font-size:10px;color:#666;">(${esc(rt.fromTo)})</span>`
       : esc(rt.name);
     return `
     <tr>
       <td class="code">${routeStartNo + i}</td>
-      <td>【ルート配送】${label}</td>
+      <td>【${baseLabel}】${label}${_taxBadge(taxFlag)}</td>
       <td class="num">${rt.totalRounds.toLocaleString()}回</td>
       <td class="num">${rt.unitPrice.toLocaleString()}</td>
       <td class="num">${rt.amount.toLocaleString()}</td>
@@ -24088,6 +24251,8 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   // チャーター行(Pattern C)
   const charterStartNo = routeStartNo + (bill.routes||[]).length;
   const charterRows = (bill.charters||[]).map((c, i)=>{
+    const taxFlag = c.taxFlag || defaultTax;
+    const baseLabel = _getDisplayLabel('__charter__', 'チャーター');
     const detail = [c.from, c.to].filter(Boolean).join(' → ');
     const label = detail ? `${esc(c.content||'')} <span style="font-size:10px;color:#666;">${esc(detail)}</span>` : esc(c.content||'');
     const dateStr = c.date ? `${esc(c.date)} ` : '';
@@ -24097,7 +24262,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
     return `
     <tr>
       <td class="code">${charterStartNo + i}</td>
-      <td>【チャーター】${dateStr}${label}</td>
+      <td>【${baseLabel}】${dateStr}${label}${_taxBadge(taxFlag)}</td>
       <td class="num">1</td>
       <td class="num">-</td>
       <td class="num">${amtCell}</td>
@@ -24105,7 +24270,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   }).join('');
 
   // 空白行(最低6行埋める)
-  const filledRows = bill.breakdown.length + (bill.routes||[]).length + (bill.charters||[]).length;
+  const filledRows = (bill.breakdown||[]).length + (bill.routes||[]).length + (bill.charters||[]).length;
   const blankCount = Math.max(0, 6-filledRows);
   const blanks = Array(blankCount).fill('<tr class="blank"><td></td><td></td><td></td><td></td><td></td></tr>').join('');
 
@@ -24132,7 +24297,39 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
 
   // 備考
   const noteExtra = cu.invoiceNote?`<br>${esc(cu.invoiceNote)}`:'';
-  const noteLine = `※ 単価・金額は${taxLabel}表示となっております。お振込は税込合計 ¥${grand.toLocaleString()} にてお願い申し上げます。${noteExtra}`;
+  const taxNote = isMixedTax
+    ? '※ 単価・金額は項目ごとに税込/税別が混在しています。'
+    : (defaultTax === 'in' ? '※ 単価・金額は税込表示となっております。' : '※ 単価・金額は税抜表示となっております。');
+  const noteLine = `${taxNote}お振込は税込合計 ¥${grand.toLocaleString()} にてお願い申し上げます。${noteExtra}`;
+
+  // 表ヘッダの単価/金額ラベル
+  const headerTaxLabel = isMixedTax
+    ? '<span style="font-size:9.5pt;color:#666;">(税別/税込)</span>'
+    : (defaultTax === 'in' ? '(税込)' : '(税抜)');
+
+  // 集計表(税混在対応)
+  const summaryTable = isMixedTax ? `
+        <table class="fb-sum">
+          <tr><th colspan="2" style="font-size:10pt;">税モード別 集計</th></tr>
+          <tr><td style="text-align:right;padding:3px 6px;">税別 小計</td><td class="num">¥${subtotalEx.toLocaleString()}</td></tr>
+          <tr><td style="text-align:right;padding:3px 6px;">税別 消費税(10%)</td><td class="num">¥${taxOfEx.toLocaleString()}</td></tr>
+          <tr><td style="text-align:right;padding:3px 6px;">税込 小計</td><td class="num">¥${subtotalIn.toLocaleString()}</td></tr>
+          <tr><td style="text-align:right;padding:3px 6px;font-size:9pt;color:#666;">(うち税抜)</td><td class="num" style="font-size:9pt;color:#666;">¥${(bill.taxExOfIn||0).toLocaleString()}</td></tr>
+          <tr><td style="text-align:right;padding:3px 6px;font-size:9pt;color:#666;">(うち消費税)</td><td class="num" style="font-size:9pt;color:#666;">¥${taxOfIn.toLocaleString()}</td></tr>
+          <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
+          <tr><td style="text-align:right;padding:3px 6px;font-size:9pt;color:#666;">(うち消費税合計)</td><td class="num" style="font-size:9pt;color:#666;">¥${totalTax.toLocaleString()}</td></tr>
+          <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">得意先コード</th></tr>
+          <tr><td style="text-align:center;">${esc(monStr.replace('-','/')+'/末')}</td><td style="text-align:center;">${esc(cu.custNo||cu.id||'')}</td></tr>
+        </table>
+  ` : `
+        <table class="fb-sum">
+          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
+          <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
+          <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
+          <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">得意先コード</th></tr>
+          <tr><td style="text-align:center;">${esc(monStr.replace('-','/')+'/末')}</td><td style="text-align:center;">${esc(cu.custNo||cu.id||'')}</td></tr>
+        </table>
+  `;
 
   const html = `
   <div class="fb-paper">
@@ -24165,13 +24362,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
     <div class="fb-mid">
       <div></div>
       <div>
-        <table class="fb-sum">
-          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
-          <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
-          <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
-          <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">得意先コード</th></tr>
-          <tr><td style="text-align:center;">${esc(monStr.replace('-','/')+'/末')}</td><td style="text-align:center;">${esc(cu.custNo||cu.id||'')}</td></tr>
-        </table>
+        ${summaryTable}
       </div>
     </div>
 
@@ -24181,8 +24372,8 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
           <th style="width:7%;">コード</th>
           <th style="width:45%;">品目・備考</th>
           <th style="width:10%;">数量</th>
-          <th style="width:17%;">売上単価(${taxLabel})</th>
-          <th style="width:21%;">売上金額(${taxLabel})</th>
+          <th style="width:17%;">売上単価${headerTaxLabel}</th>
+          <th style="width:21%;">売上金額${headerTaxLabel}</th>
         </tr>
       </thead>
       <tbody>
@@ -24191,8 +24382,8 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
         ${charterRows}
         ${blanks}
         <tr class="total">
-          <td colspan="4" style="text-align:right;">頁 計(${taxLabel})</td>
-          <td class="tot-val">${(isTaxIncl?grand:taxEx).toLocaleString()}</td>
+          <td colspan="4" style="text-align:right;">頁 計</td>
+          <td class="tot-val">${grand.toLocaleString()}</td>
         </tr>
       </tbody>
     </table>
