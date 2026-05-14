@@ -1709,29 +1709,43 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
       </div>
       <!-- 一括設定ツールバー(2026/05/14) -->
-      <div id="staff-bulk-toolbar" style="display:none;padding:8px 12px;background:rgba(33,150,243,.08);border:1px solid rgba(33,150,243,.25);border-radius:5px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap;">
-        <div style="font-size:11px;">
-          <strong style="color:var(--blu2);">選択: <span id="staff-bulk-count">0</span>名</strong>
+      <div id="staff-bulk-toolbar" style="display:none;padding:14px 16px;background:linear-gradient(135deg,rgba(33,150,243,.10),rgba(33,150,243,.04));border:2px solid rgba(33,150,243,.35);border-radius:8px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="background:var(--blu);color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">✓</div>
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--blu2);">選択した <span id="staff-bulk-count">0</span> 名に一括適用</div>
+              <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">適用したい項目を選択して「一括適用」を押してください(空欄の項目は変更しません)</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn b-gh btn-sm" onclick="_clearStaffBulkSel()">選択解除</button>
+            <button class="btn b-blu btn-sm" onclick="_applyStaffBulkSet()" style="font-weight:700;">一括適用 →</button>
+          </div>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11px;">
-          <span style="color:var(--txt2);">一括設定:</span>
-          <select id="staff-bulk-office" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
-            <option value="">─ 拠点 ─</option>
-          </select>
-          <select id="staff-bulk-kubun" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
-            <option value="">─ 区分 ─</option>
-            <option value="社員">社員</option>
-            <option value="個人事業主">個人事業主</option>
-            <option value="委託会社所属">委託会社所属</option>
-          </select>
-          <select id="staff-bulk-company" style="padding:3px 6px;font-size:11px;border:1px solid var(--brd);border-radius:3px;">
-            <option value="">─ 委託会社 ─</option>
-            <option value="__none__">(なし)</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:6px;margin-left:auto;">
-          <button class="btn b-gh btn-sm" onclick="_clearStaffBulkSel()">選択解除</button>
-          <button class="btn b-blu btn-sm" onclick="_applyStaffBulkSet()">一括適用</button>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+          <div>
+            <div style="font-size:10.5px;color:var(--txt2);margin-bottom:3px;font-weight:600;">① 拠点(営業所)</div>
+            <select id="staff-bulk-office" style="width:100%;padding:5px 8px;font-size:12px;border:1px solid var(--brd);border-radius:4px;background:#fff;">
+              <option value="">─ 変更しない ─</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--txt2);margin-bottom:3px;font-weight:600;">② 区分</div>
+            <select id="staff-bulk-kubun" style="width:100%;padding:5px 8px;font-size:12px;border:1px solid var(--brd);border-radius:4px;background:#fff;">
+              <option value="">─ 変更しない ─</option>
+              <option value="社員">社員</option>
+              <option value="個人事業主">個人事業主</option>
+              <option value="委託会社所属">委託会社所属</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:10.5px;color:var(--txt2);margin-bottom:3px;font-weight:600;">③ 委託会社</div>
+            <select id="staff-bulk-company" style="width:100%;padding:5px 8px;font-size:12px;border:1px solid var(--brd);border-radius:4px;background:#fff;">
+              <option value="">─ 変更しない ─</option>
+              <option value="__none__">(なし)</option>
+            </select>
+          </div>
         </div>
       </div>
       <!-- フリート未登録ドライバー通知カード -->
@@ -11892,7 +11906,7 @@ function _updateStaffBulkCount(){
   const cntEl = document.getElementById('staff-bulk-count');
   if(cntEl) cntEl.textContent = cnt;
   const bar = document.getElementById('staff-bulk-toolbar');
-  if(bar) bar.style.display = cnt > 0 ? 'flex' : 'none';
+  if(bar) bar.style.display = cnt > 0 ? 'block' : 'none';
 }
 
 // 全選択トグル
