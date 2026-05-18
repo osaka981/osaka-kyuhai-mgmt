@@ -23878,9 +23878,11 @@ function _buildInvoiceProxyPortrait(ctx){
         </div>
       </div>
       <div class="ci-subttl">下記の通り、小包委託料金のご請求申し上げます。</div>
+      <div class="ci-amt-wrapper">
       <div class="ci-amt-row">
         <div class="lbl"><span class="main">合 計 金 額</span><span class="sub">(税込)</span></div>
         <div class="val">¥${totals.grandTotal.toLocaleString()}</div>
+      </div>
       </div>
     ` : `
       <div class="ci-cont-bar">
@@ -24764,7 +24766,7 @@ function _printDocWindow(title, html){
       .ci-top-head{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start;margin-bottom:18px;}
       .ci-head-l{font-size:12px;line-height:1.7;}
       .ci-head-r{font-size:12px;line-height:1.9;min-width:340px;}
-      .ci-head-r .ci-kv{display:grid;grid-template-columns:auto auto;align-items:center;gap:10px;margin-bottom:2px;justify-content:end;}
+      .ci-head-r .ci-kv{display:flex;align-items:center;gap:10px;margin-bottom:2px;justify-content:flex-end;}
       .ci-head-r .ci-kv label{color:#555;font-size:11px;}
       .ci-head-r .ci-val.bold{font-weight:700;font-family:'Times New Roman',serif;letter-spacing:0.05em;}
       .ci-head-r .ci-val.highlight{background:#e8e8e8;padding:1px 8px;font-weight:700;}
@@ -24778,8 +24780,22 @@ function _printDocWindow(title, html){
       .ci-issuer-info{text-align:right;padding-right:6px;}
       .ci-issuer-info .nm{font-size:15px;font-weight:500;letter-spacing:0.08em;}
       .ci-issuer-stamp{position:relative;height:70px;display:flex;align-items:flex-start;justify-content:center;}
-      .ci-stamp-fallback{width:62px;height:62px;border:2px double #c62828;color:#c62828;border-radius:3px;display:flex;align-items:center;justify-content:center;font-family:'MS Mincho',serif;font-size:11px;font-weight:700;opacity:0.8;text-align:center;padding:3px;line-height:1.1;}
+      .ci-stamp-fallback{width:62px;height:62px;border:1.5px dashed #bbb;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#fafafa;font-size:0;}
+      .ci-stamp-fallback::before{content:'印';display:block;font-size:14pt;color:#bbb;font-weight:500;line-height:1;}
+      .ci-stamp-fallback::after{content:'ここに印影';display:block;font-size:7pt;color:#aaa;margin-top:2px;}
       .ci-stamp-img{width:62px;height:62px;object-fit:contain;opacity:0.85;}
+      /* 税区分凡例 控えめに */
+      .tax-legend{display:flex;font-size:8.5pt;color:#999;padding:4px 8px;background:#fafafa;border:0.5px solid #e8e8e8;border-radius:2px;margin:6px 0;opacity:0.75;gap:14px;line-height:1.4;}
+      .tax-legend > *{font-size:8.5pt;}
+      .tax-legend .sw{width:8px;height:8px;display:inline-block;margin-right:3px;vertical-align:middle;}
+      /* 合計金額枠 強調 */
+      .ci-amt-row{display:inline-grid;grid-template-columns:auto 1fr;align-items:stretch;border:2.5px double #000;background:#fffbe8;margin:14px auto;min-width:340px;max-width:420px;}
+      .ci-amt-row .lbl{background:transparent;padding:10px 18px;font-size:11pt;border-right:1.5px solid #000;white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;font-weight:600;letter-spacing:0.2em;color:#444;}
+      .ci-amt-row .lbl .main{font-weight:600;}
+      .ci-amt-row .lbl .sub{font-size:9pt;color:#666;margin-top:2px;letter-spacing:0;}
+      .ci-amt-row .val{padding:10px 20px;font-size:22pt;font-weight:700;font-family:'Times New Roman',serif;text-align:right;letter-spacing:0.03em;}
+      /* 合計金額行を中央配置するためのラッパー */
+      .ci-amt-wrapper{text-align:center;margin:14px 0;}
       .ci-subttl{margin:20px 0 8px;font-size:13px;}
       .ci-amt-row{display:grid;grid-template-columns:auto 1fr;align-items:stretch;border:1px solid #000;margin:10px 0 24px;max-width:400px;}
       .ci-amt-row .lbl{background:#f4f4f4;padding:10px 16px;font-size:12px;border-right:1px solid #000;white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.25;}
@@ -24801,7 +24817,7 @@ function _printDocWindow(title, html){
       .ci-amt-box-ls .lbl .sub{font-size:9px;color:#555;margin-top:2px;}
       .ci-amt-box-ls .val{padding:8px 16px;font-size:20px;font-weight:700;font-family:'Times New Roman',serif;text-align:right;}
       .ci-top-head-ls .ci-head-r{font-size:10px;line-height:1.5;min-width:0;}
-      .ci-top-head-ls .ci-kv{display:grid;grid-template-columns:auto auto;align-items:center;gap:6px;margin-bottom:2px;justify-content:end;}
+      .ci-top-head-ls .ci-kv{display:flex;align-items:center;gap:6px;margin-bottom:2px;justify-content:flex-end;}
       .ci-top-head-ls .reg-wrap{text-align:right;margin:4px 0 0;display:block;clear:both;}
       .ci-top-head-ls .ci-reg-box .h{font-size:9px;padding:2px 8px;}
       .ci-top-head-ls .ci-reg-box .v{font-size:10px;padding:2px 8px;}
