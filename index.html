@@ -15629,9 +15629,15 @@ function saveRoute(){
     if(typeof renderStaffRouteInline==='function') renderStaffRouteInline();
     syncColRoutesToFirebase();
   } else if(_rtOwnerType==='company'){
+    // 委託会社のcolRoutesをlocalStorage + Firebaseに保存(2026/05/19修正: 保存処理欠落バグ修正)
+    lsSet(LS_KEYS.COMPANIES, D.companies);
+    try{ fbSet('companies', D.companies); }catch(e){ console.warn('委託会社ルートFB保存失敗:', e); }
     if(typeof renderCoRouteInline==='function') renderCoRouteInline();
     if(typeof renderCompanyPage==='function') renderCompanyPage();
   } else if(_rtOwnerType==='customer'){
+    // 顧客のcolRoutesをlocalStorage + Firebaseに保存(同じバグ修正)
+    lsSet(LS_KEYS.CUST, D.customers);
+    try{ fbSet('customers', D.customers); }catch(e){ console.warn('顧客ルートFB保存失敗:', e); }
     if(typeof renderCustRouteInline==='function') renderCustRouteInline();
   }
 }
@@ -20419,6 +20425,9 @@ function deleteCoRouteFromModal(rtId){
   const co=D.companies.find(x=>x.id===_coEditId);if(!co)return;
   showConfirm('このルートを削除しますか？',()=>{
     co.colRoutes=(co.colRoutes||[]).filter(r=>r.id!==rtId);
+    // 2026/05/19 修正: 削除時もFirebase/localStorage保存
+    lsSet(LS_KEYS.COMPANIES, D.companies);
+    try{ fbSet('companies', D.companies); }catch(e){ console.warn('委託会社ルート削除FB保存失敗:', e); }
     renderCoRouteInline();
     renderCompanyPage();
   });
@@ -20974,6 +20983,9 @@ window.deleteCustRouteFromModal = function(rtId){
   const cu = D.customers.find(x=>x.id===editId); if(!cu) return;
   showConfirm('このルートを削除しますか？', ()=>{
     cu.colRoutes = (cu.colRoutes||[]).filter(r=>r.id!==rtId);
+    // 2026/05/19 修正: 削除時もFirebase/localStorage保存
+    lsSet(LS_KEYS.CUST, D.customers);
+    try{ fbSet('customers', D.customers); }catch(e){ console.warn('顧客ルート削除FB保存失敗:', e); }
     renderCustRouteInline();
   });
 };
