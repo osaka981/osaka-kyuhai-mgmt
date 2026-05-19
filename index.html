@@ -31131,8 +31131,8 @@ window.dqImportJson = function(){
     </button>
     <button type="button" class="co-tab" data-tab="price" onclick="switchCoModalTab('price')"
       style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
-      <div style="font-size:12px;font-weight:700;">💴 営業所・単価</div>
-      <div style="font-size:9px;margin-top:1px;">担当営業所・宅配/集荷/ルート</div>
+      <div style="font-size:12px;font-weight:700;">💴 単価設定</div>
+      <div style="font-size:9px;margin-top:1px;">宅配/集荷/その他/ルート</div>
     </button>
     <button type="button" class="co-tab" data-tab="pay" onclick="switchCoModalTab('pay')"
       style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
@@ -31333,14 +31333,13 @@ window.dqImportJson = function(){
       <div id="co-last-owner-pin-info" style="font-size:10.5px;color:var(--amb2);margin-top:6px;display:none;"></div>
     </div>
 
-  </div>
-
-  <!-- 💴 営業所・単価タブ -->
-  <div class="co-tab-panel" data-panel="price" style="display:none;">
-    <!-- 担当営業所 -->
-    <div style="margin-bottom:14px;">
+    <!-- 担当営業所(基本情報タブに移動 2026/05/19) -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--brd);">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div style="font-size:12px;font-weight:700;color:var(--blu2);">🏢 担当営業所（複数選択可）</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--blu2);">🏢 担当営業所（複数選択可）</div>
+          <div style="font-size:9.5px;color:var(--txt2);margin-top:2px;">この委託会社のドライバーが担当する営業所(郵便局)を選択</div>
+        </div>
         <div style="display:flex;gap:5px;">
           <button type="button" class="btn b-gh btn-sm" style="font-size:10px;" onclick="selectAllCoOffices(true)">すべて選択</button>
           <button type="button" class="btn b-gh btn-sm" style="font-size:10px;" onclick="selectAllCoOffices(false)">すべて解除</button>
@@ -31348,14 +31347,30 @@ window.dqImportJson = function(){
       </div>
       <div id="co-offices-list" style="display:flex;flex-wrap:wrap;gap:8px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;"></div>
     </div>
+
+  </div>
+
+  <!-- 💴 単価設定タブ -->
+  <div class="co-tab-panel" data-panel="price" style="display:none;">
+    <!-- 担当営業所 → 基本情報タブに移動済(2026/05/19) -->
     <!-- 会社単価 -->
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--red2);margin-bottom:8px;">🚛 単価設定（ドライバー全員に共通適用）</div>
+      <div style="background:linear-gradient(135deg,rgba(244,67,54,.08),rgba(244,67,54,.02));border:1px solid rgba(244,67,54,.3);border-radius:6px;padding:10px 14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="background:var(--red);color:#fff;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;">標準単価</span>
+          <div style="font-size:13px;font-weight:700;color:var(--red2);">この委託会社のドライバー全員に共通適用</div>
+        </div>
+        <div style="font-size:10.5px;color:var(--txt2);line-height:1.5;">
+          ・ここで設定した単価が、この委託会社所属の全ドライバーに自動適用されます<br>
+          ・ドライバー個別に違う単価を設定したい場合は、従業員管理 → 該当ドライバー → 単価設定で個別に上書きできます<br>
+          ・優先順位: <strong>ドライバー個別単価 > 委託会社標準単価 > 拠点マスタ単価</strong>
+        </div>
+      </div>
       <div style="display:flex;border:1px solid var(--brd2);border-radius:5px;overflow:hidden;margin-bottom:10px;">
-        <button type="button" class="otab on" id="co-ptab-del" onclick="switchCoTab('del')" style="flex:1;font-size:11px;">🚛 宅配</button>
-        <button type="button" class="otab" id="co-ptab-col" onclick="switchCoTab('col')" style="flex:1;font-size:11px;">📦 集荷</button>
-        <button type="button" class="otab" id="co-ptab-oth" onclick="switchCoTab('oth')" style="flex:1;font-size:11px;">その他</button>
-        <button type="button" class="otab" id="co-ptab-rt" onclick="switchCoTab('rt')" style="flex:1;font-size:11px;">🗺️ ルート</button>
+        <button type="button" class="otab on" id="co-ptab-del" onclick="switchCoTab('del')" style="flex:1;font-size:11px;padding:8px 4px;line-height:1.3;"><div style="font-weight:700;">🚛 宅配単価</div><div style="font-size:9px;color:var(--txt2);">完了/転送/夜間/大型</div></button>
+        <button type="button" class="otab" id="co-ptab-col" onclick="switchCoTab('col')" style="flex:1;font-size:11px;padding:8px 4px;line-height:1.3;"><div style="font-weight:700;">📦 集荷単価</div><div style="font-size:9px;color:var(--txt2);">60/80/100/120/140/160</div></button>
+        <button type="button" class="otab" id="co-ptab-oth" onclick="switchCoTab('oth')" style="flex:1;font-size:11px;padding:8px 4px;line-height:1.3;"><div style="font-weight:700;">📋 その他単価</div><div style="font-size:9px;color:var(--txt2);">ケース/クリックポスト等</div></button>
+        <button type="button" class="otab" id="co-ptab-rt" onclick="switchCoTab('rt')" style="flex:1;font-size:11px;padding:8px 4px;line-height:1.3;"><div style="font-weight:700;">🗺️ ルート</div><div style="font-size:9px;color:var(--txt2);">配送ルート単価</div></button>
       </div>
       <!-- ① 宅配単価（固定5項目） -->
       <div id="co-ptab-content-del" style="display:grid;">
