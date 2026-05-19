@@ -12555,6 +12555,37 @@ function onStCp60Change(){
   });
 }
 
+// 委託会社 YP60→YP80~160 自動反映(個別変更したサイズは保護)
+function onCoCp60Change(){
+  const p60 = $('co-cp60')?.value || '';
+  if(!p60) return;
+  ['co-cp80','co-cp100','co-cp120','co-cp140','co-cp160'].forEach(id => {
+    const el = $(id);
+    if(!el) return;
+    // 手動入力フラグが立っているフィールドは上書きしない
+    if(el.dataset.coManual === '1') return;
+    el.value = p60;
+  });
+}
+
+// 個別フィールドが手動入力された印を立てる
+function _markCoColManual(id){
+  const el = $(id);
+  if(!el) return;
+  // 値が空ならフラグを解除(自動反映を再有効化)
+  if(!el.value || el.value === '0'){
+    delete el.dataset.coManual;
+    // 視覚的なマーカーを除去
+    el.style.borderColor = '';
+    el.style.background = '';
+  } else {
+    el.dataset.coManual = '1';
+    // 視覚的に手動変更を示す薄い色
+    el.style.borderColor = 'var(--amb)';
+    el.style.background = 'rgba(255,170,0,.05)';
+  }
+}
+
 function onStCpk1Change(){
   const pk1=$('st-cpk1')?.value||'';
   if(!pk1)return;
@@ -20457,6 +20488,24 @@ function restoreCoPrices(prices, company){
   ['pk1','pk2','cp','ke','te'].forEach(k=>{const e=$('co-c'+k);if(e)e.value=c[k]||0;});
   // 集荷個別単価を復元(営業所マスタと自動マージ)
   if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp(d.colCompanies||[], company);
+  
+  // YP60と異なる値は「手動入力」とマーク(YP60→自動反映を保護)
+  const p60Val = c.p60 || 0;
+  ['80','100','120','140','160'].forEach(s=>{
+    const el = $('co-cp'+s);
+    if(!el) return;
+    const v = c['p'+s] || 0;
+    if(v && v !== p60Val){
+      // YP60と違う値 → 手動変更扱い
+      el.dataset.coManual = '1';
+      el.style.borderColor = 'var(--amb)';
+      el.style.background = 'rgba(255,170,0,.05)';
+    } else {
+      delete el.dataset.coManual;
+      el.style.borderColor = '';
+      el.style.background = '';
+    }
+  });
 }
 
 function openCompanyModal(coId){
@@ -20508,7 +20557,15 @@ function openCompanyModal(coId){
   else {
     ['co-pkanryo','co-ptenso','co-pnight','co-pogata','co-pshukka',
      'co-cp60','co-cp80','co-cp100','co-cp120','co-cp140','co-cp160','co-cpk1','co-cpk2','co-ccp','co-cke','co-cte'
-    ].forEach(id=>{const e=$(id);if(e)e.value='';});
+    ].forEach(id=>{
+      const e=$(id);
+      if(e){
+        e.value='';
+        delete e.dataset.coManual;
+        e.style.borderColor='';
+        e.style.background='';
+      }
+    });
     if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp([], co);
     restoreCoCustRoutes([]);
   }
@@ -31421,12 +31478,12 @@ window.dqImportJson = function(){
         </div>
         <!-- 品目別単価グリッド（選択中顧客の入力エリア） -->
         <div id="co-col-price-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;">
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c60">YP 60サイズ</label><input type="number" id="co-cp60" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c80">YP 80サイズ</label><input type="number" id="co-cp80" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c100">YP 100サイズ</label><input type="number" id="co-cp100" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c120">YP 120サイズ</label><input type="number" id="co-cp120" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c140">YP 140サイズ</label><input type="number" id="co-cp140" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c160">YP 160サイズ</label><input type="number" id="co-cp160" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c60">YP 60サイズ</label><input type="number" id="co-cp60" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="onCoCp60Change()"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c80">YP 80サイズ</label><input type="number" id="co-cp80" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp80')"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c100">YP 100サイズ</label><input type="number" id="co-cp100" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp100')"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c120">YP 120サイズ</label><input type="number" id="co-cp120" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp120')"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c140">YP 140サイズ</label><input type="number" id="co-cp140" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp140')"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c160">YP 160サイズ</label><input type="number" id="co-cp160" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp160')"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cpk1">ゆうパケット通常</label><input type="number" id="co-cpk1" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cpk2">ゆうパケット7cm〜</label><input type="number" id="co-cpk2" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="ccp">クリックポスト</label><input type="number" id="co-ccp" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
