@@ -23890,6 +23890,106 @@ function _renderBottomTable(bankInfo, totals){
   </table>`;
 }
 
+// 2026/05/19 新規: 統合表(明細+凡例+内訳を1つの表に)
+function _renderUnifiedItemsTable(items, totals, isLandscape){
+  const itemRows = _renderItemRows(items, 1, isLandscape);
+  
+  // 内訳行を構築(_renderBottomTable と同じロジック)
+  const naiwakeRows = [];
+  if(totals.inclSub > 0){
+    naiwakeRows.push({k:'税込対象 小計', v:totals.inclSub.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'内 消費税(10%)', v:totals.inclTax.toLocaleString(), sub:true});
+  }
+  if(totals.exclSub > 0){
+    naiwakeRows.push({k:'税別対象 小計', v:totals.exclSub.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'別途 消費税(10%)', v:totals.exclTax.toLocaleString(), sub:true});
+  }
+  if(totals.nontaxSub > 0){
+    naiwakeRows.push({k:'非課税 小計', v:totals.nontaxSub.toLocaleString(), sub:false});
+  }
+  naiwakeRows.push({k:'合計 (税込)', v:'¥'+totals.grandTotal.toLocaleString(), yellow:true});
+  
+  const totalCols = isLandscape ? 6 : 5;
+  const labelColspan = totalCols - 1;
+  
+  // 凡例行(明細と内訳の間に挟む)
+  const legendRow = `<tr class="ci-legend-row">
+    <td colspan="${totalCols}" style="background:#fafafa;color:#999;font-size:8.5pt;padding:4px 8px;border-top:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:0.85;">
+      <span style="margin-right:14px;"><span style="display:inline-block;width:8px;height:8px;background:#e3f2fd;border:1px solid #90caf9;margin-right:3px;vertical-align:middle;"></span>税込 = 単価に消費税を含む</span>
+      <span style="margin-right:14px;"><span style="display:inline-block;width:8px;height:8px;background:#fff3e0;border:1px solid #ffb74d;margin-right:3px;vertical-align:middle;"></span>税別 = 別途消費税10%加算</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#f5f5f5;border:1px solid #bdbdbd;margin-right:3px;vertical-align:middle;"></span>非課税 = 消費税対象外 (手当・損害賠償等)</span>
+    </td>
+  </tr>`;
+  
+  // 内訳行(統合表の最後に追加)
+  const naiwakeRowsHtml = naiwakeRows.map((r,i) => {
+    const isFirstNaiwake = (i === 0);
+    const bgStyle = r.yellow 
+      ? 'background:#fffbe8;font-weight:700;border-top:1.5px double #000;'
+      : (r.sub ? 'background:#fafafa;color:#666;' : 'background:#fafafa;');
+    const labelStyle = `text-align:right;${bgStyle}font-size:${r.yellow?'12pt':'11px'};padding:${r.yellow?'8px 10px':'5px 10px'};`;
+    const valueStyle = `text-align:right;${bgStyle}font-size:${r.yellow?'14pt':'11px'};font-family:${r.yellow?"'Times New Roman',serif":"inherit"};font-weight:${r.yellow?'700':(r.sub?'400':'500')};padding:${r.yellow?'8px 14px':'5px 10px'};white-space:nowrap;`;
+    const borderTop = isFirstNaiwake ? 'border-top:1.5px solid #000;' : '';
+    return `<tr class="ci-naiwake-row${r.yellow?' total':''}">
+      <td colspan="${labelColspan}" style="${labelStyle}${borderTop}">${esc(r.k)}</td>
+      <td style="${valueStyle}${borderTop}">${esc(r.v)}</td>
+    </tr>`;
+  }).join('');
+  
+  // 列構造(縦向き5列 / 横向き6列)
+  const colgroup = isLandscape ? `<colgroup>
+      <col style="width: 7%;"><col style="width: 37%;"><col style="width: 10%;">
+      <col style="width: 12%;"><col style="width: 10%;"><col style="width: 24%;">
+    </colgroup>` : `<colgroup>
+      <col style="width: 36%;"><col style="width: 10%;">
+      <col style="width: 14%;"><col style="width: 10%;"><col style="width: 30%;">
+    </colgroup>`;
+  const thead = isLandscape ? `<thead>
+      <tr><th>No</th><th>品目・備考</th><th>数量</th><th>単価</th><th>税区分</th><th>金額</th></tr>
+    </thead>` : `<thead>
+      <tr><th>品目・備考</th><th>数量</th><th>単価</th><th>税区分</th><th>金額</th></tr>
+    </thead>`;
+  
+  return `<table class="ci-items ci-unified">
+    ${colgroup}
+    ${thead}
+    <tbody>
+      ${itemRows}
+      ${legendRow}
+      ${naiwakeRowsHtml}
+    </tbody>
+  </table>`;
+}
+
+// 2026/05/19 新規: 振込先口座+備考の横並び
+function _renderUnifiedBottomRow(bankInfo){
+  const bankName = esc(bankInfo?.bankName || '');
+  const branch = esc(bankInfo?.branch || '');
+  const type = esc(bankInfo?.type || '普通');
+  const num = bankInfo?.kigo
+    ? `記号${esc(bankInfo.kigo)}　番号${esc(bankInfo.ban||'')}`
+    : (bankInfo?.code
+        ? `コード${esc(bankInfo.code)} 店番${esc(bankInfo.store||'')} 番号${esc(bankInfo.ban||'')}`
+        : `番号${esc(bankInfo?.ban||'')}`);
+  const holder = esc(bankInfo?.holder || '');
+  const bankLine = bankName
+    ? `${bankName} ${branch}<br>${type}　${num}`
+    : '<span style="color:#999;">口座情報未登録</span>';
+  
+  return `<div class="ci-bottom-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;align-items:stretch;">
+    <div class="ci-bank-box" style="border:1px solid #000;">
+      <div style="background:#f0f0f0;padding:4px 8px;border-bottom:1px solid #000;font-size:11px;font-weight:500;">振込先口座</div>
+      <div style="padding:8px 10px;font-size:11px;line-height:1.6;min-height:50px;">${bankLine}</div>
+      <div style="background:#f0f0f0;padding:3px 8px;border-top:1px solid #000;border-bottom:1px solid #000;font-size:10.5px;color:#666;">口座名義</div>
+      <div style="padding:6px 10px;font-size:11px;min-height:24px;">${holder||'&nbsp;'}</div>
+    </div>
+    <div class="ci-bikou-box" style="border:1px solid #000;">
+      <div style="background:#f0f0f0;padding:4px 8px;border-bottom:1px solid #000;font-size:11px;font-weight:500;">備考</div>
+      <div style="padding:8px 10px;font-size:11px;min-height:90px;"></div>
+    </div>
+  </div>`;
+}
+
 // 税区分凡例
 function _renderTaxLegend(){
   return `<div class="tax-legend">
@@ -23962,14 +24062,16 @@ function _buildInvoiceProxyPortrait(ctx){
     const subtotalRow = !p.isLast
       ? `<tr class="subtotal-row"><td class="lbl" colspan="4" style="text-align:right;font-weight:500;background:#f9f9f9;">— 次頁に続く —</td><td class="val" style="text-align:right;font-family:'Times New Roman',serif;font-weight:700;background:#f9f9f9;">${p.items.reduce((s,it)=>s+it.amount,0).toLocaleString()}</td></tr>`
       : '';
-    const bottomSection = p.isLast ? `
-      ${_renderTaxLegend()}
-      ${_renderBottomTable(bankInfo, totals)}
-      <div class="ci-remark">
-        <div class="hd">備考</div>
-        <div class="bd"></div>
-      </div>
-    ` : '';
+    // 2026/05/19: 最終ページは統合表(明細+凡例+内訳)+ 振込先/備考横並び
+    if(p.isLast){
+      return `<div class="ci-paper ci-portrait">
+        ${fullHeader}
+        ${pageNumDisplay}
+        ${_renderUnifiedItemsTable(p.items, totals, false)}
+        ${_renderUnifiedBottomRow(bankInfo)}
+      </div>`;
+    }
+    // 中間ページは従来通り
     return `<div class="ci-paper ci-portrait">
       ${fullHeader}
       ${pageNumDisplay}
@@ -23983,7 +24085,6 @@ function _buildInvoiceProxyPortrait(ctx){
         </thead>
         <tbody>${itemRows}${blanks}${subtotalRow}</tbody>
       </table>
-      ${bottomSection}
     </div>`;
   }).join('<div style="page-break-after:always;"></div>');
 }
@@ -24050,14 +24151,15 @@ function _buildInvoiceProxyLandscape(ctx){
     const subtotalRow = !p.isLast
       ? `<tr class="subtotal-row"><td></td><td class="lbl" colspan="4" style="text-align:right;font-weight:500;background:#f9f9f9;">— 次頁に続く —</td><td class="val" style="text-align:right;font-family:'Times New Roman',serif;font-weight:700;background:#f9f9f9;">${p.items.reduce((s,it)=>s+it.amount,0).toLocaleString()}</td></tr>`
       : '';
-    const bottomSection = p.isLast ? `
-      ${_renderTaxLegend()}
-      ${_renderBottomTable(bankInfo, totals)}
-      <div class="ci-remark">
-        <div class="hd">備考</div>
-        <div class="bd"></div>
-      </div>
-    ` : '';
+    // 2026/05/19: 最終ページは統合表(横向き対応)+ 振込先/備考横並び
+    if(p.isLast){
+      return `<div class="ci-paper ci-landscape">
+        ${fullHeader}
+        ${_renderUnifiedItemsTable(p.items, totals, true)}
+        ${_renderUnifiedBottomRow(bankInfo)}
+      </div>`;
+    }
+    // 中間ページは従来通り
     return `<div class="ci-paper ci-landscape">
       ${fullHeader}
       <table class="ci-items">
@@ -24070,7 +24172,6 @@ function _buildInvoiceProxyLandscape(ctx){
         </thead>
         <tbody>${itemRows}${blanks}${subtotalRow}</tbody>
       </table>
-      ${bottomSection}
     </div>`;
   }).join('<div style="page-break-after:always;"></div>');
 }
