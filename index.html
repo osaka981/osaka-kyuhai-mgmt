@@ -15487,12 +15487,9 @@ function filterRtCust(q){
 }
 
 function addRtCust(id,name){
-  const pt=$('rt-pattern')?.value;
-  // パターンDは1社のみ
-  if(pt==='A'){
-    _rtSelCusts=[{id,name}];
-  } else {
-    if(!_rtSelCusts.find(c=>c.id===id)) _rtSelCusts.push({id,name});
+  // 重複防止しつつ、常に複数選択可能(2026/05/19 修正: 上書き挙動を廃止)
+  if(!_rtSelCusts.find(c=>c.id===id)){
+    _rtSelCusts.push({id,name});
   }
   renderRtCustChips();
   const dd=$('rt-cust-dd');if(dd)dd.style.display='none';
