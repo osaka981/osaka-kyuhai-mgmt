@@ -31387,20 +31387,9 @@ window.dqImportJson = function(){
       <div id="co-last-owner-pin-info" style="font-size:10.5px;color:var(--amb2);margin-top:6px;display:none;"></div>
     </div>
 
-    <!-- 担当営業所(基本情報タブに移動 2026/05/19) -->
-    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--brd);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <div>
-          <div style="font-size:12px;font-weight:700;color:var(--blu2);">🏢 担当営業所（複数選択可）</div>
-          <div style="font-size:9.5px;color:var(--txt2);margin-top:2px;">この委託会社のドライバーが担当する営業所(郵便局)を選択</div>
-        </div>
-        <div style="display:flex;gap:5px;">
-          <button type="button" class="btn b-gh btn-sm" style="font-size:10px;" onclick="selectAllCoOffices(true)">すべて選択</button>
-          <button type="button" class="btn b-gh btn-sm" style="font-size:10px;" onclick="selectAllCoOffices(false)">すべて解除</button>
-        </div>
-      </div>
-      <div id="co-offices-list" style="display:flex;flex-wrap:wrap;gap:8px;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px;"></div>
-    </div>
+    <!-- 旧「担当営業所」セクションは「担当郵便局(宅配事業)」と重複のため削除(2026/05/19)
+         隠しUI: 保存処理がエラーにならないようダミー要素を残す -->
+    <div id="co-offices-list" style="display:none;"></div>
 
   </div>
 
