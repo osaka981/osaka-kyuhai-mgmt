@@ -24667,6 +24667,13 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   const zip=cu.zip?`〒 ${esc(cu.zip)}`:'';
   const addr=esc(cu.addr||'');
   const custName2=esc(cu.name);
+  // 2026/05/20: 代表者名があれば「様」、なければ「御中」
+  const repName = (cu.repName||'').trim();
+  const repTitle = (cu.repTitle||'').trim();
+  const custSuffix = repName ? '' : '御中';  // 代表者があれば「御中」削除
+  const repLine = repName 
+    ? `<div style="font-size:13px;font-weight:600;margin-top:4px;">${repTitle?esc(repTitle)+' ':''}${esc(repName)} <span style="font-size:11px;font-weight:400;">様</span></div>`
+    : '';
 
   // 自社情報
   const coName = esc(info.companyName||'大阪急配株式会社');
@@ -24772,7 +24779,8 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
       <div class="fb-head-l" style="font-size:12px;line-height:1.9;">
         ${zip?`<div>${zip}</div>`:''}
         ${addr?`<div>${addr}</div>`:''}
-        <div style="font-size:15px;font-weight:700;margin-top:6px;">${custName2}<span style="margin-left:6px;font-size:12px;">御中</span></div>
+        <div style="font-size:15px;font-weight:700;margin-top:6px;">${custName2}${custSuffix?`<span style="margin-left:6px;font-size:12px;">${custSuffix}</span>`:''}</div>
+        ${repLine}
         <div style="margin-top:6px;color:#555;">下記の通り御請求申し上げます。</div>
       </div>
       <!-- 右: 発行情報 + 登録番号 + 発行者 -->
