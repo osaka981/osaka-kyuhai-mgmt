@@ -24940,7 +24940,8 @@ function _printDocWindow(title, html){
       .fb-inv-reg{font-size:10px;color:#444;margin:0;}
       .fb-right > div{margin:0;}
       .fb-stamp-overlay{position:absolute;right:78px;top:8px;width:62px;height:62px;border:2.2px double #c62828;color:#c62828;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'MS Mincho',serif;font-size:10px;font-weight:700;line-height:1.05;text-align:center;letter-spacing:0;padding:3px;opacity:0.75;z-index:5;}
-      .fb-stamp-img{position:absolute;right:70px;top:6px;width:70px;height:70px;object-fit:contain;opacity:0.85;z-index:5;pointer-events:none;}
+      .fb-stamp-img{width:70px !important;height:70px !important;max-width:70px !important;max-height:70px !important;object-fit:contain;opacity:0.85;display:inline-block;vertical-align:middle;}
+      .fb-right .fb-stamp-img{position:absolute;right:70px;top:6px;z-index:5;pointer-events:none;}
       .fb-mid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:14px;align-items:flex-start;}
       .fb-sum{border-collapse:collapse;width:100%;font-size:11px;margin-left:auto;max-width:380px;}
       .fb-sum th,.fb-sum td{border:0.75px solid #000;padding:5px 10px;}
