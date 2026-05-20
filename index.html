@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- ビルド: 2026-05-20T17:30 統合表反映版 v2 -->
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -24719,6 +24720,49 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
         </table>
   `;
 
+  // 2026/05/20: 統合表内の内訳行を構築(顧客請求書の明細表に統合)
+  const totalCols = 5; // コード/品目/数量/単価/金額
+  const labelColspan = totalCols - 1;
+  
+  // 凡例行(税混在時のみ)
+  const legendRow = isMixedTax ? `<tr class="legend-row">
+    <td colspan="${totalCols}" style="background:#fafafa;color:#999;font-size:8.5pt;padding:4px 8px;border-top:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;opacity:0.85;">
+      <span style="display:inline-block;padding:1px 6px;background:#1565c0;color:#fff;border-radius:2px;font-size:8.5pt;margin-right:6px;">税別</span>別途消費税10%加算
+      <span style="margin-left:14px;display:inline-block;padding:1px 6px;background:#2e7d32;color:#fff;border-radius:2px;font-size:8.5pt;margin-right:6px;">税込</span>単価に消費税を含む
+    </td>
+  </tr>` : '';
+  
+  // 内訳行(統合表の最後に追加)
+  const naiwakeRows = [];
+  if(isMixedTax){
+    naiwakeRows.push({k:'税別 小計', v:subtotalEx.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'税別 消費税(10%)', v:taxOfEx.toLocaleString(), sub:true});
+    naiwakeRows.push({k:'税込 小計', v:subtotalIn.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'(うち税抜)', v:(bill.taxExOfIn||0).toLocaleString(), sub:true});
+    naiwakeRows.push({k:'(うち消費税)', v:taxOfIn.toLocaleString(), sub:true});
+  } else {
+    naiwakeRows.push({k:'当月売上額(税抜)', v:taxEx.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'10%対象消費税', v:taxAmt.toLocaleString(), sub:true});
+  }
+  naiwakeRows.push({k:'税込合計', v:'¥'+grand.toLocaleString(), yellow:true});
+  if(isMixedTax){
+    naiwakeRows.push({k:'(うち消費税合計)', v:totalTax.toLocaleString(), sub:true});
+  }
+  
+  const naiwakeRowsHtml = naiwakeRows.map((r,i) => {
+    const isFirstNaiwake = (i === 0);
+    const bgStyle = r.yellow 
+      ? 'background:#fffbe8;font-weight:700;border-top:1.5px double #000;'
+      : (r.sub ? 'background:#fafafa;color:#666;' : 'background:#fafafa;');
+    const labelStyle = `text-align:right;${bgStyle}font-size:${r.yellow?'12pt':'10.5pt'};padding:${r.yellow?'8px 10px':'4px 10px'};`;
+    const valueStyle = `text-align:right;${bgStyle}font-size:${r.yellow?'14pt':'10.5pt'};font-family:${r.yellow?"'Times New Roman',serif":"inherit"};font-weight:${r.yellow?'700':(r.sub?'400':'500')};padding:${r.yellow?'8px 14px':'4px 10px'};white-space:nowrap;`;
+    const borderTop = isFirstNaiwake ? 'border-top:1.5px solid #000;' : '';
+    return `<tr class="naiwake-row${r.yellow?' total':''}">
+      <td colspan="${labelColspan}" style="${labelStyle}${borderTop}">${esc(r.k)}</td>
+      <td style="${valueStyle}${borderTop}">${esc(r.v)}</td>
+    </tr>`;
+  }).join('');
+
   const html = `
   <div class="fb-paper">
     <div class="fb-top">
@@ -24749,12 +24793,12 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
 
     <div class="fb-mid">
       <div></div>
-      <div>
-        ${summaryTable}
+      <div style="font-size:10pt;color:#666;text-align:right;">
+        締切日: ${esc(monStr.replace('-','/')+'/末')} ／ 得意先コード: ${esc(cu.custNo||cu.id||'')}
       </div>
     </div>
 
-    <table class="fb-items">
+    <table class="fb-items fb-unified">
       <thead>
         <tr>
           <th style="width:7%;">コード</th>
@@ -24769,18 +24813,17 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
         ${routeRows}
         ${charterRows}
         ${blanks}
-        <tr class="total">
-          <td colspan="4" style="text-align:right;">頁 計</td>
-          <td class="tot-val">${grand.toLocaleString()}</td>
-        </tr>
+        ${legendRow}
+        ${naiwakeRowsHtml}
       </tbody>
     </table>
 
-    ${bankHTML}
-
-    <div class="fb-remark">
-      <div class="hd">備考</div>
-      <div class="bd">${noteLine}</div>
+    <div class="fb-bottom-row" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;align-items:stretch;">
+      <div class="fb-bank-wrapper">${bankHTML}</div>
+      <div class="fb-remark" style="border:1px solid #000;">
+        <div class="hd" style="background:#f0f0f0;padding:4px 8px;border-bottom:1px solid #000;font-size:11px;font-weight:500;">備考</div>
+        <div class="bd" style="padding:8px 10px;font-size:10.5pt;line-height:1.5;min-height:60px;">${noteLine}</div>
+      </div>
     </div>
   </div>`;
 
