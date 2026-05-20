@@ -24712,7 +24712,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
         </table>
   ` : `
         <table class="fb-sum">
-          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
+          <tr><th style="width:55%;">当月請求額(税抜)</th><th>10%対象消費税</th></tr>
           <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
           <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
           <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">得意先コード</th></tr>
@@ -24741,7 +24741,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
     naiwakeRows.push({k:'(うち税抜)', v:(bill.taxExOfIn||0).toLocaleString(), sub:true});
     naiwakeRows.push({k:'(うち消費税)', v:taxOfIn.toLocaleString(), sub:true});
   } else {
-    naiwakeRows.push({k:'当月売上額(税抜)', v:taxEx.toLocaleString(), sub:false});
+    naiwakeRows.push({k:'当月請求額(税抜)', v:taxEx.toLocaleString(), sub:false});
     naiwakeRows.push({k:'10%対象消費税', v:taxAmt.toLocaleString(), sub:true});
   }
   naiwakeRows.push({k:'税込合計', v:'¥'+grand.toLocaleString(), yellow:true});
@@ -28755,7 +28755,7 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
       <div></div>
       <div>
         <table class="fb-sum">
-          <tr><th style="width:55%;">当月売上額(税抜)</th><th>10%対象消費税</th></tr>
+          <tr><th style="width:55%;">当月請求額(税抜)</th><th>10%対象消費税</th></tr>
           <tr><td class="num">${taxEx.toLocaleString()}</td><td class="num">${taxAmt.toLocaleString()}</td></tr>
           <tr><td class="yel-h">税込合計</td><td class="yel-v">¥${grand.toLocaleString()}</td></tr>
           <tr><th style="font-size:10px;">締め切り日</th><th style="font-size:10px;">拠点コード</th></tr>
