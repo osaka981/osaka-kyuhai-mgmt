@@ -24829,15 +24829,15 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
             <div style="font-size:13px;font-weight:700;letter-spacing:0.05em;font-family:'Times New Roman',serif;">${esc(invoiceNo)}</div>
           </div>
         </div>`:''}
-        <!-- 発行者情報 + 印影 -->
+        <!-- 印影(発行者情報の上・全面) + 発行者情報 -->
         <div style="margin-top:14px;line-height:1.7;display:flex;flex-direction:column;align-items:flex-end;text-align:right;">
+          <div style="margin-bottom:6px;display:flex;justify-content:flex-end;">
+            ${info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" style="width:78px;height:78px;max-width:78px;max-height:78px;object-fit:contain;">`:`<div class="ci-stamp-fallback"></div>`}
+          </div>
           <div style="font-size:13px;font-weight:700;">${coName}</div>
           <div style="font-size:11px;color:#555;">${coZip}</div>
           <div style="font-size:11px;color:#555;">${coAddr}</div>
-          <div style="font-size:11px;color:#555;">${esc(coTel)} / ${esc(coFax)}</div>
-          <div style="margin-top:6px;display:flex;justify-content:flex-end;">
-            ${info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" style="width:70px;height:70px;max-width:70px;max-height:70px;object-fit:contain;opacity:0.85;">`:`<div class="ci-stamp-fallback"></div>`}
-          </div>
+          <div style="font-size:11px;color:#555;white-space:nowrap;">${esc(coTel)} / ${esc(coFax)}</div>
         </div>
         ${versionLabel?`<div style="text-align:right;font-size:10px;color:#666;margin-top:4px;">${versionLabel}</div>`:''}
       </div>
