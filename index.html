@@ -7756,50 +7756,142 @@ function _findUnregisteredDrivers(){
   return unregistered;
 }
 
+// ══════════════════════════════════════════════════
+// 単価未登録ドライバー検出 (2026/05/21)
+// 日報に件数/数量があるのに、その業務の支払単価が0/未登録のドライバーを検出
+// → 入力ミス or 単価登録漏れ(0円で給与計算されてしまう)を防ぐ
+// ══════════════════════════════════════════════════
+function _findMissingPriceDrivers(){
+  // 当月を対象
+  const now = new Date();
+  const monStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const issues = []; // {name, items:[業務名...]}
+
+  (D.staff||[]).forEach(st => {
+    if(!st.name) return;
+    if(st.status === '退職' || st.active === false) return;
+
+    const del = (D.delivery||[]).filter(r => r.staff===st.name && (r.date||'').replace(/-/g,'/').startsWith(monStr));
+    const pu  = (D.pickup||[]).filter(r => r.staff===st.name && (r.date||'').replace(/-/g,'/').startsWith(monStr));
+    if(del.length === 0 && pu.length === 0) return;
+
+    // 月給制は単価不要(固定額)なのでスキップ
+    if(st.kyuyo === '月給' || st.kyuyo === '時間給') return;
+
+    const missing = [];
+    const dp = (typeof _getEffectiveDelPrices==='function') ? _getEffectiveDelPrices(st) : (st.fixedPrices?.del||{});
+
+    // 宅配系: 完了/転送/夜間/大型
+    const delSums = { kanryo:0, tenso:0, yakan:0, ogata:0 };
+    del.forEach(r => {
+      delSums.kanryo += r.kanryo||0;
+      delSums.tenso  += r.tenso||0;
+      delSums.yakan  += r.yakan||0;
+      delSums.ogata  += r.ogata||0;
+    });
+    const delChecks = [
+      {key:'kanryo', label:'完了', priceKey:'kanryo'},
+      {key:'tenso',  label:'転送', priceKey:'tenso'},
+      {key:'yakan',  label:'夜間', priceKey:'night'},
+      {key:'ogata',  label:'大型', priceKey:'ogata'},
+    ];
+    delChecks.forEach(c => {
+      if(delSums[c.key] > 0 && !(Number(dp[c.priceKey]) > 0)){
+        missing.push(`${c.label}(${delSums[c.key]}件)`);
+      }
+    });
+
+    // 集荷系: 品目別
+    const cp = st.fixedPrices?.col || {};
+    const puSums = {};
+    pu.forEach(r => IK.forEach(k => { puSums[k] = (puSums[k]||0) + (iq(r,k)||0); }));
+    Object.entries(puSums).forEach(([k, q]) => {
+      if(q > 0 && !(Number(cp[k]) > 0)){
+        missing.push(`${ITEMS[k]?.label||k}(${q}個)`);
+      }
+    });
+
+    if(missing.length > 0){
+      issues.push({ name: st.name, kubun: st.kubun||'', items: missing });
+    }
+  });
+
+  return issues;
+}
+
 /** ダッシュボードに未登録ドライバーアラートを表示 */
 function _renderUnregisteredDriversAlert(){
   const el = document.getElementById('d-alerts');
   if(!el) return;
   const items = _findUnregisteredDrivers();
-  if(items.length === 0){
-    el.innerHTML = '';
-    return;
-  }
-  // 種別ごとに集計
-  const byType = {};
-  items.forEach(it => {
-    if(!byType[it.type]) byType[it.type] = [];
-    byType[it.type].push(it);
-  });
-  
-  const typeOrder = ['個人直属', '役員', '委託ドライバー'];
-  const sections = typeOrder.filter(t => byType[t]).map(t => {
-    const list = byType[t];
-    return `<div style="margin-top:8px;">
-      <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px;">${t} (${list.length}名)</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${list.map(it => `
-          <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 8px;font-size:11px;">
-            <span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
-            ${it.name ? ' <span style="color:var(--txt);">'+esc(it.name)+'</span>' : ' <span style="color:var(--txt3);">(氏名不明)</span>'}
-          </span>
-        `).join('')}
-      </div>
-    </div>`;
-  }).join('');
-  
-  el.innerHTML = `
-    <div class="card mb12" style="background:#fffbf0;border:1px solid rgba(230,126,34,.3);">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:700;color:#c2410c;margin-bottom:4px;">⚠️ 日報提出があるが従業員マスタに未登録のドライバー (${items.length}名)</div>
-          <div style="font-size:11px;color:var(--txt2);">明細・給与計算が正しく行われない可能性があります。下記から登録してください。</div>
+  let html = '';
+
+  // ── アラート1: 未登録ドライバー ──
+  if(items.length > 0){
+    const byType = {};
+    items.forEach(it => {
+      if(!byType[it.type]) byType[it.type] = [];
+      byType[it.type].push(it);
+    });
+
+    const typeOrder = ['個人直属', '役員', '委託ドライバー'];
+    const sections = typeOrder.filter(t => byType[t]).map(t => {
+      const list = byType[t];
+      return `<div style="margin-top:8px;">
+        <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px;">${t} (${list.length}名)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${list.map(it => `
+            <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 8px;font-size:11px;">
+              <span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
+              ${it.name ? ' <span style="color:var(--txt);">'+esc(it.name)+'</span>' : ' <span style="color:var(--txt3);">(氏名不明)</span>'}
+            </span>
+          `).join('')}
         </div>
-        <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
+      </div>`;
+    }).join('');
+
+    html += `
+      <div class="card mb12" style="background:#fffbf0;border:1px solid rgba(230,126,34,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:#c2410c;margin-bottom:4px;">⚠️ 日報提出があるが従業員マスタに未登録のドライバー (${items.length}名)</div>
+            <div style="font-size:11px;color:var(--txt2);">明細・給与計算が正しく行われない可能性があります。下記から登録してください。</div>
+          </div>
+          <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
+        </div>
+        ${sections}
       </div>
-      ${sections}
-    </div>
-  `;
+    `;
+  }
+
+  // ── アラート2: 単価未登録(当月) ──
+  const priceIssues = (typeof _findMissingPriceDrivers==='function') ? _findMissingPriceDrivers() : [];
+  if(priceIssues.length > 0){
+    const rows = priceIssues.map(it => `
+      <div style="margin-top:6px;padding:6px 8px;background:#fff;border:1px solid rgba(220,38,38,.3);border-radius:4px;">
+        <span style="font-size:12px;font-weight:700;color:var(--txt);">${esc(it.name)}</span>
+        ${it.kubun?`<span style="font-size:10px;color:var(--txt3);margin-left:6px;">${esc(it.kubun)}</span>`:''}
+        <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:5px;">
+          ${it.items.map(label => `<span style="background:#fef2f2;border:1px solid rgba(220,38,38,.25);border-radius:3px;padding:2px 7px;font-size:10.5px;color:#b91c1c;">${esc(label)}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
+
+    html += `
+      <div class="card mb12" style="background:#fef5f5;border:1px solid rgba(220,38,38,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:#b91c1c;margin-bottom:4px;">⚠️ 単価が未登録の業務があります (${priceIssues.length}名・当月)</div>
+            <div style="font-size:11px;color:var(--txt2);">日報に件数があるのに支払単価が0円です。入力ミスか、単価登録漏れかご確認ください。</div>
+          </div>
+          <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
+        </div>
+        ${rows}
+      </div>
+    `;
+  }
+
+  el.innerHTML = html;
 }
 
 // 郵便局一覧の描画(2026/05/13)
