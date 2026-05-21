@@ -24013,43 +24013,48 @@ function _buildInvoiceProxyPortrait(ctx){
     const itemRows = _renderItemRows(p.items, startNo, false);
     // 空白行: 表示しない(Taka要望 2026/05/15)
     const blanks = '';
-    // ヘッダー(1ページ目のみフル)
+    // ヘッダー(1ページ目のみフル) - 顧客請求書と統一レイアウト
+    const stampUrl2 = ctx.stampUrl || '';
     const fullHeader = p.isFirst ? `
-      <h1 class="ci-title">御 請 求 書</h1>
-      <div class="ci-top-head">
-        <div class="ci-head-l">
+      <h1 style="text-align:center;font-family:'MS Mincho','Yu Mincho',serif;font-size:32px;letter-spacing:0.3em;padding-left:0.3em;margin:0 0 20px;font-weight:400;">御 請 求 書</h1>
+      <div style="display:grid;grid-template-columns:1.3fr auto 1fr;gap:18px;align-items:start;margin-bottom:14px;">
+        <!-- 左: 宛先(大阪急配) -->
+        <div style="font-size:12px;line-height:1.9;">
           ${toZip?`<div>〒${esc(toZip)}</div>`:''}
           ${toAddr?`<div>${esc(toAddr)}</div>`:''}
-          <div class="ci-to-name">${esc(toCompany)}</div>
-          <div class="ci-to-title">代表取締役</div>
-          <div><span style="display:inline-block;min-width:140px;border-bottom:1px solid #000;padding-bottom:1px;">　${esc(repName)}</span><span class="ci-to-honor">様</span></div>
+          <div style="font-size:15px;font-weight:700;margin-top:6px;white-space:nowrap;">${esc(toCompany)}</div>
+          <div style="font-size:11px;font-weight:500;margin-top:4px;color:#444;">代表取締役</div>
+          <div style="font-size:13px;font-weight:600;margin-top:1px;white-space:nowrap;">${esc(repName)} <span style="font-size:11px;font-weight:400;">様</span></div>
+          <div style="margin-top:6px;color:#555;">下記の通り、小包委託料金のご請求申し上げます。</div>
         </div>
-        <div class="ci-head-r">
-          <div class="ci-kv"><label>請求日</label><span class="ci-val highlight">${esc(todayLabel)}</span></div>
-          <div class="ci-kv"><label>請求番号</label><span class="ci-val bold">${esc(invoiceNo)}</span></div>
-          ${issuer.invoiceNo ? `<div style="margin-top:8px; text-align:right; display:block; clear:both;">
-            <div class="ci-reg-box">
-              <div class="h">適格請求書発行事業者登録番号</div>
-              <div class="v">${esc(issuer.invoiceNo)}</div>
-            </div>
-          </div>` : ''}
-          <div class="ci-issuer">
-            <div class="ci-issuer-info">
-              <div class="nm">${esc(issuer.name)}</div>
-              ${issuer.zip?`<div>〒${esc(issuer.zip)}</div>`:''}
-              ${issuer.addr?`<div>${esc(issuer.addr)}</div>`:''}
-              ${issuer.tel?`<div>電話番号　${esc(issuer.tel)}</div>`:''}
-            </div>
-            <div class="ci-issuer-stamp">${stampImg}</div>
+        <!-- 中央: 合計金額枠 -->
+        <div style="display:flex;justify-content:center;align-items:flex-start;padding-top:150px;">
+          <div style="border:2.5px double #000;background:#fffbe8;padding:10px 22px;text-align:center;white-space:nowrap;">
+            <div style="font-size:11pt;font-weight:600;letter-spacing:0.25em;color:#444;margin-bottom:4px;">合 計 金 額 (税込)</div>
+            <div style="font-size:22pt;font-weight:700;font-family:'Times New Roman',serif;letter-spacing:0.05em;color:#000;">¥${totals.grandTotal.toLocaleString()}</div>
           </div>
         </div>
-      </div>
-      <div class="ci-subttl">下記の通り、小包委託料金のご請求申し上げます。</div>
-      <div class="ci-amt-wrapper">
-      <div class="ci-amt-row">
-        <div class="lbl"><span class="main">合 計 金 額</span><span class="sub">(税込)</span></div>
-        <div class="val">¥${totals.grandTotal.toLocaleString()}</div>
-      </div>
+        <!-- 右: 発行情報 + 登録番号 + 発行者(委託会社/個人) -->
+        <div style="font-size:12px;line-height:1.9;">
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">請求日</label><span style="background:#e8e8e8;padding:1px 8px;font-weight:700;">${esc(todayLabel)}</span></div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">請求番号</label><span style="font-weight:700;font-family:'Times New Roman',serif;">${esc(invoiceNo)}</span></div>
+          ${issuer.invoiceNo?`<div style="margin-top:8px;text-align:right;display:block;clear:both;">
+            <div style="display:inline-block;border:1px solid #888;padding:4px 12px;text-align:center;background:#fafafa;">
+              <div style="font-size:10px;color:#555;">適格請求書発行事業者登録番号</div>
+              <div style="font-size:13px;font-weight:700;letter-spacing:0.05em;font-family:'Times New Roman',serif;">${esc(issuer.invoiceNo)}</div>
+            </div>
+          </div>`:''}
+          <!-- 発行者情報(印影を文字に重ねて透過配置) -->
+          <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
+            ${stampUrl2?`<img src="${esc(stampUrl2)}" style="position:absolute;top:50%;right:30px;transform:translateY(-50%);width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;opacity:0.65;pointer-events:none;z-index:0;">`:`<div style="position:absolute;top:50%;right:30px;transform:translateY(-50%);opacity:0.65;z-index:0;pointer-events:none;"><div class="ci-stamp-fallback">${esc((issuer.name||'').slice(0,4))}</div></div>`}
+            <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;">
+              <div style="font-size:13px;font-weight:700;">${esc(issuer.name)}</div>
+              ${issuer.zip?`<div style="font-size:11px;color:#555;">〒${esc(issuer.zip)}</div>`:''}
+              ${issuer.addr?`<div style="font-size:11px;color:#555;">${esc(issuer.addr)}</div>`:''}
+              ${issuer.tel?`<div style="font-size:11px;color:#555;white-space:nowrap;">電話番号 ${esc(issuer.tel)}</div>`:''}
+            </div>
+          </div>
+        </div>
       </div>
     ` : `
       <div class="ci-cont-bar">
@@ -24103,44 +24108,46 @@ function _buildInvoiceProxyLandscape(ctx){
     const itemRows = _renderItemRows(p.items, startNo, true);
     // 空白行: 表示しない(Taka要望 2026/05/15)
     const blanks = '';
+    const stampUrl2 = ctx.stampUrl || '';
     const fullHeader = p.isFirst ? `
-      <div class="ci-top-head-ls">
-        <div class="ci-head-l">
-          ${toZip?`<div class="addr-line">〒 ${esc(toZip)}</div>`:''}
-          ${toAddr?`<div class="addr-line">${esc(toAddr)}</div>`:''}
-          <div class="ci-cust-block">
-            <div class="co">${esc(toCompany)}</div>
-            <div class="title-line">代表取締役</div>
-            <div class="nm-line"><span>　${esc(repName)}　</span><span>様</span></div>
-          </div>
-          <div style="font-size: 10px; margin-top: 4px; color: #444;">下記の通り、小包委託料金のご請求申し上げます。</div>
+      <h1 style="text-align:center;font-family:'MS Mincho','Yu Mincho',serif;font-size:30px;letter-spacing:0.3em;padding-left:0.3em;margin:0 0 16px;font-weight:400;">御 請 求 書</h1>
+      <div style="display:grid;grid-template-columns:1.3fr auto 1fr;gap:18px;align-items:start;margin-bottom:14px;">
+        <!-- 左: 宛先(大阪急配) -->
+        <div style="font-size:12px;line-height:1.9;">
+          ${toZip?`<div>〒${esc(toZip)}</div>`:''}
+          ${toAddr?`<div>${esc(toAddr)}</div>`:''}
+          <div style="font-size:15px;font-weight:700;margin-top:6px;white-space:nowrap;">${esc(toCompany)}</div>
+          <div style="font-size:11px;font-weight:500;margin-top:4px;color:#444;">代表取締役</div>
+          <div style="font-size:13px;font-weight:600;margin-top:1px;white-space:nowrap;">${esc(repName)} <span style="font-size:11px;font-weight:400;">様</span></div>
+          <div style="margin-top:6px;color:#555;">下記の通り、小包委託料金のご請求申し上げます。</div>
         </div>
-        <div class="ci-center">
-          <h1 class="ci-title-ls">御 請 求 書</h1>
-          <div class="ci-amt-box-ls">
-            <div class="lbl"><span class="main">合 計 金 額</span><span class="sub">(税込)</span></div>
-            <div class="val">¥${totals.grandTotal.toLocaleString()}</div>
+        <!-- 中央: 合計金額枠 -->
+        <div style="display:flex;justify-content:center;align-items:flex-start;padding-top:120px;">
+          <div style="border:2.5px double #000;background:#fffbe8;padding:10px 22px;text-align:center;white-space:nowrap;">
+            <div style="font-size:11pt;font-weight:600;letter-spacing:0.25em;color:#444;margin-bottom:4px;">合 計 金 額 (税込)</div>
+            <div style="font-size:22pt;font-weight:700;font-family:'Times New Roman',serif;letter-spacing:0.05em;color:#000;">¥${totals.grandTotal.toLocaleString()}</div>
           </div>
         </div>
-        <div class="ci-head-r">
-          <div class="ci-kv"><label>請求日</label><span class="ci-val highlight">${esc(todayLabel)}</span></div>
-          <div class="ci-kv"><label>請求番号</label><span class="ci-val bold">${esc(invoiceNo)}</span></div>
-          ${issuer.invoiceNo ? `<div class="reg-wrap">
-            <div class="ci-reg-box">
-              <div class="h">適格請求書発行事業者登録番号</div>
-              <div class="v">${esc(issuer.invoiceNo)}</div>
+        <!-- 右: 発行情報 + 登録番号 + 発行者 -->
+        <div style="font-size:12px;line-height:1.9;">
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">請求日</label><span style="background:#e8e8e8;padding:1px 8px;font-weight:700;">${esc(todayLabel)}</span></div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">請求番号</label><span style="font-weight:700;font-family:'Times New Roman',serif;">${esc(invoiceNo)}</span></div>
+          ${issuer.invoiceNo?`<div style="margin-top:8px;text-align:right;display:block;clear:both;">
+            <div style="display:inline-block;border:1px solid #888;padding:4px 12px;text-align:center;background:#fafafa;">
+              <div style="font-size:10px;color:#555;">適格請求書発行事業者登録番号</div>
+              <div style="font-size:13px;font-weight:700;letter-spacing:0.05em;font-family:'Times New Roman',serif;">${esc(issuer.invoiceNo)}</div>
             </div>
-          </div>` : ''}
-          <div class="ci-issuer-ls">
-            <div class="ci-issuer-info">
-              <div class="nm">${esc(issuer.name)}</div>
-              ${issuer.zip?`<div>〒${esc(issuer.zip)}</div>`:''}
-              ${issuer.addr?`<div>${esc(issuer.addr)}</div>`:''}
-              ${issuer.tel?`<div>TEL ${esc(issuer.tel)}</div>`:''}
+          </div>`:''}
+          <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
+            ${stampUrl2?`<img src="${esc(stampUrl2)}" style="position:absolute;top:50%;right:30px;transform:translateY(-50%);width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;opacity:0.65;pointer-events:none;z-index:0;">`:`<div style="position:absolute;top:50%;right:30px;transform:translateY(-50%);opacity:0.65;z-index:0;pointer-events:none;"><div class="ci-stamp-fallback">${esc((issuer.name||'').slice(0,4))}</div></div>`}
+            <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;">
+              <div style="font-size:13px;font-weight:700;">${esc(issuer.name)}</div>
+              ${issuer.zip?`<div style="font-size:11px;color:#555;">〒${esc(issuer.zip)}</div>`:''}
+              ${issuer.addr?`<div style="font-size:11px;color:#555;">${esc(issuer.addr)}</div>`:''}
+              ${issuer.tel?`<div style="font-size:11px;color:#555;white-space:nowrap;">TEL ${esc(issuer.tel)}</div>`:''}
             </div>
-            <div class="ci-issuer-stamp">${stampImg}</div>
           </div>
-          ${p.totalPages>1 ? `<div class="page-num">頁 <strong>1 / ${p.totalPages}</strong></div>` : ''}
+          ${p.totalPages>1 ? `<div style="text-align:right;font-size:10px;color:#666;margin-top:4px;">頁 <strong>1 / ${p.totalPages}</strong></div>` : ''}
         </div>
       </div>
     ` : `
@@ -24235,7 +24242,7 @@ function _buildInvoiceProxyHTML(staffName, monStr){
   const isLandscape = isCompany;
   const pages = _buildInvoicePages(items, isLandscape);
 
-  const ctx = {st, info, issuer, stampImg, invoiceNo, todayLabel, items, totals, bankInfo, pages};
+  const ctx = {st, info, issuer, stampImg, stampUrl, invoiceNo, todayLabel, items, totals, bankInfo, pages};
 
   const body = isLandscape
     ? _buildInvoiceProxyLandscape(ctx)
