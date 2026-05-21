@@ -24817,7 +24817,7 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">得意先コード</label><span style="font-weight:700;font-family:'Times New Roman',serif;">${esc(cu.custNo||cu.id||'')}</span></div>
         ${payDeadline?`<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">支払期日</label><span style="font-weight:700;">${esc(payDeadline)}</span></div>`:''}
         ${invoiceNo?`<div style="margin-top:8px;text-align:right;display:block;clear:both;">
-          <div style="display:inline-block;border:1px solid #888;padding:4px 10px;text-align:left;background:#fafafa;">
+          <div style="display:inline-block;border:1px solid #888;padding:4px 12px;text-align:center;background:#fafafa;">
             <div style="font-size:10px;color:#555;">適格請求書発行事業者登録番号</div>
             <div style="font-size:13px;font-weight:700;letter-spacing:0.05em;font-family:'Times New Roman',serif;">${esc(invoiceNo)}</div>
           </div>
