@@ -4580,7 +4580,6 @@ SURVEY_RESPONSES = lsGet(LS_KEYS.SURVEY_RESPONSES, []);
 MONTHLY_CONFIRMATIONS = lsGet('nikki_monthly_confirmations', []);
 SCHEDULE_LOGS = lsGet(LS_KEYS.SCHEDULE_LOGS, []);
 CUSTOMER_NOTES = lsGet(LS_KEYS.CUSTOMER_NOTES, []);
-D.payments = lsGet('nikki_payments', {}) || {};
 
 // ══════════════════════════════════════════════════
 // 部署・拠点ヘルパー関数 (Phase 1)
@@ -7090,6 +7089,7 @@ function buildGroupedItems(itemsObj){
 // データストア
 // ─────────────────────────────────────────────
 const D = {
+  payments: {},
   companies: [
     {
       id:10001, companyCode:'10001', name:'株式会社UP', tel:'090-5152-8173',
@@ -7306,6 +7306,9 @@ const D = {
   ],
   curOff: '', // 宅配日報 営業所フィルター
 };
+
+// 入金管理データを localStorage から復元(D定義後・lsGet利用可能)
+try { D.payments = lsGet('nikki_payments', {}) || {}; } catch(e){ D.payments = {}; }
 
 // ─── ユーティリティ ───
 const $ = id => document.getElementById(id);
