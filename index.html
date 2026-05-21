@@ -24559,6 +24559,10 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
   const cu=bill.customer;
   const today=(new Date()).toISOString().slice(0,10);
   const info=_getSystemInfo();
+  // 2026/05/21: 請求書には会社印を使用(companyStampImage優先、なければ従来のcompanyStampUrl)
+  const companySealUrl = (info.companyStampEnabled !== false && info.companyStampImage)
+    ? info.companyStampImage
+    : (info.companyStampUrl || '');
 
   // 顧客のデフォルト税モード('in'=税込/'ex'=税別)
   const defaultTax = (cu.priceType === 'tax_included') ? 'in' : 'ex';
@@ -24829,15 +24833,17 @@ function _buildCustInvoiceHTML(custName, monStr, opts){
             <div style="font-size:13px;font-weight:700;letter-spacing:0.05em;font-family:'Times New Roman',serif;">${esc(invoiceNo)}</div>
           </div>
         </div>`:''}
-        <!-- 印影(発行者情報の上・全面) + 発行者情報 -->
-        <div style="margin-top:14px;line-height:1.7;display:flex;flex-direction:column;align-items:flex-end;text-align:right;">
-          <div style="margin-bottom:6px;display:flex;justify-content:flex-end;">
-            ${info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" style="width:78px;height:78px;max-width:78px;max-height:78px;object-fit:contain;">`:`<div class="ci-stamp-fallback"></div>`}
+        <!-- 発行者情報(印影を文字に重ねて透過配置) -->
+        <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
+          <!-- 透過印影(文字の背面に重ねる) -->
+          ${companySealUrl?`<img src="${esc(companySealUrl)}" style="position:absolute;top:50%;right:30px;transform:translateY(-50%);width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;opacity:0.45;pointer-events:none;z-index:0;">`:`<div style="position:absolute;top:50%;right:30px;transform:translateY(-50%);opacity:0.45;z-index:0;pointer-events:none;"><div class="ci-stamp-fallback"></div></div>`}
+          <!-- 発行者テキスト(印影の前面) -->
+          <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;">
+            <div style="font-size:13px;font-weight:700;">${coName}</div>
+            <div style="font-size:11px;color:#555;">${coZip}</div>
+            <div style="font-size:11px;color:#555;">${coAddr}</div>
+            <div style="font-size:11px;color:#555;white-space:nowrap;">${esc(coTel)} / ${esc(coFax)}</div>
           </div>
-          <div style="font-size:13px;font-weight:700;">${coName}</div>
-          <div style="font-size:11px;color:#555;">${coZip}</div>
-          <div style="font-size:11px;color:#555;">${coAddr}</div>
-          <div style="font-size:11px;color:#555;white-space:nowrap;">${esc(coTel)} / ${esc(coFax)}</div>
         </div>
         ${versionLabel?`<div style="text-align:right;font-size:10px;color:#666;margin-top:4px;">${versionLabel}</div>`:''}
       </div>
