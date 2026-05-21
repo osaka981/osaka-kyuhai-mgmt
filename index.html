@@ -1164,6 +1164,44 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     </div>
 
+    <!-- 入金管理 -->
+    <div id="s-payment-mgmt" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="flex:0 0 auto;">
+            <label style="font-size:11px;">対象月</label>
+            <input type="month" id="pm-mon" class="fi" onchange="renderPaymentMgmt()">
+          </div>
+          <button class="btn b-gh btn-sm" onclick="renderPaymentMgmt()">🔄 更新</button>
+          <button class="btn b-blu btn-sm" onclick="savePaymentMgmt()">💾 入金額を保存</button>
+        </div>
+      </div>
+
+      <div id="pm-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+
+      <div class="card">
+        <div class="ct" style="margin-bottom:8px;"><div class="cbar"></div>顧客別 入金状況 <span id="pm-period" class="xs muted"></span></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl" style="width:100%;font-size:12px;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">顧客</th>
+                <th style="text-align:right;">請求額(税込)</th>
+                <th style="text-align:right;">入金額</th>
+                <th style="text-align:right;">差額</th>
+                <th style="text-align:center;">状態</th>
+                <th style="text-align:left;">入金日</th>
+                <th style="text-align:left;">メモ</th>
+              </tr>
+            </thead>
+            <tbody id="tb-pm"></tbody>
+            <tfoot id="tf-pm"></tfoot>
+          </table>
+        </div>
+        <div class="xs muted mt8">※ 請求額は集荷請求書の計算と同じロジックで自動算出されます。入金額・入金日・メモを入力し「入金額を保存」を押してください。</div>
+      </div>
+    </div>
+
     <!-- 月次サマリー -->
     <div id="s-monthly-summary" class="sec">
       <div class="card mb12">
@@ -4542,6 +4580,7 @@ SURVEY_RESPONSES = lsGet(LS_KEYS.SURVEY_RESPONSES, []);
 MONTHLY_CONFIRMATIONS = lsGet('nikki_monthly_confirmations', []);
 SCHEDULE_LOGS = lsGet(LS_KEYS.SCHEDULE_LOGS, []);
 CUSTOMER_NOTES = lsGet(LS_KEYS.CUSTOMER_NOTES, []);
+D.payments = lsGet('nikki_payments', {}) || {};
 
 // ══════════════════════════════════════════════════
 // 部署・拠点ヘルパー関数 (Phase 1)
@@ -5824,6 +5863,18 @@ function setupRealtimeSync() {
       renderGasMgmt();
     }
   });
+  // ══ 入金管理 (2026/05/21) ══
+  onValue(ref(fbDB, 'nikki/payments'), snap => {
+    if(window._fbWritingGuard?.['payments']){
+      console.log('[fb listener] payments: 自己書込中のためスキップ');
+      return;
+    }
+    if (!snap.exists()){ return; }
+    D.payments = snap.val() || {};
+    if(document.getElementById('s-payment-mgmt')?.classList.contains('on') && typeof renderPaymentMgmt==='function'){
+      renderPaymentMgmt();
+    }
+  });
   // ══ 全社設定 (D.settings) ══
   onValue(ref(fbDB, 'nikki/settings'), snap => {
     if(window._fbWritingGuard?.['settings']){
@@ -6713,6 +6764,7 @@ const _TOP_TABS = {
   ]},
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
+    { s:'payment-mgmt', label:'入金管理', badge:'new' },
     { s:'monthly-summary', label:'月次サマリー' },
     { s:'cost-analysis', label:'外注費分析' },
     { s:'reconcile', label:'数量照合' },
@@ -6810,6 +6862,7 @@ function navByS(s) {
   if (s==='salary')      _call('renderSalary');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
+  if (s==='payment-mgmt') _call('renderPaymentMgmt');
   if (s==='monthly-summary') _call('renderMonthlySummary');
   if (s==='cost-analysis')   _call('renderCostAnalysis');
   if (s==='offices')     _call('renderOffCards');
@@ -14233,6 +14286,162 @@ function showPayslipPreview(staffName){
       <div id="payslip-body">${doc.html}</div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// ══════════════════════════════════════════
+// 入金管理(月別×顧客×請求/入金/差額)
+// ══════════════════════════════════════════
+function renderPaymentMgmt(){
+  const monEl = $('pm-mon');
+  if(monEl && !monEl.value){
+    const d = new Date();
+    monEl.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+  const ym = monEl?.value || '';
+  const monStr = ym.replace('-','/');
+  const monLabel = ym ? ym.replace('-','年')+'月' : '';
+  if($('pm-period')) $('pm-period').textContent = monLabel;
+  if(!ym) return;
+
+  const payData = (D.payments && D.payments[ym]) || {};
+
+  // その月に請求が発生している顧客を抽出(集荷データから)
+  const custNames = new Set();
+  (D.pickup||[]).forEach(p => {
+    if((p.date||'').startsWith(monStr) && p.customerName) custNames.add(p.customerName);
+  });
+  // 顧客マスタの順序で並べる
+  const list = [];
+  (D.customers||[]).forEach(cu => {
+    if(!custNames.has(cu.name)) return;
+    let billing = {total:0};
+    try { billing = _calcCustBilling(cu.name, monStr) || {total:0}; } catch(e){}
+    const billed = billing.grandTotal || billing.total || 0;
+    if(billed <= 0) return;
+    const rec = payData[cu.id] || {};
+    const paid = rec.paid || 0;
+    list.push({
+      id: cu.id, name: cu.name,
+      billed, paid,
+      diff: billed - paid,
+      paidDate: rec.paidDate || '',
+      memo: rec.memo || ''
+    });
+  });
+
+  const totalBilled = list.reduce((s,r)=>s+r.billed, 0);
+  const totalPaid = list.reduce((s,r)=>s+r.paid, 0);
+  const totalDiff = totalBilled - totalPaid;
+  const unpaidCount = list.filter(r=>r.diff > 0).length;
+
+  // KPI
+  const kpiEl = $('pm-kpi');
+  if(kpiEl) kpiEl.innerHTML = [
+    {l:'請求合計', v:'¥'+fmt(totalBilled), cls:''},
+    {l:'入金合計', v:'¥'+fmt(totalPaid), cls:'color:#86efac'},
+    {l:'未収合計', v:'¥'+fmt(totalDiff), cls: totalDiff>0?'color:#fca5a5':''},
+    {l:'未収顧客', v:unpaidCount+'社', cls: unpaidCount>0?'color:#fca5a5':''},
+  ].map(k=>`<div class="card" style="padding:10px;text-align:center;">
+    <div class="xs muted mb4">${k.l}</div>
+    <div class="fw7 lg" style="${k.cls}">${k.v}</div>
+  </div>`).join('');
+
+  // テーブル
+  const tbody = $('tb-pm');
+  if(!tbody) return;
+  tbody.innerHTML = list.map(r => {
+    let stBadge, stColor;
+    if(r.diff <= 0 && r.paid > 0){ stBadge='入金済'; stColor='bg'; }
+    else if(r.paid > 0){ stBadge='一部入金'; stColor='by'; }
+    else { stBadge='未入金'; stColor='br'; }
+    const diffColor = r.diff > 0 ? 'color:#fca5a5' : (r.diff < 0 ? 'color:#fcd34d' : 'color:#86efac');
+    return `<tr data-cid="${r.id}">
+      <td class="fw7">${esc(r.name)}</td>
+      <td class="tr mono">¥${fmt(r.billed)}</td>
+      <td class="tr"><input type="number" class="fi pm-paid" data-cid="${r.id}" value="${r.paid||''}" placeholder="0" style="width:110px;font-size:11px;padding:3px 6px;text-align:right;font-family:monospace;"></td>
+      <td class="tr mono fw7" style="${diffColor}">¥${fmt(r.diff)}</td>
+      <td class="tc"><span class="bdg ${stColor}">${stBadge}</span></td>
+      <td><input type="date" class="fi pm-date" data-cid="${r.id}" value="${esc(r.paidDate)}" style="font-size:11px;padding:3px 6px;"></td>
+      <td><input type="text" class="fi pm-memo" data-cid="${r.id}" value="${esc(r.memo)}" placeholder="備考" style="width:140px;font-size:11px;padding:3px 6px;"></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--txt2)">この月に請求のある顧客がありません</td></tr>';
+
+  // 入金額入力で差額をリアルタイム更新
+  tbody.querySelectorAll('.pm-paid').forEach(inp => {
+    inp.addEventListener('input', _pmRecalcRow);
+  });
+
+  // 合計行
+  const tf = $('tf-pm');
+  if(tf && list.length) tf.innerHTML = `<tr style="background:var(--bg3);font-weight:700;">
+    <td>合　計</td>
+    <td class="tr mono">¥${fmt(totalBilled)}</td>
+    <td class="tr mono" style="color:#86efac">¥${fmt(totalPaid)}</td>
+    <td class="tr mono" style="${totalDiff>0?'color:#fca5a5':'color:#86efac'}">¥${fmt(totalDiff)}</td>
+    <td colspan="3"></td>
+  </tr>`;
+  else if(tf) tf.innerHTML = '';
+}
+
+function _pmRecalcRow(e){
+  const cid = e.target.dataset.cid;
+  const tr = e.target.closest('tr');
+  if(!tr) return;
+  const billedTxt = tr.children[1]?.textContent.replace(/[¥,]/g,'') || '0';
+  const billed = parseInt(billedTxt) || 0;
+  const paid = parseInt(e.target.value) || 0;
+  const diff = billed - paid;
+  const diffCell = tr.children[3];
+  if(diffCell){
+    diffCell.textContent = '¥' + fmt(diff);
+    diffCell.style.color = diff > 0 ? '#fca5a5' : (diff < 0 ? '#fcd34d' : '#86efac');
+  }
+  // 状態バッジ更新
+  const stCell = tr.children[4];
+  if(stCell){
+    let stBadge, stColor;
+    if(diff <= 0 && paid > 0){ stBadge='入金済'; stColor='bg'; }
+    else if(paid > 0){ stBadge='一部入金'; stColor='by'; }
+    else { stBadge='未入金'; stColor='br'; }
+    stCell.innerHTML = `<span class="bdg ${stColor}">${stBadge}</span>`;
+  }
+}
+
+function savePaymentMgmt(){
+  const ym = $('pm-mon')?.value || '';
+  if(!ym){ (typeof showAlert==='function'?showAlert({title:'月を選択',msg:'対象月を選択してください'}):alert('対象月を選択してください')); return; }
+
+  D.payments = D.payments || {};
+  D.payments[ym] = D.payments[ym] || {};
+
+  // 各行の入力を収集
+  document.querySelectorAll('#tb-pm tr[data-cid]').forEach(tr => {
+    const cid = tr.dataset.cid;
+    const paidInp = tr.querySelector('.pm-paid');
+    const dateInp = tr.querySelector('.pm-date');
+    const memoInp = tr.querySelector('.pm-memo');
+    const paid = parseInt(paidInp?.value) || 0;
+    const paidDate = dateInp?.value || '';
+    const memo = memoInp?.value.trim() || '';
+    // マージ保存(完全置換しない)
+    D.payments[ym][cid] = { ...(D.payments[ym][cid]||{}), paid, paidDate, memo };
+  });
+
+  // localStorage + Firebase 保存(自己エコー対策)
+  try {
+    if(typeof lsSet === 'function') lsSet('nikki_payments', D.payments);
+    else localStorage.setItem('nikki_payments', JSON.stringify(D.payments));
+  } catch(e){ console.error('LS保存エラー', e); }
+
+  if(typeof fbSet === 'function'){
+    window._fbWritingGuard = window._fbWritingGuard || {};
+    window._fbWritingGuard['payments'] = true;
+    fbSet('payments', D.payments);
+    setTimeout(()=>{ if(window._fbWritingGuard) delete window._fbWritingGuard['payments']; }, 2000);
+  }
+
+  (typeof showAlert==='function'?showAlert({title:'保存完了',msg:'入金情報を保存しました'}):alert('入金情報を保存しました'));
+  renderPaymentMgmt();
 }
 
 // ── CSV出力 ──
