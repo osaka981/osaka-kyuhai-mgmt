@@ -1,0 +1,26 @@
+{
+  "name": "大阪急配 経営管理システム",
+  "short_name": "経営管理",
+  "description": "大阪急配株式会社 経営管理システム v3",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#943231",
+  "theme_color": "#943231",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
