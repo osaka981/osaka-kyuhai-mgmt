@@ -5364,14 +5364,42 @@ function deleteLocation(){
 // key単位で「書込中」「書込直後の猶予期間」を管理
 window._fbWritingGuard = window._fbWritingGuard || {};
 
+// Firebaseは undefined を含む値を保存できないため、書込前に除去する。
+// undefined のプロパティは「キーごと削除」する(nullに変換すると別の意味になるため)。
+// 配列・オブジェクトを再帰的に処理。NaN/Infinity も無効値なのでnull化する。
+function _fbSanitize(v){
+  if(v === undefined) return undefined; // 呼び出し側で「キー削除」判定に使う
+  if(v === null) return null;
+  if(typeof v === 'number'){ return isFinite(v) ? v : null; }
+  if(Array.isArray(v)){
+    // 配列内の undefined は null に置換(配列の穴を防ぐ)
+    return v.map(item=>{ const s=_fbSanitize(item); return s===undefined ? null : s; });
+  }
+  if(typeof v === 'object'){
+    const out = {};
+    for(const k in v){
+      if(!Object.prototype.hasOwnProperty.call(v,k)) continue;
+      const s = _fbSanitize(v[k]);
+      if(s === undefined) continue; // undefinedのキーは出力しない
+      out[k] = s;
+    }
+    return out;
+  }
+  return v; // string / boolean など
+}
+
 async function fbSet(key, value) {
-  lsSet('nikki_' + key, value);
+  // ★ 2026/06/16: undefined混入によるFirebase保存エラー対策
+  //   (例: pinChangedAt が undefined のまま staff_full に入り
+  //    "value argument contains undefined" で書込が弾かれていた)
+  const clean = _fbSanitize(value);
+  lsSet('nikki_' + key, clean);
   if (!fbDB) return;
   const { ref, set } = window._fbImports;
   try {
     // 書込前にフラグを立て、リスナーが自分の書込結果で逆同期するのを防ぐ
     window._fbWritingGuard[key] = Date.now();
-    await set(ref(fbDB, 'nikki/' + key), value);
+    await set(ref(fbDB, 'nikki/' + key), clean);
     // 書込完了後も2秒間は逆同期をブロック(伝播・echo対策)
     setTimeout(()=>{
       if(window._fbWritingGuard[key] && Date.now() - window._fbWritingGuard[key] >= 1900){
