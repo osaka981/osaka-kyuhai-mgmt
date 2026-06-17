@@ -4484,6 +4484,18 @@ function _buildFbDriverEntry(s){
     primaryDeptId: s.primaryDeptId || null,
     kyuyo: s.kyuyo || '',
     canSendNotification: !!s.canSendNotification,
+    // ★ PINハッシュを日報アプリ(nikki/drivers)に連携
+    //   日報アプリのログイン照合は initialPinHash / pinHash を参照するため、
+    //   ここに含めないと「PIN未発行」になる(2026/06/16 修正)
+    initialPinHash:   s.initialPinHash   || null,
+    initialPinIssuedAt: s.initialPinIssuedAt || null,
+    pinHash:          s.pinHash          || null,
+    pinInitialized:   !!s.pinInitialized,
+    pinInitializedAt: s.pinInitializedAt || null,
+    pinIsPersonalFixed: !!s.pinIsPersonalFixed,
+    // 委託系の社員番号フィールドも日報側照合用に出す
+    empNo:    s.empNo    || '',
+    driverNo: s.driverNo || s.empNo || '',
   };
 }
 
@@ -30182,30 +30194,34 @@ async function resetStaffPin(){
 }
 
 // 日報アプリ側のdriversノードにPINを同期
+// ★ 2026/06/16 実機能化:
+//   従来は空実装で nikki/drivers に一切書き込まれず「PIN未発行」になっていた。
+//   PIN発行後、D.staff から nikki/drivers 用エントリ(_buildFbDriverEntry)を
+//   全社員分再構築して fbSet('drivers', ...) で保存する。
+//   _buildFbDriverEntry が initialPinHash/pinHash を含むようになったため、
+//   これで日報アプリ側にPINが確実に届く。
 function _syncPinToDriversNode(staffRec, hash, mode){
-  // nikki/drivers(日報アプリのDRIVERS)にも同じid/empNoのレコードがあればPINを反映
-  // Firebase: nikki/drivers
-  if(typeof firebase === 'undefined' && typeof fbDB === 'undefined') return;
-  const driverId = staffRec.empNo || staffRec.driverNo || String(staffRec.id);
-  const update = {};
-  if(mode === 'initial'){
-    update.initialPinHash = hash;
-    update.initialPinIssuedAt = staffRec.initialPinIssuedAt;
-    update.pinHash = null;
-    update.pinInitialized = false;
-  } else if(mode === 'user'){
-    update.pinHash = hash;
-    update.pinInitialized = true;
-  }
-  // Firebase直接更新を試みる
   try{
-    if(typeof fbDB !== 'undefined' && fbDB && typeof ref === 'function' && typeof update === 'object'){
-      // この経路は mgmt.html のFirebase SDK経由
-      // 既存のsave関数があればそちらを使う
-      // 簡易実装: DRIVERSノードを丸ごと更新する既存関数があればそれ
+    // 念のため対象staffの最新値が D.staff に反映されていることを保証
+    if(staffRec && staffRec.id != null){
+      const idx = D.staff.findIndex(x=>x.id===staffRec.id || String(x.id)===String(staffRec.id));
+      if(idx>=0) D.staff[idx] = staffRec;
     }
+    // nikki/drivers を全社員分再構築(saveStaff と同じロジック)
+    const fbDrivers = D.staff
+      .filter(s => s.status !== '終了')
+      .map(s => _buildFbDriverEntry(s));
+    if(typeof fbSet === 'function'){
+      fbSet('drivers', fbDrivers);
+    }
+    if(typeof lsSet === 'function' && typeof LS_KEYS !== 'undefined'){
+      lsSet(LS_KEYS.DRIVERS, fbDrivers);
+    }
+    // staff_full(経営管理用・全フィールド)も更新しておく
+    if(typeof fbSet === 'function'){ fbSet('staff_full', D.staff); }
+    if(typeof lsSet === 'function'){ lsSet('nikki_staff_full', D.staff); }
+    console.log('[_syncPinToDriversNode] nikki/drivers 再構築・保存完了 件数=', fbDrivers.length, 'mode=', mode);
   }catch(e){ console.warn('PIN sync failed', e); }
-  // 確実な同期は別途実装が必要(今は表示のみで動作)
 }
 
 // 初期PIN表示ダイアログ(一度だけ)
@@ -30481,7 +30497,43 @@ function _editStaffImpl(id){
   // 基本情報をセット
   if($('st-kbn'))$('st-kbn').value=s.kubun||'個人事業主（歩合）';
   if($('st-off'))$('st-off').value=s.office||'';
-  if($('st-empno-disp'))$('st-empno-disp').value=s.empNo||'';
+  // ★ 社員番号の復元(2026/06/16 修正)
+  //   手入力された社員番号(=営業所の自動採番prefixに一致しない番号、または
+  //   メイン郵便局が未設定の社員)は、手入力チェックをONにして readonly を解除する。
+  //   これをしないと再編集時に onEmpNoManual の自動発番側へ倒れ、入力した番号が
+  //   別の番号に置き換わって「反映されていない」ように見える。
+  (function(){
+    const disp=$('st-empno-disp');
+    const manualChk=$('st-empno-manual');
+    if(!disp) return;
+    disp.value=s.empNo||'';
+    // 自動採番形式かどうか判定: 営業所コードのprefix + 3桁数字
+    let isAuto=false;
+    if(s.empNo && s.office){
+      const off=(D.offices||[]).find(o=>o.name===s.office);
+      if(off && off.officeCode && typeof dispCode==='function'){
+        const disp2=dispCode(off.officeCode);
+        const en=String(s.empNo);
+        if(en.startsWith(disp2) && /^\d{3}$/.test(en.slice(disp2.length))) isAuto=true;
+      }
+    }
+    // 手入力扱い: 自動採番形式でない、またはメイン郵便局なし
+    const isManual = !!s.empNo && (!isAuto || !s.office);
+    if(manualChk) manualChk.checked = isManual;
+    if(isManual){
+      disp.readOnly=false;
+      disp.style.background='var(--bg2)';
+      disp.style.color='var(--txt)';
+      disp.placeholder='5桁で入力（例:1001）';
+    } else {
+      disp.readOnly=true;
+      disp.style.background='var(--bg3)';
+      disp.style.color='var(--amb2)';
+      disp.placeholder='営業所選択で自動発番';
+    }
+    // 値は上で確実にセット済み(自動/手入力どちらでも既存empNoを表示)
+    disp.value=s.empNo||'';
+  })();
   // 姓・名を分割して復元
   const nameParts=(s.name||'').split(/\s+/);
   if($('st-sei'))$('st-sei').value=s.sei||nameParts[0]||'';
