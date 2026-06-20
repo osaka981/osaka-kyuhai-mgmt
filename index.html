@@ -1800,7 +1800,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="tw"><table>
           <thead><tr>
             <th style="width:28px;text-align:center;"><input type="checkbox" id="staff-sel-all" onchange="_toggleStaffSelAll(this.checked)"></th>
-            <th>社員番号</th><th>氏名</th><th>区分</th><th>委託会社</th><th>営業所</th><th>連絡先</th><th>給与形態</th><th class="tr">単価/基本給</th><th class="tr">今月完了</th><th class="tr">今月給与(概算)</th><th></th>
+            <th>社員番号</th><th>氏名</th><th>区分</th><th>委託会社</th><th>営業所</th><th>連絡先</th><th>給与形態</th><th class="tr">今月完了</th><th class="tr">今月給与(概算)</th><th></th>
           </tr></thead>
           <tbody id="tb-staff"></tbody>
         </table></div>
@@ -12107,10 +12107,6 @@ function renderStaff(flt){
       <td><span class="xs">${esc(s.office||'−')}</span></td>
       <td class="mono xs">${s.tel||'−'}</td>
       <td>${s.kyuyo||'−'}</td>
-      <td class="tr mono xs">${s.kyuyo==='個数制（歩合）'?
-        (s.fixedPrices?.del?.kanryo?'完了¥'+s.fixedPrices.del.kanryo:
-         s.fixedPrices?.col?.p60?'60s¥'+s.fixedPrices.col.p60:'単価未設定'):
-        s.kyuyo==='月給'?'¥'+fmt(s.tanka):s.kyuyo?'¥'+fmt(s.tanka):'−'}</td>
       <td class="tr">${fmt(kn)}</td>
       <td class="tr fw7">¥${fmt(est)}</td>
       <td><button class="btn b-gh btn-sm" onclick="event.stopPropagation();editStaff('${s.id}')">編集</button></td>
