@@ -6688,6 +6688,10 @@ function resetStaffModal(){
   // 選択リセット
   if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
   if($('st-ky'))$('st-ky').value='個数制（歩合）';
+  // ★ 在籍状況を必ず「在籍」に初期化(2026/06/20)
+  //   これをしないと、直前に誰かを「退職(終了)」にした値がモーダルに残り、
+  //   次に新規登録した人が意図せず「終了」で保存され一覧から消える。
+  if($('st-status'))$('st-status').value='在籍';
   if($('st-bank-type'))$('st-bank-type').value='普通';
   if($('st-si-emp-type'))$('st-si-emp-type').value='rate';
   if($('st-tax-res-type'))$('st-tax-res-type').value='yearly';
@@ -11068,6 +11072,9 @@ function _installCoSaveHookForFleet(){
 function _openDriverModalFromFleet(md){
   resetStaffModal();
   openM('m-staff');
+  setTimeout(_bindKanaImeGuards, 100);
+  // ★ フリート由来の新規登録は必ず「在籍」で開始(2026/06/20)
+  if($('st-status'))$('st-status').value='在籍';
 
   // フリートデータから自動入力
   const nameParts = (md.name||'').split(/\s+/);
@@ -20890,11 +20897,11 @@ function restoreCoPrices(prices, company){
   setCoPriceTax(tt);
   const d=prices.del||{};
   const c=prices.col||{};
-  if($('co-pkanryo'))$('co-pkanryo').value=d.kanryo||0;
-  if($('co-ptenso'))$('co-ptenso').value=d.tenso||0;
-  if($('co-pnight'))$('co-pnight').value=d.night||0;
-  if($('co-pogata'))$('co-pogata').value=d.ogata||0;
-  if($('co-pshukka'))$('co-pshukka').value=d.shukka||0;
+  if($('co-pkanryo'))$('co-pkanryo').value=d.kanryo||'';
+  if($('co-ptenso'))$('co-ptenso').value=d.tenso||'';
+  if($('co-pnight'))$('co-pnight').value=d.night||'';
+  if($('co-pogata'))$('co-pogata').value=d.ogata||'';
+  if($('co-pshukka'))$('co-pshukka').value=d.shukka||'';
   ['60','80','100','120','140','160'].forEach(s=>{const e=$('co-cp'+s);if(e)e.value=c['p'+s]||0;});
   ['pk1','pk2','cp','ke','te'].forEach(k=>{const e=$('co-c'+k);if(e)e.value=c[k]||0;});
   // 集荷個別単価を復元(営業所マスタと自動マージ)
@@ -22111,12 +22118,12 @@ function editOffice(id){
     const p=o.postPrices;
     ['60','80','100','120','140','160'].forEach(sz=>{const e=$('of-p'+sz);if(e)e.value=p['p'+sz]||0;});
     setOfTax(p._taxType||'ex');
-    if($('of-pkanryo'))$('of-pkanryo').value=p.kanryo||0;
-    if($('of-pnight'))$('of-pnight').value=p.night||0;
-    if($('of-pogata'))$('of-pogata').value=p.ogata||0;
-    if($('of-ptenso'))$('of-ptenso').value=p.tenso||0;
-    if($('of-pmodori'))$('of-pmodori').value=p.modori||0;
-    if($('of-pshukka'))$('of-pshukka').value=p.shukka||0;
+    if($('of-pkanryo'))$('of-pkanryo').value=p.kanryo||'';
+    if($('of-pnight'))$('of-pnight').value=p.night||'';
+    if($('of-pogata'))$('of-pogata').value=p.ogata||'';
+    if($('of-ptenso'))$('of-ptenso').value=p.tenso||'';
+    if($('of-pmodori'))$('of-pmodori').value=p.modori||'';
+    if($('of-pshukka'))$('of-pshukka').value=p.shukka||'';
     if($('of-ps1'))$('of-ps1').value=p.s1||0;
     if($('of-ps2'))$('of-ps2').value=p.s2||0;
     if($('of-ps3'))$('of-ps3').value=p.s3||0;
@@ -30654,22 +30661,22 @@ function _editStaffImpl(id){
   if(phList){phList.innerHTML='';(s.payHistory||[]).forEach(h=>addPayHistoryRow(h));}
   restoreRepairRows(s.repairRows||[]);
   restoreAreaPrices(s.areaPrices||[]);
-  if($('st-tk'))$('st-tk').value=s.tanka||0;
+  if($('st-tk'))$('st-tk').value=s.tanka||'';
   if($('st-note'))$('st-note').value=s.note||'';
   // 固定単価
   if(s.fixedPrices){
     // ユーザーが入力した値をそのまま保存・表示する方針(税モードフラグは保存するが値変換しない)
     // → 60円で保存→61円表示の四捨五入誤差を防ぐ
     if(s.fixedPrices?.del){const d=s.fixedPrices.del;
-      if($('st-pkanryo'))$('st-pkanryo').value=d.kanryo||0;
-      if($('st-ptenso'))$('st-ptenso').value=d.tenso||0;
-      if($('st-pnight'))$('st-pnight').value=d.night||0;
-      if($('st-pogata'))$('st-pogata').value=d.ogata||0;
-      if($('st-pshukka'))$('st-pshukka').value=d.shukka||0;
-      if($('st-ps1'))$('st-ps1').value=d.s1||0;
-      if($('st-ps2'))$('st-ps2').value=d.s2||0;
-      if($('st-ps3'))$('st-ps3').value=d.s3||0;
-      if($('st-ps4'))$('st-ps4').value=d.s4||0;
+      if($('st-pkanryo'))$('st-pkanryo').value=d.kanryo||'';
+      if($('st-ptenso'))$('st-ptenso').value=d.tenso||'';
+      if($('st-pnight'))$('st-pnight').value=d.night||'';
+      if($('st-pogata'))$('st-pogata').value=d.ogata||'';
+      if($('st-pshukka'))$('st-pshukka').value=d.shukka||'';
+      if($('st-ps1'))$('st-ps1').value=d.s1||'';
+      if($('st-ps2'))$('st-ps2').value=d.s2||'';
+      if($('st-ps3'))$('st-ps3').value=d.s3||'';
+      if($('st-ps4'))$('st-ps4').value=d.s4||'';
       // 集荷個別単価
       if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
       // 税込/税別トグル復元(del)
@@ -30680,17 +30687,17 @@ function _editStaffImpl(id){
     }
     // 集荷タブ単価の復元
     if(s.fixedPrices?.col){const c=s.fixedPrices.col;
-      if($('st-cp60'))$('st-cp60').value=c.p60||0;
-      if($('st-cp80'))$('st-cp80').value=c.p80||0;
-      if($('st-cp100'))$('st-cp100').value=c.p100||0;
-      if($('st-cp120'))$('st-cp120').value=c.p120||0;
-      if($('st-cp140'))$('st-cp140').value=c.p140||0;
-      if($('st-cp160'))$('st-cp160').value=c.p160||0;
-      if($('st-cpk1'))$('st-cpk1').value=c.pk1||0;
-      if($('st-cpk2'))$('st-cpk2').value=c.pk2||0;
-      if($('st-ccp'))$('st-ccp').value=c.cp||0;
-      if($('st-cke'))$('st-cke').value=c.ke||0;
-      if($('st-cte'))$('st-cte').value=c.te||0;
+      if($('st-cp60'))$('st-cp60').value=c.p60||'';
+      if($('st-cp80'))$('st-cp80').value=c.p80||'';
+      if($('st-cp100'))$('st-cp100').value=c.p100||'';
+      if($('st-cp120'))$('st-cp120').value=c.p120||'';
+      if($('st-cp140'))$('st-cp140').value=c.p140||'';
+      if($('st-cp160'))$('st-cp160').value=c.p160||'';
+      if($('st-cpk1'))$('st-cpk1').value=c.pk1||'';
+      if($('st-cpk2'))$('st-cpk2').value=c.pk2||'';
+      if($('st-ccp'))$('st-ccp').value=c.cp||'';
+      if($('st-cke'))$('st-cke').value=c.ke||'';
+      if($('st-cte'))$('st-cte').value=c.te||'';
       // 税込/税別トグル復元(col)
       if(c._tax && typeof setItemTax==='function'){
         const colMap = {p60:'st-cp60',p80:'st-cp80',p100:'st-cp100',p120:'st-cp120',p140:'st-cp140',p160:'st-cp160',pk1:'st-cpk1',pk2:'st-cpk2',cp:'st-ccp',ke:'st-cke',te:'st-cte'};
