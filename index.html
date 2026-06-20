@@ -11810,11 +11810,34 @@ function archiveRestore(kind, id){
     item.archiveExpiresAt = null;
     item.statusChangedAt = new Date().toISOString().slice(0,10);
     if(kind==='company') item.active = true;
-    // 保存
-    if(kind==='cust'){ lsSet(LS_KEYS.CUSTOMERS, D.customers); renderCustTbl && renderCustTbl(); }
-    else if(kind==='staff'){ lsSet(LS_KEYS.DRIVERS, D.staff); renderStaff && renderStaff(); }
-    else if(kind==='company'){ lsSet(LS_KEYS.COMPANIES, D.companies); renderCompanyPage && renderCompanyPage(); }
-    else if(kind==='office'){ lsSet(LS_KEYS.OFFICES, D.offices); renderOffCards && renderOffCards(); }
+    // 保存(localStorage + Firebase 両方)
+    // ★ 2026/06/20: 従来は lsSet のみで Firebase に書かれず、
+    //   リスナー同期や再読込でFirebase側の「終了」状態に巻き戻り、
+    //   「取引再開しても再びアーカイブに戻る」バグが起きていた。
+    if(kind==='cust'){
+      lsSet(LS_KEYS.CUSTOMERS, D.customers);
+      if(typeof fbSet==='function') fbSet('customers', D.customers);
+      renderCustTbl && renderCustTbl();
+    }
+    else if(kind==='staff'){
+      lsSet(LS_KEYS.DRIVERS, D.staff);
+      if(typeof fbSet==='function'){
+        fbSet('staff_full', D.staff);
+        const fbDrivers = D.staff.filter(s=>s.status!=='終了').map(s=>_buildFbDriverEntry(s));
+        fbSet('drivers', fbDrivers);
+      }
+      renderStaff && renderStaff();
+    }
+    else if(kind==='company'){
+      lsSet(LS_KEYS.COMPANIES, D.companies);
+      if(typeof fbSet==='function') fbSet('companies', D.companies);
+      renderCompanyPage && renderCompanyPage();
+    }
+    else if(kind==='office'){
+      lsSet(LS_KEYS.OFFICES, D.offices);
+      if(typeof fbSet==='function') fbSet('offices', D.offices);
+      renderOffCards && renderOffCards();
+    }
     renderArchive();
     showAlert({msg:`${label}「${item.name}」との取引を再開しました`});
   });
