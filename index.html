@@ -1746,6 +1746,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6" style="flex-wrap:wrap;">
           <input type="text" id="staff-search" class="fi" placeholder="番号・氏名で検索..." style="width:220px;" oninput="renderStaff(document.getElementById('staff-search')._flt||'')">
+          <select id="staff-office-filter" class="fi" style="width:150px;" onchange="renderStaff(document.getElementById('staff-search')._flt||'')"><option value="">全営業所</option></select>
           <button class="btn b-gh btn-sm" onclick="fltStaff('')">全員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('社員')">社員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
@@ -11989,14 +11990,47 @@ function editCust(id){
   setTimeout(()=>{ if(typeof renderCustRouteInline==='function') renderCustRouteInline(); }, 50);
 }
 
+// ─── 営業所順ソート ヘルパー(2026/06/20) ───
+// 拠点マスタ(D.offices→D.locations)の登録順を基準に並べる。
+// マスタに無い営業所はその後、未設定は最後。
+function _sortByOfficeOrder(arr){
+  const order=[];
+  (D.offices||[]).forEach(o=>{ if(o.name && !order.includes(o.name)) order.push(o.name); });
+  (D.locations||[]).forEach(l=>{ if(l.name && !order.includes(l.name)) order.push(l.name); });
+  const rank=(name)=>{
+    if(!name) return 99999; // 未設定は最後
+    const i=order.indexOf(name);
+    return i>=0 ? i : 9999; // マスタ外はマスタ済みの後・未設定の前
+  };
+  return [...arr].sort((a,b)=>{
+    const ra=rank(a.office||''), rb=rank(b.office||'');
+    if(ra!==rb) return ra-rb;
+    // 同営業所内は社員番号順
+    return String(a.empNo||'').localeCompare(String(b.empNo||''),'ja',{numeric:true});
+  });
+}
+
 // ─── 従事員 ───
 function renderStaff(flt){
   const searchEl=$('staff-search');
   const q=(searchEl?.value||'').trim().toLowerCase();
   if(searchEl) searchEl._flt=flt;
+  // 営業所フィルタの選択肢を更新(現在の選択は保持)
+  const offFilterEl=$('staff-office-filter');
+  const offFilterVal=offFilterEl?offFilterEl.value:'';
+  if(offFilterEl){
+    const offSet=new Set();
+    (D.staff||[]).filter(s=>s.status!=='終了').forEach(s=>{ if(s.office) offSet.add(s.office); });
+    const sortedOffs=[..._sortByOfficeOrder([...offSet].map(n=>({office:n})))].map(o=>o.office);
+    offFilterEl.innerHTML='<option value="">全営業所</option>'+sortedOffs.map(n=>`<option value="${esc(n)}" ${offFilterVal===n?'selected':''}>${esc(n)}</option>`).join('');
+  }
   // s.kubun が undefined/null でもクラッシュしないよう防御
   let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||(s.kubun||'').includes(flt));
+  // 営業所フィルタ適用
+  if(offFilterVal) rows=rows.filter(s=>(s.office||'')===offFilterVal);
   if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
+  // 営業所順に並べる
+  rows=_sortByOfficeOrder(rows);
 
   // 一括設定ツールバーの拠点・委託会社プルダウンを更新
   _populateStaffBulkSelects();
@@ -12045,9 +12079,9 @@ function renderStaff(flt){
       <td style="text-align:center;" onclick="event.stopPropagation()"><input type="checkbox" class="staff-sel-chk" data-id="${s.id}" onchange="_updateStaffBulkCount()"></td>
       <td>${empBadge}</td>
       <td><div class="fw7 staff-link">${esc(s.name)}</div>${s.kana?`<div class="xs muted">${esc(s.kana)}</div>`:''}</td>
-      <td>${kubunSelect}</td>
-      <td>${companySelect}</td>
-      <td>${officeSelect}</td>
+      <td><span class="xs">${esc(s.kubun||'−')}</span></td>
+      <td><span class="xs">${esc(s.companyName||'−')}</span></td>
+      <td><span class="xs">${esc(s.office||'−')}</span></td>
       <td class="mono xs">${s.tel||'−'}</td>
       <td>${s.kyuyo||'−'}</td>
       <td class="tr mono xs">${s.kyuyo==='個数制（歩合）'?
