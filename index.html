@@ -3372,21 +3372,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 姓・名（分割） -->
     <div class="fg">
       <label>姓</label>
-      <input type="text" id="st-sei" class="fi" placeholder="山田" oninput="syncStName()">
+      <input type="text" id="st-sei" class="fi" lang="ja" placeholder="山田" oninput="syncStName()">
     </div>
     <div class="fg">
       <label>名</label>
-      <input type="text" id="st-mei" class="fi" placeholder="太郎" oninput="syncStName()">
+      <input type="text" id="st-mei" class="fi" lang="ja" placeholder="太郎" oninput="syncStName()">
     </div>
     <input type="hidden" id="st-name">
     <!-- フリガナ（姓・名・ひらがな自動変換） -->
     <div class="fg">
       <label>フリガナ（姓）</label>
-      <input type="text" id="st-kana-sei" class="fi" placeholder="ヤマダ" oninput="kanaToHira(this);syncStKana()">
+      <input type="text" id="st-kana-sei" class="fi" lang="ja" placeholder="ヤマダ" oninput="kanaToHira(this);syncStKana()">
     </div>
     <div class="fg">
       <label>フリガナ（名）</label>
-      <input type="text" id="st-kana-mei" class="fi" placeholder="タロウ" oninput="kanaToHira(this);syncStKana()">
+      <input type="text" id="st-kana-mei" class="fi" lang="ja" placeholder="タロウ" oninput="kanaToHira(this);syncStKana()">
     </div>
     <input type="hidden" id="st-kana">
   </div>
@@ -3435,7 +3435,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
     <div class="fg">
       <label>住所</label>
-      <input type="text" id="st-addr" class="fi" placeholder="大阪市北区○○1-2-3"
+      <input type="text" id="st-addr" class="fi" lang="ja" placeholder="大阪市北区○○1-2-3"
         oninput="onStAddrInput(this)">
     </div>
   </div>
@@ -30013,6 +30013,14 @@ function setupEnterNav(){
 
 function openM(id){
   $(id)?.classList.add('on');
+  // ★ 2026/06/20: モーダルを開くたびスクロール位置を先頭に戻す。
+  //   前の人で下までスクロールした位置が残り「最下部から表示」になる問題を防ぐ。
+  setTimeout(()=>{
+    const modal=$(id);
+    if(!modal) return;
+    modal.scrollTop=0;
+    modal.querySelectorAll('.modal-body,.m-body,.modal-content,.mc,.scroll,[data-scroll]').forEach(el=>{ el.scrollTop=0; });
+  }, 30);
   // Enter移動リスナーを設定（初回のみ）
   setupEnterNav();
   if(id==='m-del'){
