@@ -10660,55 +10660,48 @@ async function saveCust(){
     // 新規
     D.customers.push({id:Date.now(),...custData});
   }
-  const fbCusts=lsGet(LS_KEYS.CUSTOMERS,[])||[];
-  const cu=D.customers.find(c=>c.custNo===custNo);
-  if(cu){
-    // Firebase顧客データを完全保存(全フィールドを含める)
-    const fbRec={
-      id:cu.id,
-      custNo:cu.custNo||'',
-      name:cu.name,
-      region:cu.region||'',
-      start:cu.start||'',
-      colPrices:cu.colPrices||{},
-      // 顧客詳細(編集モーダルで入力する情報全て)
-      zip:cu.zip||'',
-      addr:cu.addr||'',
-      repName:cu.repName||'',
-      repTitle:cu.repTitle||'',
-      dept:cu.dept||'',
-      contact:cu.contact||'',
-      title:cu.title||'',
-      tel:cu.tel||'',
-      fax:cu.fax||'',
-      email:cu.email||'',
-      invoiceNo:cu.invoiceNo||'',
-      industry:cu.industry||'',
-      // 締め・支払
-      closeDay:cu.closeDay||'末',
-      payMonth:cu.payMonth||'翌月',
-      payDay:cu.payDay||'末',
-      payMethod:cu.payMethod||'銀行振込',
-      // 書類発行
-      invoiceEnabled:cu.invoiceEnabled!==false,
-      invoiceNote:cu.invoiceNote||'',
-      bankSetId:cu.bankSetId||'',
-      priceType:cu.priceType||'tax_excluded',
-      // 取引状態
-      status:cu.status||'稼働中',
-      statusReason:cu.statusReason||'',
-      statusChangedAt:cu.statusChangedAt||null,
-      archivedAt:cu.archivedAt||null,
-      archiveExpiresAt:cu.archiveExpiresAt||null,
-      // チャーター・その他・相殺
-      charter:cu.charter||[],
-      otherItems:cu.otherItems||[],
-      offset:cu.offset||null,
-    };
-    const fi=fbCusts.findIndex(x=>x.id===cu.id);
-    if(fi>=0) fbCusts[fi]={...fbCusts[fi],...fbRec};
-    else fbCusts.push(fbRec);
-  }
+  // ★ 2026/06/23: Firebase保存をD.customers全件起点に変更。
+  //   従来は古いlocalStorage(nikki_customers)を起点に1件だけ足していたため、
+  //   CSV一括取込等でD.customersが増えてもFirebaseに反映されず、
+  //   日報アプリの顧客選択に新規顧客が出ない不整合が起きていた。
+  //   毎回 D.customers の全件(終了除く)を完全な形でFirebaseへ同期する。
+  const fbCusts = (D.customers||[]).filter(c=>c.status!=='終了').map(cu=>({
+    id:cu.id,
+    custNo:cu.custNo||'',
+    name:cu.name,
+    region:cu.region||'',
+    start:cu.start||'',
+    colPrices:cu.colPrices||{},
+    zip:cu.zip||'',
+    addr:cu.addr||'',
+    repName:cu.repName||'',
+    repTitle:cu.repTitle||'',
+    dept:cu.dept||'',
+    contact:cu.contact||'',
+    title:cu.title||'',
+    tel:cu.tel||'',
+    fax:cu.fax||'',
+    email:cu.email||'',
+    invoiceNo:cu.invoiceNo||'',
+    industry:cu.industry||'',
+    closeDay:cu.closeDay||'末',
+    payMonth:cu.payMonth||'翌月',
+    payDay:cu.payDay||'末',
+    payMethod:cu.payMethod||'銀行振込',
+    invoiceEnabled:cu.invoiceEnabled!==false,
+    invoiceNote:cu.invoiceNote||'',
+    bankSetId:cu.bankSetId||'',
+    priceType:cu.priceType||'tax_excluded',
+    status:cu.status||'稼働中',
+    statusReason:cu.statusReason||'',
+    statusChangedAt:cu.statusChangedAt||null,
+    archivedAt:cu.archivedAt||null,
+    archiveExpiresAt:cu.archiveExpiresAt||null,
+    charter:cu.charter||[],
+    otherItems:cu.otherItems||[],
+    offset:cu.offset||null,
+  }));
+  lsSet(LS_KEYS.CUSTOMERS, fbCusts);
   fbSet('customers',fbCusts);
   closeM('m-cust');renderCustTbl();updOffSels();
 }
