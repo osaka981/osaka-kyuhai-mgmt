@@ -4497,6 +4497,8 @@ function _buildFbDriverEntry(s){
     // 委託系の社員番号フィールドも日報側照合用に出す
     empNo:    s.empNo    || '',
     driverNo: s.driverNo || s.empNo || '',
+    // ★ 誕生日お祝い用に生年月日も連携(2026/06/23)
+    birth:    s.birth    || '',
   };
 }
 
