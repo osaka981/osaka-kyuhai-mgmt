@@ -16866,6 +16866,7 @@ function _renderSurveyCard(s){
         <button class="btn b-gh btn-sm" onclick="openSurveyDetailModal('${esc(s.id)}')">詳細</button>
         ${s.status === 'active' ? `<button class="btn b-gh btn-sm" onclick="sendSurveyReminder('${esc(s.id)}')">督促</button>` : ''}
         ${s.status === 'active' ? `<button class="btn b-gh btn-sm" style="color:var(--red2);" onclick="closeSurvey('${esc(s.id)}')">締切</button>` : ''}
+        ${s.status !== 'active' ? `<button class="btn b-gh btn-sm" style="color:var(--red2);" onclick="deleteSurvey('${esc(s.id)}')">削除</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -17201,6 +17202,29 @@ async function closeSurvey(surveyId){
   renderScheduleSurvey();
   if(typeof toast === 'function') toast('締切しました', 'ok');
   else alert('締切しました');
+}
+
+// ★ 2026/06/20: 休業調査の完全削除
+//   調査本体と紐づく回答(SURVEY_RESPONSES)を削除する。
+//   実施中(active)は誤削除防止のため不可(先に締切が必要)。2段階確認。
+async function deleteSurvey(surveyId){
+  const s = SCHEDULE_SURVEYS.find(x => String(x.id) === String(surveyId));
+  if(!s) return;
+  if(s.status === 'active'){
+    alert('実施中の調査は削除できません。先に「締切」してから削除してください。');
+    return;
+  }
+  if(!confirm(`調査「${s.title||''}」を完全に削除します。\nこの操作は元に戻せません。よろしいですか?`)) return;
+  if(!confirm('本当に削除しますか?(回答データも一緒に削除されます)')) return;
+  // 調査本体を削除
+  SCHEDULE_SURVEYS = SCHEDULE_SURVEYS.filter(x => String(x.id) !== String(surveyId));
+  // 紐づく回答も削除
+  SURVEY_RESPONSES = (SURVEY_RESPONSES||[]).filter(r => String(r.surveyId) !== String(surveyId));
+  await saveScheduleSurveys();
+  await saveSurveyResponses();
+  renderScheduleSurvey();
+  if(typeof toast === 'function') toast('削除しました', 'ok');
+  else alert('削除しました');
 }
 
 // ══════════════════════════════════════════════════
