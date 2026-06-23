@@ -5954,14 +5954,14 @@ function setupRealtimeSync() {
     const v = snap.val();
     SCHEDULE_SURVEYS = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet(LS_KEYS.SCHEDULE_SURVEYS, SCHEDULE_SURVEYS);
-    if (typeof renderScheduleSurvey === 'function' && document.getElementById('scr-schedule-survey')) renderScheduleSurvey();
+    if (typeof renderScheduleSurvey === 'function' && document.getElementById('s-schedule-survey')) renderScheduleSurvey();
   });
   onValue(ref(fbDB, 'nikki/survey_responses'), snap => {
     if (!snap.exists()) return;
     const v = snap.val();
     SURVEY_RESPONSES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet(LS_KEYS.SURVEY_RESPONSES, SURVEY_RESPONSES);
-    if (typeof renderScheduleSurvey === 'function' && document.getElementById('scr-schedule-survey')) renderScheduleSurvey();
+    if (typeof renderScheduleSurvey === 'function' && document.getElementById('s-schedule-survey')) renderScheduleSurvey();
   });
   // 月次確認(Phase B: 2026/05/02)
   onValue(ref(fbDB, 'nikki/monthly_confirmations'), snap => {
