@@ -22616,7 +22616,54 @@ function renderStaffDaily(el, name){
     html+=`</tbody></table></div>`;
   }
 
-  if(!delRows.length && !puRows.length) html+=`<div class="al al-e"><span>ℹ️</span><span>該当月のデータがありません</span></div>`;
+  // ★ 2026/06/24: 勤怠サマリー(時間単価・時間給の従事員)
+  //   出退勤(att_logs)を日付ごとに集計して表示。件数日報が無くても勤務が分かる。
+  //   勤怠ログは driverId に empNo が入る。同じ日の複数打刻は合算する。
+  const _staffObj = (D.staff||[]).find(s=>s.name===name);
+  const _kyuyo = _staffObj?.kyuyo || '';
+  const _isTimeBased = (_kyuyo==='時間単価' || _kyuyo==='時間給');
+  let attHasRows = false;
+  if(_isTimeBased && _staffObj){
+    const ATT=lsGet(LS_KEYS.ATT,[])||[];
+    const empNo=String(_staffObj.empNo||'');
+    const myAtt=ATT.filter(a=> String(a.driverId)===empNo && (a.date||'').startsWith(mon));
+    if(myAtt.length){
+      attHasRows = true;
+      // 日付ごとに集計
+      const byDate={};
+      myAtt.forEach(a=>{
+        const d=a.date||'';
+        if(!byDate[d]) byDate[d]={ins:[],outs:[],workMin:0};
+        if(a.clockIn) byDate[d].ins.push(a.clockIn);
+        if(a.clockOut||a.adjustedOut) byDate[d].outs.push(a.adjustedOut||a.clockOut);
+        byDate[d].workMin += (a.workMin||0);
+      });
+      const fmtT=(iso)=>{ if(!iso) return '-'; const t=new Date(iso); return isNaN(t)?'-':`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`; };
+      const fmtWM=(m)=>{ if(!m) return '0分'; const h=Math.floor(m/60), mm=m%60; return (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分')); };
+      const dates=Object.keys(byDate).sort();
+      let totalMin=0;
+      html+=`<div class="ct mb8"><div class="cbar"></div>勤怠（${dates.length}日）</div>`;
+      html+=`<div class="tw"><table><thead><tr>
+        <th>日付</th><th class="tr">出勤</th><th class="tr">退勤</th><th class="tr">稼働時間</th>
+      </tr></thead><tbody>`;
+      dates.forEach(d=>{
+        const r=byDate[d];
+        totalMin += r.workMin;
+        const firstIn=r.ins.sort()[0];
+        const lastOut=r.outs.sort().slice(-1)[0];
+        html+=`<tr>
+          <td class="mono">${d}</td>
+          <td class="tr mono">${fmtT(firstIn)}</td>
+          <td class="tr mono">${fmtT(lastOut)}</td>
+          <td class="tr fw7" style="color:var(--clay,#a56a1a)">${fmtWM(r.workMin)}</td>
+        </tr>`;
+      });
+      html+=`<tr style="border-top:2px solid var(--brd,#ccc);"><td class="fw7">月合計</td><td></td><td></td><td class="tr fw7" style="color:var(--clay,#a56a1a)">${fmtWM(totalMin)}</td></tr>`;
+      html+=`</tbody></table></div>`;
+    }
+  }
+
+  if(!delRows.length && !puRows.length && !attHasRows) html+=`<div class="al al-e"><span>ℹ️</span><span>該当月のデータがありません</span></div>`;
   html+=`</div>`;
   el.innerHTML=html;
 }
