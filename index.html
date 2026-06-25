@@ -12028,6 +12028,41 @@ function _sortByOfficeOrder(arr){
   });
 }
 
+// ★ 2026/06/25: 時間単価・時間給の給与計算 共通ヘルパー
+//   従業員一覧の概算(est)と明細・書類タブ(_calcStaffPayment)の両方から呼ぶ。
+//   勤怠(att_logs)の月間稼働時間 × 単価。集荷品目単価があれば加算。
+//   戻り値: {amount, workMin, hLabel, colAmt, breakdown:[{label,amount}]}
+function _calcHourlyPay(st, monStr){
+  const ATT = lsGet(LS_KEYS.ATT,[])||[];
+  const myAtt = ATT.filter(a=>
+    (a.driverName===st.name || String(a.driverId)===String(st.empNo))
+    && (a.date||'').startsWith(monStr)
+  );
+  const workMin = myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
+  const totalH = workMin/60;
+  const tk = st.tanka||0;
+  const baseAmt = (tk>0 && totalH>0) ? Math.round(tk*totalH) : 0;
+  const h = Math.floor(workMin/60), mm = workMin%60;
+  const hLabel = (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分'));
+  const unitLabel = st.kyuyo==='時間単価' ? '時間単価' : '時間給';
+  const breakdown = [{label:`${unitLabel} ${hLabel}×¥${fmtUnitPrice(tk)}`, amount:baseAmt}];
+  // 集荷品目単価(時間単価で集荷もする人)
+  let colAmt = 0;
+  const cp = st.fixedPrices?.col||{};
+  const pu = (D.pickup||[]).filter(r=>r.staff===st.name && (r.date||'').startsWith(monStr));
+  const puSum = {};
+  pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+  Object.entries(puSum).forEach(([k,q])=>{
+    if(q>0&&cp[k]){
+      const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
+      const camt = calcUnitTotal(cp[k], q, taxFlag);
+      breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:camt});
+      colAmt += camt;
+    }
+  });
+  return { amount: baseAmt+colAmt, workMin, hLabel, colAmt, breakdown };
+}
+
 // ─── 従事員 ───
 function renderStaff(flt){
   const searchEl=$('staff-search');
@@ -12063,6 +12098,10 @@ function renderStaff(flt){
       D.delivery.filter(r=>r.staff===s.name).forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
+    } else if(s.kyuyo==='時間単価' || s.kyuyo==='時間給'){
+      // ★ 共通ヘルパー _calcHourlyPay で勤怠×単価を計算(明細タブと同一ロジック)
+      const _ym = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+      est = _calcHourlyPay(s, _ym).amount;
     } else {
       est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
     }
@@ -23618,35 +23657,10 @@ function _calcStaffPayment(name, monStr){
       total+=cAmt;
     }
   } else if(st.kyuyo==='時間単価' || st.kyuyo==='時間給'){
-    // ★ 2026/06/25: 時間単価・時間給は勤怠(att_logs)の稼働時間×単価で計算。
-    //   従来は時間単価の分岐が無く、時給をそのまま支払額にしていた(¥1,300のバグ)。
-    //   従業員一覧の概算と同じ計算に揃える。
-    const ATT_LOGS = lsGet(LS_KEYS.ATT,[])||[];
-    const myAtt = ATT_LOGS.filter(a=>
-      (a.driverName===st.name || String(a.driverId)===String(st.empNo))
-      && (a.date||'').startsWith(monStr)
-    );
-    const totalMin = myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
-    const totalH = totalMin/60;
-    const tk = st.tanka||0;
-    const amt = (tk>0 && totalH>0) ? Math.round(tk*totalH) : 0;
-    const h = Math.floor(totalMin/60), mm = totalMin%60;
-    const hLabel = (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分'));
-    const unitLabel = st.kyuyo==='時間単価' ? '時間単価' : '時間給';
-    total = amt;
-    breakdown.push({label:`${unitLabel} ${hLabel}×¥${fmtUnitPrice(tk)}`, amount:amt});
-    // 集荷の品目別単価があれば加算(時間単価で集荷もする人)
-    const cp=st.fixedPrices?.col||{};
-    const puSum={};
-    pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
-    Object.entries(puSum).forEach(([k,q])=>{
-      if(q>0&&cp[k]){
-        const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
-        const camt = calcUnitTotal(cp[k], q, taxFlag);
-        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:camt});
-        total+=camt;
-      }
-    });
+    // ★ 2026/06/25: 共通ヘルパー _calcHourlyPay を使用(従業員一覧の概算と同一計算)
+    const hp = _calcHourlyPay(st, monStr);
+    total = hp.amount;
+    hp.breakdown.forEach(b=>breakdown.push(b));
   } else {
     total=st.tanka||0;
     breakdown.push({label:st.kyuyo||'基本給', amount:total});
