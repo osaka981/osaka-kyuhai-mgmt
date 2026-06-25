@@ -12063,6 +12063,15 @@ function renderStaff(flt){
       D.delivery.filter(r=>r.staff===s.name).forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
+    } else if(s.kyuyo==='時間単価' || s.kyuyo==='時間給'){
+      // ★ 2026/06/24: 時間単価・時間給は勤怠(att_logs)の稼働時間×単価で概算。
+      //   明細・書類タブと同じ計算に揃える。完了件数ベースだと0になっていた。
+      const _nowYm = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+      const _ATT = lsGet(LS_KEYS.ATT,[])||[];
+      const _myAtt = _ATT.filter(a=>(a.driverName===s.name || String(a.driverId)===String(s.empNo)) && (a.date||'').startsWith(_nowYm));
+      const _totalMin = _myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
+      const _totalH = _totalMin/60;
+      est = (s.tanka>0 && _totalH>0) ? Math.round(s.tanka*_totalH) : 0;
     } else {
       est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
     }
