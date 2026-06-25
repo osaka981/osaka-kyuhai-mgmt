@@ -12063,15 +12063,6 @@ function renderStaff(flt){
       D.delivery.filter(r=>r.staff===s.name).forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
-    } else if(s.kyuyo==='時間単価' || s.kyuyo==='時間給'){
-      // ★ 2026/06/24: 時間単価・時間給は勤怠(att_logs)の稼働時間×単価で概算。
-      //   明細・書類タブと同じ計算に揃える。完了件数ベースだと0になっていた。
-      const _nowYm = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
-      const _ATT = lsGet(LS_KEYS.ATT,[])||[];
-      const _myAtt = _ATT.filter(a=>(a.driverName===s.name || String(a.driverId)===String(s.empNo)) && (a.date||'').startsWith(_nowYm));
-      const _totalMin = _myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
-      const _totalH = _totalMin/60;
-      est = (s.tanka>0 && _totalH>0) ? Math.round(s.tanka*_totalH) : 0;
     } else {
       est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
     }
@@ -23626,9 +23617,36 @@ function _calcStaffPayment(name, monStr){
       breakdown.push({label:`日額手当 ${workDays}日×¥${st.hoshoC.amt}`, amount:cAmt});
       total+=cAmt;
     }
-  } else if(st.kyuyo==='時間給'){
-    total=st.tanka||0;
-    breakdown.push({label:'時間給', amount:total});
+  } else if(st.kyuyo==='時間単価' || st.kyuyo==='時間給'){
+    // ★ 2026/06/25: 時間単価・時間給は勤怠(att_logs)の稼働時間×単価で計算。
+    //   従来は時間単価の分岐が無く、時給をそのまま支払額にしていた(¥1,300のバグ)。
+    //   従業員一覧の概算と同じ計算に揃える。
+    const ATT_LOGS = lsGet(LS_KEYS.ATT,[])||[];
+    const myAtt = ATT_LOGS.filter(a=>
+      (a.driverName===st.name || String(a.driverId)===String(st.empNo))
+      && (a.date||'').startsWith(monStr)
+    );
+    const totalMin = myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
+    const totalH = totalMin/60;
+    const tk = st.tanka||0;
+    const amt = (tk>0 && totalH>0) ? Math.round(tk*totalH) : 0;
+    const h = Math.floor(totalMin/60), mm = totalMin%60;
+    const hLabel = (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分'));
+    const unitLabel = st.kyuyo==='時間単価' ? '時間単価' : '時間給';
+    total = amt;
+    breakdown.push({label:`${unitLabel} ${hLabel}×¥${fmtUnitPrice(tk)}`, amount:amt});
+    // 集荷の品目別単価があれば加算(時間単価で集荷もする人)
+    const cp=st.fixedPrices?.col||{};
+    const puSum={};
+    pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+    Object.entries(puSum).forEach(([k,q])=>{
+      if(q>0&&cp[k]){
+        const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
+        const camt = calcUnitTotal(cp[k], q, taxFlag);
+        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:camt});
+        total+=camt;
+      }
+    });
   } else {
     total=st.tanka||0;
     breakdown.push({label:st.kyuyo||'基本給', amount:total});
