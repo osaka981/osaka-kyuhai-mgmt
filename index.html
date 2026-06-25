@@ -5516,8 +5516,11 @@ function applyFirebaseData() {
   const fbOffices = lsGet(LS_KEYS.OFFICES, null);
   const fbCompanies = lsGet(LS_KEYS.COMPANIES, null);
   const fbStaff = lsGet(LS_KEYS.STAFF, null);
-  // 初回起動またはlsが空のとき：サンプルデータをlocalStorageに保存
-  if((!fbCompanies || !fbCompanies.length) && D.companies && D.companies.length){
+  // 初回起動のみ：localStorageキー自体が存在しない(null)ときだけサンプルを保存。
+  // ★ 2026/06/25: 空配列[](=全削除)のときは復元しない。
+  //   従来は !length も条件にしていたため、委託会社を全削除しても
+  //   メモリ上のサンプルで埋め戻され、削除が巻き戻っていた。
+  if((fbCompanies===null || fbCompanies===undefined) && D.companies && D.companies.length){
     lsSet(LS_KEYS.COMPANIES, D.companies);
   }
   // 委託会社の復元(全フィールド)
@@ -5871,8 +5874,10 @@ function setupRealtimeSync() {
   });
   // 委託会社マスタ
   onValue(ref(fbDB, 'nikki/companies'), snap => {
-    if (!snap.exists()) return;
-    const v = snap.val();
+    // ★ 2026/06/25: snap.exists()がfalse(=全削除でノードが空)のときも
+    //   空配列として反映する。従来は return していたため、委託会社を
+    //   全削除しても古いデータに巻き戻る不具合があった。
+    const v = snap.exists() ? snap.val() : [];
     const arr = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet(LS_KEYS.COMPANIES, arr);
     applyFirebaseData();
