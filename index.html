@@ -7177,80 +7177,10 @@ function buildGroupedItems(itemsObj){
 // ─────────────────────────────────────────────
 const D = {
   payments: {},
-  companies: [
-    {
-      id:10001, companyCode:'10001', name:'株式会社UP', tel:'090-5152-8173',
-      contact:'', fax:'', addr:'大阪府茨木市大正町1-1-309',
-      note:'', invoiceNo:'T8120903004136', invoiceName:'株式会社UP',
-      offices:[], active:true,
-      bankInfo:{name:'三井住友銀行', branch:'154 豊中支店', type:'普通', no:'7499133', holder:'カ）ユーピー'},
-      gasCards:[], yosha:[],
-      prices:{
-        del:{kanryo:0,tenso:0,night:0,ogata:0,shukka:0,_taxType:'ex'},
-        col:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:0,pk2:0,cp:0,ke:250,te:0,_taxType:'in'},
-        custRoutes:[], _othTaxType:'ex'
-      },
-      colRoutes:[
-        {
-          id:'rt_up_001', name:'ASLAJ（アスラジャ）集荷', pattern:'A', taxType:'ex',
-          customers:[], note:'個建 税抜¥40/個（税込¥44）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:0,pk2:0,cp:0,ke:40,te:0}
-        },
-        {
-          id:'rt_up_002', name:'北郵便局集荷（ヘソ）', pattern:'B', taxType:'ex',
-          customers:[], note:'車建 税抜¥2,495/日（税込¥2,745）',
-          daily:2495, steps:[]
-        },
-        {
-          id:'rt_up_003', name:'城東郵便局集荷', pattern:'A', taxType:'ex',
-          customers:[], note:'アップビー/ファミット 税抜¥25/個（税込¥28）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:0,pk2:0,cp:25,ke:25,te:0}
-        },
-        {
-          id:'rt_up_004', name:'大阪フォトサービス集荷', pattern:'A', taxType:'in',
-          customers:[], note:'ゆうパック¥20/個・ゆうパケット¥8/個（税込）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:8,pk2:8,cp:0,ke:0,te:0}
-        },
-        {
-          id:'rt_up_005', name:'寝屋川郵便局集荷（摂津倉庫）', pattern:'A', taxType:'ex',
-          customers:[], note:'個建 税抜¥29/個（税込¥33）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:0,pk2:0,cp:0,ke:29,te:0}
-        },
-        {
-          id:'rt_up_006', name:'岡本商会集荷', pattern:'B', taxType:'ex',
-          customers:[], note:'車建 税抜¥2,250/日（税込¥2,475）',
-          daily:2250, steps:[]
-        },
-        {
-          id:'rt_up_007', name:'浪速郵便局集荷（フジキ）', pattern:'B', taxType:'ex',
-          customers:[], note:'車建 税抜¥2,300/日（税込¥2,530）',
-          daily:2300, steps:[]
-        },
-        {
-          id:'rt_up_008', name:'港郵便局集荷（4か所）', pattern:'B', taxType:'ex',
-          customers:[], note:'出勤 税抜¥5,000/日（税込¥5,500）',
-          daily:5000, steps:[]
-        },
-        {
-          id:'rt_up_009', name:'港郵便局集荷（徳岡）', pattern:'A', taxType:'ex',
-          customers:[], note:'ゆうパック 税抜¥80/個（税込¥88）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:80,pk1:0,pk2:0,cp:0,ke:0,te:0}
-        },
-        {
-          id:'rt_up_010', name:'西淀川郵便局集荷（ジェット）', pattern:'A', taxType:'ex',
-          customers:[], note:'個建 税抜¥10/個（税込¥12）',
-          prices:{p60:0,p80:0,p100:0,p120:0,p140:0,p160:0,pk1:0,pk2:10,cp:0,ke:0,te:0}
-        },
-        {
-          id:'rt_up_011', name:'西郵便局集荷（京福堂/ゼンケア）', pattern:'A', taxType:'ex',
-          customers:[], note:'京福堂：YP税抜¥26/PKT¥8 / ゼンケア：YP¥26/PKT¥8 / ゆうメールは弊社ケース単価',
-          prices:{p60:26,p80:26,p100:0,p120:0,p140:0,p160:0,pk1:8,pk2:8,cp:0,ke:0,te:0}
-        },
-      ],
-      charges:[], memo:{}, otherItems:[],
-    },
-    {id:10002, companyCode:'10002', name:'左近トランスポート', tel:'06-3333-4444', contact:'', addr:'', note:'', offices:[], colRoutes:[], active:true},
-  ],
+  // ★ 2026/06/25: デフォルトの委託会社サンプル(UP/左近)を削除。
+  //   コードに焼き付けると全削除しても復活し消せなくなるため、
+  //   委託会社は全てFirebase/localStorageで管理する。
+  companies: [],
   // 部署マスタ (Phase 1 新設)
   departments: [
     {id:1, code:'ADM', name:'管理部',     type:'mgmt', active:true, order:10, note:'社員・役員・事務'},
@@ -7348,9 +7278,9 @@ const D = {
      items:{'ゆうパック_60':20,'ゆうパック_80':15,'ゆうパック_100':10,'ゆうパケット_通常':45,'定形外(ゆうメール)':30},note:''},
   ],
   // 委託会社マスタ
-  companies: [
-    {id:1, name:'株式会社○○運輸', tel:'06-1111-2222', addr:'大阪市北区○○', contact:'担当者A'},
-  ],
+  // ★ 2026/06/25: サンプル(株式会社○○運輸)を削除。実データはFirebase/localStorageから読む。
+  //   ここにサンプルを残すと、全削除しても初期化時に復活してしまう。
+  companies: [],
   // 顧客・単価契約
   customers: [
     {id:4,custNo:'4',name:'ユック・コーポレーション',region:'',start:'',prices:{'ゆうパック_60':150,'ゆうパック_80':180,'ゆうパック_100':220,'ゆうパック_120':260,'ゆうパック_140':300,'ゆうパック_160':350,'ゆうパケット_通常':80,'ゆうパケット_7cm以上':100,'クリックポスト':60,'ケース':120,'定形外(ゆうメール)':50,'チャーター':5000}},
@@ -20258,14 +20188,14 @@ function toggleCompanyPrices(headerEl){
 let _coEditId=null, _drvEditId=null, _drvCoId=null;
 
 function renderCompanyPage(){
-  // lsからcompaniesを読み込む（localStorageが使える場合のみ）
+  // localStorageのcompaniesを正として読み込む（localStorageが使える場合のみ）
+  // ★ 2026/06/25: 従来は特定invoiceNoの有無で判定し、無ければD.companies(サンプル)で
+  //   上書きしていたため、全削除しても画面を開くたびにサンプルが復活していた。
+  //   localStorageにキーがあればそれを尊重(空配列も尊重)。キー自体が無い初回のみ現状維持。
   try {
     const lsCo = lsGet(LS_KEYS.COMPANIES, null);
-    const hasUP = lsCo && lsCo.some(c=>c.invoiceNo==='T8120903004136');
-    if(lsCo && lsCo.length && hasUP){
-      D.companies = lsCo;
-    } else {
-      lsSet(LS_KEYS.COMPANIES, D.companies);
+    if(lsCo !== null && lsCo !== undefined){
+      D.companies = Array.isArray(lsCo) ? lsCo : [];
     }
   } catch(e) {
     // file://の場合はD.companiesのサンプルデータをそのまま使用
