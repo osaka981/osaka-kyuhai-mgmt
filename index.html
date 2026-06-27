@@ -2569,7 +2569,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- チャーター入力モーダル -->
-<div id="m-charter" class="mbg">
+<div id="m-charter" class="mbg" data-no-bgclose>
 <div class="modal" style="width:620px;max-width:98vw;">
   <div class="mhd">
     <div class="mtt" id="charter-modal-title">🚐 チャーター入力</div>
@@ -2593,7 +2593,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <!-- MODALS -->
 
 <!-- 宅配日報入力（運坊.NET形式） -->
-<div id="m-del" class="mbg">
+<div id="m-del" class="mbg" data-no-bgclose>
 <div class="modal" style="width:860px;max-width:98vw;">
   <div class="mhd"><div class="mtt">📋 宅配日報入力</div><button class="mx" onclick="closeM('m-del')">×</button></div>
 
@@ -2794,7 +2794,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 集荷日報入力 -->
-<div id="m-pu" class="mbg">
+<div id="m-pu" class="mbg" data-no-bgclose>
 <div class="modal modal-w">
   <div class="mhd"><div class="mtt">📦 集荷日報入力</div><button class="mx" onclick="closeM('m-pu')">×</button></div>
   <div class="f3 mb8">
@@ -2897,7 +2897,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 顧客・契約登録 -->
-<div id="m-cust" class="mbg">
+<div id="m-cust" class="mbg" data-no-bgclose>
 <div class="modal modal-w">
   <div class="mhd">
     <div class="mtt">顧客・単価契約登録</div>
@@ -3179,7 +3179,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 従業員台帳登録モーダル -->
-<div id="m-staff" class="mbg">
+<div id="m-staff" class="mbg" data-no-bgclose>
 <div class="modal" id="m-staff-modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:row;position:relative;transition:max-width .3s;">
 
   <!-- 書類PDFプレビュー（左サイドパネル） -->
@@ -4056,7 +4056,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 部署 追加・編集モーダル (Phase 2) -->
-<div id="m-dept" class="mbg">
+<div id="m-dept" class="mbg" data-no-bgclose>
 <div class="modal" style="width:440px;max-width:98vw;">
   <div class="mhd"><div class="mtt" id="m-dept-title">🏛 部署を追加</div><button class="mx" onclick="closeM('m-dept')">×</button></div>
   <input type="hidden" id="dept-edit-id">
@@ -4090,7 +4090,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 拠点 追加・編集モーダル (Phase 2) -->
-<div id="m-loc" class="mbg">
+<div id="m-loc" class="mbg" data-no-bgclose>
 <div class="modal" style="width:600px;max-width:98vw;">
   <div class="mhd"><div class="mtt" id="m-loc-title">📍 拠点を追加</div><button class="mx" onclick="closeM('m-loc')">×</button></div>
   <input type="hidden" id="loc-edit-id">
@@ -4222,7 +4222,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 営業所追加 -->
-<div id="m-office" class="mbg">
+<div id="m-office" class="mbg" data-no-bgclose>
 <div class="modal" style="width:620px;max-width:98vw;";position:relative;">
   <div class="mhd"><div class="mtt">🏢 営業所追加・編集</div><button class="mx" onclick="closeM('m-office')">×</button></div>
 
@@ -4400,7 +4400,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 宅配請求発行 -->
-<div id="m-inv" class="mbg">
+<div id="m-inv" class="mbg" data-no-bgclose>
 <div class="modal modal-n">
   <div class="mhd"><div class="mtt">🧾 宅配 請求書発行</div><button class="mx" onclick="closeM('m-inv')">×</button></div>
   <div class="f2" style="gap:8px;">
@@ -16900,7 +16900,7 @@ function openSurveyCreateModal(){
     </div>
   `).join('');
 
-  const modalHtml = `<div id="m-survey-create" class="mbg" style="display:flex;">
+  const modalHtml = `<div id="m-survey-create" class="mbg" data-no-bgclose style="display:flex;">
     <div class="modal" style="width:720px;max-width:96vw;max-height:92vh;overflow-y:auto;">
       <div class="mhd"><div class="mtt">📨 新規 休業調査作成</div><button class="mx" onclick="document.getElementById('m-survey-create').remove()">×</button></div>
       <div class="fg" style="margin-bottom:10px;">
@@ -30946,7 +30946,14 @@ function closeM(id){
     const mPuEl = document.getElementById('m-pu'); if(mPuEl) mPuEl._editId = null;
   }
 }
-document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{if(e.target===bg)bg.classList.remove('on');}));
+// ★ 2026/06/25: data-no-bgclose を持つモーダルは背景クリックで閉じない。
+//   入力フォーム系モーダルで、誤って背景をクリックして入力が消える事故を防ぐ。
+document.querySelectorAll('.mbg').forEach(bg=>bg.addEventListener('click',e=>{
+  if(e.target===bg){
+    if(bg.hasAttribute('data-no-bgclose')) return; // 背景クリック無効
+    bg.classList.remove('on');
+  }
+}));
 
 // ══════════════════════════════════════════════
 // 📄 業務委託契約書 一括印刷 (セッション5)
@@ -32055,7 +32062,7 @@ window.dqImportJson = function(){
 
 
 <!-- 委託会社登録・編集モーダル -->
-<div id="m-company" class="mbg">
+<div id="m-company" class="mbg" data-no-bgclose>
 <div class="modal" style="width:min(1100px,97vw);max-width:97vw;height:92vh;max-height:96vh;display:flex;flex-direction:column;position:relative;">
   <div class="mhd">
     <div class="mtt" id="m-company-title">委託会社登録</div>
@@ -32517,7 +32524,7 @@ window.dqImportJson = function(){
 </div>
 
 <!-- ドライバー登録・編集モーダル -->
-<div id="m-driver" class="mbg">
+<div id="m-driver" class="mbg" data-no-bgclose>
 <div class="modal" style="width:620px;max-width:98vw;";position:relative;">
   <div class="mhd"><div class="mtt" id="m-driver-title">🚗 ドライバー登録</div><button class="mx" onclick="closeM('m-driver')">×</button></div>
   <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:12px 14px;margin-bottom:12px;">
@@ -32597,7 +32604,7 @@ window.dqImportJson = function(){
 </div>
 
 <!-- 集荷ルート登録モーダル -->
-<div id="m-route" class="mbg">
+<div id="m-route" class="mbg" data-no-bgclose>
 <div class="modal" style="width:780px;max-width:98vw;max-height:92vh;overflow-y:auto;";position:relative;">
   <div class="mhd"><div class="mtt" id="m-route-title">🗺️ 集荷ルート登録</div><button class="mx" onclick="closeM('m-route')">×</button></div>
 
@@ -32834,7 +32841,7 @@ window.dqImportJson = function(){
 </script>
 
 <!-- ══ 休業日 追加/編集モーダル(Phase 1: 2026/05/01) ══ -->
-<div id="m-schedule" class="mbg">
+<div id="m-schedule" class="mbg" data-no-bgclose>
 <div class="modal" style="width:520px;max-width:96vw;max-height:92vh;overflow-y:auto;">
   <div class="mhd"><div class="mtt" id="m-schedule-title">📅 休業日登録</div><button class="mx" onclick="closeM('m-schedule')">×</button></div>
 
