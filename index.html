@@ -2193,7 +2193,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <div style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
               <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:8px;">実施日時</div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
-                <div class="fg"><label style="font-size:10px;">実施日</label><input type="date" id="dq-date" class="fi" style="font-size:11px;padding:5px 8px;"></div>
+                <div class="fg"><label style="font-size:10px;">実施日</label><input type="date" min="1900-01-01" max="2099-12-31" id="dq-date" class="fi" style="font-size:11px;padding:5px 8px;"></div>
                 <div class="fg"><label style="font-size:10px;">開始時刻</label><input type="time" id="dq-time-from" class="fi" style="font-size:11px;padding:5px 8px;" onchange="dqCalcQuote()"></div>
                 <div class="fg"><label style="font-size:10px;">終了時刻(予定)</label><input type="time" id="dq-time-to" class="fi" style="font-size:11px;padding:5px 8px;"></div>
               </div>
@@ -2600,7 +2600,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 基本情報 -->
   <input type="hidden" id="dd-post">
   <div style="display:grid;grid-template-columns:160px 1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>日付</label><input type="date" id="dd-date" class="fi" oninput="valDel()"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi" oninput="valDel()"></div>
 
     <!-- ① 営業所コンボ：番号/名前で検索、確定で郵便局・従業員に連動 -->
     <div class="fg">
@@ -2798,7 +2798,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <div class="modal modal-w">
   <div class="mhd"><div class="mtt">📦 集荷日報入力</div><button class="mx" onclick="closeM('m-pu')">×</button></div>
   <div class="f3 mb8">
-    <div class="fg"><label>日付</label><input type="date" id="pu-date" class="fi"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="pu-date" class="fi"></div>
 
     <!-- 営業所コンボ -->
     <div class="fg">
@@ -2923,7 +2923,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
     <div class="fg"><label>顧客名</label><input type="text" id="cu-name" class="fi" placeholder="例：山田商事株式会社"></div>
     <div class="fg"><label>納入郵便局もしくは地域</label><input type="text" id="cu-reg" class="fi" placeholder="例：浜寺郵便局 / 大阪市北区"></div>
-    <div class="fg"><label>契約開始日</label><input type="date" id="cu-start" class="fi"></div>
+    <div class="fg"><label>契約開始日</label><input type="date" id="cu-start" class="fi" min="1900-01-01" max="2099-12-31"></div>
   </div>
 
   <!-- ■ 顧客詳細情報 -->
@@ -4407,7 +4407,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg" style="grid-column:span 2"><label>請求先</label><input type="text" class="fi" placeholder="日本郵便㈱ ○○支店"></div>
     <div class="fg"><label>対象期間</label><input type="month" class="fi"></div>
     <div class="fg"><label>営業所</label><select class="fi" id="inv-off"></select></div>
-    <div class="fg"><label>入金期限</label><input type="date" class="fi"></div>
+    <div class="fg"><label>入金期限</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi"></div>
   </div>
   <div class="mft">
     <button class="btn b-gh" onclick="closeM('m-inv')">キャンセル</button>
@@ -12355,7 +12355,7 @@ function addCharterInputRow(){
   const row = document.createElement('div');
   row.style.cssText = 'display:grid;grid-template-columns:120px 1fr 100px 1fr 28px;gap:5px;align-items:end;';
   row.innerHTML = `
-    <div class="fg"><label style="font-size:9px;">日付</label><input type="date" class="fi charter-date" style="font-size:11px;padding:3px 6px;"></div>
+    <div class="fg"><label style="font-size:9px;">日付</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi charter-date" style="font-size:11px;padding:3px 6px;"></div>
     <div class="fg"><label style="font-size:9px;">顧客名・行き先</label><input type="text" class="fi charter-client" style="font-size:11px;padding:3px 6px;" placeholder="○○会社 / ○○市"></div>
     <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi charter-amt" style="font-size:11px;padding:3px 6px;" placeholder="0"></div>
     <div class="fg"><label style="font-size:9px;">備考</label><input type="text" class="fi charter-note" style="font-size:11px;padding:3px 6px;" placeholder="積載品・特記など"></div>
@@ -12417,7 +12417,7 @@ function _addGasRow(list){
   const row=document.createElement('div');
   row.style.cssText='display:grid;grid-template-columns:110px 60px 90px 1fr 26px;gap:4px;align-items:end;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" class="fi gs-date" style="font-size:10px;padding:3px 5px;"></div>
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi gs-date" style="font-size:10px;padding:3px 5px;"></div>
     <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi gs-cnt" style="font-size:10px;padding:3px 5px;" placeholder="1" min="1" value="1"></div>
     <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi gs-amt" style="font-size:10px;padding:3px 5px;" placeholder="0"></div>
     <div class="fg"><label style="font-size:9px;">備考（給油先など）</label><input type="text" class="fi gs-note" style="font-size:10px;padding:3px 5px;" placeholder="○○SS など"></div>
@@ -12486,7 +12486,7 @@ function addStRepairRow(d){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
         <div class="fg" style="min-width:108px;"><label style="font-size:8.5px;">修理日</label>
-          <input type="date" class="fi rp-date" style="font-size:10px;padding:3px 5px;" value="${d.date||''}"></div>
+          <input type="date" min="1900-01-01" max="2099-12-31" class="fi rp-date" style="font-size:10px;padding:3px 5px;" value="${d.date||''}"></div>
         <div class="fg" style="min-width:80px;"><label style="font-size:8.5px;">種別</label>
           <select class="fi rp-type" style="font-size:10px;padding:3px 5px;">
             <option ${d.type==='免責'||!d.type?'selected':''}>免責</option>
@@ -12566,7 +12566,7 @@ function addDelPenaltyRow(){
   const row=document.createElement('div');
   row.style.cssText='display:grid;grid-template-columns:110px 70px 90px 1fr 26px;gap:4px;align-items:end;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" class="fi pn-date" style="font-size:10px;padding:3px 5px;"></div>
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi pn-date" style="font-size:10px;padding:3px 5px;"></div>
     <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi pn-cnt" style="font-size:10px;padding:3px 5px;" placeholder="1" min="1" value="1"></div>
     <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi pn-amt" style="font-size:10px;padding:3px 5px;" placeholder="0"></div>
     <div class="fg"><label style="font-size:9px;">事由</label><input type="text" class="fi pn-note" style="font-size:10px;padding:3px 5px;" placeholder="遅延・破損など"></div>
@@ -12579,7 +12579,7 @@ function addPUPenaltyRow(){
   const row=document.createElement('div');
   row.style.cssText='display:grid;grid-template-columns:110px 70px 90px 1fr 26px;gap:4px;align-items:end;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" class="fi pn-date" style="font-size:10px;padding:3px 5px;"></div>
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi pn-date" style="font-size:10px;padding:3px 5px;"></div>
     <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi pn-cnt" style="font-size:10px;padding:3px 5px;" placeholder="1" min="1" value="1"></div>
     <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi pn-amt" style="font-size:10px;padding:3px 5px;" placeholder="0"></div>
     <div class="fg"><label style="font-size:9px;">事由</label><input type="text" class="fi pn-note" style="font-size:10px;padding:3px 5px;" placeholder="遅延・破損など"></div>
@@ -12623,7 +12623,7 @@ function addDelCharterRow(){
   const row=document.createElement('div');
   row.style.cssText='display:grid;grid-template-columns:110px 1fr 90px 1fr 26px;gap:4px;align-items:start;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">日付</label><input type="date" class="fi ch-date" style="font-size:10px;padding:3px 5px;"></div>
+    <div class="fg"><label style="font-size:9px;">日付</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi ch-date" style="font-size:10px;padding:3px 5px;"></div>
     <div class="fg"><label style="font-size:9px;">顧客名・行き先</label>
       <div class="charter-client-wrap" style="position:relative;">
         <input type="text" class="fi ch-client" style="font-size:10px;padding:3px 5px;" placeholder="顧客名を入力 or 選択..."
@@ -14560,7 +14560,7 @@ function renderPaymentMgmt(){
       <td class="tr"><input type="number" class="fi pm-paid" data-cid="${r.id}" value="${r.paid||''}" placeholder="0" style="width:110px;font-size:11px;padding:3px 6px;text-align:right;font-family:monospace;"></td>
       <td class="tr mono fw7" style="${diffColor}">¥${fmt(r.diff)}</td>
       <td class="tc"><span class="bdg ${stColor}">${stBadge}</span></td>
-      <td><input type="date" class="fi pm-date" data-cid="${r.id}" value="${esc(r.paidDate)}" style="font-size:11px;padding:3px 6px;"></td>
+      <td><input type="date" min="1900-01-01" max="2099-12-31" class="fi pm-date" data-cid="${r.id}" value="${esc(r.paidDate)}" style="font-size:11px;padding:3px 6px;"></td>
       <td><input type="text" class="fi pm-memo" data-cid="${r.id}" value="${esc(r.memo)}" placeholder="備考" style="width:140px;font-size:11px;padding:3px 6px;"></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" style="text-align:center;padding:16px;color:var(--txt2)">この月に請求のある顧客がありません</td></tr>';
@@ -14995,7 +14995,7 @@ function renderAdvanceTab(){
 function addAdvanceRow(){
   const dateVal=new Date().toISOString().slice(0,10);
   const html='<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px;">'
-    +'<div class="fg"><label>日付</label><input type="date" id="adv-date" class="fi" value="'+dateVal+'"></div>'
+    +'<div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="adv-date" class="fi" value="'+dateVal+'"></div>'
     +'<div class="fg"><label>金額（円）</label><input type="number" id="adv-amount" class="fi" placeholder="10000"></div>'
     +'<div class="fg"><label>理由・メモ</label><input type="text" id="adv-reason" class="fi" placeholder="生活費前払いなど"></div>'
     +'</div>';
@@ -15055,7 +15055,7 @@ function payHistoryRowHtml(h){
     <div style="display:grid;grid-template-columns:120px 130px 130px 1fr 28px;gap:6px;align-items:end;margin-bottom:6px;">
       <div class="fg">
         <label style="font-size:8.5px;">適用開始日</label>
-        <input type="date" class="fi ph-from" style="font-size:10px;padding:3px 5px;" value="${h.from||''}">
+        <input type="date" min="1900-01-01" max="2099-12-31" class="fi ph-from" style="font-size:10px;padding:3px 5px;" value="${h.from||''}">
       </div>
       <div class="fg">
         <label style="font-size:8.5px;">給与形態</label>
@@ -15220,7 +15220,7 @@ function addPenaltyRow(){
   const row=document.createElement('div');
   row.style.cssText='display:grid;grid-template-columns:100px 1fr 1fr 30px;gap:5px;align-items:end;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" class="fi penalty-date" style="font-size:11px;padding:3px 6px;"></div>
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date" style="font-size:11px;padding:3px 6px;"></div>
     <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi penalty-cnt" style="font-size:11px;padding:3px 6px;" placeholder="1" min="1" value="1"></div>
     <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;" placeholder="0"></div>
     <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.parentElement.remove()">✕</button>`;
@@ -16910,15 +16910,15 @@ function openSurveyCreateModal(){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
         <div class="fg">
           <label style="font-size:12px;font-weight:700;">期間開始 <span style="color:var(--red2);">*</span></label>
-          <input type="date" id="srv-period-start" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
+          <input type="date" min="1900-01-01" max="2099-12-31" id="srv-period-start" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
         </div>
         <div class="fg">
           <label style="font-size:12px;font-weight:700;">期間終了 <span style="color:var(--red2);">*</span></label>
-          <input type="date" id="srv-period-end" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
+          <input type="date" min="1900-01-01" max="2099-12-31" id="srv-period-end" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;">
         </div>
         <div class="fg">
           <label style="font-size:12px;font-weight:700;">回答期日 <span style="color:var(--red2);">*</span></label>
-          <input type="date" id="srv-due-date" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;" value="${dueStr}">
+          <input type="date" min="1900-01-01" max="2099-12-31" id="srv-due-date" class="fi" style="font-size:13px;padding:6px 8px;margin-top:4px;" value="${dueStr}">
         </div>
       </div>
       <div class="fg" style="margin-bottom:10px;">
@@ -20361,7 +20361,7 @@ function addCoCharge(d){
   row.style.cssText='background:rgba(192,57,43,.05);border:1px solid rgba(192,57,43,.2);border-radius:5px;padding:8px 10px;display:grid;grid-template-columns:100px 1fr 90px 90px 1fr 26px;gap:6px;align-items:end;';
   row.innerHTML=`
     <div class="fg" style="margin:0;"><label style="font-size:10px;">発生日</label>
-      <input type="date" class="fi cc-date" style="font-size:11px;padding:3px 5px;" value="${d.date||''}"></div>
+      <input type="date" min="1900-01-01" max="2099-12-31" class="fi cc-date" style="font-size:11px;padding:3px 5px;" value="${d.date||''}"></div>
     <div class="fg" style="margin:0;"><label style="font-size:10px;">種別</label>
       <select class="fi cc-type" style="font-size:11px;padding:3px 5px;">
         <option ${d.type==='違約金'||!d.type?'selected':''}>違約金</option>
@@ -21811,7 +21811,7 @@ function openPayHistModal(sid, editFrom){
       <div id="mph-staff-name" style="font-size:11px;color:var(--tel2);font-weight:700;margin-bottom:12px;"></div>
       <div class="f2 mb8">
         <div class="fg"><label>適用開始日 <span style="color:var(--red2);">*</span></label>
-          <input type="date" id="mph-from" class="fi"></div>
+          <input type="date" min="1900-01-01" max="2099-12-31" id="mph-from" class="fi"></div>
         <div class="fg"><label>給与形態</label>
           <select id="mph-ky" class="fi" onchange="onMphKyChange()">
             <option>月給</option><option>保証</option><option>時給</option>
@@ -32583,7 +32583,7 @@ window.dqImportJson = function(){
     </div>
     <div class="fg">
       <label style="font-size:12px;">入社・開始日</label>
-      <input type="date" id="drv-start" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;">
+      <input type="date" min="1900-01-01" max="2099-12-31" id="drv-start" class="fi" style="font-size:13px;padding:6px 10px;margin-top:4px;">
     </div>
     <div class="fg">
       <label style="font-size:12px;">備考</label>
@@ -32887,9 +32887,9 @@ window.dqImportJson = function(){
       </label>
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
-      <input type="date" id="m-sch-date-start" class="fi" style="font-size:13px;padding:6px 8px;flex:1;">
+      <input type="date" min="1900-01-01" max="2099-12-31" id="m-sch-date-start" class="fi" style="font-size:13px;padding:6px 8px;flex:1;">
       <span id="m-sch-range-sep" style="display:none;">〜</span>
-      <input type="date" id="m-sch-date-end" class="fi" style="font-size:13px;padding:6px 8px;flex:1;display:none;">
+      <input type="date" min="1900-01-01" max="2099-12-31" id="m-sch-date-end" class="fi" style="font-size:13px;padding:6px 8px;flex:1;display:none;">
     </div>
   </div>
 
