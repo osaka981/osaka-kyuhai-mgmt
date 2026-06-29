@@ -11858,13 +11858,44 @@ function archiveDelete(kind, id){
     okText:'完全削除する', cancelText:'キャンセル'
   }).then(ok=>{
     if(!ok) return;
-    // 2段階確認
-    showDialog({
-      icon:'⚠️', title:'最終確認',
-      msg:`本当に「${item.name}」を完全削除しますか？\n\nこの操作は取り消せません。\n関連データへの影響を再度ご確認ください。`,
-      okText:'はい、削除します', cancelText:'キャンセル'
-    }).then(ok2=>{
-      if(!ok2) return;
+    // ★ 2026/06/29: 委託会社所属ドライバー削除時の追加警告
+    //   委託会社所属は日報アプリ(nikki/drivers)と共有されているため、
+    //   経営管理で削除すると日報側のドライバーも消える。事前に明示する。
+    let extraWarn = Promise.resolve(true);
+    if(kind==='staff' && item.kubun && String(item.kubun).includes('委託会社')){
+      extraWarn = showDialog({
+        icon:'⚠️', title:'委託会社所属ドライバーの削除',
+        msg:`「${item.name}」は委託会社所属ドライバーです。\n\nこのドライバーは日報アプリ(委託会社オーナーページ)と共有されています。\n経営管理から削除すると、日報アプリ側のドライバーも一緒に削除されます。\n\n本当に削除しますか?\n\n※ 退職扱いにするだけなら、削除せず編集画面で「在籍状態」を変更してください。`,
+        okText:'それでも削除する', cancelText:'やめる'
+      });
+    }
+    extraWarn.then(okExtra=>{
+      if(!okExtra) return;
+      // ★ 同名ドライバーが他に存在する場合、IDを明示して誤削除を防ぐ
+      let dupCheck = Promise.resolve(true);
+      if(kind==='staff'){
+        const sameName = (D.staff||[]).filter(s=>s.name===item.name && String(s.id)!==String(id));
+        if(sameName.length>0){
+          const dupList = sameName.map(s=>`・${s.name}(ID:${s.id||s.empNo||'?'}${s.kubun?' / '+s.kubun:''})`).join('\n');
+          dupCheck = showDialog({
+            icon:'⚠️', title:'同名ドライバーが存在します',
+            msg:`「${item.name}」という同名のドライバーが他に${sameName.length}件あります。\n\n${dupList}\n\n今回削除するのは ID:${item.id||item.empNo||'?'} の1件のみです。\n他の同名ドライバーは削除されません。\n\nこのID:${item.id||item.empNo||'?'} を削除してよろしいですか?`,
+            okText:'このIDを削除する', cancelText:'キャンセル'
+          });
+        }
+      }
+      dupCheck.then(okDup=>{
+        if(!okDup) return;
+        _doArchiveDelete(kind, id, item, label, listKey, lsKey);
+      });
+    });
+  });
+}
+
+// 実際の削除処理(確認後に呼ばれる)
+function _doArchiveDelete(kind, id, item, label, listKey, lsKey){
+  {
+    {
       // 番号リサイクル防止のため、削除番号を記録
       if(kind==='cust' && item.custNo){
         _addDeletedNo('custNo', item.custNo);
@@ -11888,10 +11919,15 @@ function archiveDelete(kind, id){
       try{
         if(kind==='cust'){ const fb=(lsGet(lsKey,[])||[]).filter(x=>x.id!==id); fbSet('customers', fb); }
       }catch(e){}
+      // ★ 2026/06/29: 従業員削除時は staff_full も更新(Firebase同期の整合)
+      if(kind==='staff'){
+        try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
+        try{ lsSet('nikki_staff_full', D.staff); }catch(e){}
+      }
       renderArchive();
       showAlert({msg:`${label}「${item.name}」を完全削除しました`});
-    });
-  });
+  }
+  }
 }
 
 
