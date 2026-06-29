@@ -6797,6 +6797,7 @@ function resetStaffModal(){
 function openNewStaff(){
   resetStaffModal();
   openM('m-staff');
+  if(typeof buildCompanySel==='function') buildCompanySel(); // ★ 委託会社プルダウンを構築
   setTimeout(_bindKanaImeGuards, 100);
   setTimeout(()=>updateTabNavBtns('staff'),80);
   setTimeout(()=>{switchStTab('info');updateTabNavBtns('staff');},50);
@@ -11058,6 +11059,7 @@ function _installCoSaveHookForFleet(){
 function _openDriverModalFromFleet(md){
   resetStaffModal();
   openM('m-staff');
+  if(typeof buildCompanySel==='function') buildCompanySel(); // ★ 委託会社プルダウンを構築
   setTimeout(_bindKanaImeGuards, 100);
   // ★ フリート由来の新規登録は必ず「在籍」で開始(2026/06/20)
   if($('st-status'))$('st-status').value='在籍';
@@ -30722,6 +30724,18 @@ function _editStaffImpl(id){
   if(!s) return;
   resetStaffModal();
   openM('m-staff');
+  if(typeof buildCompanySel==='function') buildCompanySel(); // ★ 委託会社プルダウンを構築
+  // ★ 既存の委託会社所属なら、その会社をプルダウンで選択状態にする
+  (function(){
+    const sel=$('st-company-sel'); if(!sel) return;
+    let coId='';
+    if(s.companyId) coId=String(s.companyId);
+    else if(s.companyName && Array.isArray(D.companies)){
+      const co=D.companies.find(c=>c.name===s.companyName);
+      if(co) coId=String(co.id);
+    }
+    if(coId){ sel.value=coId; if(typeof onCompanySelChange==='function') onCompanySelChange(); }
+  })();
   setTimeout(_bindKanaImeGuards, 100);
   // ★ 元の型のIDを保存(他の関数が x.id===editId で比較するため)
   $('m-staff')._editId = s.id;
