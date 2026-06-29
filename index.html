@@ -1747,6 +1747,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6" style="flex-wrap:wrap;">
           <input type="text" id="staff-search" class="fi" placeholder="番号・氏名で検索..." style="width:220px;" oninput="renderStaff(document.getElementById('staff-search')._flt||'')">
           <select id="staff-office-filter" class="fi" style="width:150px;" onchange="renderStaff(document.getElementById('staff-search')._flt||'')"><option value="">全営業所</option></select>
+          <label style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--txt);cursor:pointer;border:1px solid var(--brd);border-radius:6px;padding:5px 10px;"><input type="checkbox" id="staff-hide-company" onchange="renderStaff(document.getElementById('staff-search')._flt||'')" style="margin:0;">委託ドライバーを除く</label>
           <button class="btn b-gh btn-sm" onclick="fltStaff('')">全員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('社員')">社員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
@@ -5434,6 +5435,55 @@ async function syncFromFirebase() {
 }
 
 // Firebaseデータ → D に反映(データ変換含む)
+// ★ 2026/06/29: 日報オーナー登録の委託会社所属ドライバーを D.staff に補完マージ。
+//   給与計算では区分で除外、集荷数(請求)には反映する。両面同期の経営管理側受け口。
+function _mergeOwnerCompanyDrivers(){
+  try{
+    const fbDrivers = lsGet(LS_KEYS.DRIVERS, null);
+    if(!fbDrivers || !fbDrivers.length) return;
+    if(!Array.isArray(D.staff)) D.staff = [];
+    // 委託会社所属と判定: kubun が委託会社所属 / companyId を持つ / ID が「数字-数字」形式(会社コード-連番)
+    const isCompanyDriver = d=>{
+      if(!d) return false;
+      if(d.kubun && String(d.kubun).includes('委託会社')) return true;
+      if(d.companyId) return true;
+      if(d.id && /^\d+-\d+$/.test(String(d.id))) return true;
+      if(d.driverNo && /^\d+-\d+$/.test(String(d.driverNo))) return true;
+      return false;
+    };
+    const existsInStaff = d=>{
+      return D.staff.some(s=>
+        (d.id && String(s.id)===String(d.id)) ||
+        (d.id && String(s.empNo)===String(d.id)) ||
+        (d.name && s.name && String(s.name).replace(/[\s　]/g,'')===String(d.name).replace(/[\s　]/g,''))
+      );
+    };
+    fbDrivers.forEach(d=>{
+      if(!isCompanyDriver(d)) return;       // 委託会社所属のみ対象
+      if(d.active===false) return;          // 退職者は取り込まない
+      if(existsInStaff(d)) return;          // 既に従業員マスタにあればスキップ
+      // 委託会社名を解決(companyId → D.companies)
+      let coName = '';
+      if(d.companyId && Array.isArray(D.companies)){
+        const co = D.companies.find(c=>String(c.id)===String(d.companyId));
+        if(co) coName = co.name||'';
+      }
+      D.staff.push({
+        id: d.id || d.driverNo || ('co_'+Date.now()),
+        empNo: d.id || d.driverNo || '',
+        name: d.name || '(名前なし)',
+        kubun: '委託会社所属',
+        kyuyo: '',               // 給与形態なし(直接支払いなし)
+        office: d.office || '',
+        companyId: d.companyId || '',
+        companyName: coName,
+        tel: '',
+        _fromOwnerDrivers: true, // オーナー登録由来のマーク
+      });
+    });
+  }catch(e){ console.warn('_mergeOwnerCompanyDrivers failed', e); }
+}
+
 function applyFirebaseData() {
   // ① 全フィールド版を優先(staff_full)
   const fbStaffFull = lsGet('nikki_staff_full', null);
@@ -5459,6 +5509,11 @@ function applyFirebaseData() {
       D.staff = merged;
     }
   }
+
+  // ★ 2026/06/29: 日報オーナーが nikki/drivers に登録した委託会社所属ドライバーを補完。
+  //   staff_full に含まれないオーナー登録ドライバーを D.staff へマージする(両面同期)。
+  //   区分=委託会社所属。給与計算では除外し、集荷数(請求)にのみ反映する。
+  _mergeOwnerCompanyDrivers();
 
   // 顧客(CUSTOMERS → D.customers)
   const fbCusts = lsGet(LS_KEYS.CUSTOMERS, null);
@@ -12014,6 +12069,11 @@ function renderStaff(flt){
   }
   // s.kubun が undefined/null でもクラッシュしないよう防御
   let rows=D.staff.filter(s=>s.status!=='終了').filter(s=>!flt||(s.kubun||'').includes(flt));
+  // ★ 2026/06/29: 「委託ドライバーを除く」チェックがオンなら委託会社所属を除外
+  const hideCompanyEl=$('staff-hide-company');
+  if(hideCompanyEl && hideCompanyEl.checked){
+    rows=rows.filter(s=>!(s.kubun && String(s.kubun).includes('委託会社')));
+  }
   // 営業所フィルタ適用
   if(offFilterVal) rows=rows.filter(s=>(s.office||'')===offFilterVal);
   if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
@@ -21938,6 +21998,9 @@ function renderSalary(){
   const salMonStr=salMon||toYM(new Date().toISOString().slice(0,7));
 
   D.staff.forEach((s,i)=>{
+    // ★ 2026/06/29: 委託会社所属ドライバーは給与計算の対象外(大阪急配から直接支払いなし)。
+    //   集荷数(請求)には反映するが、給与・支払明細には含めない。
+    if(s.kubun && String(s.kubun).includes('委託会社')) return;
     const delRows=D.delivery.filter(r=>r.staff===s.name&&(!salMonStr||r.date.startsWith(salMonStr)));
     const puRows=D.pickup.filter(r=>r.staff===s.name&&(!salMonStr||r.date.startsWith(salMonStr)));
 
