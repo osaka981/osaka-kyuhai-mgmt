@@ -5437,6 +5437,8 @@ async function syncFromFirebase() {
 // Firebaseデータ → D に反映(データ変換含む)
 // ★ 2026/06/29: 日報オーナー登録の委託会社所属ドライバーを D.staff に補完マージ。
 //   給与計算では区分で除外、集荷数(請求)には反映する。両面同期の経営管理側受け口。
+// ★ 2026/06/29: 委託ドライバー自動取り込みの新規発生フラグ(通知用)
+let _ownerDriverImported = false;
 function _mergeOwnerCompanyDrivers(){
   try{
     const fbDrivers = lsGet(LS_KEYS.DRIVERS, null);
@@ -5479,7 +5481,9 @@ function _mergeOwnerCompanyDrivers(){
         companyName: coName,
         tel: '',
         _fromOwnerDrivers: true, // オーナー登録由来のマーク
+        _needsReview: true,      // ★ 内勤未確認(通知対象)。確認すると解除
       });
+      _ownerDriverImported = true; // 今回新規取り込みが発生した
     });
   }catch(e){ console.warn('_mergeOwnerCompanyDrivers failed', e); }
 }
@@ -7892,12 +7896,57 @@ function _findMissingPriceDrivers(){
   return issues;
 }
 
+/** ★ 取り込んだ委託ドライバーを内勤が確認(通知を消す) */
+function _confirmImportedDrivers(){
+  let changed = 0;
+  (D.staff||[]).forEach(s=>{
+    if(s._needsReview && s.kubun && String(s.kubun).includes('委託会社')){
+      delete s._needsReview;
+      changed++;
+    }
+  });
+  if(changed>0){
+    try{ lsSet(LS_KEYS.STAFF, D.staff); }catch(e){}
+    try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
+    try{ lsSet('nikki_staff_full', D.staff); }catch(e){}
+  }
+  if(typeof showAlert==='function') showAlert({msg:`${changed}名の委託ドライバーを確認しました`});
+  if(typeof _renderUnregisteredDriversAlert==='function') _renderUnregisteredDriversAlert();
+  if(typeof renderStaff==='function') try{ renderStaff(document.getElementById('staff-search')?._flt||''); }catch(e){}
+}
+
 /** ダッシュボードに未登録ドライバーアラートを表示 */
 function _renderUnregisteredDriversAlert(){
   const el = document.getElementById('d-alerts');
   if(!el) return;
   const items = _findUnregisteredDrivers();
   let html = '';
+
+  // ★ 2026/06/29: 自動取り込みされた委託ドライバーの通知(内勤未確認分)
+  //   日報の委託会社オーナーが登録したドライバーを自動で従業員一覧に取り込んだ際、
+  //   内勤が把握できるよう通知する。「確認」で _needsReview を外し通知から消す。
+  const reviewList = (D.staff||[]).filter(s=>s._needsReview && s.kubun && String(s.kubun).includes('委託会社'));
+  if(reviewList.length > 0){
+    html += `
+      <div class="card mb12" style="background:#eff6ff;border:1px solid rgba(37,99,235,.3);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:4px;">🆕 委託会社から新しいドライバーが登録されました (${reviewList.length}名)</div>
+            <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">日報アプリの委託会社オーナーが登録したドライバーを従業員一覧に自動で取り込みました。内容を確認してください。集荷数(委託会社への支払い数量)に反映されます。</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+              ${reviewList.map(s=>`
+                <span style="background:#fff;border:1px solid rgba(37,99,235,.35);border-radius:4px;padding:3px 8px;font-size:11px;">
+                  <span style="font-family:monospace;color:#1d4ed8;font-weight:700;">${esc(s.empNo||s.id||'')}</span>
+                  <span style="color:var(--txt);"> ${esc(s.name||'')}</span>
+                  ${s.companyName?`<span style="color:var(--txt3);"> / ${esc(s.companyName)}</span>`:''}
+                </span>
+              `).join('')}
+            </div>
+          </div>
+          <button class="btn btn-sm b-blu" onclick="_confirmImportedDrivers()" style="white-space:nowrap;">確認しました</button>
+        </div>
+      </div>`;
+  }
 
   // ── アラート1: 未登録ドライバー ──
   if(items.length > 0){
