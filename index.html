@@ -10291,6 +10291,82 @@ function _normalizeCustNo(no){
   return String(n).padStart(3,'0');
 }
 
+/** 顧客レコードの「情報の濃さ」を採点(重複除去で残す側を選ぶ用) */
+function _custRichness(c){
+  if(!c) return -1;
+  let score = 0;
+  // 稼働中を最優先(終了より必ず上に)
+  if(c.status !== '終了') score += 100000;
+  // 単価が入っている(集荷単価)
+  const cp = c.colPrices || {};
+  const priceKeys = ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'];
+  priceKeys.forEach(k=>{ if(parseInt(cp[k])>0) score += 500; });
+  if(Array.isArray(c.charter)) score += c.charter.filter(r=>parseInt(r&&r.amt)>0).length * 300;
+  if(Array.isArray(c.otherItems)) score += c.otherItems.filter(r=>r&&(r.name||'').trim()).length * 300;
+  // 各種フィールドが埋まっている
+  ['name','zip','addr','repName','tel','fax','email','invoiceNo','industry','region','start','dept','contact'].forEach(f=>{
+    if((c[f]||'').toString().trim()) score += 10;
+  });
+  if(c.offset) score += 5;
+  return score;
+}
+
+/** 情報の薄いレコードから濃いレコードへ、空欄のフィールドだけを補完 */
+function _mergeMissingCustFields(winner, loser){
+  if(!winner || !loser) return winner;
+  const strFields = ['name','region','start','zip','addr','repName','repTitle','dept','contact','title','tel','fax','email','invoiceNo','industry','closeDay','payMonth','payDay','payMethod','invoiceNote','bankSetId','priceType','statusReason'];
+  strFields.forEach(f=>{
+    if(!(winner[f]||'').toString().trim() && (loser[f]||'').toString().trim()) winner[f] = loser[f];
+  });
+  // 集荷単価: winner側が0/未設定の品目だけloserから補完
+  const wcp = winner.colPrices = winner.colPrices || {};
+  const lcp = loser.colPrices || {};
+  ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'].forEach(k=>{
+    if(!(parseInt(wcp[k])>0) && parseInt(lcp[k])>0) wcp[k] = lcp[k];
+  });
+  if(!wcp._tax && lcp._tax) wcp._tax = lcp._tax;
+  // charter / otherItems: winner側が空ならloserを採用
+  if((!Array.isArray(winner.charter) || winner.charter.length===0) && Array.isArray(loser.charter) && loser.charter.length){ winner.charter = loser.charter; }
+  if((!Array.isArray(winner.otherItems) || winner.otherItems.length===0) && Array.isArray(loser.otherItems) && loser.otherItems.length){ winner.otherItems = loser.otherItems; }
+  if(!winner.offset && loser.offset) winner.offset = loser.offset;
+  return winner;
+}
+
+/** D.customers から顧客番号(正規化後)の重複を自動除去。
+ *  同一番号グループごとに「情報が最も濃い」1件を残し、残りの空欄を補完してから削除。
+ *  顧客番号が無い/不正なレコードは触らない(別顧客の可能性があるため)。
+ *  返り値: 削除した重複件数 */
+function _dedupeCustomers(){
+  if(!Array.isArray(D.customers)) return 0;
+  const groups = {};        // normNo -> [records]
+  const keep = [];          // 番号なし等、判定対象外はそのまま残す
+  D.customers.forEach(c=>{
+    const norm = _normalizeCustNo(c && c.custNo);
+    // 正規化して3桁になったものだけをグループ化対象にする
+    if(norm && /^\d{3}$/.test(norm)){
+      (groups[norm] = groups[norm] || []).push(c);
+    } else {
+      keep.push(c);
+    }
+  });
+  let removed = 0;
+  Object.keys(groups).forEach(norm=>{
+    const recs = groups[norm];
+    if(recs.length === 1){ keep.push(recs[0]); return; }
+    // 最も情報が濃い1件を勝者に
+    let winner = recs[0];
+    recs.forEach(r=>{ if(_custRichness(r) > _custRichness(winner)) winner = r; });
+    // 敗者の情報を勝者へ補完(欠損だけ)
+    recs.forEach(r=>{ if(r !== winner) _mergeMissingCustFields(winner, r); });
+    removed += recs.length - 1;
+    keep.push(winner);
+  });
+  if(removed > 0){
+    D.customers = keep;
+  }
+  return removed;
+}
+
 /** 1年以内に終了した顧客の番号(再利用ロック中) */
 function _getLockedCustNos(){
   const locked = [];
@@ -10702,6 +10778,13 @@ async function saveCust(){
   } else {
     // 新規
     D.customers.push({id:Date.now(),...custData});
+  }
+  // ★ 保存時の顧客番号重複を自動除去(再発防止)。
+  //   同一顧客番号のレコードが複数ある場合、情報が最も濃い1件へ欠損を補完してから残りを削除。
+  //   これによりリロードや複数端末操作で重複が復活しても、次回保存時に自動で1件に収束する。
+  const _dupRemoved = _dedupeCustomers();
+  if(_dupRemoved > 0){
+    console.log('[saveCust] 顧客番号重複を自動除去: ' + _dupRemoved + '件');
   }
   // ★ 2026/06/23: Firebase保存をD.customers全件起点に変更。
   //   従来は古いlocalStorage(nikki_customers)を起点に1件だけ足していたため、
