@@ -29,48 +29,40 @@
   --y120:#7acfff;--y140:#8adaff;--y160:#a0e8ff;
   --pk1:#ff9e4a;--pk2:#ffb86a;
   --cp:#80d040;--ke:#e0b040;--te:#e05070;--ch:#a050e0;
-  /* ── 表示サイズ変数（小=デフォルト）── ヘッダー・サブタブは固定 ── */
-  --sz-root:15.5px;
-  --sz-tbl:13px;
-  --sz-th:10.5px;
-  --sz-btn:13px;
-  --sz-btn-sm:12px;
-  --sz-ct:13.5px;
-  --sz-kv:26px;
-  --sz-kl:10.5px;
-  --sz-fi:13.5px;
-  --sz-lbl:11px;
-  --sz-xs:11px;
-  --sz-sm:12.5px;
-  --sz-mtt:16px;
-  --sz-modal-fi:14.5px;
-  --sz-modal-btn:13px;
-  --sz-p-td:8px 10px;
-  --sz-p-th:7px 10px;
-  --sz-p-fi:7px 10px;
-  --sz-p-content:18px;
-  --sz-p-btn:7px 14px;
-  --sz-p-btn-sm:5px 11px;
-  --sz-p-card:15px 16px;
-  --sz-kpi-cols:repeat(4,1fr);
-}
-
-/* ── サイズ: 中 (×1.12) ── */
-html[data-size="m"]{
+  /* ── 表示サイズ変数（小=デフォルト）──
+     ★ 2026/07/27: 全体的に文字が小さく読みづらいため、4段階すべてを1段階分
+        大きい側へ底上げした。旧「小」は廃止し、旧「中」を新しい「小」とする。
+        （小=旧中 / 中=旧大 / 大=旧特大 / 特大=新設）
+        サイドナビも data-size に追随するよう --sz-nav を追加。 */
   --sz-root:17px;
-  --sz-tbl:14.5px;--sz-th:12px;
-  --sz-btn:14.5px;--sz-btn-sm:13.5px;
-  --sz-ct:15px;--sz-kv:30px;--sz-kl:12px;
-  --sz-fi:15px;--sz-lbl:12.5px;--sz-xs:12.5px;--sz-sm:14px;
-  --sz-mtt:18px;--sz-modal-fi:16px;--sz-modal-btn:14.5px;
-  --sz-p-td:9px 12px;--sz-p-th:8px 12px;
-  --sz-p-fi:8px 12px;--sz-p-content:20px;
-  --sz-p-btn:8px 16px;--sz-p-btn-sm:6px 13px;
+  --sz-tbl:14.5px;
+  --sz-th:12px;
+  --sz-btn:14.5px;
+  --sz-btn-sm:13.5px;
+  --sz-ct:15px;
+  --sz-kv:30px;
+  --sz-kl:12px;
+  --sz-fi:15px;
+  --sz-lbl:12.5px;
+  --sz-xs:12.5px;
+  --sz-sm:14px;
+  --sz-mtt:18px;
+  --sz-modal-fi:16px;
+  --sz-modal-btn:14.5px;
+  --sz-p-td:9px 12px;
+  --sz-p-th:8px 12px;
+  --sz-p-fi:8px 12px;
+  --sz-p-content:20px;
+  --sz-p-btn:8px 16px;
+  --sz-p-btn-sm:6px 13px;
   --sz-p-card:17px 18px;
   --sz-kpi-cols:repeat(4,1fr);
+  --sz-nav:13px;
+  --sz-nav-ico:14px;
 }
-/* ── サイズ: 大 (×1.25) ── */
-html[data-size="l"]{
+
+/* ── サイズ: 中 (小の×1.12 / 旧「大」相当) ── */
+html[data-size="m"]{
   --sz-root:19px;
   --sz-tbl:16px;--sz-th:13.5px;
   --sz-btn:16px;--sz-btn-sm:15px;
@@ -82,9 +74,10 @@ html[data-size="l"]{
   --sz-p-btn:9px 18px;--sz-p-btn-sm:7px 15px;
   --sz-p-card:20px 22px;
   --sz-kpi-cols:repeat(auto-fill,minmax(220px,1fr));
+  --sz-nav:14px;--sz-nav-ico:15px;
 }
-/* ── サイズ: 特大 (×1.4) ── */
-html[data-size="xl"]{
+/* ── サイズ: 大 (小の×1.25 / 旧「特大」相当) ── */
+html[data-size="l"]{
   --sz-root:21px;
   --sz-tbl:18px;--sz-th:15px;
   --sz-btn:18px;--sz-btn-sm:16.5px;
@@ -96,18 +89,34 @@ html[data-size="xl"]{
   --sz-p-btn:11px 22px;--sz-p-btn-sm:8px 17px;
   --sz-p-card:24px 26px;
   --sz-kpi-cols:repeat(auto-fill,minmax(260px,1fr));
+  --sz-nav:15px;--sz-nav-ico:16px;
+}
+/* ── サイズ: 特大 (小の×1.38 / 新設) ── */
+html[data-size="xl"]{
+  --sz-root:23px;
+  --sz-tbl:20px;--sz-th:16.5px;
+  --sz-btn:20px;--sz-btn-sm:18px;
+  --sz-ct:21px;--sz-kv:46px;--sz-kl:16.5px;
+  --sz-fi:21px;--sz-lbl:17px;--sz-xs:17px;--sz-sm:18.5px;
+  --sz-mtt:24px;--sz-modal-fi:22px;--sz-modal-btn:20px;
+  --sz-p-td:13px 17px;--sz-p-th:12px 17px;
+  --sz-p-fi:12px 17px;--sz-p-content:26px;
+  --sz-p-btn:12px 24px;--sz-p-btn-sm:9px 19px;
+  --sz-p-card:26px 28px;
+  --sz-kpi-cols:repeat(auto-fill,minmax(290px,1fr));
+  --sz-nav:16.5px;--sz-nav-ico:17px;
 }
 #size-btns .active-sz{background:#e63946!important;color:#fff!important;border-color:#e63946!important;}
 #size-btns .btn{font-size:13px!important;padding:8px 18px!important;min-width:70px;justify-content:center;}
 #size-preview{font-size:var(--sz-tbl)!important;}
-html[data-size="l"] .modal{width:800px;}
-html[data-size="xl"] .modal{width:900px;padding:28px;}
-html[data-size="l"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))!important;}
-html[data-size="xl"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))!important;}
-html[data-size="l"] input[type="month"].fi,html[data-size="l"] input[type="date"].fi{min-width:200px;}
-html[data-size="xl"] input[type="month"].fi,html[data-size="xl"] input[type="date"].fi{min-width:230px;}
-html[data-size="l"] .g2{gap:14px;}
-html[data-size="xl"] .g2{gap:18px;}
+html[data-size="l"] .modal{width:900px;}
+html[data-size="xl"] .modal{width:1000px;padding:30px;}
+html[data-size="l"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))!important;}
+html[data-size="xl"] #off-cards{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))!important;}
+html[data-size="l"] input[type="month"].fi,html[data-size="l"] input[type="date"].fi{min-width:230px;}
+html[data-size="xl"] input[type="month"].fi,html[data-size="xl"] input[type="date"].fi{min-width:265px;}
+html[data-size="l"] .g2{gap:18px;}
+html[data-size="xl"] .g2{gap:22px;}
 /* ─── フルスクリーン集約ページ ─── */
 #fs-overlay .fs-tab{padding:10px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;background:var(--sur);color:var(--txt2);border:1px solid var(--brd);transition:all .12s;}
 #fs-overlay .fs-tab:hover{border-color:var(--txt2);color:var(--txt);}
@@ -183,10 +192,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 .nc.collapsed .sb-items{max-height:0 !important;}
 .nc.collapsed .sb-arrow{transform:rotate(-90deg);}
 .nl{font-size:7.5px;color:var(--txt3);letter-spacing:2.5px;text-transform:uppercase;padding:8px 14px 3px;font-weight:700;font-family:'DM Mono',monospace;}
-.ni{display:flex;align-items:center;gap:8px;padding:7.5px 14px;cursor:pointer;font-size:12px;color:var(--txt2);border-left:2px solid transparent;transition:all .12s;}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:var(--sz-nav,13px);color:var(--txt2);border-left:2px solid transparent;transition:all .12s;}
 .ni:hover{background:rgba(255,255,255,.028);color:var(--txt);}
 .ni.on{background:rgba(192,57,43,.07);color:#fff;border-left-color:var(--red);}
-.ni-ico{font-size:13px;width:15px;text-align:center;flex-shrink:0;}
+.ni-ico{font-size:var(--sz-nav-ico,14px);width:17px;text-align:center;flex-shrink:0;}
 .nbadge{margin-left:auto;background:var(--red);color:#fff;font-size:8px;padding:1px 5px;border-radius:8px;font-weight:700;}
 
 /* MAIN */
@@ -2478,7 +2487,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <!-- 表示サイズ設定 -->
       <div class="card mb12" style="max-width:500px;">
         <div class="ct mb12"><div class="cbar"></div>表示サイズ設定</div>
-        <div class="xs muted mb8">本文の文字サイズを切り替えます（ヘッダー・タブは固定）</div>
+        <div class="xs muted mb8">本文・表・ボタン・サイドメニューの文字サイズを切り替えます</div>
         <div id="size-btns-sys" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
       </div>
 
@@ -27473,7 +27482,7 @@ function renderSizeBtnsSys(){
   const wrap=$('size-btns-sys');
   if(!wrap) return;
   const current=(document.documentElement.getAttribute('data-size')||'s').toLowerCase();
-  const sizes=[['s','小 (S)'],['m','中 (M)'],['l','大 (L)'],['xl','特大 (XL)']];
+  const sizes=[['s','小'],['m','中'],['l','大'],['xl','特大']];
   wrap.innerHTML=sizes.map(([v,lab])=>{
     const active=v===current;
     return `<button type="button" onclick="setUiSize('${v}');renderSizeBtnsSys();" style="flex:1;padding:10px 14px;border:1.5px solid ${active?'var(--blu2)':'var(--brd2)'};background:${active?'var(--blu2)':'var(--bg3)'};color:${active?'#fff':'var(--txt)'};border-radius:6px;font-weight:700;font-size:13px;cursor:pointer;">${lab}</button>`;
