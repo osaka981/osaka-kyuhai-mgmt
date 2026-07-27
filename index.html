@@ -59,6 +59,11 @@
   --sz-kpi-cols:repeat(4,1fr);
   --sz-nav:13px;
   --sz-nav-ico:14px;
+  /* ★ 2026/07/27: ヘッダー(上段タブ・サブタブ)も文字サイズ設定に追随させる */
+  --sz-tn-tab:17px;   --sz-p-tn-tab:16px 28px;
+  --sz-sn-btn:16px;   --sz-p-sn-btn:14px 34px;
+  --sz-tn-logo:20px;  --sz-tn-btn:13px;  --sz-tn-ts:12px;
+  --sz-sn-badge:9px;  --sz-h-subnav:66px;
 }
 
 /* ── サイズ: 中 (小の×1.12 / 旧「大」相当) ── */
@@ -75,6 +80,10 @@ html[data-size="m"]{
   --sz-p-card:20px 22px;
   --sz-kpi-cols:repeat(auto-fill,minmax(220px,1fr));
   --sz-nav:14px;--sz-nav-ico:15px;
+  --sz-tn-tab:19px;   --sz-p-tn-tab:17px 30px;
+  --sz-sn-btn:17.5px; --sz-p-sn-btn:15px 36px;
+  --sz-tn-logo:22px;  --sz-tn-btn:14.5px; --sz-tn-ts:13px;
+  --sz-sn-badge:10px; --sz-h-subnav:72px;
 }
 /* ── サイズ: 大 (小の×1.25 / 旧「特大」相当) ── */
 html[data-size="l"]{
@@ -90,6 +99,10 @@ html[data-size="l"]{
   --sz-p-card:24px 26px;
   --sz-kpi-cols:repeat(auto-fill,minmax(260px,1fr));
   --sz-nav:15px;--sz-nav-ico:16px;
+  --sz-tn-tab:21px;   --sz-p-tn-tab:18px 32px;
+  --sz-sn-btn:19px;   --sz-p-sn-btn:16px 38px;
+  --sz-tn-logo:24px;  --sz-tn-btn:16px;   --sz-tn-ts:14px;
+  --sz-sn-badge:11px; --sz-h-subnav:78px;
 }
 /* ── サイズ: 特大 (小の×1.38 / 新設) ── */
 html[data-size="xl"]{
@@ -105,6 +118,10 @@ html[data-size="xl"]{
   --sz-p-card:26px 28px;
   --sz-kpi-cols:repeat(auto-fill,minmax(290px,1fr));
   --sz-nav:16.5px;--sz-nav-ico:17px;
+  --sz-tn-tab:23px;   --sz-p-tn-tab:19px 34px;
+  --sz-sn-btn:21px;   --sz-p-sn-btn:17px 40px;
+  --sz-tn-logo:26px;  --sz-tn-btn:17.5px; --sz-tn-ts:15px;
+  --sz-sn-badge:12px; --sz-h-subnav:84px;
 }
 #size-btns .active-sz{background:#e63946!important;color:#fff!important;border-color:#e63946!important;}
 #size-btns .btn{font-size:13px!important;padding:8px 18px!important;min-width:70px;justify-content:center;}
@@ -606,24 +623,24 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 
 /* ━━ 案B：上部ヘッダーナビ CSS ━━ */
 #top-nav{background:#1a2238;display:flex;flex-wrap:wrap;align-items:stretch;height:auto;position:sticky;top:0;z-index:300;flex-shrink:0;}
-#top-nav .tn-logo{padding:14px 22px;display:flex;align-items:center;font-size:20px;font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:1.5px;gap:8px;flex-shrink:0;}
+#top-nav .tn-logo{padding:14px 22px;display:flex;align-items:center;font-size:var(--sz-tn-logo,20px);font-weight:700;color:#fff;border-right:0.5px solid rgba(255,255,255,.12);white-space:nowrap;letter-spacing:1.5px;gap:8px;flex-shrink:0;}
 #top-nav .tn-logo-sub{font-size:9px;color:rgba(255,255,255,.35);letter-spacing:3px;font-family:'DM Mono',monospace;}
-#top-nav .tn-tabs{order:3;width:100%;flex:none;display:flex;background:#141a2e;border-top:1px solid rgba(255,255,255,.08);}
-#top-nav .tn-tab{padding:16px 28px;display:flex;align-items:center;font-size:17px;font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:.5px;}
+#top-nav .tn-tabs{order:3;width:100%;flex:none;display:flex;background:#141a2e;border-top:1px solid rgba(255,255,255,.08);overflow-x:auto;}
+#top-nav .tn-tab{padding:var(--sz-p-tn-tab,16px 28px);display:flex;align-items:center;font-size:var(--sz-tn-tab,17px);font-weight:700;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:4px solid transparent;white-space:nowrap;transition:color .15s,background .15s;letter-spacing:.5px;}
 #top-nav .tn-tab:hover{color:rgba(255,255,255,.82);background:rgba(255,255,255,.05);}
 #top-nav .tn-tab.active{color:#fff;border-bottom:4px solid #5c9ee8;background:rgba(92,158,232,.1);}
 #top-nav .tn-right{padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;}
-#top-nav .tn-right button{font-size:13px;padding:8px 15px;border-radius:6px;}
-#top-nav .tn-ts-btn{padding:6px 12px;border-radius:5px;font-size:12px;color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
+#top-nav .tn-right button{font-size:var(--sz-tn-btn,13px);padding:8px 15px;border-radius:6px;}
+#top-nav .tn-ts-btn{padding:6px 12px;border-radius:5px;font-size:var(--sz-tn-ts,12px);color:rgba(255,200,50,.7);background:rgba(255,200,50,.08);border:0.5px solid rgba(255,200,50,.2);cursor:pointer;white-space:nowrap;}
 #top-nav .tn-ts-btn.authed{color:rgba(255,200,50,.95);background:rgba(255,200,50,.15);}
-#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:14px 22px;display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:66px;align-items:center;}
-.sn-btn{padding:14px 34px;border-radius:8px;font-size:16px;color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
+#sub-nav{background:var(--bg3);border-bottom:1px solid var(--brd);padding:14px 22px;display:flex;flex-wrap:wrap;gap:10px;flex-shrink:0;min-height:var(--sz-h-subnav,66px);align-items:center;}
+.sn-btn{padding:var(--sz-p-sn-btn,14px 34px);border-radius:8px;font-size:var(--sz-sn-btn,16px);color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:all .1s;flex-shrink:0;font-weight:600;}
 .sn-btn:hover{border-color:var(--txt2);color:var(--txt);}
 .sn-btn.active{background:#1a2238;color:#fff;border-color:#1a2238;}
 [data-theme='light'] .sn-btn.active{background:#1a2238;color:#fff;}
-.sn-badge-r{font-size:9px;background:rgba(220,50,50,.85);color:#fff;border-radius:8px;padding:0 5px;min-width:16px;text-align:center;}
-.sn-badge-n{font-size:9px;background:rgba(76,175,136,.2);color:#0a7a5a;border-radius:3px;padding:0 4px;}
-.sn-badge-ts{font-size:9px;background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
+.sn-badge-r{font-size:var(--sz-sn-badge,9px);background:rgba(220,50,50,.85);color:#fff;border-radius:8px;padding:0 5px;min-width:16px;text-align:center;}
+.sn-badge-n{font-size:var(--sz-sn-badge,9px);background:rgba(76,175,136,.2);color:#0a7a5a;border-radius:3px;padding:0 4px;}
+.sn-badge-ts{font-size:var(--sz-sn-badge,9px);background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
 </style>
 
 <!-- PDF-lib (契約書ページ抽出用) -->
