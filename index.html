@@ -64,6 +64,7 @@
   --sz-sn-btn:16px;   --sz-p-sn-btn:14px 34px;
   --sz-tn-logo:20px;  --sz-tn-btn:13px;  --sz-tn-ts:12px;
   --sz-sn-badge:9px;  --sz-h-subnav:66px;
+  --sz-tiny:11px;
 }
 
 /* ── サイズ: 中 (小の×1.12 / 旧「大」相当) ── */
@@ -84,6 +85,7 @@ html[data-size="m"]{
   --sz-sn-btn:17.5px; --sz-p-sn-btn:15px 36px;
   --sz-tn-logo:22px;  --sz-tn-btn:14.5px; --sz-tn-ts:13px;
   --sz-sn-badge:10px; --sz-h-subnav:72px;
+  --sz-tiny:12px;
 }
 /* ── サイズ: 大 (小の×1.25 / 旧「特大」相当) ── */
 html[data-size="l"]{
@@ -103,6 +105,7 @@ html[data-size="l"]{
   --sz-sn-btn:19px;   --sz-p-sn-btn:16px 38px;
   --sz-tn-logo:24px;  --sz-tn-btn:16px;   --sz-tn-ts:14px;
   --sz-sn-badge:11px; --sz-h-subnav:78px;
+  --sz-tiny:13px;
 }
 /* ── サイズ: 特大 (小の×1.38 / 新設) ── */
 html[data-size="xl"]{
@@ -122,7 +125,28 @@ html[data-size="xl"]{
   --sz-sn-btn:21px;   --sz-p-sn-btn:17px 40px;
   --sz-tn-logo:26px;  --sz-tn-btn:17.5px; --sz-tn-ts:15px;
   --sz-sn-badge:12px; --sz-h-subnav:84px;
+  --sz-tiny:14px;
 }
+/* ★ 2026/07/27: HTMLに直書きされた小さい font-size を表示サイズ設定に追随させる。
+   部署マスタ・拠点管理・CSVインポート・見積ツール等は個別に px 直書きだったため、
+   文字サイズを変えても小さいままだった。画面(.sec)とモーダル(.modal)のみ対象とし、
+   帳票プレビュー(.print-page / *-paper)は元の版面を保つため除外する。
+   段階は保持する: 9px系 < 10px系 < 11px系 < 12px系 */
+.sec :is([style*="font-size:8px"],[style*="font-size:8.5px"],[style*="font-size:9px"],[style*="font-size:9.5px"]):not(.print-page *):not([class*="-paper"] *),
+.modal :is([style*="font-size:8px"],[style*="font-size:8.5px"],[style*="font-size:9px"],[style*="font-size:9.5px"])
+  {font-size:var(--sz-tiny)!important;}
+.sec :is([style*="font-size:10px"],[style*="font-size:10.5px"]):not(.print-page *):not([class*="-paper"] *),
+.modal :is([style*="font-size:10px"],[style*="font-size:10.5px"])
+  {font-size:var(--sz-kl)!important;}
+.sec :is([style*="font-size:11px"],[style*="font-size:11.5px"]):not(.print-page *):not([class*="-paper"] *),
+.modal :is([style*="font-size:11px"],[style*="font-size:11.5px"])
+  {font-size:var(--sz-xs)!important;}
+.sec :is([style*="font-size:12px"],[style*="font-size:12.5px"]):not(.print-page *):not([class*="-paper"] *),
+.modal :is([style*="font-size:12px"],[style*="font-size:12.5px"])
+  {font-size:var(--sz-sm)!important;}
+.sec :is([style*="font-size:13px"],[style*="font-size:13.5px"]):not(.print-page *):not([class*="-paper"] *),
+.modal :is([style*="font-size:13px"],[style*="font-size:13.5px"])
+  {font-size:var(--sz-tbl)!important;}
 #size-btns .active-sz{background:#e63946!important;color:#fff!important;border-color:#e63946!important;}
 #size-btns .btn{font-size:13px!important;padding:8px 18px!important;min-width:70px;justify-content:center;}
 #size-preview{font-size:var(--sz-tbl)!important;}
@@ -11093,7 +11117,16 @@ function renderUnregisteredFleetCard(){
     return;
   }
   container.style.display='block';
-  let html=`<div class="ch"><div class="ct"><div class="cbar" style="background:var(--amb2)"></div>フリート未登録ドライバー（${list.length}名）</div></div>
+  // ★ 2026/07/27: 件数が多いと画面を占有するため折りたたみ可能にした。
+  //   開閉状態は端末ごとに localStorage で記憶する(既定=閉じる)。
+  let _open = false;
+  try{ _open = localStorage.getItem('unregFleetOpen') === '1'; }catch(e){}
+  let html=`<div class="ch" onclick="toggleUnregisteredFleetCard()"
+      style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">
+      <div class="ct"><div class="cbar" style="background:var(--amb2)"></div>フリート未登録ドライバー（${list.length}名）</div>
+      <span id="unreg-fleet-arrow" style="font-size:var(--sz-sm);color:var(--txt2);padding:0 4px;">${_open?'▲ 閉じる':'▼ 開く'}</span>
+    </div>
+    <div id="unreg-fleet-body" style="display:${_open?'block':'none'};">
     <div class="xs muted mb8">フリート管理に登録済みだが経営管理に未登録のドライバーです。「登録」で台帳に追加できます。</div>`;
 
   list.forEach(d=>{
@@ -11101,19 +11134,31 @@ function renderUnregisteredFleetCard(){
     const fileCount = (d.attachedFiles||[]).length;
     html+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--brd);border-radius:6px;margin-bottom:4px;background:var(--sur);">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:700;">${esc(d.name)}</div>
-        <div style="font-size:10px;color:var(--txt3);">
+        <div style="font-size:var(--sz-tbl);font-weight:700;">${esc(d.name)}</div>
+        <div style="font-size:var(--sz-xs);color:var(--txt3);">
           ${esc(d._source)}　${esc(offices)}
           ${d._companyName?'　<span style="color:var(--blu2);">'+esc(d._companyName)+'</span>':''}
           ${fileCount?'　📎'+fileCount+'件':''}
         </div>
       </div>
       <button class="btn b-grn btn-sm" onclick="registerFromFleet('${esc(d.name)}')" style="font-weight:700;">登録</button>
-      <button class="btn b-gh btn-sm" onclick="ignoreFleetDriver('${esc(d.name)}')" style="font-size:10px;">無視</button>
+      <button class="btn b-gh btn-sm" onclick="ignoreFleetDriver('${esc(d.name)}')">無視</button>
     </div>`;
   });
 
+  html += `</div>`;   // #unreg-fleet-body 閉じ
   container.innerHTML=html;
+}
+
+// フリート未登録ドライバーカードの開閉
+function toggleUnregisteredFleetCard(){
+  const body = document.getElementById('unreg-fleet-body');
+  const arrow = document.getElementById('unreg-fleet-arrow');
+  if(!body) return;
+  const willOpen = body.style.display === 'none';
+  body.style.display = willOpen ? 'block' : 'none';
+  if(arrow) arrow.textContent = willOpen ? '▲ 閉じる' : '▼ 開く';
+  try{ localStorage.setItem('unregFleetOpen', willOpen ? '1' : '0'); }catch(e){}
 }
 
 // フリートドライバーを台帳モーダルに自動入力して開く
