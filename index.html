@@ -25809,8 +25809,15 @@ function _printDocWindow(title, html){
   if(!w){ showAlert({msg:'ポップアップがブロックされました'}); return; }
   w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
-      @page{size:A4;margin:8mm;}
-      @page :first{size:A4;margin:8mm;}
+      /* ★ 2026/07/27 印刷レイアウト修正
+         旧: 用紙幅をpxで指定していたため、A4の印刷可能幅(194mm≒733px)より
+             用紙が広く(864〜1084px)、ブラウザが65〜85%に自動縮小していた。
+             これが「印刷すると小さくて読みづらい」原因。
+         新: 用紙幅をmmで指定し、A4の印刷可能幅にぴったり合わせる(縮小なし=100%)。
+             横向き帳票は名前付きページ(land)でA4横に切り替える。 */
+      @page{size:A4 portrait;margin:10mm;}
+      @page land{size:A4 landscape;margin:10mm;}
+      *{box-sizing:border-box;}
       body{font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;color:#000;padding:20px;background:#fff;margin:0;}
       /* 旧フォーマット互換（給与明細などで使用） */
       .doc-header{border-bottom:3px solid #1a2238;padding-bottom:16px;margin-bottom:24px;}
@@ -25826,7 +25833,7 @@ function _printDocWindow(title, html){
       .stamp{display:inline-block;width:60px;height:60px;border:2px solid #c0392b;border-radius:50%;color:#c0392b;text-align:center;line-height:56px;font-weight:700;font-size:11px;letter-spacing:2px;position:relative;}
       .stamp::after{content:'';position:absolute;inset:4px;border:1px solid #c0392b;border-radius:50%;}
       /* v5請求書レイアウト */
-      .fb-paper{width:1020px;min-height:700px;padding:24px 32px;margin:0 auto;font-size:11px;line-height:1.5;color:#000;background:#fff;}
+      .fb-paper{width:190mm;min-height:0;padding:6mm 8mm;margin:0 auto;font-size:12.5px;line-height:1.55;color:#000;background:#fff;}
       .fb-top{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:start;margin-bottom:14px;}
       .fb-left .fb-addr-line{border-bottom:1px dotted #888;padding:2px 0;margin-bottom:3px;font-size:11px;}
       .fb-cust{font-size:17px;border-bottom:1.5px solid #000;padding:10px 0 3px;display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;}
@@ -25873,9 +25880,9 @@ function _printDocWindow(title, html){
       .fb-version{display:inline-block;background:#fef3c7;color:#92400e;font-size:10px;padding:1px 6px;border-radius:3px;margin-left:6px;font-weight:600;}
 
       /* ═══ ci-* 請求書代行(個人=縦/会社=横)レイアウト ═══ */
-      .ci-paper{background:#fff;color:#000;margin:0 auto 16px;padding:32px 40px;font-size:12px;line-height:1.5;}
+      .ci-paper{background:#fff;color:#000;width:190mm;margin:0 auto 16px;padding:6mm 8mm;font-size:13px;line-height:1.55;}
       .ci-paper.ci-portrait{width:760px;min-height:1050px;}
-      .ci-paper.ci-landscape{width:1020px;min-height:700px;padding:22px 30px;font-size:11px;}
+      .ci-paper.ci-landscape{width:277mm;min-height:0;padding:6mm 8mm;font-size:12.5px;page:land;}
       .ci-title{font-family:'MS Mincho','Yu Mincho',serif;font-size:32px;letter-spacing:0.3em;padding-left:0.3em;margin:0 0 20px;font-weight:400;text-align:center;}
       .ci-title-ls{font-family:'MS Mincho','Yu Mincho',serif;font-size:26px;letter-spacing:0.4em;padding-left:0.4em;margin:0 0 10px;font-weight:400;text-align:center;}
       /* 縦向き */
@@ -25955,8 +25962,8 @@ function _printDocWindow(title, html){
       .ci-items td{height:28px;}
       .ci-portrait .ci-items{font-size:12px;}
       .ci-portrait .ci-items thead th{font-size:12px;}
-      .ci-landscape .ci-items{font-size:11px;}
-      .ci-landscape .ci-items thead th{font-size:11px;}
+      .ci-landscape .ci-items{font-size:12.5px;}
+      .ci-landscape .ci-items thead th{font-size:12.5px;}
       .ci-landscape .ci-items td{height:26px;padding:5px 8px;}
       .ci-items td.num{text-align:right;font-family:'Times New Roman',serif;}
       .ci-items td.unit-cell{background:#f4f4f4;text-align:right;font-family:'Times New Roman',serif;}
@@ -25990,17 +25997,17 @@ function _printDocWindow(title, html){
       .ci-remark .bd{padding:10px 12px;min-height:50px;color:#333;}
 
       /* ═══ 明細書(日報・金額非表示) dt-* ═══ */
-      .dt-paper{background:#fff;color:#000;margin:0 auto;padding:40px 52px;font-size:12px;line-height:1.5;width:760px;min-height:1050px;font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;}
+      .dt-paper{background:#fff;color:#000;margin:0 auto;padding:8mm 10mm;font-size:13px;line-height:1.5;width:190mm;min-height:0;font-family:'Meiryo','Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif;}
       .dt-top{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start;margin-bottom:14px;}
       .dt-addr-title{font-size:15px;font-weight:700;padding-bottom:4px;border-bottom:1px solid #000;}
       .dt-date{text-align:right;font-size:13px;font-weight:500;}
       .dt-date-inline{display:inline-block;min-width:28px;padding:0 6px;border-bottom:1px solid #000;text-align:center;margin:0 3px;}
       .dt-date-inline.dt-mon{font-weight:700;min-width:32px;}
-      .dt-title{font-size:16px;text-align:center;font-weight:500;letter-spacing:1em;padding-left:1em;margin:14px 0 12px;font-family:'MS Mincho','Yu Mincho',serif;}
-      .dt-daily{width:100%;border-collapse:collapse;font-size:10px;}
-      .dt-daily th,.dt-daily td{border:0.75px solid #000;padding:3px 6px;}
+      .dt-title{font-size:19px;text-align:center;font-weight:500;letter-spacing:1em;padding-left:1em;margin:14px 0 12px;font-family:'MS Mincho','Yu Mincho',serif;}
+      .dt-daily{width:100%;border-collapse:collapse;font-size:11.5px;}
+      .dt-daily th,.dt-daily td{border:0.75px solid #000;padding:3.5px 6px;}
       .dt-daily thead th{background:#f4f4f4;text-align:center;font-weight:500;height:22px;}
-      .dt-daily thead th.sub{font-size:9px;font-weight:400;color:#444;}
+      .dt-daily thead th.sub{font-size:10px;font-weight:400;color:#444;}
       .dt-daily td.date{text-align:center;background:#fafafa;font-weight:500;width:40px;}
       .dt-daily td.dow{text-align:center;background:#fafafa;color:#666;width:32px;}
       .dt-daily td.num{text-align:right;font-family:'Times New Roman',serif;}
@@ -26008,7 +26015,7 @@ function _printDocWindow(title, html){
       .dt-daily tr.sat td.date,.dt-daily tr.sat td.dow{color:#1565c0;}
       .dt-daily tr.dt-total td,.dt-daily tr.dt-total{background:#fef3c7;font-weight:700;}
       .dt-daily tr.dt-total td.dt-tot-label{text-align:center;}
-      .dt-footer{margin-top:14px;padding:8px 12px;border:0.75px solid #000;background:#fafafa;font-size:10px;color:#555;}
+      .dt-footer{margin-top:14px;padding:8px 12px;border:0.75px solid #000;background:#fafafa;font-size:11px;color:#444;}
       .dt-col-day{width:40px;}
       .dt-col-dow{width:32px;}
       .dt-col-total{width:13%;}
@@ -26016,14 +26023,14 @@ function _printDocWindow(title, html){
       .dt-col-shuka{width:10%;}
 
       /* 集荷明細用 */
-      .dt-subttl{font-size:11px;color:#666;margin-bottom:10px;text-align:center;}
+      .dt-subttl{font-size:12px;color:#555;margin-bottom:10px;text-align:center;}
       .col-cust-block{margin-bottom:16px;}
       .col-cust-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#e0e7ff;border:0.75px solid #3730a3;border-radius:4px 4px 0 0;font-weight:700;font-size:12px;color:#1e3a8a;}
       .col-cust-head .cust-sum{font-size:11px;color:#4b5563;font-weight:500;}
       .col-cust-head .cust-sum strong{color:#1e3a8a;}
-      .col-daily{width:100%;border-collapse:collapse;font-size:10px;margin-top:-1px;}
+      .col-daily{width:100%;border-collapse:collapse;font-size:11px;margin-top:-1px;}
       .col-daily th,.col-daily td{border:0.75px solid #000;padding:3px 6px;}
-      .col-daily thead th{background:#f4f4f4;text-align:center;font-weight:500;height:22px;font-size:10px;}
+      .col-daily thead th{background:#f4f4f4;text-align:center;font-weight:500;height:22px;font-size:11px;}
       .col-daily thead th.sub-grp{background:#eef0ff;font-weight:600;color:#3730a3;}
       .col-daily td.date{text-align:center;background:#fafafa;font-weight:500;}
       .col-daily td.dow{text-align:center;background:#fafafa;color:#666;}
@@ -26033,7 +26040,11 @@ function _printDocWindow(title, html){
       .col-daily tr.col-total td,.col-daily tr.col-total{background:#fef3c7;font-weight:700;}
       .col-daily tr.col-total td.tot-label{text-align:center;}
 
-      @media print{body{padding:0;} .no-print{display:none;}}
+      @media print{
+        body{padding:0;margin:0;background:#fff;}
+        .no-print{display:none;}
+        .fb-paper,.ci-paper,.dt-paper{margin:0 auto;box-shadow:none;}
+      }
       .print-btn{position:fixed;top:10px;right:10px;background:#c0392b;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-weight:700;z-index:1000;}
     </style></head><body>
     <button class="print-btn no-print" onclick="window.print()">🖨 印刷 / PDF保存</button>
