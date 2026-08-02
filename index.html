@@ -2978,6 +2978,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg"><label>契約開始日</label><input type="date" id="cu-start" class="fi" min="1900-01-01" max="2099-12-31"></div>
   </div>
 
+  <!-- ■ 基本の訪問時間（★ 2026/08/03 追加。日報アプリの集荷カード上部に表示される） -->
+  <div class="xs muted fw7 mb8 mt8" style="letter-spacing:.4px;">■ 基本の訪問時間</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-bottom:4px;">
+    <div class="fg"><label>開始時刻</label><input type="time" id="cu-visit-from" class="fi"></div>
+    <div class="fg"><label>終了時刻</label><input type="time" id="cu-visit-to" class="fi"></div>
+    <div class="fg"><label>備考（訪問時の注意など）</label><input type="text" id="cu-visit-note" class="fi" placeholder="例：裏口・インターホン不可"></div>
+  </div>
+  <div class="xs muted mb8" style="line-height:1.6;">
+    ・<b>両方入力</b>　… その時間内に訪問<br>
+    ・<b>開始のみ</b>　… その時刻以降。17:30までに郵便局へ納入<br>
+    ・<b>終了のみ</b>　… その時刻まで（早く行き過ぎると待機の可能性あり）<br>
+    ・その日だけの変更は「時間変更・休業予定日の登録」で登録してください（日報アプリ側に併記されます）
+  </div>
+
   <!-- ■ 顧客詳細情報 -->
   <div class="xs muted fw7 mb8 mt8" style="letter-spacing:.4px;">■ 顧客詳細情報</div>
   <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
@@ -10802,6 +10816,10 @@ async function saveCust(){
     custNo,name,
     region:$('cu-reg')?.value.trim()||'',
     start:$('cu-start')?.value.replace(/-/g,'/')||'',
+    // ★ 2026/08/03: 基本の訪問時間(日報アプリの集荷カード上部に表示)
+    visitFrom:$('cu-visit-from')?.value||'',
+    visitTo:$('cu-visit-to')?.value||'',
+    visitNote:$('cu-visit-note')?.value.trim()||'',
     // 顧客詳細
     zip:$('cu-zip')?.value.trim()||'',
     addr:$('cu-addr')?.value.trim()||'',
@@ -12174,6 +12192,9 @@ function editCust(id){
   }
   if($('cu-no-manual'))$('cu-no-manual').checked=true;
   $('cu-name').value=c.name||'';$('cu-reg').value=c.region||'';
+  if($('cu-visit-from'))$('cu-visit-from').value=c.visitFrom||'';
+  if($('cu-visit-to'))$('cu-visit-to').value=c.visitTo||'';
+  if($('cu-visit-note'))$('cu-visit-note').value=c.visitNote||'';
   if($('cu-start'))$('cu-start').value=(c.start||'').replace(/\//g,'-');
   // 顧客詳細復元
   if($('cu-zip'))$('cu-zip').value=c.zip||'';
@@ -30550,6 +30571,9 @@ function openM(id){
       // 全フィールドをクリア
       if($('cu-name'))$('cu-name').value='';
       if($('cu-reg'))$('cu-reg').value='';
+  if($('cu-visit-from'))$('cu-visit-from').value='';
+  if($('cu-visit-to'))$('cu-visit-to').value='';
+  if($('cu-visit-note'))$('cu-visit-note').value='';
       if($('cu-start'))$('cu-start').value='';
       ['cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160','cu-cpk1','cu-cpk2','cu-ccp','cu-cke','cu-cte'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
       if($('cu-charter-list'))$('cu-charter-list').innerHTML='';
