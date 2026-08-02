@@ -3130,12 +3130,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div id="cu-ptab-content-other" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <div class="xs muted fw7">カスタム品目(その他・立替・チャーター・集荷別便など)</div>
-      <button type="button" class="btn b-grn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="addCuOtherRow()">＋ 行追加</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setCuOtherTaxAll('in')">全て税込</button>
+        <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setCuOtherTaxAll('ex')">全て税別</button>
+        <button type="button" class="btn b-grn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="addCuOtherRow()">＋ 行追加</button>
     </div>
     <div class="xs muted mb8" style="font-size:9.5px;line-height:1.5;">
       ・<b>件 / 個 / 日額</b> … 日報アプリで入力した数量 × 単価。入力が無い月は請求されません<br>
       ・<b>月額</b> … 固定費。日報の入力に関係なく毎月 1×単価 を自動計上（日報アプリには出しません）<br>
-      ・契約状態が「終了」「停止」の顧客は、月額の自動計上も止まります
+      ・契約状態が「終了」「停止」の顧客は、月額の自動計上も止まります<br>
+      ・<b>税区分</b>は品目ごとに指定します（税別＝別途消費税10%を加算 / 税込＝単価に消費税を含む）
     </div>
     <div id="cu-other-list" style="display:flex;flex-direction:column;gap:5px;"></div>
     <!-- 互換性のため非表示で残しておく(旧データのインポート時用) -->
@@ -9816,13 +9819,17 @@ function addCuCharterRow(){
 }
 
 // その他立替(カスタム品目)行の追加・編集
-function cuOtherRowHtml(name, amt, unit){
+function cuOtherRowHtml(name, amt, unit, tax){
   const units = ['件','個','日額','月額'];
   const optionsHtml = units.map(u => `<option value="${u}"${u===(unit||'月額')?' selected':''}>${u}</option>`).join('');
-  return `<div class="cu-other-row" style="display:grid;grid-template-columns:1.4fr 0.9fr 0.8fr 30px;gap:5px 5px;align-items:end;margin-bottom:4px;padding-bottom:4px;border-bottom:1px dashed var(--brd);">
+  // ★ 2026/07/27: 品目ごとに税込/税別を選べるようにする(既定=税別)
+  const tx = (tax === 'in') ? 'in' : 'ex';
+  const taxHtml = ['ex','in'].map(v => `<option value="${v}"${v===tx?' selected':''}>${v==='in'?'税込':'税別'}</option>`).join('');
+  return `<div class="cu-other-row" style="display:grid;grid-template-columns:1.4fr 0.9fr 0.7fr 0.7fr 30px;gap:5px 5px;align-items:end;margin-bottom:4px;padding-bottom:4px;border-bottom:1px dashed var(--brd);">
     <div class="fg"><label style="font-size:9px;">項目名</label><input type="text" class="fi cu-other-name" style="font-size:10px;padding:3px 6px;" value="${esc(name||'')}" placeholder="例:ロジ発送・夜間別便・事務所費"></div>
     <div class="fg"><label style="font-size:9px;">金額(円)</label><input type="number" class="fi cu-other-amt" style="font-size:10px;padding:3px 6px;" value="${amt||''}" placeholder="0"></div>
     <div class="fg"><label style="font-size:9px;">単位</label><select class="fi cu-other-unit" style="font-size:10px;padding:3px 6px;" onchange="_cuOtherUnitHint(this)">${optionsHtml}</select></div>
+    <div class="fg"><label style="font-size:9px;">税区分</label><select class="fi cu-other-tax" style="font-size:10px;padding:3px 6px;">${taxHtml}</select></div>
     <button type="button" class="btn b-gh btn-sm" style="padding:3px 6px;" onclick="this.closest('.cu-other-row').remove()">✕</button>
     <div class="cu-other-hint" style="grid-column:1/-1;font-size:9px;margin-top:-2px;">${_cuOtherHintText(unit||'月額')}</div>
   </div>`;
@@ -9840,10 +9847,15 @@ function _cuOtherUnitHint(sel){
   const hint = row && row.querySelector('.cu-other-hint');
   if(hint) hint.innerHTML = _cuOtherHintText(sel.value);
 }
-function addCuOtherRow(name, amt, unit){
+// ★ 2026/07/27: カスタム品目の税区分を一括設定(品目別単価の一括ボタンと同じ操作感)
+function setCuOtherTaxAll(v){
+  const tx = (v === 'in') ? 'in' : 'ex';
+  document.querySelectorAll('#cu-other-list .cu-other-tax').forEach(function(sel){ sel.value = tx; });
+}
+function addCuOtherRow(name, amt, unit, tax){
   const cl=$('cu-other-list'); if(!cl) return;
   const div=document.createElement('div');
-  div.innerHTML=cuOtherRowHtml(name||'', amt||'', unit||'月額');
+  div.innerHTML=cuOtherRowHtml(name||'', amt||'', unit||'月額', tax||'ex');
   cl.appendChild(div.firstElementChild);
 }
 
@@ -10771,7 +10783,8 @@ async function saveCust(){
     const nm = row.querySelector('.cu-other-name')?.value.trim() || '';
     const at = parseInt(row.querySelector('.cu-other-amt')?.value) || 0;
     const ut = row.querySelector('.cu-other-unit')?.value || '月額';
-    if(nm) otherItems.push({name:nm, amt:at, unit:ut});
+    const tx = row.querySelector('.cu-other-tax')?.value === 'in' ? 'in' : 'ex';
+    if(nm) otherItems.push({name:nm, amt:at, unit:ut, _tax:tx});
   });
   const offset={
     yokonoriUnit:parseInt($('cu-yokonori-unit')?.value)||0,
@@ -12223,10 +12236,10 @@ function editCust(id){
   if(ol){
     ol.innerHTML = '';
     (c.otherItems||[]).forEach(o => {
-      if(o.name || o.amt) addCuOtherRow(o.name, o.amt, o.unit);
+      if(o.name || o.amt) addCuOtherRow(o.name, o.amt, o.unit, o._tax);
     });
     // 1件もなければ空行を1つ表示
-    if(ol.children.length === 0) addCuOtherRow('', '', '月額');
+    if(ol.children.length === 0) addCuOtherRow('', '', '月額', 'ex');
   }
   // 旧データ互換のため、5項目の隠しフィールドにも復元しておく
   (c.otherItems||[]).forEach((o,i)=>{
@@ -16384,6 +16397,7 @@ function saveRoute(){
     try{ fbSet('companies', D.companies); }catch(e){ console.warn('委託会社ルートFB保存失敗:', e); }
     if(typeof renderCoRouteInline==='function') renderCoRouteInline();
     if(typeof renderCompanyPage==='function') renderCompanyPage();
+    syncColRoutesToFirebase();   // ★ 2026/08/03: 委託会社ルートも日報アプリへ反映する
   } else if(_rtOwnerType==='customer'){
     // 顧客のcolRoutesをlocalStorage + Firebaseに保存(同じバグ修正)
     lsSet(LS_KEYS.CUST, D.customers);
@@ -16392,24 +16406,54 @@ function saveRoute(){
   }
 }
 
-// 全スタッフのcolRoutesをFirebaseに同期
+// ★ 2026/08/03: col_routes への同期
+//   旧実装は D.staff のルートしか集めておらず、しかも staff 保存時にしか
+//   呼ばれていなかった。そのため「委託会社に登録した集荷ルート」は
+//   companies にだけ保存され、日報アプリのルート選択に一切出てこなかった。
+//   委託会社のルートも同期対象に加える。
+//   ・従業員のルート  … staffIds でその本人にだけ表示
+//   ・委託会社のルート … companyId でその会社所属のドライバー全員に表示
 function syncColRoutesToFirebase(){
   const allRoutes=[];
-  D.staff.forEach(s=>{
+  const mapCusts = (arr)=>(arr||[]).map(custId=>{
+    // 既にオブジェクト形式で保持している場合はそのまま活かす
+    if(custId && typeof custId==='object'){
+      const cid = custId.custId ?? custId.id;
+      const cu = D.customers.find(c=>String(c.id)===String(cid));
+      return cu?{id:cu.id,custId:cu.id,name:cu.name,region:cu.region||''}
+               :{id:cid,custId:cid,name:custId.name||String(cid),region:custId.region||''};
+    }
+    const cu=D.customers.find(c=>String(c.id)===String(custId));
+    return cu?{id:cu.id,custId:cu.id,name:cu.name,region:cu.region||''}:{id:custId,name:String(custId),region:''};
+  });
+
+  // ① 従業員(自社ドライバー)のルート
+  (D.staff||[]).forEach(s=>{
     (s.colRoutes||[]).forEach(r=>{
       allRoutes.push({
         ...r,
         staffId:s.id,
         staffName:s.name,
         staffIds:[s.id],
-        // 顧客情報を付加
-        customers:(r.customers||[]).map(custId=>{
-          const cu=D.customers.find(c=>c.id===custId);
-          return cu?{id:cu.id,custId:cu.id,name:cu.name,region:cu.region||''}:{id:custId,name:String(custId),region:''};
-        }),
+        customers: mapCusts(r.customers),
       });
     });
   });
+
+  // ② 委託会社のルート
+  (D.companies||[]).forEach(co=>{
+    (co.colRoutes||[]).forEach(r=>{
+      allRoutes.push({
+        ...r,
+        id: 'co' + co.id + '_' + r.id,   // 従業員ルートとID衝突しないよう名前空間を分ける
+        companyId: co.id,
+        companyName: co.name,
+        staffIds: [],                    // 会社所属ドライバー全員が対象(日報アプリ側でcompanyId判定)
+        customers: mapCusts(r.customers),
+      });
+    });
+  });
+
   fbSet('col_routes',allRoutes);
 }
 
@@ -30501,7 +30545,7 @@ function openM(id){
       const ol2 = $('cu-other-list');
       if(ol2){
         ol2.innerHTML = '';
-        addCuOtherRow('', '', '月額');
+        addCuOtherRow('', '', '月額', 'ex');
       }
       for(let i=1;i<=5;i++){const n=document.getElementById(`cu-oth${i}-name`);const a=document.getElementById(`cu-oth${i}-amt`);if(n)n.value='';if(a)a.value='';}
       ['cu-yokonori-unit','cu-tokubetsu-unit','cu-teate-other','cu-gas-amt','cu-yosha-amt'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
