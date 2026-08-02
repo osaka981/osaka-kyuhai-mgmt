@@ -21813,16 +21813,28 @@ function openCompanyRouteModal(coId,routeId){
   _rtStaffId=null;_rtCoId=coId;_rtCustOwnerId=null;_rtOwnerType='company';_rtEditId=routeId||null;_rtSelCusts=[];
   const co=D.companies.find(x=>x.id===coId);
   const t=$('m-route-title');if(t)t.textContent=routeId?`🗺️ ルート編集（${co?.name}）`:`🗺️ 集荷ルート追加（${co?.name}）`;
-  ['rt-name','rt-daily','rt-p60','rt-p80','rt-p100','rt-p120','rt-p140','rt-p160','rt-pk1','rt-pk2','rt-cp','rt-ke','rt-te','rt-note','rt-cust-search'].forEach(id=>{const e=$(id);if(e)e.value='';});
+  ['rt-name','rt-route-price','rt-fromto','rt-daily','rt-p60','rt-p80','rt-p100','rt-p120','rt-p140','rt-p160','rt-pk1','rt-pk2','rt-cp','rt-ke','rt-te','rt-note','rt-cust-search'].forEach(id=>{const e=$(id);if(e)e.value='';});
   if($('rt-pattern'))$('rt-pattern').value='A';
   if($('rt-tax'))$('rt-tax').value='ex';
   if($('rt-steps'))$('rt-steps').innerHTML='';
   if($('rt-step-preview'))$('rt-step-preview').style.display='none';
   renderRtCustChips();onRtPatternChange();
+  // ★ 2026/08/03: 委託会社のルートモーダルだけ、ルート単価(rt-route-price)と
+  //   立寄件数・実施回数・稼働曜日のリセット/復元が抜けていた。
+  //   そのため前に開いたルートの入力値がDOMに残り、別のルートを保存すると
+  //   その残り値で上書きされていた(港5,000 → 北を開くと5,000のまま等)。
+  if($('rt-stop-count')) $('rt-stop-count').value='1';
+  if($('rt-rounds')) $('rt-rounds').value='1';
+  renderRtWeekdays([1,2,3,4,5]);
   if(routeId){
     const rt=(co?.colRoutes||[]).find(r=>r.id===routeId);
     if(rt){
       if($('rt-name'))$('rt-name').value=rt.name||'';
+      if($('rt-fromto')) $('rt-fromto').value=rt.fromTo||'';
+      if($('rt-route-price')) $('rt-route-price').value=rt.routePrice||rt.dailyAmt||0;
+      if($('rt-stop-count')) $('rt-stop-count').value=rt.stopCount||1;
+      if($('rt-rounds')) $('rt-rounds').value=rt.rounds||1;
+      renderRtWeekdays(Array.isArray(rt.weekdays)?rt.weekdays:[0,1,2,3,4,5,6]);
       const ptMap={'D':'A','B':'A','E':'C','C':'B'};
       if($('rt-pattern')){$('rt-pattern').value=ptMap[rt.pattern]||rt.pattern||'A';onRtPatternChange();}
       if($('rt-tax'))$('rt-tax').value=rt.taxType||'ex';
