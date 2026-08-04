@@ -25018,7 +25018,11 @@ function _buildInvoiceProxyPortrait(ctx){
               ${issuer.zip?`<div style="font-size:11px;color:#555;">〒${esc(issuer.zip)}</div>`:''}
               ${issuer.addr?`<div style="font-size:11px;color:#555;">${esc(issuer.addr)}</div>`:''}
               ${issuer.tel?`<div style="font-size:11px;color:#555;white-space:nowrap;">電話番号 ${esc(issuer.tel)}</div>`:''}
-            ${stampUrl2?`<div style="margin-top:5px;text-align:right;"><img src="${esc(stampUrl2)}" style="width:58px;height:58px;object-fit:contain;display:inline-block;"></div>`:''}
+            ${(stampUrl2 || ctx.stampSvg)?`<div style="margin-top:5px;text-align:right;">${
+                stampUrl2
+                  ? `<img src="${esc(stampUrl2)}" style="width:58px;height:58px;object-fit:contain;display:inline-block;">`
+                  : `<span style="display:inline-block;line-height:0;">${ctx.stampSvg}</span>`
+              }</div>`:''}
             </div>
           </div>
         </div>
@@ -25177,9 +25181,24 @@ function _buildInvoiceProxyHTML(staffName, monStr){
     if(coInfo?.docs?.repStampUrl) stampUrl = coInfo.docs.repStampUrl;
     else if(coInfo?.docs?.companyStampUrl) stampUrl = coInfo.docs.companyStampUrl;
   }
+  // ★ 2026/08/04: 個人印画像が未登録でも、電子印の制作依頼にチェックがあれば
+  //   経営管理システム内で生成した印影(制作サンプルと同じデザイン)を使う。
+  //   従来は画像が無いと何も出ず、書類に印が入らなかった。
+  let stampSvg = '';
+  if(!stampUrl){
+    const _wantStamp = isCompany
+      ? !!(coInfo?.docs?.stampRequest)
+      : !!(st.docs?.stampRequest);
+    if(_wantStamp && typeof _generateStampSampleSVG === 'function'){
+      const _nm = isCompany
+        ? String(coInfo?.name||'').replace(/(株式会社|有限会社|合同会社)/g,'').trim()
+        : (st.sei || String(st.name||'').trim().split(/\s+/)[0] || '印');
+      stampSvg = _generateStampSampleSVG(_nm || '印', 58);
+    }
+  }
   const stampImg = stampUrl
     ? `<img src="${esc(stampUrl)}" class="ci-stamp-img">`
-    : `<div class="ci-stamp-fallback">${esc((issuer.name||'').slice(0,4))}</div>`;
+    : (stampSvg || `<div class="ci-stamp-fallback">${esc((issuer.name||'').slice(0,4))}</div>`);
 
   // 請求番号
   const codeForNo = isCompany
@@ -25209,7 +25228,7 @@ function _buildInvoiceProxyHTML(staffName, monStr){
   const isLandscape = isCompany;
   const pages = _buildInvoicePages(items, isLandscape);
 
-  const ctx = {st, info, issuer, stampImg, stampUrl, invoiceNo, todayLabel, items, totals, bankInfo, pages};
+  const ctx = {st, info, issuer, stampImg, stampUrl, stampSvg, invoiceNo, todayLabel, items, totals, bankInfo, pages};
 
   const body = isLandscape
     ? _buildInvoiceProxyLandscape(ctx)
@@ -26096,7 +26115,10 @@ function _printDocWindow(title, html){
       .fb-right > div{margin:0;}
       .fb-stamp-overlay{position:absolute;right:78px;top:8px;width:62px;height:62px;border:2.2px double #c62828;color:#c62828;border-radius:4px;display:flex;align-items:center;justify-content:center;font-family:'MS Mincho',serif;font-size:10px;font-weight:700;line-height:1.05;text-align:center;letter-spacing:0;padding:3px;opacity:0.75;z-index:5;}
       .fb-stamp-img{width:70px !important;height:70px !important;max-width:70px !important;max-height:70px !important;object-fit:contain;opacity:0.85;display:inline-block;vertical-align:middle;}
-      .fb-right .fb-stamp-img{position:absolute;right:70px;top:6px;z-index:5;pointer-events:none;}
+      .fb-right .fb-stamp-img{position:absolute;right:0;top:-4px;z-index:5;pointer-events:none;opacity:0.9;}
+      /* ★ 2026/08/04: 角印が会社名・住所に重なっていたため、印の幅ぶん右側に余白を確保 */
+      .fb-right{padding-right:76px;}
+      .fb-right .fb-issue{padding-right:0;}
       .fb-mid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:14px;align-items:flex-start;}
       .fb-sum{border-collapse:collapse;width:100%;font-size:11px;margin-left:auto;max-width:380px;}
       .fb-sum th,.fb-sum td{border:0.75px solid #000;padding:5px 10px;}
