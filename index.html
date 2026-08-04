@@ -24573,7 +24573,14 @@ function _buildPaySlipHTMLContractor(pay, monStr){
   const coTel = info.tel||'TEL 072-258-9811';
   const coFax = info.fax||'FAX 072-258-6000';
   const invoiceNo = info.invoiceNo||'';
-  const stampImg = info.companyStampUrl?`<img src="${esc(info.companyStampUrl)}" class="fb-stamp-img">`:`<div class="fb-stamp-overlay">${esc(info.companyName||'大阪急配')}</div>`;
+  // ★ 2026/08/04: 支払明細書は会社角印を使う(代表印ではない)。
+  //   companyStampImage(新)を優先し、無ければ companyStampUrl(旧)へフォールバック。
+  //   これまで companyStampUrl しか見ておらず、角印を登録しても
+  //   旧データの代表印(川村)が出続けていた。
+  const _coStamp = info.companyStampImage || info.companyStampUrl || '';
+  const stampImg = (_coStamp && info.companyStampEnabled !== false)
+    ? `<img src="${esc(_coStamp)}" class="fb-stamp-img">`
+    : `<div class="fb-stamp-overlay">${esc(info.companyName||'大阪急配')}</div>`;
   const bankHTML = _buildBankInfoBlock(''); // デフォルトセット
 
   const html = `
@@ -25005,12 +25012,13 @@ function _buildInvoiceProxyPortrait(ctx){
           </div>`:''}
           <!-- 発行者情報(印影を文字に重ねて透過配置) -->
           <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
-            ${stampUrl2?`<img src="${esc(stampUrl2)}" style="position:absolute;top:50%;right:30px;transform:translateY(-50%);width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;opacity:0.65;pointer-events:none;z-index:0;">`:''}
+            <!-- ★ 2026/08/04: 中央の透かし印は撤去。発行者情報(電話番号の下)に捺印する形へ変更 -->
             <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;">
               <div style="font-size:13px;font-weight:700;">${esc(issuer.name)}</div>
               ${issuer.zip?`<div style="font-size:11px;color:#555;">〒${esc(issuer.zip)}</div>`:''}
               ${issuer.addr?`<div style="font-size:11px;color:#555;">${esc(issuer.addr)}</div>`:''}
               ${issuer.tel?`<div style="font-size:11px;color:#555;white-space:nowrap;">電話番号 ${esc(issuer.tel)}</div>`:''}
+            ${stampUrl2?`<div style="margin-top:5px;text-align:right;"><img src="${esc(stampUrl2)}" style="width:58px;height:58px;object-fit:contain;display:inline-block;"></div>`:''}
             </div>
           </div>
         </div>
@@ -26069,13 +26077,13 @@ function _printDocWindow(title, html){
       .stamp::after{content:'';position:absolute;inset:4px;border:1px solid #c0392b;border-radius:50%;}
       /* v5請求書レイアウト */
       .fb-paper{width:190mm;min-height:0;padding:6mm 8mm;margin:0 auto;font-size:12.5px;line-height:1.55;color:#000;background:#fff;}
-      .fb-top{display:grid;grid-template-columns:1fr 1.1fr 1fr;gap:16px;align-items:start;margin-bottom:14px;}
+      .fb-top{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:12px;align-items:start;margin-bottom:14px;}
       .fb-left .fb-addr-line{border-bottom:1px dotted #888;padding:2px 0;margin-bottom:3px;font-size:11px;}
       .fb-cust{font-size:17px;border-bottom:1.5px solid #000;padding:10px 0 3px;display:flex;justify-content:space-between;align-items:flex-end;margin-top:14px;}
       .fb-cust .mr{font-size:12px;padding-right:20px;}
       .fb-subtxt{font-size:11px;margin-top:5px;color:#444;}
       .fb-center{text-align:center;}
-      .fb-title{font-family:'MS Mincho','Yu Mincho',serif;font-size:28px;letter-spacing:0.7em;padding-left:0.7em;margin:0 0 12px;font-weight:400;}
+      .fb-title{font-family:'MS Mincho','Yu Mincho',serif;font-size:26px;letter-spacing:0.35em;padding-left:0.35em;margin:0 0 12px;font-weight:400;white-space:nowrap;}
       .fb-amt-box{border:1.5px solid #000;padding:7px 22px;text-align:center;display:inline-block;}
       .fb-amt-box .lbl{font-size:11px;letter-spacing:0.3em;margin-bottom:3px;}
       .fb-amt-box .val{font-size:24px;font-weight:700;font-family:'Times New Roman',serif;line-height:1;}
