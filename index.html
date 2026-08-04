@@ -10921,6 +10921,12 @@ async function saveCust(){
     charter:cu.charter||[],
     otherItems:cu.otherItems||[],
     offset:cu.offset||null,
+    // ★ 2026/08/04: 基本の訪問時間。ここに入れ忘れると日報アプリ側へ届かない。
+    //   このリストは「Firebaseへ送る項目の許可リスト」なので、
+    //   顧客マスタに項目を追加したら必ずここにも足すこと。
+    visitFrom:cu.visitFrom||'',
+    visitTo:cu.visitTo||'',
+    visitNote:cu.visitNote||'',
   }));
   lsSet(LS_KEYS.CUSTOMERS, fbCusts);
   fbSet('customers',fbCusts);
