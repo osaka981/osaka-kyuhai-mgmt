@@ -5606,6 +5606,12 @@ function applyFirebaseData() {
       name: c.name,
       region: c.region || '',
       start: c.start || '',
+      // ★ 2026/08/04: 基本の訪問時間。
+      //   ここに書かないと、保存直後にFirebaseリスナーがD.customersを作り直す際に
+      //   値が落ちてしまい、「保存したのに編集画面で消えている」状態になる。
+      visitFrom: c.visitFrom || '',
+      visitTo: c.visitTo || '',
+      visitNote: c.visitNote || '',
       // 集荷単価(colPricesがあればそれを優先、なければデフォルト)
       colPrices: c.colPrices || {},
       prices: c.prices || buildDefaultPrices(),
