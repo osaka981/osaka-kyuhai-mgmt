@@ -4543,6 +4543,27 @@ function _deriveOfficeTypeFromStaff(s){
   return s.kubun==='集荷担当' ? 'collection' : 'delivery';
 }
 function _buildFbDriverEntry(s){
+  // ★ 2026/08/07: 本人設定PIN(pinHash)の消失対策。
+  //   ドライバーが日報アプリで自分のPINを設定すると nikki/drivers に pinHash が入るが、
+  //   経営管理側の D.staff には取り込まれない(取り込み経路が存在しない)。
+  //   そのため従業員を1人でも保存すると、この関数が s.pinHash=null で書き出し、
+  //   全員の本人PINをFirebaseから消していた。
+  //   → 結果:「正しいPINなのにログインできない」が不定期に発生。
+  //   現在の nikki/drivers に本人PINが残っていれば、それを引き継いで消さない。
+  let _prev = null;
+  try{
+    const _cur = lsGet(LS_KEYS.DRIVERS, []) || [];
+    const _key = String(s.empNo || s.id);
+    _prev = (Array.isArray(_cur) ? _cur : Object.values(_cur||{})).find(d =>
+      d && (String(d.id) === _key ||
+            (s.empNo && String(d.empNo||'') === String(s.empNo)))) || null;
+  }catch(e){}
+  const _pinHash        = s.pinHash        || (_prev && _prev.pinHash)        || null;
+  const _pinInitialized = s.pinInitialized || (_prev && _prev.pinInitialized) || false;
+  const _pinInitAt      = s.pinInitializedAt || (_prev && _prev.pinInitializedAt) || null;
+  const _pinFixed       = s.pinIsPersonalFixed || (_prev && _prev.pinIsPersonalFixed) || false;
+  const _initHash       = s.initialPinHash || (_prev && _prev.initialPinHash) || null;
+  const _initAt         = s.initialPinIssuedAt || (_prev && _prev.initialPinIssuedAt) || null;
   return {
     id: String(s.empNo || s.id),
     name: s.name || '',
@@ -4558,12 +4579,12 @@ function _buildFbDriverEntry(s){
     // ★ PINハッシュを日報アプリ(nikki/drivers)に連携
     //   日報アプリのログイン照合は initialPinHash / pinHash を参照するため、
     //   ここに含めないと「PIN未発行」になる(2026/06/16 修正)
-    initialPinHash:   s.initialPinHash   || null,
-    initialPinIssuedAt: s.initialPinIssuedAt || null,
-    pinHash:          s.pinHash          || null,
-    pinInitialized:   !!s.pinInitialized,
-    pinInitializedAt: s.pinInitializedAt || null,
-    pinIsPersonalFixed: !!s.pinIsPersonalFixed,
+    initialPinHash:   _initHash,
+    initialPinIssuedAt: _initAt,
+    pinHash:          _pinHash,
+    pinInitialized:   !!_pinInitialized,
+    pinInitializedAt: _pinInitAt,
+    pinIsPersonalFixed: !!_pinFixed,
     // 委託系の社員番号フィールドも日報側照合用に出す
     empNo:    s.empNo    || '',
     driverNo: s.driverNo || s.empNo || '',
@@ -6002,6 +6023,27 @@ function setupRealtimeSync() {
       return;
     }
     lsSet(LS_KEYS.DRIVERS, snap.val());
+    // ★ 2026/08/07: 日報アプリでドライバー本人が設定したPINを D.staff にも取り込む。
+    //   これが無いと経営管理側は常に pinHash=null のままで、書き出しのたびに
+    //   Firebaseの本人PINを消していた。
+    try{
+      const _v = snap.val();
+      const _arr = Array.isArray(_v) ? _v : Object.values(_v||{});
+      let _n = 0;
+      _arr.forEach(d=>{
+        if(!d || !d.pinHash) return;
+        const st = (D.staff||[]).find(x =>
+          String(x.empNo||x.id) === String(d.id) ||
+          (d.empNo && String(x.empNo||'') === String(d.empNo)));
+        if(st && st.pinHash !== d.pinHash){
+          st.pinHash = d.pinHash;
+          st.pinInitialized = true;
+          st.pinInitializedAt = d.pinInitializedAt || st.pinInitializedAt || null;
+          _n++;
+        }
+      });
+      if(_n) console.log('[drivers同期] 本人設定PINを'+_n+'件 取り込みました');
+    }catch(e){ console.warn('PIN取り込み失敗:', e); }
     applyFirebaseData();
     updOffSels();
   });
