@@ -20668,6 +20668,25 @@ function toggleCompanyPrices(headerEl){
 // ════════════════════════════════
 let _coEditId=null, _drvEditId=null, _drvCoId=null;
 
+// ★ 2026/08/08: 委託会社所属ドライバーの区分は2種類の文字列が併存している。
+//   ・'委託会社所属' … 日報アプリのオーナー登録からの取り込み(_mergeOwnerCompanyDrivers)
+//   ・'委託ドライバー' … 経営管理から直接登録した場合
+//   委託会社ページのドライバー数は '委託ドライバー' しか数えていなかったため、
+//   オーナー登録のドライバー(坂部龍之介)が 0名 と表示されていた。
+//   会社の紐付け(companyId / companyName)のどちらで持っていても拾えるようにする。
+function _isCompanyDriver(s){
+  const k = String((s && s.kubun) || '');
+  return k === '委託ドライバー' || k === '委託会社所属' || k.includes('委託');
+}
+function _companyDriverCount(co){
+  if(!co) return 0;
+  return (D.staff||[]).filter(s=>
+    s && s.status!=='終了' && _isCompanyDriver(s) &&
+    (String(s.companyId||'') === String(co.id) ||
+     (s.companyName && co.name && s.companyName === co.name))
+  ).length;
+}
+
 function renderCompanyPage(){
   // localStorageのcompaniesを正として読み込む（localStorageが使える場合のみ）
   // ★ 2026/06/25: 従来は特定invoiceNoの有無で判定し、無ければD.companies(サンプル)で
@@ -20685,7 +20704,7 @@ function renderCompanyPage(){
   const list=D.companies.filter(c=>c.status!=='終了'&&c.active!==false).filter(c=>!q||matchZenHan(c.name,q)||matchZenHan(String(c.companyCode||''),q));
   const kpi=$('company-kpi');
   if(kpi){
-    const drvCount=D.staff.filter(s=>s.kubun==='委託ドライバー').length;
+    const drvCount=D.staff.filter(s=>s && s.status!=='終了' && _isCompanyDriver(s)).length;
     kpi.innerHTML=[
       {l:'委託会社数',v:D.companies.length,u:'社',c:'--tel'},
       {l:'ドライバー数',v:drvCount,u:'名',c:'--blu'},
@@ -20699,7 +20718,10 @@ function renderCompanyPage(){
   }
   const ptColor={'A':'#e53935','B':'#1e88e5','C':'#f57c00'};
   cards.innerHTML=list.map(co=>{
-    const drivers=D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===co.id);
+    const drivers=(D.staff||[]).filter(s=>
+      s && s.status!=='終了' && _isCompanyDriver(s) &&
+      (String(s.companyId||'') === String(co.id) ||
+       (s.companyName && co.name && s.companyName === co.name)));
     const routes=co.colRoutes||[];
     const adminCount=drivers.filter(d=>String(d.driverNo||'').endsWith('-999')).length;
     const ownerLoginId=co.ownerLoginId||(co.companyCode?`9${co.companyCode}`:'');
