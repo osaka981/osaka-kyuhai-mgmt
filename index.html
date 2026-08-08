@@ -5575,10 +5575,31 @@ function _mergeOwnerCompanyDrivers(){
         (d.name && s.name && String(s.name).replace(/[\s　]/g,'')===String(d.name).replace(/[\s　]/g,''))
       );
     };
+    // ★ 2026/08/08: 同名の従業員が既に居る場合、会社の紐付けが欠けていることがある。
+    //   (例: 坂部龍之介 → kubun='委託会社所属' だが companyId=0 / companyName='')
+    //   この状態だと委託会社ページの「所属ドライバー」は会社名で絞るため0名になる。
+    //   新規追加はせず、欠けている紐付けだけを補完する。
+    const backfillStaff = d=>{
+      const norm = v=>String(v||'').replace(/[\s　]/g,'');
+      const st = D.staff.find(s=>
+        (d.id && String(s.id)===String(d.id)) ||
+        (d.id && String(s.empNo)===String(d.id)) ||
+        (d.name && s.name && norm(s.name)===norm(d.name)));
+      if(!st) return;
+      let touched = false;
+      if(d.companyId && !st.companyId){ st.companyId = d.companyId; touched = true; }
+      if(!st.companyName && d.companyId && Array.isArray(D.companies)){
+        const co = D.companies.find(c=>String(c.id)===String(d.companyId));
+        if(co && co.name){ st.companyName = co.name; touched = true; }
+      }
+      if(!st.kubun) { st.kubun = '委託会社所属'; touched = true; }
+      if(touched) console.log('[オーナー登録取込] 紐付けを補完: ' + (st.name||'') + ' → ' + (st.companyName||''));
+    };
+
     fbDrivers.forEach(d=>{
       if(!isCompanyDriver(d)) return;       // 委託会社所属のみ対象
       if(d.active===false) return;          // 退職者は取り込まない
-      if(existsInStaff(d)) return;          // 既に従業員マスタにあればスキップ
+      if(existsInStaff(d)){ backfillStaff(d); return; }   // 既存なら紐付けだけ補完
       // 委託会社名を解決(companyId → D.companies)
       let coName = '';
       if(d.companyId && Array.isArray(D.companies)){
