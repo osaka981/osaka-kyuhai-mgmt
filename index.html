@@ -4542,6 +4542,31 @@ function _deriveOfficeTypeFromStaff(s){
   // 旧データ互換: '集荷担当'は実在しないkbnなので実質効かないが安全側フォールバック
   return s.kubun==='集荷担当' ? 'collection' : 'delivery';
 }
+// ★ 2026/08/07: nikki/drivers を書き出すときに「経営管理が知らないドライバー」を消さない。
+//   日報アプリの委託会社オーナーページで登録されたドライバー(ID: 会社コード-連番)は
+//   nikki/drivers に直接追加されるが、経営管理の D.staff には即座には入らない。
+//   従来は D.staff だけから配列を作り直して丸ごと置換していたため、
+//   従業員を1件保存しただけでオーナー登録ドライバーが消え、
+//   「ログインIDが見つかりません」になっていた(坂部龍之介の件)。
+//   現在の nikki/drivers に居て新配列に居ないIDは、そのまま残す。
+function _mergeKeepUnknownDrivers(fbDrivers){
+  try{
+    const cur = lsGet(LS_KEYS.DRIVERS, []) || [];
+    const arr = Array.isArray(cur) ? cur : Object.values(cur || {});
+    if(!arr.length) return fbDrivers;
+    const known = new Set((fbDrivers||[]).map(d => String(d && d.id)));
+    const kept = arr.filter(d => d && d.id != null && !known.has(String(d.id)));
+    if(kept.length){
+      console.log('[drivers書出] 経営管理に無いドライバー' + kept.length + '件を保持: '
+        + kept.map(d=>`${d.id}:${d.name||''}`).join(', '));
+    }
+    return (fbDrivers||[]).concat(kept);
+  }catch(e){
+    console.warn('ドライバー保持処理に失敗（安全側で元の配列を返します）:', e);
+    return fbDrivers;
+  }
+}
+
 function _buildFbDriverEntry(s){
   // ★ 2026/08/07: 本人設定PIN(pinHash)の消失対策。
   //   ドライバーが日報アプリで自分のPINを設定すると nikki/drivers に pinHash が入るが、
@@ -12114,7 +12139,7 @@ function archiveRestore(kind, id){
       if(typeof fbSet==='function'){
         fbSet('staff_full', D.staff);
         const fbDrivers = D.staff.filter(s=>s.status!=='終了').map(s=>_buildFbDriverEntry(s));
-        fbSet('drivers', fbDrivers);
+        fbSet('drivers', _mergeKeepUnknownDrivers(fbDrivers));
       }
       renderStaff && renderStaff();
     }
@@ -16070,7 +16095,7 @@ function saveStaff(continueAdd=false){
     .filter(s => s.status !== '終了')
     .map(s => _buildFbDriverEntry(s));
   console.log('[saveStaff] Firebase書き込み開始 fbDrivers.length=', fbDrivers.length);
-  fbSet('drivers', fbDrivers);
+  fbSet('drivers', _mergeKeepUnknownDrivers(fbDrivers));
   lsSet(LS_KEYS.DRIVERS, fbDrivers);
   // ② nikki/staff_full (経営管理用、全フィールド)
   fbSet('staff_full', D.staff);
@@ -21703,7 +21728,7 @@ function saveDriver(){
     const fbDrivers = D.staff
       .filter(s => s.status !== '終了')
       .map(s => _buildFbDriverEntry(s));
-    try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
+    try{ const _fd=_mergeKeepUnknownDrivers(fbDrivers); fbSet('drivers', _fd); lsSet(LS_KEYS.DRIVERS, _fd); }catch(e){ console.warn(e); }
   }
   closeM('m-driver');renderCompanyPage();
 }
@@ -21734,7 +21759,7 @@ function deleteDriver(){
       const fbDrivers = D.staff
         .filter(s => s.status !== '終了')
         .map(s => _buildFbDriverEntry(s));
-      try{ fbSet('drivers', fbDrivers); lsSet(LS_KEYS.DRIVERS, fbDrivers); }catch(e){ console.warn(e); }
+      try{ const _fd=_mergeKeepUnknownDrivers(fbDrivers); fbSet('drivers', _fd); lsSet(LS_KEYS.DRIVERS, _fd); }catch(e){ console.warn(e); }
     }
     closeM('m-driver');renderCompanyPage();
   });
@@ -30915,7 +30940,7 @@ function _syncPinToDriversNode(staffRec, hash, mode){
       .filter(s => s.status !== '終了')
       .map(s => _buildFbDriverEntry(s));
     if(typeof fbSet === 'function'){
-      fbSet('drivers', fbDrivers);
+      fbSet('drivers', _mergeKeepUnknownDrivers(fbDrivers));
     }
     if(typeof lsSet === 'function' && typeof LS_KEYS !== 'undefined'){
       lsSet(LS_KEYS.DRIVERS, fbDrivers);
