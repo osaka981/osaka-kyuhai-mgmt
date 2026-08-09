@@ -6038,6 +6038,9 @@ function applyFirebaseData() {
     const fbIds = new Set(fbPu.map(r => String(r.id)));
     D.pickup = [...D.pickup.filter(r => !fbIds.has(String(r.id))), ...fbPu];
   }
+  // ★ 2026/08/10: 取り込み後に日付形式を統一する。
+  //   経営管理から保存した分がスラッシュ形式で、月の絞り込みから漏れていた。
+  try{ normalizeReportDates(); }catch(e){ console.warn('日付正規化に失敗:', e); }
 }
 
 function buildDefaultPrices() {
@@ -9033,6 +9036,35 @@ function loadDrvSel(){
   if(!sel.options.length)sel.innerHTML='<option>（未登録）</option>';
 }
 
+// ★ 2026/08/10: 日報の日付形式を統一する。
+//   日報アプリから同期されるレコードは "2026-07-07"(ハイフン)、
+//   経営管理の入力モーダルから保存すると "2026/07/02"(スラッシュ) になっていた。
+//   一覧・集計の月絞り込みは50箇所あり、いずれも startsWith("2026-07") で比較するため、
+//   スラッシュ形式のレコードは1件も表示・集計されなかった。
+//   保存時にハイフンへ統一し、既存のスラッシュ形式も起動時に変換する。
+function _normDate(d){
+  const v = String(d==null?'':d).trim();
+  return v ? v.replace(/\//g,'-') : '';
+}
+function normalizeReportDates(){
+  let n = 0;
+  ['delivery','pickup'].forEach(k=>{
+    (D[k]||[]).forEach(r=>{
+      if(r && typeof r.date === 'string' && r.date.includes('/')){
+        r.date = _normDate(r.date); n++;
+      }
+    });
+  });
+  if(n){
+    console.log('[日付正規化] スラッシュ形式の日報を'+n+'件ハイフンに統一しました');
+    try{
+      lsSet(LS_KEYS.YP,  D.delivery);
+      lsSet(LS_KEYS.COL, D.pickup);
+    }catch(e){}
+  }
+  return n;
+}
+
 async function saveDel(){
   const n=id=>Math.max(0,parseInt($(id)?.value)||0);
   const mochi=n('dd-mochi'),kanryo=n('dd-kanryo'),yakan=n('dd-yakan'),
@@ -9046,7 +9078,7 @@ async function saveDel(){
   // ── 重複チェック（新規入力のみ・編集時はスキップ）──
   const editingId = $('m-del')?._editId || null;
   if(!editingId){
-    const dateVal = $('dd-date')?.value?.replace(/-/g,'/');
+    const dateVal = _normDate($('dd-date')?.value);
     const offVal  = $('dd-off')?.value||'';
     const stfVal  = $('dd-staff')?.value||'';
     const dup = D.delivery.find(r=>
@@ -9071,7 +9103,7 @@ async function saveDel(){
       okText:'保存する', cancelText:'戻って修正'});
     if(!ok) return;
   }
-  const date=$('dd-date')?.value.replace(/-/g,'/');
+  const date=_normDate($('dd-date')?.value);
   const rec = {
     id:Date.now(),date,
     office:$('dd-off')?.value,
@@ -9246,7 +9278,7 @@ function savePU(){
   const items={};
   IK.forEach(k=>{const q=parseInt($(ITEMS[k].modalId)?.value)||0;if(q>0)items[k]=q;});
   if(!Object.keys(items).length){alert('数量を1以上入力してください');return;}
-  const date=$('pu-date')?.value.replace(/-/g,'/');
+  const date=_normDate($('pu-date')?.value);
   const newRec = {
     id: editingId || Date.now(), date,
     office:$('pu-off')?.value||'',staff:$('pu-staff')?.value||'',
