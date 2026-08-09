@@ -2646,7 +2646,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 宅配日報入力（運坊.NET形式） -->
 <div id="m-del" class="mbg" data-no-bgclose>
-<div class="modal" style="width:860px;max-width:98vw;">
+<div class="modal" style="width:1120px;max-width:98vw;">
   <div class="mhd"><div class="mtt">📋 宅配日報入力</div><button class="mx" onclick="closeM('m-del')">×</button></div>
 
   <!-- 基本情報 -->
@@ -2700,32 +2700,32 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <thead>
       <tr style="background:var(--blu);color:#fff;">
         <th style="padding:7px 8px;text-align:left;width:70px;"></th>
-        <th style="padding:7px 8px;text-align:center;color:#fc9;">持出</th>
-        <th style="padding:7px 8px;text-align:center;">完了</th>
-        <th style="padding:7px 8px;text-align:center;color:#adf;">転送</th>
-        <th style="padding:7px 8px;text-align:center;color:#9cf;">夜間</th>
-        <th style="padding:7px 8px;text-align:center;">大型</th>
-        <th style="padding:7px 8px;text-align:center;color:#afa;">集荷</th>
-        <th style="padding:7px 8px;text-align:center;">その他1</th>
-        <th style="padding:7px 8px;text-align:center;">その他2</th>
-        <th style="padding:7px 8px;text-align:center;">その他3</th>
-        <th style="padding:7px 8px;text-align:center;">その他4</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#fc9;">持出</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">完了</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#adf;">転送</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#9cf;">夜間</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">大型</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#afa;">集荷</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
+        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
       </tr>
     </thead>
     <tbody>
       <!-- 個数行 -->
       <tr style="background:var(--bg3);">
         <td style="padding:5px 8px;font-weight:700;font-size:11px;">個　数</td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-mochi" class="fi" min="0" value="0" oninput="valDel()" style="text-align:right;padding:4px 6px;color:#fc9;font-weight:700;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-kanryo" class="fi" min="0" value="0" oninput="valDel();calcDelAmt();autoCalcModori()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-tenso"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt();autoCalcModori()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-yakan"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-ogata"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-mochi" class="fi" min="0" value="0" oninput="valDel();autoCalcModori()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;color:#fc9;font-weight:700;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-kanryo" class="fi" min="0" value="0" oninput="valDel();calcDelAmt();autoCalcModori()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-tenso"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt();autoCalcModori()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-yakan"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-ogata"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
       </tr>
       <!-- 個数行の右下：クイック保存 -->
       <tr class="no-hover" style="background:transparent !important;">
@@ -2738,15 +2738,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <tr id="del-unit-row" style="background:var(--bg3);display:none;">
         <td style="padding:5px 8px;font-weight:700;font-size:11px;">単　価</td>
         <td style="padding:3px 4px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-kanryo-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-tenso-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-yakan-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-ogata-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-shukka-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:3px 4px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-kanryo-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-tenso-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-yakan-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-ogata-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-shukka-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
       </tr>
       <!-- 金額行（管理者のみ表示） -->
       <tr id="del-amt-row" style="display:none;">
@@ -23690,7 +23690,17 @@ function renderCompanyFSTab(key){
 }
 
 function _companyDrivers(coName){
-  return (D.staff||[]).filter(s=>s.companyName===coName);
+  // ★ 2026/08/08: アーカイブ(取引終了)した人を除外する。
+  //   従来は会社名だけで絞っており、アーカイブ済みの人も所属ドライバーに
+  //   出続けていた(委託会社ページのKPI/カードは除外していたため数字が食い違った)。
+  //   会社の紐付けは companyName / companyId のどちらでも拾う。
+  const co = (D.companies||[]).find(c=>c && c.name===coName);
+  return (D.staff||[]).filter(s=>{
+    if(!s) return false;
+    if(s.status==='終了' || s.archivedAt) return false;   // アーカイブ済みは除外
+    if(s.companyName === coName) return true;
+    return !!(co && String(s.companyId||'') === String(co.id));
+  });
 }
 
 function renderCompanyMembers(el, name){
