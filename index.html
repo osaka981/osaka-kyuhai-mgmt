@@ -23108,15 +23108,19 @@ function renderStaffDaily(el, name){
   if(delRows.length){
     html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th>
+      <th>日付</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th><th></th>
     </tr></thead><tbody>`;
     delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+      // ★ 2026/08/10: 一覧から直接修正できるよう編集ボタンを追加
+      const _sum = (r.kanryo||0)+(r.tenso||0)+(r.mochimodoiri||0)+(r['翌日廻し']||0);
+      const _ng  = (r.mochidashi||0) !== _sum;
       html+=`<tr>
         <td class="mono">${r.date||''}</td><td>${officeLink(r.office)}</td>
         <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
         <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
-        <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+        <td class="tr"${_ng?' style="color:var(--red2);font-weight:700;" title="持出≠完了+転送+持戻+翌日"':''}>${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
         <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
+        <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button></td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
