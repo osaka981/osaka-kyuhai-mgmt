@@ -23149,10 +23149,12 @@ function openStaffDailyEntry(kind, staffName, dateStr){
 
 function renderStaffDaily(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  // ★ 2026/08/10: 選択中の月を保持する。HTMLを組み立てる前に読み取る必要がある。
+  const mon=$('fs-daily-mon')?.value||ym;
   // ★ 2026/08/10: その場で日報を追加できるボタンを追加(従業員・営業所を自動セット)
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
-      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-daily-mon" class="fi" value="${ym}" onchange="renderStaffFSTab('daily')"></div>
+      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-daily-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('daily')"></div>
       <div style="display:flex;gap:6px;margin-left:auto;">
         <button class="btn btn-sm" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:6px 14px;"
           onclick="openStaffDailyEntry('del','${esc(name)}')">＋局日報</button>
@@ -23161,7 +23163,7 @@ function renderStaffDaily(el, name){
       </div>
     </div>`;
 
-  const mon=$('fs-daily-mon')?.value||ym;
+  // ★ mon は上部で宣言済み(HTMLテンプレートより前に必要なため)
   // 宅配日報
   const delRows=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(mon));
   {
