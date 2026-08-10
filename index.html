@@ -30883,6 +30883,19 @@ function openM(id){
       if($('dd-staff-input'))$('dd-staff-input').value='';
       if($('dd-off'))$('dd-off').value='';
       if($('dd-staff'))$('dd-staff').value='';
+      // ★ 2026/08/10: 一度閉じて開き直したときは初期状態に戻す。
+      //   従来は日付・数量が前回の値のままDOMに残っていた。
+      //   「保存して続けて入力」の場合は saveDelContinue が
+      //   この後で営業所・従業員・翌日の日付を入れ直すため影響しない。
+      if($('dd-date')) $('dd-date').value = new Date().toISOString().slice(0,10);
+      ['dd-mochi','dd-kanryo','dd-tenso','dd-yakan','dd-ogata','dd-shukka',
+       'dd-s1','dd-s2','dd-s3','dd-s4','dd-modori','dd-yoku',
+       'dd-yokonori','dd-tokubetsu'].forEach(id=>{ const el=$(id); if(el) el.value=0; });
+      if($('dd-note')) $('dd-note').value='';
+      if($('dd-charter-rows')) $('dd-charter-rows').innerHTML='';
+      if($('dd-penalty-rows')) $('dd-penalty-rows').innerHTML='';
+      if($('dd-gas-rows')) $('dd-gas-rows').innerHTML='';
+      try{ valDel(); calcDelAmt(); }catch(e){}
     }
   }
   if(id==='m-pu'){
@@ -30893,6 +30906,9 @@ function openM(id){
     if($('pu-off'))$('pu-off').value='';
     if($('pu-staff'))$('pu-staff').value='';
     if($('pu-cust'))$('pu-cust').value='';
+    // ★ 2026/08/10: 開き直したら初期状態(今日)に戻す。
+    //   「保存して続けて入力」の場合は savePUContinue が後から値を戻す。
+    if($('pu-date')) $('pu-date').value = new Date().toISOString().slice(0,10);
     // 初期フォーカスを日付欄に
     setTimeout(()=>{const el=$('pu-date');if(el){el.focus();el.select&&el.select();}},80);
   }
