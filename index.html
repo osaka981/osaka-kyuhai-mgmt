@@ -23095,53 +23095,156 @@ function renderStaffFSTab(key){
   else if(key==='mail') renderStaffMail(body, name);
 }
 
+// ★ 2026/08/10: 従業員台帳から直接、日報を追加する
+//   従業員名・営業所・日付を自動でセットしてモーダルを開く。
+function openStaffDailyEntry(kind, staffName, dateStr){
+  const st = (D.staff||[]).find(s=>s.name===staffName);
+  const office = st?.office || '';
+  const mon = $('fs-daily-mon')?.value || '';
+  // 日付未指定なら、その月の1日を初期値にする(当月なら今日)
+  let d = dateStr || '';
+  if(!d && mon){
+    const today = new Date();
+    const curMon = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+    d = (mon===curMon) ? `${mon}-${String(today.getDate()).padStart(2,'0')}` : `${mon}-01`;
+  }
+  window._delEditMode = false;
+  openM(kind==='del' ? 'm-del' : 'm-pu');
+  setTimeout(()=>{
+    const p = kind==='del' ? 'dd' : 'pu';
+    if($(p+'-date')) $(p+'-date').value = d;
+    if($(p+'-off'))        $(p+'-off').value = office;
+    if($(p+'-off-input'))  $(p+'-off-input').value = office;
+    if($(p+'-staff'))       $(p+'-staff').value = staffName;
+    if($(p+'-staff-input')) $(p+'-staff-input').value = staffName;
+    try{ if(kind==='del'){ valDel && valDel(); calcDelAmt && calcDelAmt(); } }catch(e){}
+  }, 120);
+}
+
 function renderStaffDaily(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  // ★ 2026/08/10: その場で日報を追加できるボタンを追加(従業員・営業所を自動セット)
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
       <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-daily-mon" class="fi" value="${ym}" onchange="renderStaffFSTab('daily')"></div>
+      <div style="display:flex;gap:6px;margin-left:auto;">
+        <button class="btn btn-sm" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:6px 14px;"
+          onclick="openStaffDailyEntry('del','${esc(name)}')">＋局日報</button>
+        <button class="btn btn-sm" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:6px 14px;"
+          onclick="openStaffDailyEntry('pu','${esc(name)}')">＋集荷日報</button>
+      </div>
     </div>`;
 
   const mon=$('fs-daily-mon')?.value||ym;
   // 宅配日報
   const delRows=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(mon));
-  if(delRows.length){
-    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
+  {
+    // ★ 2026/08/10: 1日〜末日をすべて並べる。
+    //   従来は入力のある日だけ表示していたため、抜けているのか休みなのか判断できなかった。
+    const [_y,_m] = mon.split('-').map(Number);
+    const _last = new Date(_y, _m, 0).getDate();
+    const _wd = ['日','月','火','水','木','金','土'];
+    const _byDate = {};
+    delRows.forEach(r=>{ (_byDate[r.date] = _byDate[r.date] || []).push(r); });
+    const _t = {mochi:0,kanryo:0,yakan:0,tenso:0,modori:0,yoku:0,shukka:0};
+    let _days = 0;
+    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（入力 ${delRows.length}日 / ${_last}日中）</div>`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th><th></th>
+      <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th><th></th>
     </tr></thead><tbody>`;
-    delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
-      // ★ 2026/08/10: 一覧から直接修正できるよう編集ボタンを追加
-      const _sum = (r.kanryo||0)+(r.tenso||0)+(r.mochimodoiri||0)+(r['翌日廻し']||0);
-      const _ng  = (r.mochidashi||0) !== _sum;
-      html+=`<tr>
-        <td class="mono">${r.date||''}</td><td>${officeLink(r.office)}</td>
-        <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
-        <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
-        <td class="tr"${_ng?' style="color:var(--red2);font-weight:700;" title="持出≠完了+転送+持戻+翌日"':''}>${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
-        <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
-        <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button></td>
-      </tr>`;
-    });
-    html+=`</tbody></table></div>`;
+    for(let _d=1; _d<=_last; _d++){
+      const ds = `${mon}-${String(_d).padStart(2,'0')}`;
+      const dow = new Date(_y, _m-1, _d).getDay();
+      const dowCol = dow===0?'var(--red2)':(dow===6?'var(--blu)':'var(--txt2)');
+      const rowBg = (dow===0||dow===6) ? 'background:rgba(176,154,138,.06);' : '';
+      const list = _byDate[ds] || [];
+      if(!list.length){
+        // 未入力の日
+        html+=`<tr style="${rowBg}">
+          <td class="mono" style="color:var(--txt3);">${ds}</td>
+          <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
+          <td colspan="8" class="xs" style="color:var(--txt3);">未入力</td>
+          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openStaffDailyEntry('del','${esc(name)}','${ds}')">＋入力</button></td>
+        </tr>`;
+        continue;
+      }
+      _days++;
+      list.forEach(r=>{
+        const _sum = (r.kanryo||0)+(r.tenso||0)+(r.mochimodoiri||0)+(r['翌日廻し']||0);
+        const _ng  = (r.mochidashi||0) !== _sum;
+        _t.mochi+=r.mochidashi||0; _t.kanryo+=r.kanryo||0; _t.yakan+=r.yakan||0;
+        _t.tenso+=r.tenso||0; _t.modori+=r.mochimodoiri||0;
+        _t.yoku+=r['翌日廻し']||0; _t.shukka+=r.shukka||0;
+        html+=`<tr style="${rowBg}">
+          <td class="mono">${ds}</td>
+          <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
+          <td>${officeLink(r.office)}</td>
+          <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
+          <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
+          <td class="tr"${_ng?' style="color:var(--red2);font-weight:700;" title="持出≠完了+転送+持戻+翌日"':''}>${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+          <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
+          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button></td>
+        </tr>`;
+      });
+    }
+    html+=`</tbody><tfoot><tr style="background:var(--bg3);font-weight:700;">
+      <td colspan="2" style="text-align:center;">合計</td>
+      <td class="xs muted">稼働 ${_days}日</td>
+      <td class="tr">${_t.mochi.toLocaleString()}</td><td class="tr">${_t.kanryo.toLocaleString()}</td>
+      <td class="tr">${_t.yakan.toLocaleString()}</td><td class="tr">${_t.tenso.toLocaleString()}</td>
+      <td class="tr">${_t.modori.toLocaleString()}</td><td class="tr">${_t.yoku.toLocaleString()}</td>
+      <td class="tr">${_t.shukka.toLocaleString()}</td><td colspan="2"></td>
+    </tr></tfoot></table></div>`;
   }
 
   // 集荷日報
   const puRows=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(mon));
-  if(puRows.length){
-    html+=`<div class="ct mb8 mt12"><div class="cbar"></div>集荷日報（${puRows.length}件）</div>`;
+  {
+    // ★ 2026/08/10: 集荷も1日〜末日を並べる。同日に複数件あるのは正常なのでそのまま列挙。
+    const [_py,_pm] = mon.split('-').map(Number);
+    const _plast = new Date(_py, _pm, 0).getDate();
+    const _pwd = ['日','月','火','水','木','金','土'];
+    const _pby = {};
+    puRows.forEach(r=>{ (_pby[r.date] = _pby[r.date] || []).push(r); });
+    let _ptot = 0, _pdays = 0;
+    html+=`<div class="ct mb8 mt12"><div class="cbar"></div>集荷日報（${puRows.length}件 / 入力 ${Object.keys(_pby).length}日）</div>`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>営業所</th><th>顧客</th><th>地域</th><th class="tr">総個数</th>
+      <th>日付</th><th>曜</th><th>営業所</th><th>顧客</th><th>地域</th><th class="tr">総個数</th><th></th>
     </tr></thead><tbody>`;
-    puRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
-      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
-      html+=`<tr>
-        <td class="mono">${r.date||''}</td><td>${officeLink(r.office)}</td>
-        <td>${custLink(r.customerName)}</td><td class="xs muted">${r.region||''}</td>
-        <td class="tr fw7">${tot}</td>
-      </tr>`;
-    });
-    html+=`</tbody></table></div>`;
+    for(let _d=1; _d<=_plast; _d++){
+      const ds = `${mon}-${String(_d).padStart(2,'0')}`;
+      const dow = new Date(_py, _pm-1, _d).getDay();
+      const dowCol = dow===0?'var(--red2)':(dow===6?'var(--blu)':'var(--txt2)');
+      const rowBg = (dow===0||dow===6) ? 'background:rgba(176,154,138,.06);' : '';
+      const list = _pby[ds] || [];
+      if(!list.length){
+        html+=`<tr style="${rowBg}">
+          <td class="mono" style="color:var(--txt3);">${ds}</td>
+          <td style="text-align:center;color:${dowCol};">${_pwd[dow]}</td>
+          <td colspan="4" class="xs" style="color:var(--txt3);">未入力</td>
+          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openStaffDailyEntry('pu','${esc(name)}','${ds}')">＋入力</button></td>
+        </tr>`;
+        continue;
+      }
+      _pdays++;
+      list.forEach((r,idx)=>{
+        const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
+        _ptot += tot;
+        html+=`<tr style="${rowBg}">
+          <td class="mono">${idx===0?ds:''}</td>
+          <td style="text-align:center;color:${dowCol};">${idx===0?_pwd[dow]:''}</td>
+          <td>${officeLink(r.office)}</td>
+          <td>${custLink(r.customerName)}</td><td class="xs muted">${r.region||''}</td>
+          <td class="tr fw7">${tot}</td>
+          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editPU(${r.id})">編集</button></td>
+        </tr>`;
+      });
+    }
+    html+=`</tbody><tfoot><tr style="background:var(--bg3);font-weight:700;">
+      <td colspan="2" style="text-align:center;">合計</td>
+      <td colspan="3" class="xs muted">稼働 ${_pdays}日 ／ ${puRows.length}件</td>
+      <td class="tr">${_ptot.toLocaleString()}</td><td></td>
+    </tr></tfoot></table></div>`;
   }
 
   // ★ 2026/06/24: 勤怠サマリー(時間単価・時間給の従事員)
