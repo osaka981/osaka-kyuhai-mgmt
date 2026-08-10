@@ -9147,6 +9147,7 @@ async function saveDel(){
   if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
   if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
   renderDel();renderDash();renderCmp();
+  _refreshOpenLedger();   // ★ 2026/08/10: 開いている台帳画面も更新する
   // 保存確認バーを消す
   const bar=document.getElementById('enter-save-confirm');if(bar)bar.remove();
   // 連続入力：フォームをリセットして入力続行
@@ -9157,6 +9158,19 @@ async function saveDel(){
 
 
 // 保存完了トースト
+// ★ 2026/08/10: 従業員台帳・営業所台帳を開いたまま日報を保存すると、
+//   一覧が再描画されず「保存したのに反映されない」ように見えていた。
+//   開いているタブがあれば描き直す。
+function _refreshOpenLedger(){
+  try{
+    if(document.getElementById('fs-daily-mon') && typeof renderStaffFSTab==='function'){
+      renderStaffFSTab('daily');
+    } else if(document.getElementById('fs-of-del-mon') && typeof renderOfficeFSTab==='function'){
+      renderOfficeFSTab('del');
+    }
+  }catch(e){ console.warn('台帳の再描画に失敗:', e); }
+}
+
 function _showSaveToast(msg){
   const existing=document.getElementById('save-toast');if(existing)existing.remove();
   const t=document.createElement('div');
@@ -9318,6 +9332,7 @@ function savePU(){
   lsSet(LS_KEYS.COL, colLogs);
   if (typeof fbSet === 'function') { fbSet('col_logs', colLogs); fbSet('pickup', D.pickup); }
   renderPU();renderDash();renderSum();renderPUInv();
+  _refreshOpenLedger();   // ★ 2026/08/10: 開いている台帳画面も更新する
   // 保存確認バーを消す
   const barPU=document.getElementById('enter-save-confirm');if(barPU)barPU.remove();
   // 連続入力：フォームをリセットして入力続行
