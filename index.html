@@ -14500,6 +14500,7 @@ function deleteSingle(type, id){
     }
     renderDel && renderDel(); renderDash && renderDash();
     scanDuplicates();
+    _refreshOpenLedger && _refreshOpenLedger();   // ★ 2026/08/10: 台帳画面も更新
     _showSaveToast('1件削除しました');
   });
 }
@@ -23208,7 +23209,11 @@ function renderStaffDaily(el, name){
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
           <td class="tr"${_ng?' style="color:var(--red2);font-weight:700;" title="持出≠完了+転送+持戻+翌日"':''}>${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
           <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
-          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button></td>
+          <td style="white-space:nowrap;">
+            <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button>
+            <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+              onclick="deleteSingle('del',${r.id})" title="この日報を削除">削除</button>
+          </td>
         </tr>`;
       });
     }
@@ -23261,7 +23266,11 @@ function renderStaffDaily(el, name){
           <td>${officeLink(r.office)}</td>
           <td>${custLink(r.customerName)}</td><td class="xs muted">${r.region||''}</td>
           <td class="tr fw7">${tot}</td>
-          <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editPU(${r.id})">編集</button></td>
+          <td style="white-space:nowrap;">
+            <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editPU(${r.id})">編集</button>
+            <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+              onclick="deleteSingle('pu',${r.id})" title="この日報を削除">削除</button>
+          </td>
         </tr>`;
       });
     }
