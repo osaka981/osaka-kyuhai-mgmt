@@ -7469,44 +7469,11 @@ const D = {
     {id:6,empNo:'4001',name:'山田 六郎',kubun:'個人事業主',office:'吹田営業所', tel:'090-6666-6666',kyuyo:'個数制（歩合）',tanka:145},
   ],
   // 宅配日報
-  delivery: [
-    // ── 照合済（差異なし）──
-    {id:1,date:'2025/03/06',office:'大阪北営業所',staff:'田中 一郎',kubun:'社員',empNo:'1001',
-     mochidashi:120,kanryo:108,yakan:12,tenso:3,mochimodoiri:7,'翌日廻し':2,shukka:5,note:'',
-     postData:108,status:'照合済'},
-    {id:3,date:'2025/03/06',office:'大阪北営業所',staff:'山本 三郎',kubun:'個人事業主',empNo:'1002',
-     mochidashi:87,kanryo:82,yakan:5,tenso:1,mochimodoiri:3,'翌日廻し':1,shukka:0,note:'',
-     postData:82,status:'照合済'},
-    {id:6,date:'2025/03/05',office:'大阪北営業所',staff:'田中 一郎',kubun:'社員',empNo:'1001',
-     mochidashi:118,kanryo:110,yakan:9,tenso:2,mochimodoiri:4,'翌日廻し':2,shukka:6,note:'',
-     postData:110,status:'照合済'},
-
-    // ── 差異あり①：日報側が誤り（日報108 vs 郵便局105）──
-    {id:2,date:'2025/03/06',office:'大阪南営業所',staff:'鈴木 二郎',kubun:'会社委託',empNo:'2001',
-     mochidashi:98,kanryo:108,yakan:8,tenso:2,mochimodoiri:5,'翌日廻し':0,shukka:3,note:'',
-     postData:105,status:'差異あり',cause:'',
-     fixHistory:[]},
-
-    // ── 差異あり②：郵便局側が誤り（日報95 vs 郵便局98）──
-    {id:7,date:'2025/03/05',office:'大阪南営業所',staff:'鈴木 二郎',kubun:'会社委託',empNo:'2001',
-     mochidashi:102,kanryo:95,yakan:11,tenso:3,mochimodoiri:2,'翌日廻し':1,shukka:4,note:'',
-     postData:98,status:'差異あり',cause:'',
-     fixHistory:[]},
-
-    // ── 差異あり③：両方誤り（日報80 vs 郵便局85、正解は82）──
-    {id:8,date:'2025/03/04',office:'豊中営業所',staff:'伊藤 四郎',kubun:'個人事業主',empNo:'3001',
-     mochidashi:90,kanryo:80,yakan:5,tenso:2,mochimodoiri:3,'翌日廻し':2,shukka:1,note:'',
-     postData:85,status:'差異あり',cause:'',
-     fixHistory:[]},
-
-    // ── 未照合（郵便局データ未取込）──
-    {id:4,date:'2025/03/06',office:'豊中営業所',staff:'伊藤 四郎',kubun:'個人事業主',empNo:'3001',
-     mochidashi:107,kanryo:95,yakan:10,tenso:4,mochimodoiri:5,'翌日廻し':3,shukka:2,note:'',
-     postData:null,status:'未照合'},
-    {id:5,date:'2025/03/06',office:'吹田営業所',staff:'山田 六郎',kubun:'個人事業主',empNo:'4001',
-     mochidashi:94,kanryo:80,yakan:7,tenso:3,mochimodoiri:6,'翌日廻し':5,shukka:1,note:'',
-     postData:null,status:'未照合'},
-  ],
+  // 宅配日報
+  // ★ 2026/08/11: サンプル8件(田中一郎・山本三郎・鈴木二郎・伊藤四郎・山田六郎/2025年3月)を削除。
+  //   顧客マスタと同じく、コードに焼き付けると全削除しても復活し消せなくなる。
+  //   実データは Firebase(yp_logs)/localStorage から読み込む。
+  delivery: [],
   // 宅配事業内集荷（郵便局の定時集荷先別）
   // 日報アプリから {companies:[{name,count}], total, postOffice, ...} で届く
   deliveryCol: [],
@@ -9149,7 +9116,11 @@ async function saveDel(){
   }
   // Firebaseにも保存
   const ypLogs=lsGet(LS_KEYS.YP,[])||[];
-  ypLogs.push({id:rec.id,type:'yuupack',driver:{name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()});
+  // ★ 2026/08/11: driver.id が無いと日報アプリ側の集計(月次確認・全社統計)で
+  //   一切拾われない。従業員マスタの社員番号を必ず入れる。
+  const _st = (D.staff||[]).find(x=>x && x.name===rec.staff);
+  const _drvId = String(_st?.empNo || _st?.id || '');
+  ypLogs.push({id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()});
   fbSet('yp_logs',ypLogs);
   if($('dd-charter-rows'))$('dd-charter-rows').innerHTML='';
   if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
@@ -9330,7 +9301,11 @@ function savePU(){
   }));
   const newColEntry = {
     id: newRec.id, type: 'collection',
-    driver: { name: newRec.staff, office: newRec.office },
+    // ★ 2026/08/11: driver.id が無いと日報アプリ側の集計で拾われない
+    driver: (function(){
+      const st=(D.staff||[]).find(x=>x && x.name===newRec.staff);
+      return { id:String(st?.empNo || st?.id || ''), name:newRec.staff, office:newRec.office };
+    })(),
     date: newRec.date, rows,
     note: newRec.note || '',
     submittedAt: new Date().toISOString(),
