@@ -147,6 +147,14 @@ html[data-size="xl"]{
 .sec :is([style*="font-size:13px"],[style*="font-size:13.5px"]):not(.print-page *):not([class*="-paper"] *),
 .modal :is([style*="font-size:13px"],[style*="font-size:13.5px"])
   {font-size:var(--sz-tbl)!important;}
+/* ★ 2026/08/10: 日付欄のカレンダーアイコンを大きく表示し、押しやすくする */
+input.date-fi{ position:relative; cursor:pointer; padding-right:34px; }
+input.date-fi::-webkit-calendar-picker-indicator{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:20px; height:20px; cursor:pointer; opacity:.85;
+  filter:invert(48%) sepia(60%) saturate(1200%) hue-rotate(340deg);
+}
+input.date-fi::-webkit-calendar-picker-indicator:hover{ opacity:1; }
 #size-btns .active-sz{background:#e63946!important;color:#fff!important;border-color:#e63946!important;}
 #size-btns .btn{font-size:13px!important;padding:8px 18px!important;min-width:70px;justify-content:center;}
 #size-preview{font-size:var(--sz-tbl)!important;}
@@ -2652,7 +2660,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 基本情報 -->
   <input type="hidden" id="dd-post">
   <div style="display:grid;grid-template-columns:160px 1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi" oninput="valDel()"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel()" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
 
     <!-- ① 営業所コンボ：番号/名前で検索、確定で郵便局・従業員に連動 -->
     <div class="fg">
@@ -2850,7 +2858,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <div class="modal modal-w">
   <div class="mhd"><div class="mtt">📦 集荷日報入力</div><button class="mx" onclick="closeM('m-pu')">×</button></div>
   <div class="f3 mb8">
-    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="pu-date" class="fi"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="pu-date" class="fi date-fi" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
 
     <!-- 営業所コンボ -->
     <div class="fg">
@@ -30487,13 +30495,36 @@ function enterMoveNext(e, order){
 
 
 // ── 保存して続けて入力（宅配） ──
+// ★ 2026/08/10: 日付を1日進める
+function _nextDay(ymd){
+  const m = String(ymd||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return new Date().toISOString().slice(0,10);
+  const d = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+  d.setDate(d.getDate()+1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
 function saveDelContinue(){
+  // ★ 2026/08/10: 連続入力の改善
+  //   ・営業所／従業員を保持する(毎回入れ直す手間をなくす)
+  //   ・日付は「保存した日の翌日」にする(今日に戻さない)
+  const _keep = {
+    off:      $('dd-off')?.value || '',
+    offInput: $('dd-off-input')?.value || '',
+    stf:      $('dd-staff')?.value || '',
+    stfInput: $('dd-staff-input')?.value || '',
+    nextDate: _nextDay($('dd-date')?.value || ''),
+  };
   window._delEditMode = false;
   saveDel();
   setTimeout(()=>{
     openM('m-del');
-    const today=new Date().toISOString().slice(0,10);
-    if($('dd-date'))$('dd-date').value=today;
+    if($('dd-date'))$('dd-date').value=_keep.nextDate;
+    // openM で消された営業所・従業員を戻す
+    if($('dd-off'))       $('dd-off').value       = _keep.off;
+    if($('dd-off-input')) $('dd-off-input').value = _keep.offInput;
+    if($('dd-staff'))       $('dd-staff').value       = _keep.stf;
+    if($('dd-staff-input')) $('dd-staff-input').value = _keep.stfInput;
     ['dd-kanryo','dd-tenso','dd-yakan','dd-ogata','dd-shukka',
      'dd-s1','dd-s2','dd-s3','dd-s4',
      'dd-mochi','dd-modori','dd-yoku','dd-yokonori','dd-tokubetsu']
@@ -30503,7 +30534,8 @@ function saveDelContinue(){
     if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
     if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
     valDel(); calcDelAmt();
-    setTimeout(()=>{ const e=$('dd-date');if(e)e.focus(); },80);
+    // 営業所・従業員は保持済みなので、そのまま持出の入力へ進む
+    setTimeout(()=>{ const e=$('dd-mochi')||$('dd-date'); if(e){e.focus(); if(e.select)e.select();} },80);
   },50);
 }
 function savePUContinue(){
@@ -30514,17 +30546,19 @@ function savePUContinue(){
   const stInput   = $('pu-staff-input')?.value || '';
   const custVal   = $('pu-cust')?.value || '';
   const custInput = $('pu-cust-input')?.value || '';
+  const keepDate  = $('pu-date')?.value || new Date().toISOString().slice(0,10);
   // 保存実行
   savePU();
   // 保存後：全欄リセット→①営業所欄にフォーカス
   setTimeout(()=>{
     openM('m-pu');
-    const today=new Date().toISOString().slice(0,10);
-    if($('pu-date'))$('pu-date').value=today;
-    if($('pu-off'))$('pu-off').value='';
-    if($('pu-off-input')){$('pu-off-input').value='';$('pu-off-input').placeholder='1・１・大阪北...';}
-    if($('pu-staff'))$('pu-staff').value='';
-    if($('pu-staff-input')){$('pu-staff-input').value='';$('pu-staff-input').placeholder='001・1001・氏名...';}
+    // ★ 2026/08/10: 集荷は「同じ日に別の顧客」を続けて入れることが多いため、
+    //   日付・営業所・従業員はそのまま保持し、顧客だけクリアする。
+    if($('pu-date'))$('pu-date').value = keepDate;
+    if($('pu-off'))$('pu-off').value = offVal;
+    if($('pu-off-input')){$('pu-off-input').value = offInput;}
+    if($('pu-staff'))$('pu-staff').value = stVal;
+    if($('pu-staff-input')){$('pu-staff-input').value = stInput;}
     if($('pu-cust'))$('pu-cust').value='';
     if($('pu-cust-input')){$('pu-cust-input').value='';$('pu-cust-input').placeholder='0001・山田商事...';}
     ['p-y60','p-y80','p-y100','p-y120','p-y140','p-y160',
@@ -30707,9 +30741,16 @@ function setupEnterNav(){
       // Shift+Tab: 前へ（デフォルト動作）
       if(e.key==='Tab')return;
 
-      // ── type=date の Enter: ブラウザ標準のセグメント間移動を抑止して次フィールドへ ──
-      // (Takaの要望: 年→Enter で月に移動せず緊急連絡先などへ飛ぶ)
+      // ── type=date/month/time の Enter ──
+      // ★ 2026/08/10 仕様変更:
+      //   以前は年を入れてEnterした時点で次のフィールドへ飛ばしていたが、
+      //   年→月→日と続けて入力できないため不便だった。
+      //   日付が未完成のうちはブラウザ標準のセグメント移動に任せ、
+      //   完成している場合のみ次のフィールドへ進む。
       if(e.key==='Enter' && (inputType==='date' || inputType==='month' || inputType==='time')){
+        if(!e.target.value){
+          return;   // 未完成 → 標準動作(年→月→日へ移動)
+        }
         e.preventDefault();
         e.stopPropagation();
         // フォーカスを外して値を確定させてから次フィールドへ
