@@ -9056,11 +9056,13 @@ function normalizeReportDates(){
     });
   });
   if(n){
-    console.log('[日付正規化] スラッシュ形式の日報を'+n+'件ハイフンに統一しました');
-    try{
-      lsSet(LS_KEYS.YP,  D.delivery);
-      lsSet(LS_KEYS.COL, D.pickup);
-    }catch(e){}
+    console.log('[日付正規化] スラッシュ形式の日報を'+n+'件ハイフンに統一しました（メモリ上のみ）');
+    // ★ 2026/08/10 重大な修正:
+    //   ここで lsSet(LS_KEYS.YP, D.delivery) を実行していたのは誤り。
+    //   nikki_yp_logs は日報アプリ側のログで {id,type,driver:{},date,form:{}} という
+    //   別の構造を持つ。D.delivery({id,date,office,staff,mochidashi,...})で上書きすると
+    //   構造が壊れ、次回の読み込みで日報が復元できず消える。
+    //   保存は各機能(saveDel/savePU)が正しい構造で行うため、ここでは何も書かない。
   }
   return n;
 }
