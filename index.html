@@ -7450,24 +7450,14 @@ const D = {
      head:'', order:10, active:true, isBilling:false},
     // 郵便局(宅配事業部) - デフォルトは空配列、既存D.officesからマイグレーションで生成
   ],
-  offices: [
-    {id:1,officeCode:'01',name:'大阪北営業所',addr:'大阪市北区○○1-2-3',  tel:'06-1234-1111',head:'田中 一郎',typesDel:true,typesCol:false,
-     postPrices:null},
-    {id:2,officeCode:'02',name:'大阪南営業所',addr:'大阪市住吉区○○4-5-6',tel:'06-1234-2222',head:'鈴木 二郎',typesDel:true,typesCol:false,
-     postPrices:null},
-    {id:3,officeCode:'03',name:'豊中営業所',  addr:'豊中市○○7-8-9',      tel:'06-1234-3333',head:'山本 三郎',typesDel:true,typesCol:false,
-     postPrices:null},
-    {id:4,officeCode:'04',name:'吹田営業所',  addr:'吹田市○○10-11-12',   tel:'06-1234-4444',head:'伊藤 四郎',typesDel:true,typesCol:false,
-     postPrices:null},
-  ],
-  staff: [
-    {id:1,empNo:'1001',name:'田中 一郎',kubun:'社員',    office:'大阪北営業所',tel:'090-1111-1111',kyuyo:'月給',      tanka:280000},
-    {id:2,empNo:'2001',name:'鈴木 二郎',kubun:'会社委託',office:'大阪南営業所',tel:'090-2222-2222',kyuyo:'個数制（歩合）',tanka:150},
-    {id:3,empNo:'1002',name:'山本 三郎',kubun:'個人事業主',office:'大阪北営業所',tel:'090-3333-3333',kyuyo:'個数制（歩合）',tanka:145},
-    {id:4,empNo:'3001',name:'伊藤 四郎',kubun:'個人事業主',office:'豊中営業所',  tel:'090-4444-4444',kyuyo:'個数制（歩合）',tanka:148},
-    {id:5,empNo:'3002',name:'中村 五郎',kubun:'社員',    office:'豊中営業所',  tel:'090-5555-5555',kyuyo:'月給',      tanka:260000},
-    {id:6,empNo:'4001',name:'山田 六郎',kubun:'個人事業主',office:'吹田営業所', tel:'090-6666-6666',kyuyo:'個数制（歩合）',tanka:145},
-  ],
+  // 営業所
+  // ★ 2026/08/11: サンプル4拠点(大阪北・大阪南・豊中・吹田営業所)を削除。
+  //   ダッシュボードの「郵便局別 宅配実績」に架空の数字が出る原因になっていた。
+  offices: [],
+  // 従業員
+  // ★ 2026/08/11: サンプル6名(田中一郎ほか)を削除。
+  //   コードに焼き付けると全削除しても復活し、社員番号1002の重複などの原因になる。
+  staff: [],
   // 宅配日報
   // 宅配日報
   // ★ 2026/08/11: サンプル8件(田中一郎・山本三郎・鈴木二郎・伊藤四郎・山田六郎/2025年3月)を削除。
@@ -7479,23 +7469,11 @@ const D = {
   deliveryCol: [],
   // 集荷日報
   // items: { masterKey: qty, ... } — 日報アプリの rows[] を品目ごとに集約
-  pickup: [
-    {id:1,date:'2025/03/06',office:'大阪北営業所',staff:'田中 一郎',
-     customerId:1,customerName:'株式会社アルファ',region:'大阪市北区',
-     items:{'ゆうパック_60':12,'ゆうパック_80':8,'ゆうパケット_通常':28,'クリックポスト':15},note:''},
-    {id:2,date:'2025/03/06',office:'大阪南営業所',staff:'鈴木 二郎',
-     customerId:3,customerName:'ベータ商事株式会社',region:'大阪市中央区',
-     items:{'ゆうパック_60':22,'ゆうパック_100':5,'定形外(ゆうメール)':40,'チャーター':1},note:'チャーター→東大阪倉庫'},
-    {id:3,date:'2025/03/05',office:'大阪北営業所',staff:'田中 一郎',
-     customerId:2,customerName:'アルファ物流センター',region:'大阪市北区',
-     items:{'ゆうパック_80':18,'ゆうパック_120':6,'ゆうパケット_通常':32,'ゆうパケット_7cm以上':10},note:''},
-    {id:4,date:'2025/03/05',office:'豊中営業所',staff:'中村 五郎',
-     customerId:4,customerName:'株式会社ガンマ',region:'大阪市西区',
-     items:{'ゆうパック_60':35,'ゆうパック_80':12,'クリックポスト':50,'ケース':8},note:''},
-    {id:5,date:'2025/03/04',office:'吹田営業所',staff:'山田 六郎',
-     customerId:5,customerName:'デルタ物流株式会社',region:'大阪市住之江区',
-     items:{'ゆうパック_60':20,'ゆうパック_80':15,'ゆうパック_100':10,'ゆうパケット_通常':45,'定形外(ゆうメール)':30},note:''},
-  ],
+  // 集荷日報
+  // items: { masterKey: qty, ... } — 日報アプリの rows[] を品目ごとに集約
+  // ★ 2026/08/11: サンプル5件(株式会社アルファ・ベータ商事/2025年3月)を削除。
+  //   先日Firebaseから削除した5件は、これが毎回書き戻されていたもの。
+  pickup: [],
   // 委託会社マスタ
   // ★ 2026/06/25: サンプル(株式会社○○運輸)を削除。実データはFirebase/localStorageから読む。
   //   ここにサンプルを残すと、全削除しても初期化時に復活してしまう。
