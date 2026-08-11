@@ -1702,12 +1702,14 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               CSV取込
               <input type="file" id="gas-csv-file" accept=".csv" onchange="onGasCsvSelected(event)" style="display:none;">
             </label>
+            <button class="btn b-grn btn-sm" onclick="openGasManualModal()">＋ 手入力で追加</button>
             <button class="btn b-gh btn-sm" onclick="renderGasMgmt()">更新</button>
           </div>
         </div>
         <div style="font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:6px;">
           燃料カード会社(ENEOSなど)のCSVを取込み、カード車番ごとに月別集計します。<br>
-          車番→ドライバーの紐付けは「カード車番」(従業員モーダル)で設定。
+          車番→ドライバーの紐付けはCSV取込画面の「紐付け」から設定できます（従業員台帳に自動保存）。<br>
+          <b>A1石油・エネフリなどCSVが無い給油元は「＋ 手入力で追加」</b>から登録してください。
         </div>
         <!-- カード貸出料(マークアップ率) 設定 -->
         <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border-radius:5px;font-size:11px;">
@@ -19810,6 +19812,211 @@ async function generateInvoicePDF(customerName, ymInput){
 
 // ═══════════════════════════════════════════════════════
 // 燃料代管理 (2026/05/10)
+// ══════════════════════════════════════════════════
+// ★ 2026/08/11: 燃料代の手入力
+//   ENEOS以外(A1石油・エネフリ)はCSVが無いため手入力で登録する。
+//   CSV取込分と同じ D.gasRecords に入れることで、給与計算(カード貸出の実費控除)に
+//   そのまま反映される。カード貸出料のマークアップも共通で掛かる。
+//   ・A1石油は町の給油所(浜寺のみ)のため、ドライバー候補を浜寺所属に絞る。
+//   ・同一ドライバーが複数の給油元を併用する場合も、給油元ごとに別レコードで持つ。
+// ══════════════════════════════════════════════════
+const GAS_VENDORS = [
+  { key:'eneos',   label:'エネオス',  office:null },
+  { key:'a1',      label:'A1石油',    office:'浜寺郵便局' },   // 町の給油所(浜寺のみ)
+  { key:'enefri',  label:'エネフリ',  office:null },
+];
+
+let _gasManual = { vendor:'a1', mode:'sum', rows:[] };
+
+function openGasManualModal(){
+  const ym = document.getElementById('gas-month')?.value || new Date().toISOString().slice(0,7);
+  _gasManual = { vendor:'a1', mode:'sum', rows:[{date:'',qty:'',amt:''}] };
+  document.getElementById('gas-manual-modal')?.remove();
+  const m = document.createElement('div');
+  m.id = 'gas-manual-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;display:flex;justify-content:center;align-items:flex-start;padding:30px 20px;overflow-y:auto;';
+  m.innerHTML = `<div style="background:var(--bg);border:1px solid var(--brd);border-radius:8px;padding:18px;max-width:560px;width:100%;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;font-size:15px;">燃料代 手入力</h3>
+        <button onclick="document.getElementById('gas-manual-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--txt2);">&times;</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="fg"><label>対象月 <span style="color:var(--red2);">*</span></label>
+          <input type="month" id="gm-ym" class="fi date-fi" value="${ym}"></div>
+        <div class="fg"><label>給油元 <span style="color:var(--red2);">*</span></label>
+          <select id="gm-vendor" class="fi" onchange="_gmVendorChanged()">
+            ${GAS_VENDORS.map(v=>`<option value="${v.key}"${v.key==='a1'?' selected':''}>${v.label}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="fg" style="margin-bottom:4px;"><label>ドライバー <span style="color:var(--red2);">*</span></label>
+        <select id="gm-staff" class="fi"></select></div>
+      <div id="gm-staff-note" style="font-size:10px;color:var(--txt2);margin-bottom:10px;"></div>
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button type="button" id="gm-mode-sum" class="btn btn-sm" onclick="_gmSetMode('sum')" style="flex:1;">月間まとめ</button>
+        <button type="button" id="gm-mode-day" class="btn btn-sm" onclick="_gmSetMode('day')" style="flex:1;">日別明細</button>
+      </div>
+      <div id="gm-body"></div>
+
+      <div class="fg" style="margin-top:10px;"><label>備考</label>
+        <input type="text" id="gm-note" class="fi" placeholder="例：現金給油・立替など"></div>
+
+      <div id="gm-preview" style="margin-top:10px;padding:8px 10px;background:var(--bg3);border-radius:5px;font-size:11.5px;"></div>
+
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+        <button class="btn b-gh btn-sm" onclick="document.getElementById('gas-manual-modal').remove()">キャンセル</button>
+        <button class="btn b-prim btn-sm" onclick="saveGasManual()">💾 登録</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  _gmVendorChanged();
+  _gmSetMode('sum');
+}
+
+/** 給油元に応じてドライバー候補を絞る */
+function _gmVendorChanged(){
+  const key = document.getElementById('gm-vendor')?.value;
+  const v = GAS_VENDORS.find(x=>x.key===key) || GAS_VENDORS[0];
+  let list = (D.staff||[]).filter(s=>s.status==='在籍');
+  if(v.office) list = list.filter(s=>String(s.office||'')===v.office);
+  list = _sortStaffByOffice(list);
+  const sel = document.getElementById('gm-staff');
+  if(sel){
+    sel.innerHTML = '<option value="">─ 選択 ─</option>' + list.map(s=>
+      `<option value="${s.id}">${esc(s.name)} (${esc(s.empNo||'')}) ${esc(s.office||'')}</option>`).join('');
+  }
+  const note = document.getElementById('gm-staff-note');
+  if(note){
+    note.innerHTML = v.office
+      ? `${esc(v.label)}は${esc(v.office)}のみのため、同局所属の${list.length}名から選択します。`
+      : `全営業所の在籍者${list.length}名から選択できます。`;
+  }
+}
+
+function _gmSetMode(mode){
+  _gasManual.mode = mode;
+  ['sum','day'].forEach(k=>{
+    const b=document.getElementById('gm-mode-'+k);
+    if(b) b.className = 'btn btn-sm ' + (k===mode?'b-prim':'b-gh');
+  });
+  _gmRenderBody();
+}
+
+function _gmRenderBody(){
+  const body = document.getElementById('gm-body');
+  if(!body) return;
+  if(_gasManual.mode==='sum'){
+    body.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label>数量(L)</label><input type="number" id="gm-qty" class="fi" step="0.01" min="0" placeholder="0.00" oninput="_gmPreview()"></div>
+      <div class="fg"><label>金額(税込) <span style="color:var(--red2);">*</span></label><input type="number" id="gm-amt" class="fi" min="0" placeholder="0" oninput="_gmPreview()"></div>
+    </div>`;
+  } else {
+    body.innerHTML = `<div id="gm-rows"></div>
+      <button type="button" class="btn b-gh btn-sm" style="margin-top:6px;font-size:10.5px;" onclick="_gmAddRow()">＋ 行を追加</button>`;
+    _gmRenderRows();
+  }
+  _gmPreview();
+}
+
+function _gmRenderRows(){
+  const wrap = document.getElementById('gm-rows');
+  if(!wrap) return;
+  wrap.innerHTML = _gasManual.rows.map((r,i)=>`
+    <div style="display:grid;grid-template-columns:1.2fr 0.9fr 1fr 26px;gap:6px;align-items:end;margin-bottom:5px;">
+      <div class="fg"><label style="font-size:9px;">給油日</label>
+        <input type="date" class="fi date-fi gm-d" value="${r.date||''}" data-i="${i}" oninput="_gmSyncRows()"></div>
+      <div class="fg"><label style="font-size:9px;">数量(L)</label>
+        <input type="number" class="fi gm-q" step="0.01" min="0" value="${r.qty||''}" data-i="${i}" oninput="_gmSyncRows()"></div>
+      <div class="fg"><label style="font-size:9px;">金額(税込)</label>
+        <input type="number" class="fi gm-a" min="0" value="${r.amt||''}" data-i="${i}" oninput="_gmSyncRows()"></div>
+      <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:15px;" onclick="_gmDelRow(${i})">&times;</button>
+    </div>`).join('');
+}
+
+function _gmSyncRows(){
+  document.querySelectorAll('#gm-rows .gm-d').forEach(el=>{ _gasManual.rows[el.dataset.i].date = el.value; });
+  document.querySelectorAll('#gm-rows .gm-q').forEach(el=>{ _gasManual.rows[el.dataset.i].qty  = el.value; });
+  document.querySelectorAll('#gm-rows .gm-a').forEach(el=>{ _gasManual.rows[el.dataset.i].amt  = el.value; });
+  _gmPreview();
+}
+function _gmAddRow(){ _gasManual.rows.push({date:'',qty:'',amt:''}); _gmRenderRows(); _gmPreview(); }
+function _gmDelRow(i){ _gasManual.rows.splice(i,1); if(!_gasManual.rows.length) _gasManual.rows.push({date:'',qty:'',amt:''}); _gmRenderRows(); _gmPreview(); }
+
+/** 合計とマークアップ後の金額を表示 */
+function _gmTotals(){
+  if(_gasManual.mode==='sum'){
+    return {
+      qty: parseFloat(document.getElementById('gm-qty')?.value)||0,
+      amt: parseInt(document.getElementById('gm-amt')?.value)||0,
+    };
+  }
+  let qty=0, amt=0;
+  _gasManual.rows.forEach(r=>{ qty += parseFloat(r.qty)||0; amt += parseInt(r.amt)||0; });
+  return {qty, amt};
+}
+
+function _gmPreview(){
+  const el = document.getElementById('gm-preview');
+  if(!el) return;
+  const t = _gmTotals();
+  const rate = parseFloat(document.getElementById('gas-markup-rate')?.value) || 0;
+  const marked = Math.round(t.amt * (1 + rate/100));
+  el.innerHTML = `合計 <b>${t.qty.toFixed(2)}L</b> / <b>¥${t.amt.toLocaleString()}</b>（税込）`
+    + (rate>0 ? `　→　カード貸出料 ${rate}% 加算後 <b style="color:var(--ink);">¥${marked.toLocaleString()}</b>` : '')
+    + `<div style="font-size:10px;color:var(--txt2);margin-top:3px;">この金額が給与計算で控除されます（カード貸出の場合）</div>`;
+}
+
+async function saveGasManual(){
+  const ym  = document.getElementById('gm-ym')?.value || '';
+  const vk  = document.getElementById('gm-vendor')?.value || '';
+  const sid = document.getElementById('gm-staff')?.value || '';
+  const note= document.getElementById('gm-note')?.value.trim() || '';
+  const vendor = GAS_VENDORS.find(v=>v.key===vk);
+  if(!ym){ alert('対象月を選択してください'); return; }
+  if(!sid){ alert('ドライバーを選択してください'); return; }
+  const staff = (D.staff||[]).find(s=>String(s.id)===String(sid));
+  if(!staff){ alert('ドライバーが見つかりません'); return; }
+
+  const t = _gmTotals();
+  if(t.amt <= 0){ alert('金額を入力してください'); return; }
+
+  const details = (_gasManual.mode==='day')
+    ? _gasManual.rows.filter(r=>(parseInt(r.amt)||0)>0).map(r=>({
+        date: r.date||'', qty: parseFloat(r.qty)||0, amount: parseInt(r.amt)||0, note:''
+      }))
+    : [{ date:'', qty:t.qty, amount:t.amt, note:'月間まとめ' }];
+
+  // 給油元ごとに別レコード(併用に対応)
+  const recId = `gas-${ym.replace(/-/g,'')}-${vk}-${staff.id}`;
+  D.gasRecords = D.gasRecords || [];
+  const exist = D.gasRecords.find(g=>g.id===recId);
+  if(exist && !confirm(`${ym} の ${vendor.label} / ${staff.name} は既に登録されています。\n\n上書きしますか?\n(現在: ${(exist.qty||0).toFixed(1)}L / ¥${(exist.amount||0).toLocaleString()})`)) return;
+
+  const rec = {
+    id: recId, ym,
+    cardNo: staff.offset?.gasCardNo || `manual-${vk}-${staff.id}`,
+    staffId: staff.id, staffName: staff.name,
+    vehicleId: null, vehicleNumber: '',
+    qty: t.qty, amount: t.amt, amountEx: Math.round(t.amt/1.1), tax: t.amt - Math.round(t.amt/1.1),
+    details,
+    sourceCSV: `手入力(${vendor.label})`,
+    vendor: vk, vendorLabel: vendor.label, isManual: true,
+    importedAt: exist?.importedAt || new Date().toISOString(),
+    confirmedAt: null,
+    note,
+  };
+  if(exist) Object.assign(exist, rec); else D.gasRecords.push(rec);
+
+  // gas_records は Firebase のみで保持する(localStorageには持たない既存方針)
+  try{
+    if(typeof fbSet==='function') await fbSet('gas_records', D.gasRecords);
+  }catch(e){ console.warn('燃料代の保存に失敗:', e); alert('保存に失敗しました。通信状況を確認してください。'); return; }
+
+  document.getElementById('gas-manual-modal')?.remove();
+  if(typeof renderGasMgmt==='function') renderGasMgmt();
+  _showSaveToast(`${vendor.label} / ${staff.name} の燃料代を登録しました（${t.qty.toFixed(1)}L・¥${t.amt.toLocaleString()}）`);
+}
+
 // 燃料カード会社のCSV取込 → 車番ごと月別集計 → 給与計算連携
 // ═══════════════════════════════════════════════════════
 
@@ -20375,7 +20582,7 @@ function renderGasMgmt(){
 
   const records = (D.gasRecords||[]).filter(g => g.ym === ym);
   if(records.length === 0){
-    contentEl.innerHTML = '<div class="muted xs" style="padding:20px;text-align:center;">この月の燃料代データはありません。<br>CSVを取込んでください。</div>';
+    contentEl.innerHTML = '<div class="muted xs" style="padding:20px;text-align:center;">この月の燃料代データはありません。<br>CSVを取込むか、「＋ 手入力で追加」から登録してください。</div>';
     if(summaryEl) summaryEl.innerHTML = '';
     return;
   }
@@ -20439,7 +20646,11 @@ function renderGasMgmt(){
             const m = _applyGasMarkup(r);
             const diff = m.amount - (r.amount||0);
             return `<tr style="border-bottom:1px solid var(--brd);">
-              <td style="padding:6px 8px;font-family:monospace;font-weight:700;">${esc(r.cardNo)}</td>
+              <td style="padding:6px 8px;font-family:monospace;font-weight:700;">${esc(r.cardNo)}
+                ${r.isManual
+                  ? `<span style="font-family:inherit;font-size:9px;font-weight:700;background:rgba(90,138,90,.18);color:var(--grn2);border-radius:8px;padding:1px 6px;margin-left:4px;">${esc(r.vendorLabel||'手入力')}</span>`
+                  : `<span style="font-family:inherit;font-size:9px;color:var(--txt2);margin-left:4px;">ENEOS</span>`}
+              </td>
               <td style="padding:6px 8px;">${staffName} ${gasTypeLabel}</td>
               <td style="padding:6px 8px;text-align:right;">${(r.qty||0).toFixed(2)}</td>
               <td style="padding:6px 8px;text-align:right;color:var(--txt2);">¥${(r.amount||0).toLocaleString()}</td>
@@ -24400,19 +24611,27 @@ function _calcStaffPayment(name, monStr){
   // 会社負担   → 給与計算に反映しない(記録のみ表示)
   // なし       → 何もしない
   const gasMonthKey = String(monStr||'').replace(/\//g, '-').slice(0, 7);
-  const gasRec = (D.gasRecords||[]).find(g => 
+  // ★ 2026/08/11: 給油元の併用に対応。
+  //   従来は find で1件しか拾わず、ENEOS＋A1石油＋エネフリを併用すると
+  //   最初の1件しか控除されなかった。全件を対象にする。
+  const gasRecList = (D.gasRecords||[]).filter(g =>
     g.staffId && String(g.staffId) === String(st.id) && g.ym === gasMonthKey
   );
+  const gasRec = gasRecList[0] || null;
   switch(off.gasType){
     case 'カード貸出':
-      if(gasRec && gasRec.amount > 0){
-        // カード貸出料(マークアップ率)を適用
-        const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(gasRec) : gasRec;
-        breakdown.push({
-          label: `燃料費(カード貸出) ${(marked.qty||0).toFixed(1)}L`,
-          amount: -marked.amount,
+      if(gasRecList.length > 0 && gasRecList.some(g=>(g.amount||0)>0)){
+        // 給油元ごとに1行ずつ出す(金額が合わないときに原因を追えるようにする)
+        gasRecList.forEach(g=>{
+          if(!(g.amount>0)) return;
+          const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
+          const vlabel = g.vendorLabel || (g.isManual ? '手入力' : 'カード貸出');
+          breakdown.push({
+            label: `燃料費(${vlabel}) ${(marked.qty||0).toFixed(1)}L`,
+            amount: -marked.amount,
+          });
+          total -= marked.amount;
         });
-        total -= marked.amount;
       } else if(off.gasAmt > 0){
         // CSVが未取込でも、暫定的に固定額があれば使う(後方互換)
         breakdown.push({label:'燃料費(固定額・要CSV取込)', amount:-off.gasAmt});
