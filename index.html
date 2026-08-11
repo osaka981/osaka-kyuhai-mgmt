@@ -20101,7 +20101,15 @@ function _parseCsvLine(line){
 }
 
 // プレビューモーダル
-function _showGasImportPreview(aggList, fileName){
+// ★ 2026/08/11: 紐付け・解除の後に一覧を描き直せるようにする
+function _renderGasImportPreview(){
+  const p = window._gasImportPending;
+  if(!p) return;
+  document.getElementById('gas-import-modal')?.remove();
+  _showGasImportPreview(p.records, p.fileName, true);
+}
+
+function _showGasImportPreview(aggList, fileName, _isRedraw){
   // 紐付け解決
   const rows = aggList.map(a => {
     const resolve = _resolveStaffByCardNo(a.cardNo);
@@ -20159,8 +20167,9 @@ function _showGasImportPreview(aggList, fileName){
                 <td style="padding:5px 6px;text-align:right;">${r.qty.toFixed(2)}</td>
                 <td style="padding:5px 6px;text-align:right;">¥${r.amount.toLocaleString()}</td>
                 <td style="padding:5px 6px;" class="gas-staff-cell">${driverName}${src}</td>
-                <td style="padding:5px 6px;text-align:center;">
-                  <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_assignGasStaffManually(${i})">紐付け</button>
+                <td style="padding:5px 6px;text-align:center;white-space:nowrap;">
+                  <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_assignGasStaffManually(${i})">${ok?'変更':'紐付け'}</button>
+                  ${ok?`<button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);" onclick="_unlinkGasStaff(${i})" title="この車番の登録を解除">解除</button>`:''}
                 </td>
               </tr>`;
             }).join('')}
@@ -20179,13 +20188,50 @@ function _showGasImportPreview(aggList, fileName){
   document.body.appendChild(modal);
 }
 
+// ★ 2026/08/11: 紐付けを解除し、台帳の車番も消す
+function _unlinkGasStaff(rowIdx){
+  const records = window._gasImportPending?.records;
+  if(!records || !records[rowIdx]) return;
+  const r = records[rowIdx];
+  const cardNo = String(r.cardNo||'').trim();
+  const cur = r.resolved?.staffName || '';
+  if(!confirm(`車番 ${cardNo} の紐付けを解除しますか?\n\n現在: ${cur}\n\n従業員台帳のカード車番も空欄になります。`)) return;
+
+  // 台帳から車番を削除
+  let cleared = 0;
+  (D.staff||[]).forEach(st=>{
+    if(String(st.offset?.gasCardNo||'').trim() === cardNo){
+      st.offset.gasCardNo = ''; cleared++;
+    }
+  });
+  if(cleared) _saveStaffCardNo();
+
+  // この取込内の同じ車番をすべて未紐付に戻す
+  let n = 0;
+  records.forEach(x=>{
+    if(String(x.cardNo||'').trim() === cardNo){ x.resolved = null; n++; }
+  });
+  _renderGasImportPreview();
+  _showSaveToast(`車番 ${cardNo} の紐付けを解除しました（${n}件）`);
+}
+
 // 手動紐付け(ドライバー選択モーダル)
 function _assignGasStaffManually(rowIdx){
-  const candidates = (D.staff||[]).filter(s => s.status === '在籍').sort((a,b) => (a.empNo||'').localeCompare(b.empNo||''));
-  const options = candidates.map(s => `<option value="${s.id}">${esc(s.name)} (${esc(s.empNo||'')})</option>`).join('');
+  const rec = window._gasImportPending?.records?.[rowIdx];
+  const cardNo = String(rec?.cardNo||'').trim();
+  // ★ 2026/08/11: 営業所順に並べ、各人の現在のカード車番を併記する
+  const candidates = _sortStaffByOffice((D.staff||[]).filter(s => s.status === '在籍'));
+  const options = candidates.map(s => {
+    const cur = String(s.offset?.gasCardNo||'').trim();
+    const mark = cur ? (cur===cardNo ? `　← 既に ${cur}` : `　[現在: ${cur}]`) : '';
+    return `<option value="${s.id}">${esc(s.name)} (${esc(s.empNo||'')}) ${esc(s.office||'')}${esc(mark)}</option>`;
+  }).join('');
   const html = `
-    <div style="background:var(--bg);padding:16px;border-radius:6px;min-width:300px;">
-      <div style="font-size:12px;margin-bottom:8px;">ドライバーを選択</div>
+    <div style="background:var(--bg);padding:16px;border-radius:6px;min-width:340px;max-width:460px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">車番 <span style="font-family:monospace;color:var(--blu2);">${esc(cardNo)}</span> の担当者</div>
+      <div style="font-size:10.5px;color:var(--txt2);margin-bottom:8px;line-height:1.5;">
+        選択すると<b>従業員台帳のカード車番に登録</b>され、次回以降のCSVは自動で紐付きます。
+      </div>
       <select id="gas-assign-sel" style="width:100%;padding:6px;font-size:12px;margin-bottom:10px;">
         <option value="">─ 選択 ─</option>
         ${options}
@@ -20210,15 +20256,49 @@ function _applyGasAssign(rowIdx){
   if(!staff) return;
   const records = window._gasImportPending?.records;
   if(!records || !records[rowIdx]) return;
-  records[rowIdx].resolved = { staffId: staff.id, staffName: staff.name, source: 'manual' };
-  // セル表示を更新
-  const tr = document.querySelector(`tr[data-row-idx="${rowIdx}"]`);
-  if(tr){
-    const cell = tr.querySelector('.gas-staff-cell');
-    if(cell) cell.innerHTML = esc(staff.name) + ' <span style="font-size:9px;color:var(--txt2);">(manual)</span>';
-    tr.style.background = '';
+  const cardNo = String(records[rowIdx].cardNo||'').trim();
+
+  // ★ 2026/08/11: 紐付けた車番を従業員台帳(offset.gasCardNo)へ保存する。
+  //   従来はこの取込1回限りの一時データを書き換えるだけで、
+  //   次回のCSVでは同じ車番がまた「未紐付」になっていた。
+  //   ここで台帳に登録することで、以後のCSVは自動で紐付く。
+  if(cardNo){
+    const dup = (D.staff||[]).find(x =>
+      String(x.id)!==String(staff.id) &&
+      String(x.offset?.gasCardNo||'').trim() === cardNo);
+    if(dup && !confirm(`車番 ${cardNo} は既に「${dup.name}」に登録されています。\n\n「${staff.name}」に付け替えますか?\n(${dup.name} の車番は空欄になります)`)){
+      return;
+    }
+    if(dup){ dup.offset = dup.offset||{}; dup.offset.gasCardNo = ''; }
+    staff.offset = staff.offset || {};
+    staff.offset.gasCardNo = cardNo;
+    _saveStaffCardNo();
   }
+
+  records[rowIdx].resolved = { staffId: staff.id, staffName: staff.name, source: 'manual' };
+  // 同じ車番の他の行も一括で紐付ける
+  let alsoLinked = 0;
+  records.forEach((r,i)=>{
+    if(i===rowIdx) return;
+    if(String(r.cardNo||'').trim() !== cardNo) return;
+    if(r.resolved && r.resolved.staffId) return;
+    r.resolved = { staffId: staff.id, staffName: staff.name, source: 'manual' };
+    alsoLinked++;
+  });
+
   document.getElementById('gas-assign-modal')?.remove();
+  if(typeof _renderGasImportPreview === 'function'){
+    _renderGasImportPreview();   // 件数表示ごと描き直す
+  }
+  _showSaveToast(`${staff.name} に車番 ${cardNo} を登録しました` + (alsoLinked?`（同車番 ${alsoLinked}件も紐付け）`:''));
+}
+
+// ★ 従業員台帳の変更を保存(車番のみの軽い保存)
+function _saveStaffCardNo(){
+  try{ lsSet(LS_KEYS.STAFF, D.staff); }catch(e){}
+  try{ lsSet('nikki_staff_full', D.staff); }catch(e){}
+  try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){ console.warn('カード車番の保存に失敗:', e); }
+  try{ if(typeof renderStaffTbl==='function') renderStaffTbl(); }catch(e){}
 }
 
 // 取込確定→D.gasRecords に保存
@@ -29237,8 +29317,7 @@ function _previewStaffByCode(qH){
   if(!staffInp||staffInp.value)return;
   const selOff=$('dd-off')?.value||'';
   // 社員番号のフル・末尾3桁・先頭でマッチ
-  const items=D.staff
-    .filter(s=>!selOff||s.office===selOff)
+  const items=_sortStaffByOffice(D.staff.filter(s=>!selOff||s.office===selOff))
     .filter(s=>{
       const n=s.empNo||'';
       const tail=n.slice(-3); // 末尾3桁
@@ -29251,13 +29330,39 @@ function _previewStaffByCode(qH){
   if(items.length) _showDd('dd-staff-dd',items);
 }
 
+// ★ 2026/08/11: 従事員候補の並び順
+//   従来は D.staff の登録順(=実質ランダム)で出ていた。
+//   営業所(郵便局)ごとにまとめ、局は読み仮名順、局内は社員番号順にする。
+//   漢字はそのまま並べても読み順にならないため、読み仮名の対応表を使う。
+const _OFFICE_YOMI = {
+  '宇治':'うじ','大阪北':'おおさかきた','大阪港':'おおさかみなと','大阪南':'おおさかみなみ',
+  '大阪西':'おおさかにし','城東':'じょうとう','摂津':'せっつ','中央':'ちゅうおう',
+  '西成':'にしなり','浜寺':'はまでら','東成':'ひがしなり','枚方':'ひらかた','平野':'ひらの',
+  '藤井寺':'ふじいでら','都島':'みやこじま','美原':'みはら','淀川':'よどがわ','堺':'さかい',
+  '住吉':'すみよし','天王寺':'てんのうじ','此花':'このはな','港':'みなと',
+};
+function _officeSortKey(office){
+  const r = String(office||'').trim();
+  if(!r) return '\uFFFF\uFFFF';                       // 未設定は最後
+  const base = r.replace(/(郵便局|営業所)$/,'').trim();
+  return _OFFICE_YOMI[base] || ('\uFFFE' + base);      // 表に無ければ既知の後ろ
+}
+function _sortStaffByOffice(list){
+  return list.slice().sort((a,b)=>{
+    const ka=_officeSortKey(a.office), kb=_officeSortKey(b.office);
+    if(ka !== kb) return ka < kb ? -1 : 1;
+    const na=String(a.empNo||'').padStart(6,'0'), nb=String(b.empNo||'').padStart(6,'0');
+    if(na !== nb) return na < nb ? -1 : 1;
+    return String(a.name||'').localeCompare(String(b.name||''),'ja');
+  });
+}
+
 // ══ 宅配：従事員コンボ ══
 function filterDdStaff(input){
   const q=(input?.value||'').trim();
   const qH=toHankaku(q);
   const selOff=$('dd-off')?.value||'';
-  const items=D.staff
-    .filter(s=>!selOff||s.office===selOff)
+  const items=_sortStaffByOffice(D.staff.filter(s=>!selOff||s.office===selOff))
     .map(s=>{
       const n=s.empNo||'';
       const tail=n.slice(-3); // 末尾3桁で検索可能
@@ -29345,8 +29450,7 @@ function filterPuStaff(input){
   const q=(input?.value||'').trim();
   const qH=toHankaku(q);
   const selOff=$('pu-off')?.value||'';
-  const items=D.staff
-    .filter(s=>!selOff||s.office===selOff)
+  const items=_sortStaffByOffice(D.staff.filter(s=>!selOff||s.office===selOff))
     .map(s=>{
       const n=s.empNo||'';const tail=n.slice(-3);
       const match=!q||matchQuery(n,q)||(isNumOnly(qH)&&(n.startsWith(qH)||tail.startsWith(qH)))||matchQuery(s.name,q)||matchQuery(s.kana||'',q);
