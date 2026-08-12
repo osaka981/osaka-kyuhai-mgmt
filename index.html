@@ -629,6 +629,13 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 #custom-dialog .cd-icon{font-size:28px;margin-bottom:10px;}
 #custom-dialog .cd-title{font-size:14px;font-weight:700;color:var(--txt,#f1f5f9);margin-bottom:8px;}
 #custom-dialog .cd-msg{font-size:12px;color:var(--txt2,#94a3b8);line-height:1.7;margin-bottom:20px;white-space:pre-wrap;}
+/* ★ 2026/08/12: ダイアログ内の入力欄(bodyHtml)用スタイル */
+#cd-body .fg{display:flex;flex-direction:column;gap:3px;}
+#cd-body label{font-size:10.5px;color:var(--txt2,#94a3b8);font-weight:600;}
+#cd-body .fi{width:100%;padding:7px 9px;font-size:13px;border:1px solid var(--brd,#334155);
+  border-radius:5px;background:var(--inp,#1e293b);color:var(--ink,#e2e8f0);box-sizing:border-box;font-family:inherit;}
+#cd-body .fi:focus{outline:none;border-color:var(--blu,#3b82f6);}
+#cd-body input[type=radio]{accent-color:var(--amb2,#f59e0b);}
 #custom-dialog .cd-btns{display:flex;gap:8px;justify-content:flex-end;}
 #custom-dialog .cd-btn-ok{background:#e63946;border:none;color:#fff;padding:8px 22px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;}
 #custom-dialog .cd-btn-ok.grn{background:#16a34a;}
@@ -14561,12 +14568,20 @@ function toggleAllDup(type, checked){
 
 
 // ── カスタム確認ダイアログ ──
-function showDialog({icon='⚠️', title='確認', msg='', okText='OK', okClass='', cancelText='キャンセル', showCancel=true} = {}){
+function showDialog({icon='⚠️', title='確認', msg='', okText='OK', okClass='', cancelText='キャンセル', showCancel=true, bodyHtml=''} = {}){
   return new Promise(resolve => {
     const overlay = document.getElementById('custom-dialog-overlay');
     document.getElementById('cd-icon').textContent = icon;
     document.getElementById('cd-title').textContent = title;
     document.getElementById('cd-msg').textContent = msg;
+    // ★ 2026/08/12: bodyHtml(入力欄など)に対応。
+    //   従来は引数を受け取っておらず、前払い追加などの入力欄が表示されないまま
+    //   「金額を入力してください」で必ず弾かれていた。
+    const bodyEl = document.getElementById('cd-body');
+    if(bodyEl){
+      if(bodyHtml){ bodyEl.innerHTML = bodyHtml; bodyEl.style.display = ''; }
+      else { bodyEl.innerHTML = ''; bodyEl.style.display = 'none'; }
+    }
     const okBtn = document.getElementById('cd-btn-ok');
     const cancelBtn = document.getElementById('cd-btn-cancel');
     okBtn.textContent = okText;
@@ -14588,7 +14603,10 @@ function showDialog({icon='⚠️', title='確認', msg='', okText='OK', okClass
     });
     // Enterでok、Escapeでキャンセル
     const keyHandler = e => {
-      if(e.key==='Enter'){ document.getElementById('cd-btn-ok').click(); document.removeEventListener('keydown', keyHandler); }
+      // ★ 入力欄にフォーカスがあるときのEnterは確定させない(日付の年→月移動などを妨げない)
+      const tag = (e.target?.tagName||'').toLowerCase();
+      const inField = (tag==='input' || tag==='textarea' || tag==='select');
+      if(e.key==='Enter' && !inField){ document.getElementById('cd-btn-ok').click(); document.removeEventListener('keydown', keyHandler); }
       if(e.key==='Escape'){ document.getElementById('cd-btn-cancel').click(); document.removeEventListener('keydown', keyHandler); }
     };
     document.addEventListener('keydown', keyHandler);
@@ -33435,6 +33453,8 @@ window.dqImportJson = function(){
     <div class="cd-icon" id="cd-icon">⚠️</div>
     <div class="cd-title" id="cd-title">確認</div>
     <div class="cd-msg" id="cd-msg"></div>
+    <!-- ★ 2026/08/12: 入力欄などを差し込むスロット。bodyHtml 指定時のみ表示 -->
+    <div id="cd-body" style="display:none;text-align:left;margin-bottom:18px;"></div>
     <div class="cd-btns">
       <button class="cd-btn-cancel" id="cd-btn-cancel">キャンセル</button>
       <button class="cd-btn-ok" id="cd-btn-ok">OK</button>
