@@ -15430,11 +15430,46 @@ function switchStTab(t){
 }
 
 // ══ 前払い管理 ══
+// ★ 2026/08/11: 分割払いに対応。
+//   旧実装は「未相殺の前払いを翌月に全額控除」しており、
+//   12か月分割の借用書を交わしていても翌月に全額引かれてしまう不具合があった。
+//   総額・回数・毎月の控除額・残高を持ち、控除のたびに履歴を残す。
+//
+//   データ構造(st.advances[])
+//     { id, date, amount(総額), reason,
+//       plan: 'lump' | 'installment',
+//       times(回数), perMonth(毎月の控除額), startYM('2026-08'),
+//       payments: [{ ym, amount, at }],   ← 控除実績
+//       settled(完済), settledAt }
+//   ※ 旧データ(plan未設定)は一括扱いとして従来どおり動く
+
+/** 控除済み合計 */
+function _advPaid(a){
+  return (a.payments||[]).reduce((s,p)=>s+(Number(p.amount)||0), 0);
+}
+/** 残高 */
+function _advRemain(a){
+  return Math.max(0, (Number(a.amount)||0) - _advPaid(a));
+}
+/** その月に控除すべき額 */
+function _advDueFor(a, ym){
+  if(a.settled) return 0;
+  const remain = _advRemain(a);
+  if(remain <= 0) return 0;
+  // 既にその月の控除が記録済みなら二重に引かない
+  if((a.payments||[]).some(p=>p.ym===ym)) return 0;
+  if(a.plan !== 'installment') return remain;          // 一括(旧データ含む)
+  if(a.startYM && ym < a.startYM) return 0;            // 開始前
+  const per = Number(a.perMonth)||0;
+  if(per <= 0) return remain;
+  return Math.min(per, remain);                         // 最終回は残高だけ
+}
+
 function renderAdvanceTab(){
   const editId=$('m-staff')?._editId;
   const st=D.staff.find(s=>s.id===editId);
   const advances=st?.advances||[];
-  const balance=advances.filter(a=>!a.settled).reduce((s,a)=>s+a.amount,0);
+  const balance=advances.reduce((s,a)=>s+(a.settled?0:_advRemain(a)),0);
   const balEl=$('advance-balance-amount');
   if(balEl){balEl.textContent='¥'+fmt(balance);balEl.style.color=balance>0?'var(--amb2)':'var(--grn)';}
   const rowsEl=$('advance-rows');
@@ -15442,52 +15477,219 @@ function renderAdvanceTab(){
   if(!rowsEl)return;
   if(!advances.length){rowsEl.innerHTML='';if(emptyEl)emptyEl.style.display='';return;}
   if(emptyEl)emptyEl.style.display='none';
+
   rowsEl.innerHTML=advances.map((a,i)=>{
-    const settled=a.settled;
-    return '<div style="background:var(--sur);border:1px solid var(--brd'+(settled?'':'2')+');border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;opacity:'+(settled?'0.6':'1')+';">'
-      +'<div style="font-size:12px;color:var(--txt2);min-width:80px;">'+(a.date||'−')+'</div>'
-      +'<div style="font-size:15px;font-weight:700;font-family:monospace;color:'+(settled?'var(--txt2)':'var(--amb2)')+';">¥'+fmt(a.amount)+'</div>'
-      +'<div style="font-size:12px;color:var(--txt2);flex:1;">'+(a.reason||'')+'</div>'
-      +'<div style="font-size:11px;">'+(settled?'<span style="color:var(--grn);font-weight:700;">✅ 相殿済</span>':'<span style="color:var(--amb2);font-weight:700;">⏳ 未相殿</span>')+'</div>'
-      +(!settled?'<button class="btn b-grn btn-sm" onclick="settleAdvance('+i+')" style="font-size:11px;">手動相殿</button>':'')
-      +'<button class="btn b-red btn-sm" onclick="deleteAdvance('+i+')" style="font-size:11px;">削除</button>'
-      +'</div>';
+    const paid   = _advPaid(a);
+    const remain = _advRemain(a);
+    const done   = a.settled || remain<=0;
+    const isInst = a.plan==='installment';
+    const times  = Number(a.times)||0;
+    const paidCnt= (a.payments||[]).length;
+    const pct    = a.amount>0 ? Math.round(paid/a.amount*100) : 0;
+
+    const planLabel = isInst
+      ? `<span style="background:rgba(90,138,90,.18);color:var(--grn2);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">${times}回払い ¥${fmt(a.perMonth||0)}/月</span>`
+      : `<span style="background:rgba(176,154,138,.2);color:var(--txt2);border-radius:8px;padding:1px 7px;font-size:10px;font-weight:700;">一括控除</span>`;
+
+    const bar = `<div style="height:5px;background:var(--brd);border-radius:3px;overflow:hidden;margin-top:5px;">
+        <div style="height:100%;width:${pct}%;background:${done?'var(--grn)':'var(--amb2)'};"></div>
+      </div>`;
+
+    const hist = (a.payments||[]).length
+      ? `<div style="font-size:10px;color:var(--txt2);margin-top:6px;line-height:1.6;">
+           <span style="font-weight:700;">控除履歴</span>
+           ${(a.payments||[]).map((p,pi)=>
+             `<span style="display:inline-block;background:var(--bg3);border-radius:8px;padding:1px 7px;margin:2px 3px 0 0;">
+                ${p.ym} ¥${fmt(p.amount)}
+                <span onclick="undoAdvancePayment(${i},${pi})" title="この記録を取り消す"
+                  style="color:var(--red2);cursor:pointer;font-weight:700;margin-left:4px;">&times;</span>
+              </span>`).join('')}
+         </div>` : '';
+
+    return `<div style="background:var(--sur);border:1px solid var(--brd${done?'':'2'});border-radius:6px;padding:10px 14px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:var(--txt2);min-width:80px;">${a.date||'−'}</div>
+        <div style="font-size:15px;font-weight:700;font-family:monospace;color:${done?'var(--txt2)':'var(--amb2)'};">¥${fmt(a.amount)}</div>
+        ${planLabel}
+        <div style="font-size:12px;color:var(--txt2);flex:1;min-width:100px;">${esc(a.reason||'')}</div>
+        <div style="font-size:11px;">${done
+          ? '<span style="color:var(--grn);font-weight:700;">✅ 完済</span>'
+          : `<span style="color:var(--amb2);font-weight:700;">残 ¥${fmt(remain)}</span>${isInst&&times?`<span style="color:var(--txt2);"> (${paidCnt}/${times}回)</span>`:''}`}
+        </div>
+        ${!done?`<button class="btn b-blu btn-sm" onclick="recordAdvancePayment(${i})" style="font-size:11px;">控除を記録</button>`:''}
+        ${!done?`<button class="btn b-gh btn-sm" onclick="settleAdvance(${i})" style="font-size:11px;">完済にする</button>`:''}
+        <button class="btn b-red btn-sm" onclick="deleteAdvance(${i})" style="font-size:11px;">削除</button>
+      </div>
+      ${bar}${hist}
+    </div>`;
   }).join('');
 }
 
 function addAdvanceRow(){
   const dateVal=new Date().toISOString().slice(0,10);
-  const html='<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px;">'
-    +'<div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="adv-date" class="fi" value="'+dateVal+'"></div>'
-    +'<div class="fg"><label>金額（円）</label><input type="number" id="adv-amount" class="fi" placeholder="10000"></div>'
-    +'<div class="fg"><label>理由・メモ</label><input type="text" id="adv-reason" class="fi" placeholder="生活費前払いなど"></div>'
-    +'</div>';
-  showDialog({icon:'💴',title:'前払い追加',msg:'日付・金額・理由を入力してください（月末締め処理で自動相殿）',bodyHtml:html,okText:'追加',cancelText:'キャンセル'}).then(ok=>{
+  const nextYM=(()=>{ const d=new Date(); d.setMonth(d.getMonth()+1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); })();
+  const html=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:8px;margin-top:8px;">
+      <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="adv-date" class="fi date-fi" value="${dateVal}"></div>
+      <div class="fg"><label>金額（総額・円）</label><input type="number" id="adv-amount" class="fi" placeholder="600000" oninput="_advPlanPreview()"></div>
+      <div class="fg"><label>理由・メモ</label><input type="text" id="adv-reason" class="fi" placeholder="生活費前払いなど"></div>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--brd);">
+      <div style="font-size:11px;font-weight:700;margin-bottom:6px;">返済方法</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <label style="flex:1;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="adv-plan" value="installment" checked onchange="_advPlanPreview()"> 分割
+        </label>
+        <label style="flex:1;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="adv-plan" value="lump" onchange="_advPlanPreview()"> 一括（翌月に全額）
+        </label>
+      </div>
+      <div id="adv-inst-fields" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="fg"><label>回数</label><input type="number" id="adv-times" class="fi" min="1" value="12" oninput="_advPlanPreview()"></div>
+        <div class="fg"><label>毎月の控除額</label><input type="number" id="adv-per" class="fi" placeholder="自動計算" oninput="_advPlanPreview(true)"></div>
+        <div class="fg"><label>控除開始月</label><input type="month" id="adv-start" class="fi date-fi" value="${nextYM}"></div>
+      </div>
+      <div id="adv-plan-preview" style="margin-top:8px;padding:8px 10px;background:var(--bg3);border-radius:5px;font-size:11.5px;line-height:1.6;"></div>
+    </div>`;
+  showDialog({icon:'💴',title:'前払い追加',msg:'給与から自動で控除します。分割の場合は回数を指定してください。',bodyHtml:html,okText:'追加',cancelText:'キャンセル'}).then(ok=>{
     if(!ok)return;
     const date=document.getElementById('adv-date')?.value||'';
     const amount=parseInt(document.getElementById('adv-amount')?.value)||0;
     const reason=document.getElementById('adv-reason')?.value||'';
+    const plan=document.querySelector('input[name="adv-plan"]:checked')?.value||'installment';
     if(!amount){showAlert({icon:'⚠️',title:'エラー',msg:'金額を入力してください'});return;}
+
+    let times=0, perMonth=0, startYM='';
+    if(plan==='installment'){
+      times=parseInt(document.getElementById('adv-times')?.value)||0;
+      startYM=document.getElementById('adv-start')?.value||'';
+      if(times<1){showAlert({icon:'⚠️',title:'エラー',msg:'回数は1以上で入力してください'});return;}
+      perMonth=parseInt(document.getElementById('adv-per')?.value)||Math.ceil(amount/times);
+      if(perMonth<1){showAlert({icon:'⚠️',title:'エラー',msg:'毎月の控除額を確認してください'});return;}
+    }
     const editId=$('m-staff')?._editId;
     const st=D.staff.find(s=>s.id===editId);
     if(!st){showAlert({icon:'⚠️',title:'エラー',msg:'先に従業員を保存してください'});return;}
     if(!st.advances)st.advances=[];
-    st.advances.push({date,amount,reason,settled:false,addedAt:new Date().toISOString()});
+    st.advances.push({
+      id:'adv_'+Date.now(),
+      date, amount, reason,
+      plan, times, perMonth, startYM,
+      payments:[], settled:false,
+      addedAt:new Date().toISOString(),
+    });
     lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
+    try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
     renderAdvanceTab();
-    _showSaveToast('前払いを登録しました');
+    _showSaveToast(plan==='installment'
+      ? `前払いを登録しました（${times}回払い ¥${fmt(perMonth)}/月）`
+      : '前払いを登録しました（翌月一括控除）');
+  });
+  setTimeout(_advPlanPreview, 60);
+}
+
+/** 分割条件のプレビュー(毎月の額・完済予定月) */
+function _advPlanPreview(userEditedPer){
+  const plan=document.querySelector('input[name="adv-plan"]:checked')?.value||'installment';
+  const fields=document.getElementById('adv-inst-fields');
+  const prev=document.getElementById('adv-plan-preview');
+  if(fields) fields.style.display = plan==='installment' ? 'grid' : 'none';
+  if(!prev) return;
+  const amount=parseInt(document.getElementById('adv-amount')?.value)||0;
+  if(!amount){ prev.innerHTML='<span style="color:var(--txt2);">金額を入力すると内訳が表示されます</span>'; return; }
+  if(plan!=='installment'){
+    prev.innerHTML=`翌月の給与から <b>¥${fmt(amount)}</b> を一括で控除します。`;
+    return;
+  }
+  const times=parseInt(document.getElementById('adv-times')?.value)||0;
+  const perEl=document.getElementById('adv-per');
+  let per=parseInt(perEl?.value)||0;
+  if(!userEditedPer && times>0){ per=Math.ceil(amount/times); if(perEl) perEl.value=per; }
+  if(times<1||per<1){ prev.innerHTML='<span style="color:var(--txt2);">回数を入力してください</span>'; return; }
+  const realTimes=Math.ceil(amount/per);
+  const last=amount-per*(realTimes-1);
+  const startYM=document.getElementById('adv-start')?.value||'';
+  let endLabel='';
+  if(startYM){
+    const m=startYM.match(/^(\d{4})-(\d{2})$/);
+    if(m){ const d=new Date(+m[1],+m[2]-1+realTimes-1,1);
+      endLabel=`　完済予定 <b>${d.getFullYear()}年${d.getMonth()+1}月</b>`; }
+  }
+  prev.innerHTML=`総額 <b>¥${fmt(amount)}</b> を <b>${realTimes}回</b>で控除<br>`
+    + `毎月 <b>¥${fmt(per)}</b>` + (last!==per?`（最終回のみ ¥${fmt(last)}）`:'') + endLabel;
+}
+
+/** ★ 2026/08/11: 当月分の控除を記録する(残高を減らす) */
+function recordAdvancePayment(idx){
+  const editId=$('m-staff')?._editId;
+  const st=D.staff.find(s=>s.id===editId);
+  const a=st?.advances?.[idx];
+  if(!a) return;
+  const remain=_advRemain(a);
+  if(remain<=0){ showAlert({icon:'ℹ️',title:'完済済み',msg:'この前払いは既に完済しています。'}); return; }
+  const nowYM=new Date().toISOString().slice(0,7);
+  const defAmt=(a.plan==='installment') ? Math.min(Number(a.perMonth)||0, remain) : remain;
+  const html=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+      <div class="fg"><label>控除した月</label><input type="month" id="advp-ym" class="fi date-fi" value="${nowYM}"></div>
+      <div class="fg"><label>控除額（円）</label><input type="number" id="advp-amt" class="fi" value="${defAmt}" min="1"></div>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--txt2);line-height:1.6;">
+      現在の残高 <b>¥${fmt(remain)}</b><br>
+      記録すると残高が減り、その月は給与計算で二重に控除されなくなります。
+    </div>`;
+  showDialog({icon:'✅',title:'控除を記録',msg:'給与から実際に控除した分を記録します。',bodyHtml:html,okText:'記録する',cancelText:'キャンセル'}).then(ok=>{
+    if(!ok) return;
+    const ym=document.getElementById('advp-ym')?.value||'';
+    const amt=parseInt(document.getElementById('advp-amt')?.value)||0;
+    if(!ym||amt<1){ showAlert({icon:'⚠️',title:'エラー',msg:'月と金額を入力してください'}); return; }
+    if((a.payments||[]).some(p=>p.ym===ym)){
+      showAlert({icon:'⚠️',title:'重複',msg:`${ym} の控除は既に記録されています。`}); return;
+    }
+    a.payments=a.payments||[];
+    a.payments.push({ym, amount:Math.min(amt,remain), at:new Date().toISOString()});
+    if(_advRemain(a)<=0){ a.settled=true; a.settledAt=new Date().toISOString(); }
+    lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
+    try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
+    renderAdvanceTab();
+    _showSaveToast(_advRemain(a)<=0 ? '完済しました' : `${ym} 分を記録しました（残 ¥${fmt(_advRemain(a))}）`);
   });
 }
 
+/** 控除記録を取り消す */
+function undoAdvancePayment(idx, pIdx){
+  const editId=$('m-staff')?._editId;
+  const st=D.staff.find(s=>s.id===editId);
+  const a=st?.advances?.[idx];
+  if(!a||!a.payments?.[pIdx]) return;
+  const p=a.payments[pIdx];
+  if(!confirm(`${p.ym} の控除記録（¥${fmt(p.amount)}）を取り消しますか?`)) return;
+  a.payments.splice(pIdx,1);
+  a.settled=false; a.settledAt=null;
+  lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
+  try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
+  renderAdvanceTab();
+  _showSaveToast('控除記録を取り消しました');
+}
+
+/** 残額をまとめて完済にする */
 function settleAdvance(idx){
   const editId=$('m-staff')?._editId;
   const st=D.staff.find(s=>s.id===editId);
-  if(!st?.advances)return;
-  st.advances[idx].settled=true;
-  st.advances[idx].settledAt=new Date().toISOString();
+  const a=st?.advances?.[idx];
+  if(!a) return;
+  const remain=_advRemain(a);
+  if(remain<=0) return;
+  if(!confirm(`残額 ¥${fmt(remain)} を完済として処理しますか?\n\n(給与計算では以後控除されなくなります)`)) return;
+  a.payments=a.payments||[];
+  a.payments.push({ym:new Date().toISOString().slice(0,7), amount:remain, at:new Date().toISOString(), manual:true});
+  a.settled=true;
+  a.settledAt=new Date().toISOString();
   lsSet(LS_KEYS.STAFF||'nikki_staff',D.staff);
+  try{ if(typeof fbSet==='function') fbSet('staff_full', D.staff); }catch(e){}
   renderAdvanceTab();
-  _showSaveToast('相殿済みにしました');
+  _showSaveToast('完済として処理しました');
 }
 
 function deleteAdvance(idx){
@@ -24667,12 +24869,23 @@ function _calcStaffPayment(name, monStr){
     const yoshaLabel=off.yoshaType==='月額'?'庸車両（月額）':`庸車両 ${workDays}日×¥${off.yoshaAmt}`;
     breakdown.push({label:yoshaLabel, amount:-yoshaTotal}); total-=yoshaTotal;
   }
-  // 前払い相殺
-  const unsettled=(st.advances||[]).filter(a=>!a.settled);
-  if(unsettled.length>0){
-    const advTotal=unsettled.reduce((a,v)=>a+v.amount,0);
-    breakdown.push({label:`前払い相殺（${unsettled.length}件）`, amount:-advTotal}); total-=advTotal;
-  }
+  // ── 前払い控除 ──
+  // ★ 2026/08/11: 分割払いに対応。
+  //   旧実装は未相殺の前払いを翌月に全額控除しており、12回払いの取り決めがあっても
+  //   1回で全額引かれていた。当月に控除すべき額だけを計算する。
+  const advMonthKey = String(monStr||'').replace(/\//g,'-').slice(0,7);
+  (st.advances||[]).forEach(a=>{
+    const due = (typeof _advDueFor==='function') ? _advDueFor(a, advMonthKey) : 0;
+    if(due <= 0) return;
+    const remainAfter = (typeof _advRemain==='function') ? Math.max(0,_advRemain(a)-due) : 0;
+    const isInst = a.plan === 'installment';
+    const cnt = ((a.payments||[]).length) + 1;
+    const label = isInst
+      ? `前払い返済 ${cnt}/${a.times||'?'}回目` + (remainAfter>0?`（残 ¥${fmt(remainAfter)}）`:'（完済）')
+      : `前払い相殺` + (a.reason?`（${a.reason}）`:'');
+    breakdown.push({label, amount:-due});
+    total -= due;
+  });
 
   return {total:Math.max(total,0), breakdown, staff:st};
 }
