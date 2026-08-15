@@ -16053,13 +16053,15 @@ function addPenaltyRow(data){
     if(d.date) return String(d.date).slice(0,7).replace(/\//g,'-');
     return '';
   })();
-  row.style.cssText='display:grid;grid-template-columns:120px 120px 1fr 80px 1fr 30px;gap:6px;align-items:end;margin-bottom:5px;';
+  // ★ 2026/08/15: type=month はカレンダーアイコンぶんの幅が要る。
+  //   120pxでは収まらず、アイコンが隣の金額欄に重なって見えていた。
+  row.style.cssText='display:grid;grid-template-columns:132px 150px minmax(120px,1fr) 78px minmax(120px,1fr) 28px;gap:8px;align-items:end;margin-bottom:5px;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 6px;" value="${d.date||''}" oninput="_penaltySyncStart(this)"></div>
-    <div class="fg"><label style="font-size:9px;">控除開始月</label><input type="month" class="fi penalty-start date-fi" style="font-size:11px;padding:3px 6px;" value="${_defStart}" title="給与から引き始める月"></div>
-    <div class="fg"><label style="font-size:9px;">金額（総額・円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;" placeholder="0" value="${d.amt||''}"></div>
-    <div class="fg"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;" min="1" value="${d.times||1}" title="1なら開始月に一括控除"></div>
-    <div class="fg"><label style="font-size:9px;">理由</label><input type="text" class="fi penalty-reason" style="font-size:11px;padding:3px 6px;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
+    <div class="fg" style="min-width:0;"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 4px;width:100%;box-sizing:border-box;" value="${d.date||''}" oninput="_penaltySyncStart(this)"></div>
+    <div class="fg" style="min-width:0;"><label style="font-size:9px;">控除開始月</label><input type="month" class="fi penalty-start date-fi" style="font-size:11px;padding:3px 4px;width:100%;box-sizing:border-box;" value="${_defStart}" title="給与から引き始める月"></div>
+    <div class="fg" style="min-width:0;"><label style="font-size:9px;">金額（総額・円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;text-align:right;" placeholder="0" value="${d.amt||''}"></div>
+    <div class="fg" style="min-width:0;"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;text-align:right;" min="1" value="${d.times||1}" title="1なら開始月に一括控除"></div>
+    <div class="fg" style="min-width:0;"><label style="font-size:9px;">理由</label><input type="text" class="fi penalty-reason" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
     <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.closest('.penalty-row').remove()">✕</button>`;
   list.appendChild(row);
 }
