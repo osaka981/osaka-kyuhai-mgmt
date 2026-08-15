@@ -3969,20 +3969,27 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 燃料費 -->
     <div style="margin-bottom:10px;">
       <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ 燃料費</div>
+      <!-- ★ 2026/08/12: 「カードの貸出」と「費用の負担者」は別の軸のため2項目に分割。
+           旧 gasType(なし/カード貸出/自己負担/会社負担)では
+           「カードを貸していて会社負担」を表現できなかった。 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-        <div class="fg"><label style="font-size:9px;">支給形態</label>
-          <select id="st-gas-type" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onStGasTypeChange()">
+        <div class="fg"><label style="font-size:9px;">カード貸出</label>
+          <select id="st-gas-card-lend" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onStGasTypeChange()">
             <option value="なし">なし</option>
-            <option value="カード貸出">カード貸出</option>
-            <option value="自己負担">自己負担(補填あり)</option>
-            <option value="会社負担">会社負担(車両費)</option>
+            <option value="あり">あり（会社カードを貸与）</option>
           </select>
         </div>
-        <div class="fg"><label style="font-size:9px;">カード車番(燃料CSV連携)</label><input type="text" id="st-gas-cardno" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="例: 0001"></div>
-        <div class="fg"><label style="font-size:9px;">カード番号(参考)</label><input type="text" id="st-gas-card" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="末尾4桁など"></div>
+        <div class="fg"><label style="font-size:9px;">費用負担</label>
+          <select id="st-gas-burden" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onStGasTypeChange()">
+            <option value="自己負担">自己負担（給与から控除）</option>
+            <option value="会社負担">会社負担（控除しない）</option>
+          </select>
+        </div>
+        <div class="fg" id="st-gas-cardno-wrap"><label style="font-size:9px;">カード車番(燃料CSV連携)</label><input type="text" id="st-gas-cardno" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="例: 0001"></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;">
-        <div class="fg" id="st-gas-amt-wrap"><label style="font-size:9px;">月額補填(円・自己負担時)</label><input type="number" id="st-gas-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="1"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px;">
+        <div class="fg"><label style="font-size:9px;">カード番号(参考)</label><input type="text" id="st-gas-card" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="末尾4桁など"></div>
+        <div class="fg" id="st-gas-amt-wrap" style="display:none;"><label style="font-size:9px;">月額補填(円・旧項目)</label><input type="number" id="st-gas-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="1"></div>
         <div class="fg"><label style="font-size:9px;">備考</label><input type="text" id="st-gas-note" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="ENEOS等"></div>
       </div>
       <div id="st-gas-hint" style="font-size:9.5px;color:var(--txt2);margin-top:4px;line-height:1.5;"></div>
@@ -10202,37 +10209,51 @@ function collectStColCustomerPrices(){
 }
 
 // ─── 燃料費タイプ変更時の表示切替 (2026/05/10) ───
+// ★ 2026/08/12: カード貸出／費用負担の組み合わせで表示と説明を切り替える
+function _gasTypeFromPair(lend, burden){
+  const L = lend==='あり', B = burden==='会社負担';
+  if(B) return '会社負担';
+  return L ? 'カード貸出' : '自己負担';
+}
+/** 旧gasTypeしか無いデータを2項目に読み替える */
+function _gasPairOf(off){
+  if(off && off.gasCardLend && off.gasBurden){
+    return { lend:off.gasCardLend, burden:off.gasBurden };
+  }
+  switch(off?.gasType){
+    case 'カード貸出': return { lend:'あり', burden:'自己負担' };
+    case '会社負担':   return { lend:'あり', burden:'会社負担' };   // 会社カードでの給油が主のため
+    case '自己負担':   return { lend:'なし', burden:'自己負担' };
+    default:           return { lend:'なし', burden:'自己負担' };
+  }
+}
+/** 給与から燃料費を控除する対象か */
+function _gasIsDeductible(off){
+  const p = _gasPairOf(off);
+  return p.lend==='あり' && p.burden==='自己負担';
+}
+
 function onStGasTypeChange(){
-  const type = document.getElementById('st-gas-type')?.value || 'なし';
+  const lend   = document.getElementById('st-gas-card-lend')?.value || 'なし';
+  const burden = document.getElementById('st-gas-burden')?.value || '自己負担';
+  const cardnoWrap = document.getElementById('st-gas-cardno-wrap');
   const hint = document.getElementById('st-gas-hint');
-  const amtWrap = document.getElementById('st-gas-amt-wrap');
-  const cardnoEl = document.getElementById('st-gas-cardno');
-  if(hint){
-    let msg = '';
-    switch(type){
-      case 'カード貸出':
-        msg = '会社のカードで給油 → CSV取込で月額確定後、ドライバー支払から実費控除';
-        break;
-      case '自己負担':
-        msg = 'ドライバー本人が給油 → 月額補填を支払に加算(固定額)';
-        break;
-      case '会社負担':
-        msg = '会社車両の業務費用として処理 → 給与計算に反映しない(記録のみ)';
-        break;
-      case 'なし':
-        msg = '燃料費の処理なし';
-        break;
-    }
-    hint.textContent = msg;
+  // カード車番はカード貸出ありのときだけ意味を持つ
+  if(cardnoWrap) cardnoWrap.style.display = (lend==='あり') ? '' : 'none';
+  if(!hint) return;
+  let msg='', color='var(--txt2)';
+  if(lend==='あり' && burden==='自己負担'){
+    msg='会社カードで給油 → 燃料代（CSV取込・手入力）を給与から実費控除します。<b>月次締めの入力対象です。</b>';
+    color='var(--amb2)';
+  } else if(lend==='あり' && burden==='会社負担'){
+    msg='会社カードで給油し、費用は会社が負担します。給与からは控除しません（燃料代は記録として残り、収支集計に使えます）。';
+  } else if(lend==='なし' && burden==='自己負担'){
+    msg='ドライバーが自分で給油・自己負担。給与にも明細にも一切反映しません。';
+  } else {
+    msg='カードは貸与せず、費用は会社が負担（立替精算など）。給与からは控除しません。';
   }
-  // 自己負担時のみ補填額を強調
-  if(amtWrap){
-    amtWrap.style.opacity = (type==='自己負担') ? '1' : '0.4';
-  }
-  // カード貸出/会社負担時はカード車番が重要
-  if(cardnoEl){
-    cardnoEl.style.background = (type==='カード貸出' || type==='会社負担') ? 'rgba(184,134,11,.08)' : '';
-  }
+  hint.innerHTML = msg;
+  hint.style.color = color;
 }
 
 // ─── 集荷先別単価(従業員台帳・宅配タブ) ───
@@ -16299,7 +16320,10 @@ function saveStaff(continueAdd=false){
     areaPrices:collectAreaPrices(),
     otherItems,
     offset:{
-      gasType:$('st-gas-type')?.value||'',
+      // ★ 2026/08/12: カード貸出／費用負担の2項目。gasTypeは互換のため併記して保存
+      gasCardLend:$('st-gas-card-lend')?.value||'なし',
+      gasBurden:$('st-gas-burden')?.value||'自己負担',
+      gasType:_gasTypeFromPair($('st-gas-card-lend')?.value, $('st-gas-burden')?.value),
       gasCard:$('st-gas-card')?.value||'',
       gasCardNo:$('st-gas-cardno')?.value.trim()||'',  // 2026/05/10 燃料CSV連携用車番
       gasAmt:parseInt($('st-gas-amt')?.value)||0,
@@ -24935,50 +24959,43 @@ function _calcStaffPayment(name, monStr){
     g.staffId && String(g.staffId) === String(st.id) && g.ym === gasMonthKey
   );
   const gasRec = gasRecList[0] || null;
-  switch(off.gasType){
-    case 'カード貸出':
-      if(gasRecList.length > 0 && gasRecList.some(g=>(g.amount||0)>0)){
-        // 給油元ごとに1行ずつ出す(金額が合わないときに原因を追えるようにする)
-        gasRecList.forEach(g=>{
-          if(!(g.amount>0)) return;
-          const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
-          const vlabel = g.vendorLabel || (g.isManual ? '手入力' : 'カード貸出');
-          breakdown.push({
-            label: `燃料費(${vlabel}) ${(marked.qty||0).toFixed(1)}L`,
-            amount: -marked.amount,
-          });
-          total -= marked.amount;
-        });
-      } else if(off.gasAmt > 0){
-        // CSVが未取込でも、暫定的に固定額があれば使う(後方互換)
-        breakdown.push({label:'燃料費(固定額・要CSV取込)', amount:-off.gasAmt});
-        total -= off.gasAmt;
-      }
-      break;
-    case '自己負担':
-      if(off.gasAmt > 0){
-        breakdown.push({label:'燃料費補填', amount: off.gasAmt});
-        total += off.gasAmt;
-      }
-      break;
-    case '会社負担':
-      // 給与計算に反映しないが、記録があれば参考表示
-      if(gasRec && gasRec.amount > 0){
+  // ★ 2026/08/12: カード貸出／費用負担の2軸で判定する。
+  //   控除するのは「カード貸出あり × 自己負担」だけ。
+  //   ・貸出なし×自己負担 … 給与にも明細にも一切反映しない
+  //   ・会社負担(貸出の有無を問わず) … 給与では控除しない(収支集計用に記録は残す)
+  const _gp = _gasPairOf(off);
+  if(_gp.lend==='あり' && _gp.burden==='自己負担'){
+    if(gasRecList.length > 0 && gasRecList.some(g=>(g.amount||0)>0)){
+      // 給油元ごとに1行ずつ出す(金額が合わないときに原因を追えるようにする)
+      gasRecList.forEach(g=>{
+        if(!(g.amount>0)) return;
+        const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
+        const vlabel = g.vendorLabel || (g.isManual ? '手入力' : 'カード貸出');
         breakdown.push({
-          label: `(参考)燃料費(会社負担) ${(gasRec.qty||0).toFixed(1)}L ¥${gasRec.amount.toLocaleString()}`,
-          amount: 0,
-          ref: gasRec.amount,
+          label: `燃料費(${vlabel}) ${(marked.qty||0).toFixed(1)}L`,
+          amount: -marked.amount,
         });
-      }
-      break;
-    // 'なし' は何もしない
-    default:
-      // 旧データ互換: gasTypeが未設定で gasAmt>0 なら控除として扱う
-      if(off.gasAmt > 0 && !off.gasType){
-        breakdown.push({label:'燃料費', amount:-off.gasAmt});
-        total -= off.gasAmt;
-      }
+        total -= marked.amount;
+      });
+    } else if(off.gasAmt > 0){
+      // 燃料代が未取込でも、暫定的に固定額があれば使う(後方互換)
+      breakdown.push({label:'燃料費(固定額・要 燃料代入力)', amount:-off.gasAmt});
+      total -= off.gasAmt;
+    }
+  } else if(_gp.burden==='会社負担'){
+    // 給与には反映しないが、実績があれば参考として表示(金額は0)
+    const coTotal = gasRecList.reduce((a,g)=>a+(g.amount||0),0);
+    if(coTotal > 0){
+      const coQty = gasRecList.reduce((a,g)=>a+(g.qty||0),0);
+      breakdown.push({
+        label: `(参考)燃料費 会社負担 ${coQty.toFixed(1)}L ¥${coTotal.toLocaleString()}`,
+        amount: 0,
+        ref: coTotal,
+      });
+    }
   }
+  // 貸出なし×自己負担 は何もしない(明細に出さない)
+
   if(off.yoshaAmt>0){
     const yoshaTotal=off.yoshaType==='月額'?off.yoshaAmt:off.yoshaAmt*workDays;
     const yoshaLabel=off.yoshaType==='月額'?'庸車両（月額）':`庸車両 ${workDays}日×¥${off.yoshaAmt}`;
@@ -32351,7 +32368,10 @@ function _editStaffImpl(id){
   onKyuChange();
   // 控除・手当 復元
   const off=s.offset||{};
-  if($('st-gas-type'))$('st-gas-type').value=off.gasType||'なし';
+  // ★ 2026/08/12: 旧gasTypeしか無いデータは2項目へ読み替える
+  const _gp = _gasPairOf(off);
+  if($('st-gas-card-lend'))$('st-gas-card-lend').value=_gp.lend;
+  if($('st-gas-burden'))$('st-gas-burden').value=_gp.burden;
   if($('st-gas-card'))$('st-gas-card').value=off.gasCard||'';
   if($('st-gas-cardno'))$('st-gas-cardno').value=off.gasCardNo||'';
   if($('st-gas-note'))$('st-gas-note').value=off.gasNote||'';
