@@ -15009,13 +15009,19 @@ function showPayslipPreview(staffName, ymArg){
   document.getElementById('payslip-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'payslip-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(40,40,40,.7);z-index:99999;display:flex;justify-content:center;align-items:flex-start;padding:24px;overflow-y:auto;';
+  // ★ 2026/08/15: 閉じるボタン用に上部余白を確保し、用紙を拡大して読みやすくする
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(40,40,40,.72);z-index:99999;display:flex;justify-content:center;align-items:flex-start;padding:64px 24px 40px;overflow-y:auto;';
   overlay.innerHTML = `
-    <div style="background:#fff;color:#000;width:794px;max-width:100%;position:relative;padding:50px;box-shadow:0 0 30px rgba(0,0,0,.5);border-radius:4px;">
+    <div style="background:#fff;color:#000;width:980px;max-width:100%;position:relative;padding:56px 60px;box-shadow:0 0 30px rgba(0,0,0,.5);border-radius:4px;font-size:15px;line-height:1.7;">
       <div style="position:absolute;top:-36px;right:0;display:flex;gap:8px;">
         <button onclick="(function(){var w=window.open('','_blank');w.document.write('<html><head><title>支払明細書</title></head><body style=\\'margin:30px;font-family:sans-serif;\\'>'+document.getElementById('payslip-body').innerHTML+'</body></html>');w.document.close();w.print();})()" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;">印刷 / PDF</button>
         <button onclick="document.getElementById('payslip-overlay').remove()" style="background:#dc3545;color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:18px;">×</button>
       </div>
+      <style>
+        /* ★ 2026/08/15: プレビューの文字が小さく読みにくいため底上げ(印刷用HTMLには影響しない) */
+        #payslip-body table{font-size:14px;}
+        #payslip-body th,#payslip-body td{padding-top:7px;padding-bottom:7px;}
+      </style>
       <div id="payslip-body">${doc.html}</div>
     </div>`;
   document.body.appendChild(overlay);
