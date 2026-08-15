@@ -14995,9 +14995,10 @@ function showPayDetail(staffName){
 }
 
 // ── 支払明細書プレビュー ──
-function showPayslipPreview(staffName){
-  const mon = $('bl-mon')?.value || '';
-  const monStr = mon.replace('-','/');
+function showPayslipPreview(staffName, ymArg){
+  // ★ 2026/08/12: 給与計算タブなど、bl-mon以外から呼ぶ場合に月を直接渡せるようにする
+  const mon = ymArg || $('bl-mon')?.value || '';
+  const monStr = String(mon).replace('-','/');
   if(!monStr){ showAlert ? showAlert({title:'月を選択',msg:'対象月を選択してください'}) : alert('対象月を選択してください'); return; }
   const doc = (typeof _buildPayslipHTML==='function') ? _buildPayslipHTML(staffName, monStr) : null;
   if(!doc){ showAlert ? showAlert({title:'生成失敗',msg:'支払データがありません'}) : alert('支払データがありません'); return; }
@@ -23113,12 +23114,19 @@ function savePayHistItem(){
 // ══════════════════════════════════════════════════
 
 /** 支払済みか */
-/** 明細プレビュー(既存の支払明細書を対象月で開く) */
+/** 明細プレビュー(既存の支払明細書を対象月で開く)
+ *  ★ 2026/08/12: showPayslipPreview は明細・書類タブの月入力(bl-mon)を参照する。
+ *    給与計算タブの月(sal-mon)しか設定しておらず、bl-monが空だと
+ *    「対象月を選択してください」で止まっていた。両方を揃える。 */
 function _openStaffPaySlip(staffName, ym){
-  const monEl = document.getElementById('sal-mon');
-  if(monEl && ym) monEl.value = String(ym).replace(/\//g,'-').slice(0,7);
-  if(typeof showPayslipPreview === 'function') showPayslipPreview(staffName);
-  else alert('明細プレビューを開けませんでした');
+  const ymStr = String(ym||'').replace(/\//g,'-').slice(0,7);
+  if(!ymStr){ alert('対象月が特定できません'); return; }
+  const blEl = document.getElementById('bl-mon');
+  if(blEl) blEl.value = ymStr;          // 明細生成が参照する月
+  const salEl = document.getElementById('sal-mon');
+  if(salEl) salEl.value = ymStr;
+  if(typeof showPayslipPreview !== 'function'){ alert('明細プレビューを開けませんでした'); return; }
+  showPayslipPreview(staffName, ymStr);
 }
 
 /** ★ 2026/08/12: 違約金の当月控除額
