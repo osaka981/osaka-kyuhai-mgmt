@@ -14997,8 +14997,11 @@ function showPayDetail(staffName){
 // ── 支払明細書プレビュー ──
 function showPayslipPreview(staffName, ymArg){
   // ★ 2026/08/12: 給与計算タブなど、bl-mon以外から呼ぶ場合に月を直接渡せるようにする
+  // ★ 2026/08/15: 日報の日付は 2026-07-02（ハイフン）に統一済み。
+  //   ここでスラッシュに変換すると startsWith('2026/07') が1件も一致せず、
+  //   支給計 0 円の明細になっていた。ハイフンのまま渡す。
   const mon = ymArg || $('bl-mon')?.value || '';
-  const monStr = String(mon).replace('-','/');
+  const monStr = String(mon).replace(/\//g,'-').slice(0,7);
   if(!monStr){ showAlert ? showAlert({title:'月を選択',msg:'対象月を選択してください'}) : alert('対象月を選択してください'); return; }
   const doc = (typeof _buildPayslipHTML==='function') ? _buildPayslipHTML(staffName, monStr) : null;
   if(!doc){ showAlert ? showAlert({title:'生成失敗',msg:'支払データがありません'}) : alert('支払データがありません'); return; }
@@ -15220,7 +15223,10 @@ function _getMonDefault(elId){
     const def=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if(el)el.value=def;
   }
-  return ($(elId)?.value||'').replace('-','/');
+  // ★ 2026/08/15: 日報の日付は 2026-07-02（ハイフン）に統一済み。
+  //   ここでスラッシュに変換すると startsWith('2026/07') が一致せず、
+  //   支払明細・集計が軒並み0円になっていた。
+  return ($(elId)?.value||'').replace(/\//g,'-').slice(0,7);
 }
 
 function _calcStaffCost(staffName, monStr){
@@ -15427,7 +15433,7 @@ function renderCostAnalysis(){
   const trendData=[];
   for(let i=5;i>=0;i--){
     const d=new Date(); d.setMonth(d.getMonth()-i);
-    const ym=d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0');
+    const ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');   // ★ ハイフン統一
     let mInd=0, mCo=0, mHouse=0;
     activeStaff.forEach(s=>{
       const pay=_calcStaffPayment(s.name,ym);
@@ -15435,7 +15441,7 @@ function renderCostAnalysis(){
       else if(s.kubun==='委託会社所属'||s.kubun==='委託ドライバー') mCo+=pay.total;
       else mHouse+=pay.total;
     });
-    trendData.push({label:ym.replace('/','/'),inHouse:mHouse,individual:mInd,company:mCo});
+    trendData.push({label:ym.replace('-','/'),inHouse:mHouse,individual:mInd,company:mCo});
   }
   const maxTrend=Math.max(...trendData.map(t=>t.inHouse+t.individual+t.company),1);
   let trendHtml=`<div style="display:flex;gap:8px;align-items:flex-end;height:160px;padding:10px 0;">`;
@@ -24985,10 +24991,16 @@ function _buildDriverMonthlyByOffice(staff, monStr){
 }
 
 function _calcStaffPayment(name, monStr){
+  // ★ 2026/08/15: 呼び出し元によって月が '2026-07' と '2026/07' の2種類ある。
+  //   日報の日付はハイフンに統一済みのため、スラッシュのまま比較すると
+  //   1件も一致せず支給計0円の明細になっていた。
+  //   呼び出し元が11箇所あり個別修正は漏れるので、ここで正規化して吸収する。
+  monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
   const st=(D.staff||[]).find(s=>s.name===name);
   if(!st) return {total:0,breakdown:[]};
-  const del=(D.delivery||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
-  const pu=(D.pickup||[]).filter(r=>r.staff===name&&(r.date||'').startsWith(monStr));
+  const _nd = v => String(v||'').replace(/\//g,'-');
+  const del=(D.delivery||[]).filter(r=>r.staff===name&&_nd(r.date).startsWith(monStr));
+  const pu=(D.pickup||[]).filter(r=>r.staff===name&&_nd(r.date).startsWith(monStr));
   const breakdown=[];
   let total=0;
   const off=st.offset||{};
