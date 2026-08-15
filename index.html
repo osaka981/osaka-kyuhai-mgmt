@@ -16045,15 +16045,32 @@ function addPenaltyRow(data){
   const d=data||{};
   const row=document.createElement('div');
   row.className='penalty-row';
-  row.style.cssText='display:grid;grid-template-columns:110px 1fr 1fr 70px 1fr 30px;gap:5px;align-items:end;margin-bottom:4px;';
+  // ★ 2026/08/15: 件数を廃止し、「発生日」と「控除開始月」を分ける。
+  //   事故の発生と、給与から引き始める月は別物のため
+  //   (例: 6/25発生 → 本人と協議のうえ8月分から控除開始)。
+  const _defStart = (()=>{
+    if(d.startYM) return d.startYM;
+    if(d.date) return String(d.date).slice(0,7).replace(/\//g,'-');
+    return '';
+  })();
+  row.style.cssText='display:grid;grid-template-columns:120px 120px 1fr 80px 1fr 30px;gap:6px;align-items:end;margin-bottom:5px;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 6px;" value="${d.date||''}"></div>
-    <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi penalty-cnt" style="font-size:11px;padding:3px 6px;" placeholder="1" min="1" value="${d.cnt||1}"></div>
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 6px;" value="${d.date||''}" oninput="_penaltySyncStart(this)"></div>
+    <div class="fg"><label style="font-size:9px;">控除開始月</label><input type="month" class="fi penalty-start date-fi" style="font-size:11px;padding:3px 6px;" value="${_defStart}" title="給与から引き始める月"></div>
     <div class="fg"><label style="font-size:9px;">金額（総額・円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;" placeholder="0" value="${d.amt||''}"></div>
-    <div class="fg"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;" min="1" value="${d.times||1}" title="1なら発生月に一括控除"></div>
+    <div class="fg"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;" min="1" value="${d.times||1}" title="1なら開始月に一括控除"></div>
     <div class="fg"><label style="font-size:9px;">理由</label><input type="text" class="fi penalty-reason" style="font-size:11px;padding:3px 6px;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
     <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.closest('.penalty-row').remove()">✕</button>`;
   list.appendChild(row);
+}
+
+/** ★ 2026/08/15: 発生日を入れたら控除開始月を自動補完(未入力のときだけ) */
+function _penaltySyncStart(el){
+  const row = el.closest('.penalty-row');
+  const start = row?.querySelector('.penalty-start');
+  if(start && !start.value && el.value){
+    start.value = String(el.value).slice(0,7);
+  }
 }
 
 // ── 委託会社単価行追加 ──
@@ -16258,11 +16275,11 @@ function saveStaff(continueAdd=false){
   const penaltyRows=[];
   document.querySelectorAll('#st-penalty-list > div').forEach(row=>{
     const date=row.querySelector('.penalty-date')?.value||'';
+    const startYM=row.querySelector('.penalty-start')?.value||String(date).slice(0,7);
     const times=parseInt(row.querySelector('.penalty-times')?.value)||1;
     const reason=row.querySelector('.penalty-reason')?.value.trim()||'';
-    const cnt=parseInt(row.querySelector('.penalty-cnt')?.value)||1;
     const amt=parseInt(row.querySelector('.penalty-amt')?.value)||0;
-    if(amt>0)penaltyRows.push({date,cnt,amt,times,reason,paid:0});
+    if(amt>0)penaltyRows.push({date,startYM,amt,times,reason,paid:0});
   });
   // 委託会社単価収集
   const companyPrices=[];
@@ -23147,7 +23164,8 @@ function _openStaffPaySlip(staffName, ym){
 function _penaltyDueFor(p, ym){
   const total = Number(p?.amt)||0;
   if(total <= 0) return 0;
-  const start = String(p.date||'').slice(0,7).replace(/\//g,'-');
+  // ★ 2026/08/15: 控除の起点は「控除開始月」。未設定の旧データは発生月を使う。
+  const start = String(p.startYM || String(p.date||'').slice(0,7)).replace(/\//g,'-').slice(0,7);
   if(!start) return 0;
   const cur = String(ym||'').replace(/\//g,'-').slice(0,7);
   if(cur < start) return 0;
@@ -25187,7 +25205,7 @@ function _calcStaffPayment(name, monStr){
     const due=(typeof _penaltyDueFor==='function') ? _penaltyDueFor(p, monStr) : 0;
     if(due<=0) return;
     const times=Math.max(1, Number(p.times)||1);
-    const idx=(()=>{ const st=String(p.date||'').slice(0,7).replace(/\//g,'-');
+    const idx=(()=>{ const st=String(p.startYM || String(p.date||'').slice(0,7)).replace(/\//g,'-').slice(0,7);
       const cu=String(monStr||'').replace(/\//g,'-').slice(0,7);
       const [sy,sm]=st.split('-').map(Number), [cy,cm]=cu.split('-').map(Number);
       return (cy-sy)*12+(cm-sm)+1; })();
