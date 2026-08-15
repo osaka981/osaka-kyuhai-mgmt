@@ -1917,7 +1917,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="krow" id="sal-kpi"></div>
         <div class="card mt8">
           <div class="tw"><table>
-            <thead><tr><th>従事員</th><th>区分</th><th>営業所</th><th class="tr">宅配完了</th><th class="tr">集荷数</th><th class="tr">内訳</th><th class="tr">支払額</th><th>状態</th><th></th></tr></thead>
+            <thead><tr><th>従事員</th><th>区分</th><th>営業所</th><th class="tr">宅配完了</th><th class="tr">集荷数</th><th>燃料代</th><th class="tr">内訳</th><th class="tr">支払額</th><th>状態</th><th></th></tr></thead>
             <tbody id="tb-sal"></tbody>
           </table></div>
         </div>
@@ -6203,6 +6203,15 @@ function setupRealtimeSync() {
     }
   });
   // ══ 入金管理 (2026/05/21) ══
+  // ★ 2026/08/12: 給与の支払状態(月×従業員)
+  onValue(ref(fbDB, 'nikki/salary_paid'), snap => {
+    if(window._fbWritingGuard?.['salary_paid']) return;
+    D.salaryPaid = snap.exists() ? (snap.val()||{}) : {};
+    try{ lsSet('nikki_salary_paid', D.salaryPaid); }catch(e){}
+    if(document.getElementById('s-salary')?.style.display !== 'none' && typeof renderSalary==='function'){
+      renderSalary();
+    }
+  });
   onValue(ref(fbDB, 'nikki/payments'), snap => {
     if(window._fbWritingGuard?.['payments']){
       console.log('[fb listener] payments: 自己書込中のためスキップ');
@@ -7509,6 +7518,9 @@ const D = {
   // ★ 2026/08/11: サンプル5件(株式会社アルファ・ベータ商事/2025年3月)を削除。
   //   先日Firebaseから削除した5件は、これが毎回書き戻されていたもの。
   pickup: [],
+  // ★ 2026/08/12: 給与の支払状態 { '2026-07': { staffId: {amount,at,by} } }
+  //   従来は表示上 i%2 で1人おきに「済」としており、実データが存在しなかった。
+  salaryPaid: (()=>{ try{ return JSON.parse(localStorage.getItem('nikki_salary_paid')||'{}'); }catch(e){ return {}; } })(),
   // 委託会社マスタ
   // ★ 2026/06/25: サンプル(株式会社○○運輸)を削除。実データはFirebase/localStorageから読む。
   //   ここにサンプルを残すと、全削除しても初期化時に復活してしまう。
@@ -23089,8 +23101,111 @@ function savePayHistItem(){
   }
 }
 
+// ══════════════════════════════════════════════════
+// ★ 2026/08/12: 月次締め用の補助
+//   ・燃料代の入力状況をセルに出し、その場で入力できるようにする
+//   ・支払状態を実データ(D.salaryPaid)で管理する
+// ══════════════════════════════════════════════════
+
+/** 支払済みか */
+/** 明細プレビュー(既存の支払明細書を対象月で開く) */
+function _openStaffPaySlip(staffName, ym){
+  const monEl = document.getElementById('sal-mon');
+  if(monEl && ym) monEl.value = String(ym).replace(/\//g,'-').slice(0,7);
+  if(typeof showPayslipPreview === 'function') showPayslipPreview(staffName);
+  else alert('明細プレビューを開けませんでした');
+}
+
+function _isSalaryPaid(staffId, ym){
+  const key = String(ym).replace(/\//g,'-').slice(0,7);
+  return !!(D.salaryPaid && D.salaryPaid[key] && D.salaryPaid[key][String(staffId)]);
+}
+
+/** 支払済/未払を切り替える */
+async function _toggleSalaryPaid(staffId, ym, amount){
+  const key = String(ym).replace(/\//g,'-').slice(0,7);
+  const st = (D.staff||[]).find(x=>String(x.id)===String(staffId));
+  D.salaryPaid = D.salaryPaid || {};
+  D.salaryPaid[key] = D.salaryPaid[key] || {};
+  const cur = D.salaryPaid[key][String(staffId)];
+  if(cur){
+    if(!confirm(`${st?.name||''} の ${key} を「未払」に戻しますか?`)) return;
+    delete D.salaryPaid[key][String(staffId)];
+  } else {
+    if(!confirm(`${st?.name||''} の ${key} を「支払済」にしますか?\n\n支払額 ¥${fmt(amount||0)}`)) return;
+    D.salaryPaid[key][String(staffId)] = {
+      amount: amount||0, at: new Date().toISOString(), by: 'mgmt',
+    };
+  }
+  try{
+    lsSet('nikki_salary_paid', D.salaryPaid);
+    if(typeof fbSet==='function') await fbSet('salary_paid', D.salaryPaid);
+  }catch(e){ console.warn('支払状態の保存に失敗:', e); }
+  renderSalary();
+  _showSaveToast(cur ? '未払に戻しました' : '支払済にしました');
+}
+
+/** 燃料代セル(月次締め) */
+function _salaryGasCell(st, ym){
+  const off = st.offset || {};
+  const pair = (typeof _gasPairOf==='function') ? _gasPairOf(off) : {lend:'なし',burden:'自己負担'};
+  const key = String(ym).replace(/\//g,'-').slice(0,7);
+  const recs = (D.gasRecords||[]).filter(g =>
+    g.staffId && String(g.staffId)===String(st.id) && g.ym===key && (g.amount||0)>0);
+
+  // 控除対象(カード貸出あり × 自己負担)以外は入力不要
+  if(!(pair.lend==='あり' && pair.burden==='自己負担')){
+    if(pair.burden==='会社負担' && recs.length){
+      const t = recs.reduce((a,g)=>a+(g.amount||0),0);
+      return { isTarget:false, needInput:false,
+        html:`<span style="color:var(--txt2);">会社負担 ¥${fmt(t)}</span>` };
+    }
+    return { isTarget:false, needInput:false, html:'<span style="color:var(--txt3);">−</span>' };
+  }
+
+  if(!recs.length){
+    return { isTarget:true, needInput:true,
+      html:`<span style="color:var(--amb2);font-weight:700;">⚠ 未入力</span>
+        <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 7px;margin-left:4px;"
+          onclick="_openGasFor('${esc(st.name)}','${key}')">入力</button>` };
+  }
+  const rows = recs.map(g=>{
+    const m = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
+    return `<div style="white-space:nowrap;">¥${fmt(m.amount||0)}
+      <span style="font-size:9px;color:var(--txt2);">${esc(g.vendorLabel||'ENEOS')}</span></div>`;
+  }).join('');
+  return { isTarget:true, needInput:false,
+    html:`${rows}<button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 7px;margin-top:2px;"
+      onclick="_openGasFor('${esc(st.name)}','${key}')">＋追加</button>` };
+}
+
+/** 燃料代の手入力を、対象者・対象月を入れた状態で開く */
+function _openGasFor(staffName, ym){
+  const monEl = document.getElementById('gas-month');
+  if(monEl) monEl.value = ym;
+  if(typeof openGasManualModal!=='function'){ alert('燃料代管理タブを開いてから実行してください'); return; }
+  openGasManualModal();
+  setTimeout(()=>{
+    const ymEl=document.getElementById('gm-ym'); if(ymEl) ymEl.value=ym;
+    const sel=document.getElementById('gm-staff');
+    if(sel){
+      const st=(D.staff||[]).find(x=>x.name===staffName);
+      if(st){
+        const opt=[...sel.options].find(o=>String(o.value)===String(st.id));
+        if(opt){ sel.value=String(st.id); }
+        else {
+          // 給油元の絞り込みで候補外なら、エネオスに切り替えて選び直す
+          const v=document.getElementById('gm-vendor');
+          if(v){ v.value='eneos'; _gmVendorChanged();
+            setTimeout(()=>{ sel.value=String(st.id); }, 30); }
+        }
+      }
+    }
+  }, 140);
+}
+
 function renderSalary(){
-  let h='',tot=0,paid=0,unpaid=0;
+  let h='',tot=0,paid=0,unpaid=0,gasNeed=0,gasTarget=0;
   // 表示月を取得
   const salMon=toYM($('sal-mon')?.value||'');
   const salMonStr=salMon||toYM(new Date().toISOString().slice(0,7));
@@ -23264,24 +23379,39 @@ function renderSalary(){
 
     const pay=Math.max(0,base-repairDeduct);
     tot+=pay;
-    const isPaid=i%2===0;if(isPaid)paid++;else unpaid++;
+    // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
+    const isPaid=_isSalaryPaid(s.id, salMonStr);
+    if(isPaid)paid++;else unpaid++;
     const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='委託会社所属'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     const kn=delRows.reduce((a,r)=>a+r.kanryo,0);
     const puTot=puRows.reduce((a,r)=>a+Object.values(r.items||{}).reduce((x,v)=>x+v,0),0);
+
+    // ★ 2026/08/12: 燃料代の入力状況(月次締め用)
+    const gasCell=_salaryGasCell(s, salMonStr);
+    if(gasCell.needInput) gasNeed++;
+    if(gasCell.isTarget) gasTarget++;
+
     h+=`<tr>
       <td class="fw7">${s.name}</td><td>${kb}</td><td>${s.office}</td>
       <td class="tr">${kn?fmt(kn):'−'}</td>
       <td class="tr">${puTot?fmt(puTot):'−'}</td>
+      <td style="font-size:10px;">${gasCell.html}</td>
       <td class="tr" style="font-size:10px;">${breakdown}</td>
       <td class="tr fw7" style="color:var(--tel2);">¥${fmt(pay)}</td>
       <td>${isPaid?'<span class="bdg bg">済</span>':'<span class="bdg br">未払</span>'}</td>
-      <td>${isPaid?'<button class="btn b-gh btn-sm">明細</button>':'<button class="btn b-grn btn-sm">支払</button>'}</td></tr>`;
+      <td style="white-space:nowrap;">
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_openStaffPaySlip('${esc(s.name)}','${salMonStr}')">明細</button>
+        <button class="btn ${isPaid?'b-gh':'b-grn'} btn-sm" style="font-size:10px;padding:2px 8px;margin-left:3px;"
+          onclick="_toggleSalaryPaid(${s.id},'${salMonStr}',${pay})">${isPaid?'取消':'支払'}</button>
+      </td></tr>`;
   });
-  $('tb-sal').innerHTML=h||'<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2)">データがありません</td></tr>';
+  $('tb-sal').innerHTML=h||'<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--txt2)">データがありません</td></tr>';
   $('sal-kpi').innerHTML=[
     {l:'総支払額',v:'¥'+fmt(tot),u:'',c:'--red'},
     {l:'支払済',v:paid,u:'名',c:'--grn'},
     {l:'未払い',v:unpaid,u:'名',c:'--amb'},
+    {l:gasNeed>0?'⚠ 燃料代 未入力':'✓ 燃料代 入力済',
+     v:gasNeed>0?gasNeed:gasTarget, u:gasNeed>0?`名 / 対象${gasTarget}名`:'名', c:gasNeed>0?'--amb':'--grn'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div></div>`).join('');
 }
 
