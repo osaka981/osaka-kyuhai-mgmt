@@ -1910,8 +1910,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <button class="btn b-blu btn-sm" onclick="renderSalary()">🔄 自動計算</button>
           </div>
           <div class="fla gap6">
-            <button class="btn b-amb btn-sm">📥 明細書出力</button>
-            <button class="btn b-grn btn-sm">💴 一括支払</button>
+            <!-- ★ 2026/08/12: 📥明細書出力 は onclick が無く無反応だったため一旦削除（将来実装予定） -->
+            <button class="btn b-grn btn-sm" onclick="_bulkMarkPaid()">💴 一括支払</button>
           </div>
         </div>
         <div class="krow" id="sal-kpi"></div>
@@ -16028,15 +16028,22 @@ function addCharterRow(){
 }
 
 // ── 違約金行追加 ──
-function addPenaltyRow(){
+// ★ 2026/08/12: 違約金はドライバーへの請求(給与から控除)。
+//   従来は入力しても給与計算から参照されておらず、金額が一切動かなかった。
+//   修理代と同じく「発生月から分割で天引き」できるようにする。
+function addPenaltyRow(data){
   const list=$('st-penalty-list');if(!list)return;
+  const d=data||{};
   const row=document.createElement('div');
-  row.style.cssText='display:grid;grid-template-columns:100px 1fr 1fr 30px;gap:5px;align-items:end;';
+  row.className='penalty-row';
+  row.style.cssText='display:grid;grid-template-columns:110px 1fr 1fr 70px 1fr 30px;gap:5px;align-items:end;margin-bottom:4px;';
   row.innerHTML=`
-    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date" style="font-size:11px;padding:3px 6px;"></div>
-    <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi penalty-cnt" style="font-size:11px;padding:3px 6px;" placeholder="1" min="1" value="1"></div>
-    <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;" placeholder="0"></div>
-    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.parentElement.remove()">✕</button>`;
+    <div class="fg"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 6px;" value="${d.date||''}"></div>
+    <div class="fg"><label style="font-size:9px;">件数</label><input type="number" class="fi penalty-cnt" style="font-size:11px;padding:3px 6px;" placeholder="1" min="1" value="${d.cnt||1}"></div>
+    <div class="fg"><label style="font-size:9px;">金額（総額・円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;" placeholder="0" value="${d.amt||''}"></div>
+    <div class="fg"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;" min="1" value="${d.times||1}" title="1なら発生月に一括控除"></div>
+    <div class="fg"><label style="font-size:9px;">理由</label><input type="text" class="fi penalty-reason" style="font-size:11px;padding:3px 6px;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
+    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.closest('.penalty-row').remove()">✕</button>`;
   list.appendChild(row);
 }
 
@@ -16242,9 +16249,11 @@ function saveStaff(continueAdd=false){
   const penaltyRows=[];
   document.querySelectorAll('#st-penalty-list > div').forEach(row=>{
     const date=row.querySelector('.penalty-date')?.value||'';
+    const times=parseInt(row.querySelector('.penalty-times')?.value)||1;
+    const reason=row.querySelector('.penalty-reason')?.value.trim()||'';
     const cnt=parseInt(row.querySelector('.penalty-cnt')?.value)||1;
     const amt=parseInt(row.querySelector('.penalty-amt')?.value)||0;
-    if(amt>0)penaltyRows.push({date,cnt,amt});
+    if(amt>0)penaltyRows.push({date,cnt,amt,times,reason,paid:0});
   });
   // 委託会社単価収集
   const companyPrices=[];
@@ -23116,6 +23125,51 @@ function _openStaffPaySlip(staffName, ym){
   else alert('明細プレビューを開けませんでした');
 }
 
+/** ★ 2026/08/12: 違約金の当月控除額
+ *   times=1 なら発生月に一括。times>1 なら発生月から分割で天引きする。
+ *   (修理代 repairRows と同じ考え方。端数は切り上げ、最終回で残額を吸収) */
+function _penaltyDueFor(p, ym){
+  const total = Number(p?.amt)||0;
+  if(total <= 0) return 0;
+  const start = String(p.date||'').slice(0,7).replace(/\//g,'-');
+  if(!start) return 0;
+  const cur = String(ym||'').replace(/\//g,'-').slice(0,7);
+  if(cur < start) return 0;
+  const times = Math.max(1, Number(p.times)||1);
+  const [sy,sm] = start.split('-').map(Number);
+  const [cy,cm] = cur.split('-').map(Number);
+  const idx = (cy-sy)*12 + (cm-sm);
+  if(idx < 0 || idx >= times) return 0;
+  const per = Math.ceil(total/times);
+  return (idx === times-1) ? Math.max(0, total - per*(times-1)) : per;
+}
+function _penaltyDueTotal(st, ym){
+  return (st?.offset?.penalties||[]).reduce((a,p)=>a+_penaltyDueFor(p, ym), 0);
+}
+
+/** ★ 2026/08/12: 表示中の未払をまとめて支払済にする */
+async function _bulkMarkPaid(){
+  const ym = toYM($('sal-mon')?.value||'') || toYM(new Date().toISOString().slice(0,7));
+  const key = String(ym).replace(/\//g,'-').slice(0,7);
+  const targets = (D.staff||[]).filter(s=>{
+    if(s.kubun && String(s.kubun).includes('委託会社')) return false;
+    return !_isSalaryPaid(s.id, key);
+  });
+  if(!targets.length){ showAlert({icon:'ℹ️',title:'対象なし',msg:`${key} に未払はありません。`}); return; }
+  if(!confirm(`${key} の未払 ${targets.length}名 をまとめて「支払済」にしますか?`)) return;
+  D.salaryPaid = D.salaryPaid || {};
+  D.salaryPaid[key] = D.salaryPaid[key] || {};
+  targets.forEach(s=>{
+    D.salaryPaid[key][String(s.id)] = { amount:0, at:new Date().toISOString(), by:'bulk' };
+  });
+  try{
+    lsSet('nikki_salary_paid', D.salaryPaid);
+    if(typeof fbSet==='function') await fbSet('salary_paid', D.salaryPaid);
+  }catch(e){ console.warn('一括支払の保存に失敗:', e); }
+  renderSalary();
+  _showSaveToast(`${targets.length}名を支払済にしました`);
+}
+
 function _isSalaryPaid(staffId, ym){
   const key = String(ym).replace(/\//g,'-').slice(0,7);
   return !!(D.salaryPaid && D.salaryPaid[key] && D.salaryPaid[key][String(staffId)]);
@@ -23371,13 +23425,16 @@ function renderSalary(){
         return diffMonths>=0 && diffMonths<remaining;
       })
       .reduce((sum,r)=>sum+Math.ceil((r.total||0)/(r.times||1)),0);
+    // ★ 2026/08/12: 違約金(ドライバー請求)の当月分を控除
+    const penaltyDeduct=_penaltyDueTotal(s, salMonStr);
     if(!parts.length)parts.push('単価未設定');
     if(repairDeduct>0)parts.push(`<span style='color:var(--pur2)'>🔧修理 -¥${fmt(repairDeduct)}</span>`);
+    if(penaltyDeduct>0)parts.push(`<span style='color:var(--red2)'>⚠違約金 -¥${fmt(penaltyDeduct)}</span>`);
     // 有効条件のラベル
     const condLabel=cond.note?`<span style="color:var(--amb2);font-size:8.5px;">[${cond.note}]</span>`:'';
     breakdown=`<span style="font-size:9px;color:var(--txt2);">${parts.join(' ＋ ')} ${condLabel}</span>`;
 
-    const pay=Math.max(0,base-repairDeduct);
+    const pay=Math.max(0,base-repairDeduct-penaltyDeduct);
     tot+=pay;
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
     const isPaid=_isSalaryPaid(s.id, salMonStr);
@@ -25125,6 +25182,20 @@ function _calcStaffPayment(name, monStr){
     }
   }
   // 貸出なし×自己負担 は何もしない(明細に出さない)
+
+  // ★ 2026/08/12: 違約金(ドライバー請求)を明細にも出す
+  (off.penalties||[]).forEach(p=>{
+    const due=(typeof _penaltyDueFor==='function') ? _penaltyDueFor(p, monStr) : 0;
+    if(due<=0) return;
+    const times=Math.max(1, Number(p.times)||1);
+    const idx=(()=>{ const st=String(p.date||'').slice(0,7).replace(/\//g,'-');
+      const cu=String(monStr||'').replace(/\//g,'-').slice(0,7);
+      const [sy,sm]=st.split('-').map(Number), [cy,cm]=cu.split('-').map(Number);
+      return (cy-sy)*12+(cm-sm)+1; })();
+    const label='違約金'+(p.reason?`（${p.reason}）`:'')+(times>1?` ${idx}/${times}回目`:'');
+    breakdown.push({label, amount:-due});
+    total -= due;
+  });
 
   if(off.yoshaAmt>0){
     const yoshaTotal=off.yoshaType==='月額'?off.yoshaAmt:off.yoshaAmt*workDays;
@@ -32512,6 +32583,11 @@ function _editStaffImpl(id){
   if($('st-yosha-amt'))$('st-yosha-amt').value=off.yoshaAmt||'';
   if($('st-yosha-tax'))$('st-yosha-tax').value=off.yoshaTax||'in';
   if($('st-yosha-note'))$('st-yosha-note').value=off.yoshaNote||'';
+  // ★ 2026/08/12: 違約金行の復元。従来は復元処理が無く、保存しても開き直すと消えていた。
+  if($('st-penalty-list')){
+    $('st-penalty-list').innerHTML='';
+    (off.penalties||[]).forEach(p=>addPenaltyRow(p));
+  }
   if($('st-yokonori-unit'))$('st-yokonori-unit').value=off.yokonoriUnit||'';
   if($('st-tokubetsu-unit'))$('st-tokubetsu-unit').value=off.tokubetsuUnit||'';
   if($('st-teate-other'))$('st-teate-other').value=off.teateOther||'';
