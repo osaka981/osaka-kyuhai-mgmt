@@ -1909,10 +1909,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <input type="month" id="sal-mon" class="fi" onchange="renderSalary()">
             <button class="btn b-blu btn-sm" onclick="renderSalary()">🔄 自動計算</button>
           </div>
-          <div class="fla gap6">
-            <!-- ★ 2026/08/12: 📥明細書出力 は onclick が無く無反応だったため一旦削除（将来実装予定） -->
-            <button class="btn b-grn btn-sm" onclick="_bulkMarkPaid()">💴 一括支払</button>
-          </div>
         </div>
         <div class="krow" id="sal-kpi"></div>
         <div class="card mt8">
@@ -23145,29 +23141,6 @@ function _penaltyDueFor(p, ym){
 }
 function _penaltyDueTotal(st, ym){
   return (st?.offset?.penalties||[]).reduce((a,p)=>a+_penaltyDueFor(p, ym), 0);
-}
-
-/** ★ 2026/08/12: 表示中の未払をまとめて支払済にする */
-async function _bulkMarkPaid(){
-  const ym = toYM($('sal-mon')?.value||'') || toYM(new Date().toISOString().slice(0,7));
-  const key = String(ym).replace(/\//g,'-').slice(0,7);
-  const targets = (D.staff||[]).filter(s=>{
-    if(s.kubun && String(s.kubun).includes('委託会社')) return false;
-    return !_isSalaryPaid(s.id, key);
-  });
-  if(!targets.length){ showAlert({icon:'ℹ️',title:'対象なし',msg:`${key} に未払はありません。`}); return; }
-  if(!confirm(`${key} の未払 ${targets.length}名 をまとめて「支払済」にしますか?`)) return;
-  D.salaryPaid = D.salaryPaid || {};
-  D.salaryPaid[key] = D.salaryPaid[key] || {};
-  targets.forEach(s=>{
-    D.salaryPaid[key][String(s.id)] = { amount:0, at:new Date().toISOString(), by:'bulk' };
-  });
-  try{
-    lsSet('nikki_salary_paid', D.salaryPaid);
-    if(typeof fbSet==='function') await fbSet('salary_paid', D.salaryPaid);
-  }catch(e){ console.warn('一括支払の保存に失敗:', e); }
-  renderSalary();
-  _showSaveToast(`${targets.length}名を支払済にしました`);
 }
 
 function _isSalaryPaid(staffId, ym){
