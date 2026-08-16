@@ -16055,14 +16055,27 @@ function addPenaltyRow(data){
   })();
   // ★ 2026/08/15: type=month はカレンダーアイコンぶんの幅が要る。
   //   120pxでは収まらず、アイコンが隣の金額欄に重なって見えていた。
-  row.style.cssText='display:grid;grid-template-columns:132px 150px minmax(120px,1fr) 78px minmax(120px,1fr) 28px;gap:8px;align-items:end;margin-bottom:5px;';
+  // ★ 2026/08/17: 5項目を1行に並べると容器幅(約630px)を超えてはみ出し、
+  //   ラベルと入力欄の位置がずれて見えていた。2行構成にして確実に収める。
+  row.style.cssText='border:1px solid var(--brd);border-radius:5px;padding:7px 9px;margin-bottom:6px;background:var(--bg3);';
   row.innerHTML=`
-    <div class="fg" style="min-width:0;"><label style="font-size:9px;">発生日</label><input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:3px 4px;width:100%;box-sizing:border-box;" value="${d.date||''}" oninput="_penaltySyncStart(this)"></div>
-    <div class="fg" style="min-width:0;"><label style="font-size:9px;">控除開始月</label><input type="month" class="fi penalty-start date-fi" style="font-size:11px;padding:3px 4px;width:100%;box-sizing:border-box;" value="${_defStart}" title="給与から引き始める月"></div>
-    <div class="fg" style="min-width:0;"><label style="font-size:9px;">金額（総額・円）</label><input type="number" class="fi penalty-amt" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;text-align:right;" placeholder="0" value="${d.amt||''}"></div>
-    <div class="fg" style="min-width:0;"><label style="font-size:9px;">分割回数</label><input type="number" class="fi penalty-times" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;text-align:right;" min="1" value="${d.times||1}" title="1なら開始月に一括控除"></div>
-    <div class="fg" style="min-width:0;"><label style="font-size:9px;">理由</label><input type="text" class="fi penalty-reason" style="font-size:11px;padding:3px 6px;width:100%;box-sizing:border-box;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
-    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;padding:4px;" onclick="this.closest('.penalty-row').remove()">✕</button>`;
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 70px;gap:7px;align-items:end;">
+      <div class="fg" style="min-width:0;"><label style="font-size:9px;">発生日</label>
+        <input type="date" min="1900-01-01" max="2099-12-31" class="fi penalty-date date-fi" style="font-size:11px;padding:4px 6px;" value="${d.date||''}" oninput="_penaltySyncStart(this)"></div>
+      <div class="fg" style="min-width:0;"><label style="font-size:9px;">控除開始月</label>
+        <input type="month" class="fi penalty-start date-fi" style="font-size:11px;padding:4px 6px;" value="${_defStart}" title="給与から引き始める月"></div>
+      <div class="fg" style="min-width:0;"><label style="font-size:9px;">金額（総額・円）</label>
+        <input type="number" class="fi penalty-amt" style="font-size:11px;padding:4px 6px;text-align:right;" placeholder="0" value="${d.amt||''}"></div>
+      <div class="fg" style="min-width:0;"><label style="font-size:9px;">分割回数</label>
+        <input type="number" class="fi penalty-times" style="font-size:11px;padding:4px 6px;text-align:right;" min="1" value="${d.times||1}" title="1なら開始月に一括控除"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 28px;gap:7px;align-items:end;margin-top:6px;">
+      <div class="fg" style="min-width:0;"><label style="font-size:9px;">理由</label>
+        <input type="text" class="fi penalty-reason" style="font-size:11px;padding:4px 6px;" placeholder="誤配・遅延など" value="${esc(d.reason||'')}"></div>
+      <button type="button" title="この違約金を削除"
+        style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:15px;padding:4px 0;"
+        onclick="this.closest('.penalty-row').remove()">✕</button>
+    </div>`;
   list.appendChild(row);
 }
 
@@ -16275,7 +16288,8 @@ function saveStaff(continueAdd=false){
   });
   // 違約金収集
   const penaltyRows=[];
-  document.querySelectorAll('#st-penalty-list > div').forEach(row=>{
+  // ★ 2026/08/17: 行が2段構成になったため .penalty-row で取得する
+  document.querySelectorAll('#st-penalty-list .penalty-row').forEach(row=>{
     const date=row.querySelector('.penalty-date')?.value||'';
     const startYM=row.querySelector('.penalty-start')?.value||String(date).slice(0,7);
     const times=parseInt(row.querySelector('.penalty-times')?.value)||1;
