@@ -3977,8 +3977,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="fg"><label style="font-size:9px;">費用負担</label>
           <select id="st-gas-burden" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onStGasTypeChange()">
-            <option value="自己負担">自己負担（給与から控除）</option>
-            <option value="会社負担">会社負担（控除しない）</option>
+            <option value="自己負担">自己負担（ドライバー持ち）</option>
+            <option value="会社負担">会社負担（会社持ち）</option>
           </select>
         </div>
         <div class="fg" id="st-gas-cardno-wrap"><label style="font-size:9px;">カード車番(燃料CSV連携)</label><input type="text" id="st-gas-cardno" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="例: 0001"></div>
@@ -10251,14 +10251,14 @@ function onStGasTypeChange(){
   if(!hint) return;
   let msg='', color='var(--txt2)';
   if(lend==='あり' && burden==='自己負担'){
-    msg='会社カードで給油 → 燃料代（CSV取込・手入力）を給与から実費控除します。<b>月次締めの入力対象です。</b>';
+    msg='会社カードで給油 → 立て替えた燃料代を<b>給与から実費控除</b>します。<b>月次締めの入力対象です。</b>';
     color='var(--amb2)';
   } else if(lend==='あり' && burden==='会社負担'){
-    msg='会社カードで給油し、費用は会社が負担します。給与からは控除しません（燃料代は記録として残り、収支集計に使えます）。';
+    msg='会社カードで給油し、費用も会社が負担。<b>給与からは控除しません</b>（燃料代は記録として残り、収支集計に使えます）。';
   } else if(lend==='なし' && burden==='自己負担'){
-    msg='ドライバーが自分で給油・自己負担。給与にも明細にも一切反映しません。';
+    msg='ドライバーが自分で給油し自己負担。会社は立て替えていないため、<b>給与にも明細にも一切反映しません</b>。';
   } else {
-    msg='カードは貸与せず、費用は会社が負担（立替精算など）。給与からは控除しません。';
+    msg='カードは貸与せず、費用は会社が負担（立替精算など）。<b>給与からは控除しません</b>。';
   }
   hint.innerHTML = msg;
   hint.style.color = color;
