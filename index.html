@@ -9070,6 +9070,13 @@ async function saveDel(){
   // 0件チェック
   const total=mochi+kanryo+tenso+yakan+n('dd-ogata')+n('dd-shukka')+n('dd-s1')+n('dd-s2')+n('dd-s3')+n('dd-s4');
   if(total===0){
+    // ★ 2026/08/17: 全欄0＝稼働なしの日。連続入力中にアラートで止まると
+    //   Enter連打で日を送れないため、保存せず静かに翌日へ進める。
+    //   (「保存して続けて入力」から呼ばれた場合のみ。単発保存時は従来どおり警告)
+    if(window._delContinueMode){
+      _showSaveToast('入力なしのため保存せず次の日へ進みます');
+      return { skipped:true };
+    }
     showAlert({icon:'❌', title:'入力エラー', msg:'入力データがありません。\n少なくとも1件以上入力してから保存してください。'});
     return;
   }
@@ -31420,6 +31427,7 @@ function _nextDay(ymd){
 }
 
 function saveDelContinue(){
+  window._delContinueMode = true;   // ★ 0件でも止めずに次の日へ
   // ★ 2026/08/10: 連続入力の改善
   //   ・営業所／従業員を保持する(毎回入れ直す手間をなくす)
   //   ・日付は「保存した日の翌日」にする(今日に戻さない)
@@ -31449,6 +31457,7 @@ function saveDelContinue(){
     if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
     if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
     valDel(); calcDelAmt();
+    window._delContinueMode = false;
     // 営業所・従業員は保持済みなので、そのまま持出の入力へ進む
     setTimeout(()=>{ const e=$('dd-mochi')||$('dd-date'); if(e){e.focus(); if(e.select)e.select();} },80);
   },50);
