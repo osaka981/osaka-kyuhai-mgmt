@@ -12542,12 +12542,18 @@ function renderStaff(flt){
 
   let h='';
   rows.forEach(s=>{
-    const kn=D.delivery.filter(r=>r.staff===s.name).reduce((a,r)=>a+r.kanryo,0);
+    // ★ 2026/08/17: 「今月完了」「今月給与」が全期間の累計になっていた。
+    //   月で絞り込んでいなかったため、末下さんが7月2,565件のところ4,275件と表示されていた。
+    //   日付はハイフン形式に統一済みだが、古いスラッシュ形式も拾えるよう正規化する。
+    const _curYM = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+    const _ndS = v => String(v||'').replace(/\//g,'-');
+    const _myDel = D.delivery.filter(r=>r.staff===s.name && _ndS(r.date).startsWith(_curYM));
+    const kn=_myDel.reduce((a,r)=>a+r.kanryo,0);
     const isKeisu2=s.kyuyo==='個数制（歩合）';
     const dp2=s.fixedPrices?.del||{};
     let est=0;
     if(isKeisu2){
-      D.delivery.filter(r=>r.staff===s.name).forEach(r=>{
+      _myDel.forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
     } else if(s.kyuyo==='時間単価' || s.kyuyo==='時間給'){
@@ -12555,7 +12561,7 @@ function renderStaff(flt){
       const _ym = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
       est = _calcHourlyPay(s, _ym).amount;
     } else {
-      est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;
+      est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;   // kn は当月分
     }
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
 
@@ -24723,7 +24729,10 @@ function renderCompanyMembers(el, name){
   if(drivers.length){
     html+=`<div class="tw"><table><thead><tr><th>番号</th><th>氏名</th><th>営業所</th><th>給与形態</th><th class="tr">今月完了</th><th>連絡先</th></tr></thead><tbody>`;
     drivers.forEach(s=>{
-      const kn=(D.delivery||[]).filter(r=>r.staff===s.name).reduce((a,r)=>a+(r.kanryo||0),0);
+      // ★ 2026/08/17: 全期間の累計になっていたため当月で絞り込む
+      const _cym = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
+      const kn=(D.delivery||[]).filter(r=>r.staff===s.name
+        && String(r.date||'').replace(/\//g,'-').startsWith(_cym)).reduce((a,r)=>a+(r.kanryo||0),0);
       html+=`<tr style="cursor:pointer;" onclick="openFS('staff','${esc(s.name)}')">
         <td class="mono">${s.empNo||''}</td>
         <td class="fw7 staff-link">${esc(s.name)}</td>
