@@ -1837,7 +1837,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('個人事業主')">個人</button>
         </div>
-        <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
+        <div class="fla gap6">
+          <button class="btn b-blu btn-sm" onclick="openJpNoBulk()">📮 郵便局番号 一括登録</button>
+          <button class="btn b-grn btn-sm" onclick="openNewStaff()">＋ 従事員登録</button>
+        </div>
       </div>
       <!-- 一括設定ツールバー(2026/05/14) -->
       <div id="staff-bulk-toolbar" style="display:none;padding:14px 16px;background:linear-gradient(135deg,rgba(33,150,243,.10),rgba(33,150,243,.04));border:2px solid rgba(33,150,243,.35);border-radius:8px;margin-bottom:12px;">
@@ -3369,6 +3372,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
+  <!-- ■ 郵便局側の社員番号（Excel取込の突合キー / 2026-08-17） -->
+  <div style="display:grid;grid-template-columns:280px 1fr;gap:8px;margin-bottom:10px;align-items:start;">
+    <div class="fg" style="margin:0;">
+      <label>郵便局 社員番号
+        <span style="font-size:8.5px;color:var(--txt2);margin-left:4px;">郵便局側の番号</span>
+      </label>
+      <input type="text" id="st-jp-empno" class="fi" onblur="normField(this)"
+        style="font-family:'DM Mono',monospace;font-weight:700;color:var(--blu2);font-size:15px;letter-spacing:.15em;"
+        placeholder="例）12345678">
+    </div>
+    <div style="font-size:10.5px;color:var(--txt2);line-height:1.6;padding-top:20px;">
+      郵便局から届くExcelデータを取り込む際の突合キーです。氏名は表記ゆれ（旧字・スペース有無等）で
+      一致しない場合があるため、こちらの番号で紐付けます。未設定でも保存できますが、
+      取込時は「未紐付」として手動割当が必要になります。
+    </div>
+  </div>
+
   <!-- ■ 日報アプリPIN管理 -->
   <div class="xs muted fw7 mb8" style="letter-spacing:.4px;">■ 日報アプリPIN</div>
   <div style="background:rgba(184,134,11,.04);border:1px solid rgba(184,134,11,.25);border-radius:7px;padding:10px 12px;margin-bottom:10px;">
@@ -4521,6 +4541,56 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="mft">
     <button class="btn b-gh" onclick="closeM('m-inv')">キャンセル</button>
     <button class="btn b-grn" onclick="closeM('m-inv');alert('請求書を発行しました')">📄 発行</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ 郵便局社員番号 一括登録 (2026/08/17) ══ -->
+<div id="m-jpno" class="mbg">
+<div class="modal" style="max-width:1020px;">
+  <div class="mhd"><div class="mtt">📮 郵便局社員番号 一括登録</div><button class="mx" onclick="closeM('m-jpno')">×</button></div>
+
+  <div style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--txt2);line-height:1.65;">
+    郵便局の調書から「社員番号（8桁）＋氏名」の行を貼り付けてください。数量や時刻が混ざっていても構いません。<br>
+    氏名から従事員を自動で推定しますが、<b>推定は確認用です</b>。最終的な紐付けは各行のプルダウンで確定してください。
+  </div>
+
+  <div class="fg" style="margin-bottom:8px;">
+    <label>貼り付け（1行1名）</label>
+    <textarea id="jpno-src" class="fi" rows="7" spellcheck="false"
+      style="font-family:'DM Mono',monospace;font-size:12px;line-height:1.6;"
+      placeholder="93531783 殿元　雅弘 135 119 19:39&#10;93545210 田中　悠太 109 99 19:36"></textarea>
+  </div>
+  <div class="fla gap6" style="margin-bottom:12px;">
+    <button class="btn b-blu btn-sm" onclick="parseJpNoSrc()">▼ 解析する</button>
+    <span id="jpno-parse-msg" class="xs muted"></span>
+  </div>
+
+  <div id="jpno-result-wrap" style="display:none;">
+    <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;">
+      <span class="bdg bg" id="jpno-b-auto">自動一致 0</span>
+      <span class="bdg bz" id="jpno-b-manual">要選択 0</span>
+      <span class="bdg ba" id="jpno-b-skip">対象外 0</span>
+      <span class="bdg br" id="jpno-b-dup" style="display:none;">重複 0</span>
+    </div>
+    <div class="tw" style="max-height:340px;overflow:auto;">
+      <table>
+        <thead><tr>
+          <th style="width:110px;">郵便局番号</th>
+          <th style="width:130px;">郵便局側 氏名</th>
+          <th>紐付ける従事員</th>
+          <th style="width:150px;">現在の設定</th>
+          <th style="width:90px;">判定</th>
+        </tr></thead>
+        <tbody id="tb-jpno"></tbody>
+      </table>
+    </div>
+    <div class="al al-w" style="font-size:11px;margin-top:10px;" id="jpno-warn" hidden></div>
+  </div>
+
+  <div class="mft">
+    <button class="btn b-gh" onclick="closeM('m-jpno')">キャンセル</button>
+    <button class="btn b-grn" onclick="applyJpNoBulk()" id="jpno-apply-btn" disabled>登録を反映する</button>
   </div>
 </div>
 </div>
@@ -6941,6 +7011,7 @@ function confirmCloseStaff(){
 function resetStaffModal(){
   // 基本情報
   ['st-sei','st-mei','st-kana-sei','st-kana-mei','st-name','st-kana',
+   'st-jp-empno',
    'st-tel','st-emer-rel','st-emer-name','st-emer-tel',
    'st-zip','st-addr','st-birth','st-start','st-end',
    'st-exec-pay','st-hosho-b-amt','st-hosho-b-days','st-hosho-c-amt','st-hosho-c-days',
@@ -12540,7 +12611,7 @@ function renderStaff(flt){
   }
   // 営業所フィルタ適用
   if(offFilterVal) rows=rows.filter(s=>(s.office||'')===offFilterVal);
-  if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
+  if(q) rows=rows.filter(s=>(s.name||'').toLowerCase().includes(q)||(s.empNo||'').toLowerCase().includes(q)||String(s.jpEmpNo||'').toLowerCase().includes(q)||(s.kana||'').toLowerCase().includes(q));
   // 営業所順に並べる
   rows=_sortByOfficeOrder(rows);
 
@@ -16255,6 +16326,19 @@ function saveStaff(continueAdd=false){
     alert(`社員番号 ${empNo} は現役の従事員「${_dupHit.name||''}」で使用されています`);
     return;
   }
+  // 郵便局社員番号の重複チェック(2026/08/17) — 突合キーなので重複すると取込先が特定できない
+  const _jpNo=($('st-jp-empno')?.value||'').trim();
+  if(_jpNo){
+    const _jpDup=D.staff.find(s=>
+      String(s.jpEmpNo||'').trim()===_jpNo &&
+      s.status!=='終了' &&
+      !(_editIdForDup && (s.id===_editIdForDup || String(s.id)===String(_editIdForDup)))
+    );
+    if(_jpDup){
+      alert(`郵便局社員番号 ${_jpNo} は現役の従事員「${_jpDup.name||''}」で使用されています。\n取込時の突合先が特定できなくなるため、番号を確認してください。`);
+      return;
+    }
+  }
   console.log('[saveStaff] バリデーション通過、保存処理開始');
   const kbn=$('st-kbn')?.value;
   // officeTypeは所属部署から導出(以前は kbn==='集荷担当' という存在しない条件で常に'delivery'になるバグあり)
@@ -16339,6 +16423,8 @@ function saveStaff(continueAdd=false){
   const newDrv={
     id:Date.now(),
     empNo,
+    // ★ 2026/08/17: 郵便局側の社員番号(Excel取込の突合キー)
+    jpEmpNo:($('st-jp-empno')?.value||'').trim(),
     name,
     kana:$('st-kana')?.value||'',
     officeType,
@@ -16556,6 +16642,7 @@ function saveStaff(continueAdd=false){
   // フォームリセット
   const keepCompany=kbn==='会社委託'&&continueAdd;
   ['st-name','st-kana','st-tel','st-tel2','st-addr','st-license','st-license-exp',
+   'st-jp-empno',
    'st-birth','st-start','st-end','st-note','st-tk',
    'st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
    'st-ptenso','st-pmodori','st-pshukka',
@@ -23988,6 +24075,7 @@ function renderStaffDaily(el, name){
     delRows.forEach(r=>{ (_byDate[r.date] = _byDate[r.date] || []).push(r); });
     const _t = {mochi:0,kanryo:0,yakan:0,tenso:0,modori:0,yoku:0,shukka:0};
     let _days = 0;
+    html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計',hidePeople:true,showShukka:true});
     html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（入力 ${delRows.length}日 / ${_last}日中）</div>`;
     html+=`<div class="tw"><table><thead><tr>
       <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th><th></th>
@@ -24573,9 +24661,10 @@ function renderOfficeDel(el, name){
   const rows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-del-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('del')"></div></div>
+    ${rows.length?_delSumHeader(rows,{title:esc(name)+' '+mon+' 合計'}):''}
     <div class="ct mb8"><div class="cbar"></div>宅配日報（${rows.length}件）</div>`;
   if(rows.length){
-    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
     // ★ 2026/08/11: 同じ日付をまとめ、日付が変わるところで区切って見やすくする。
     //   日付は各グループの先頭行だけに表示し、日ごとの小計を右端に添える。
     const _wd=['日','月','火','水','木','金','土'];
@@ -24586,7 +24675,7 @@ function renderOfficeDel(el, name){
       const isNew = r.date !== _prevDate;
       if(isNew && idx>0){
         // 日付の変わり目に余白の行を挟む
-        html+=`<tr><td colspan="8" style="height:10px;padding:0;border:none;background:transparent;"></td></tr>`;
+        html+=`<tr><td colspan="9" style="height:10px;padding:0;border:none;background:transparent;"></td></tr>`;
       }
       const dow = (()=>{ const m=String(r.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
@@ -24597,6 +24686,7 @@ function renderOfficeDel(el, name){
         <td>${staffLink(r.staff)}</td>
         <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
         <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
+        <td class="tr" style="color:var(--pur2)">${r.ogata||0}</td>
         <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
       </tr>`;
       _prevDate = r.date;
@@ -24768,6 +24858,7 @@ function renderCompanyDaily(el, name){
     <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-co-daily-mon" class="fi" value="${mon}" onchange="renderCompanyFSTab('daily')"></div></div>`;
 
   if(delRows.length){
+    html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計'});
     html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
     html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th></tr></thead><tbody>`;
     delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
@@ -32465,6 +32556,8 @@ function _editStaffImpl(id){
     // 値は上で確実にセット済み(自動/手入力どちらでも既存empNoを表示)
     disp.value=s.empNo||'';
   })();
+  // 郵便局社員番号(2026/08/17)
+  if($('st-jp-empno'))$('st-jp-empno').value=s.jpEmpNo||'';
   // 姓・名を分割して復元
   const nameParts=(s.name||'').split(/\s+/);
   if($('st-sei'))$('st-sei').value=s.sei||nameParts[0]||'';
@@ -34611,6 +34704,269 @@ window.dqImportJson = function(){
     attachAll();
   }
 })();
+
+// ════════════════════════════════════════════════════════════
+//  郵便局社員番号 一括登録 (2026/08/17)
+//   郵便局の調書には弊社の社員番号が載らないため、
+//   郵便局側の8桁番号を従業員台帳(jpEmpNo)に持たせて対応表とする。
+//   氏名照合は表記ゆれ・同姓(例:浦/浦野)で誤爆するため、
+//   自動推定はあくまで候補提示に留め、確定は人が行う。
+// ════════════════════════════════════════════════════════════
+
+let _jpnoRows = [];
+
+// 氏名の正規化: 全角/半角スペース除去・カタカナ全角化・英数半角化
+function _jpNormName(s){
+  return String(s||'')
+    .replace(/[\u3000\s]+/g,'')
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .trim();
+}
+
+// 現役かつ紐付け候補になる従事員
+function _jpCandidates(){
+  return (D.staff||[]).filter(s=>s.status!=='終了');
+}
+
+function openJpNoBulk(){
+  _jpnoRows=[];
+  if($('jpno-src')) $('jpno-src').value='';
+  if($('jpno-parse-msg')) $('jpno-parse-msg').textContent='';
+  if($('jpno-result-wrap')) $('jpno-result-wrap').style.display='none';
+  if($('jpno-apply-btn')) $('jpno-apply-btn').disabled=true;
+  openM('m-jpno');
+}
+
+function parseJpNoSrc(){
+  const raw=$('jpno-src')?.value||'';
+  const lines=raw.split(/\r?\n/);
+  const cands=_jpCandidates();
+  const seen=new Set();
+  _jpnoRows=[];
+  lines.forEach(line=>{
+    // 行頭付近の8桁数字を郵便局番号とみなす
+    const m=line.match(/(?:^|\s)(\d{8})(?:\s|$)/);
+    if(!m) return;
+    const no=m[1];
+    // 番号より後ろから、数量・時刻・記号を除いた残りを氏名とみなす
+    let rest=line.slice(line.indexOf(no)+8);
+    rest=rest.replace(/\d{1,2}:\d{2}/g,' ')   // 追跡最終などの時刻
+             .replace(/[\d.,%\-\/()（）「」【】]/g,' ');
+    const name=_jpNormName(rest);
+    if(!name) return;
+    if(seen.has(no)) return;               // 同一ファイル内の重複行は1件に集約
+    seen.add(no);
+
+    // 既にこの番号が登録済みの従事員がいるか
+    const already=cands.find(s=>String(s.jpEmpNo||'').trim()===no);
+    // 氏名からの推定(完全一致のみ。部分一致は誤爆するため使わない)
+    const hits=cands.filter(s=>_jpNormName(s.name)===name);
+    let sel='', kind='';
+    if(already){ sel=String(already.id); kind='registered'; }
+    else if(hits.length===1){ sel=String(hits[0].id); kind='auto'; }
+    else if(hits.length>1){ sel=''; kind='ambiguous'; }
+    else { sel=''; kind='none'; }
+    _jpnoRows.push({no,name,sel,kind});
+  });
+
+  if(!_jpnoRows.length){
+    if($('jpno-parse-msg')) $('jpno-parse-msg').textContent='8桁の社員番号を含む行が見つかりませんでした';
+    if($('jpno-result-wrap')) $('jpno-result-wrap').style.display='none';
+    if($('jpno-apply-btn')) $('jpno-apply-btn').disabled=true;
+    return;
+  }
+  if($('jpno-parse-msg')) $('jpno-parse-msg').textContent=_jpnoRows.length+'件を読み取りました';
+  if($('jpno-result-wrap')) $('jpno-result-wrap').style.display='';
+  renderJpNoTbl();
+}
+
+function renderJpNoTbl(){
+  const tb=$('tb-jpno'); if(!tb) return;
+  const cands=_jpCandidates().slice().sort((a,b)=>
+    String(a.empNo||'').localeCompare(String(b.empNo||''),'ja',{numeric:true}));
+
+  // 同じ従事員に複数の郵便局番号を割り当てていないか
+  const useCount={};
+  _jpnoRows.forEach(r=>{ if(r.sel) useCount[r.sel]=(useCount[r.sel]||0)+1; });
+
+  let nAuto=0,nManual=0,nSkip=0,nDup=0;
+  const html=_jpnoRows.map((r,i)=>{
+    const dup = r.sel && useCount[r.sel]>1;
+    if(dup) nDup++;
+    if(!r.sel) { if(r.kind==='none') nSkip++; else nManual++; }
+    else if(r.kind==='registered') nAuto++;
+    else nAuto++;
+
+    const opts=['<option value="">─ 紐付けない ─</option>'].concat(
+      cands.map(s=>{
+        const jp=String(s.jpEmpNo||'').trim();
+        const tag=jp?(jp===r.no?'  [登録済]':'  [別番号 '+jp+']'):'';
+        return '<option value="'+esc(String(s.id))+'"'+(String(s.id)===String(r.sel)?' selected':'')+'>'
+             + esc((s.empNo||'')+' '+(s.name||'')+tag)+'</option>';
+      })
+    ).join('');
+
+    const cur=cands.find(s=>String(s.id)===String(r.sel));
+    const curTxt = cur ? (String(cur.jpEmpNo||'').trim()
+        ? (String(cur.jpEmpNo).trim()===r.no
+            ? '<span class="bdg bg">同一（変更なし）</span>'
+            : '<span class="bdg br">'+esc(cur.jpEmpNo)+' を上書き</span>')
+        : '<span class="xs muted">未設定</span>') : '<span class="xs muted">—</span>';
+
+    let judge;
+    if(dup) judge='<span class="bdg br">重複</span>';
+    else if(!r.sel) judge = (r.kind==='none')
+        ? '<span class="bdg bz">台帳になし</span>'
+        : '<span class="bdg ba">要選択</span>';
+    else if(r.kind==='registered') judge='<span class="bdg bg">登録済</span>';
+    else if(r.kind==='auto') judge='<span class="bdg bg">氏名一致</span>';
+    else judge='<span class="bdg ba">手動</span>';
+
+    return '<tr'+(dup?' style="background:rgba(220,60,60,.07);"':'')+'>'
+      + '<td class="mono fw7" style="color:var(--blu2);">'+esc(r.no)+'</td>'
+      + '<td>'+esc(r.name)+'</td>'
+      + '<td><select class="fi" style="font-size:11.5px;padding:3px 6px;" '
+      +   'onchange="_jpnoSel('+i+',this.value)">'+opts+'</select></td>'
+      + '<td>'+curTxt+'</td>'
+      + '<td>'+judge+'</td>'
+      + '</tr>';
+  }).join('');
+  tb.innerHTML=html;
+
+  if($('jpno-b-auto'))   $('jpno-b-auto').textContent='紐付け済 '+nAuto;
+  if($('jpno-b-manual')) $('jpno-b-manual').textContent='要選択 '+nManual;
+  if($('jpno-b-skip'))   $('jpno-b-skip').textContent='台帳になし '+nSkip;
+  const bd=$('jpno-b-dup');
+  if(bd){ bd.textContent='重複 '+nDup; bd.style.display=nDup?'':'none'; }
+
+  const warn=$('jpno-warn');
+  if(warn){
+    if(nDup){
+      warn.hidden=false;
+      warn.innerHTML='同じ従事員に複数の郵便局番号が割り当てられています。1名につき1番号にしてください。';
+    } else if(nSkip){
+      warn.hidden=false;
+      warn.innerHTML='台帳に該当者がいない行が'+nSkip+'件あります。他社の従事員であればそのままで問題ありません。'
+        +'自社の従事員であれば、先に従事員登録を行ってください。';
+    } else warn.hidden=true;
+  }
+  const btn=$('jpno-apply-btn');
+  if(btn) btn.disabled = !!nDup || !_jpnoRows.some(r=>r.sel);
+}
+
+function _jpnoSel(i,val){
+  if(!_jpnoRows[i]) return;
+  _jpnoRows[i].sel=val;
+  _jpnoRows[i].kind = val ? 'manual' : 'none';
+  renderJpNoTbl();
+}
+
+function applyJpNoBulk(){
+  const targets=_jpnoRows.filter(r=>r.sel);
+  if(!targets.length){ alert('紐付ける行がありません'); return; }
+
+  const changes=[];
+  targets.forEach(r=>{
+    const s=(D.staff||[]).find(x=>String(x.id)===String(r.sel));
+    if(!s) return;
+    const cur=String(s.jpEmpNo||'').trim();
+    if(cur===r.no) return;             // 変更なし
+    changes.push({s,from:cur,to:r.no});
+  });
+
+  if(!changes.length){ alert('変更はありません（すべて登録済みです）'); closeM('m-jpno'); return; }
+
+  const over=changes.filter(c=>c.from);
+  let msg=changes.length+'名の郵便局社員番号を登録します。\n\n'
+    + changes.slice(0,20).map(c=>'・'+(c.s.empNo||'')+' '+(c.s.name||'')+'  '
+        +(c.from?c.from+' → ':'')+c.to).join('\n')
+    + (changes.length>20?'\n…ほか'+(changes.length-20)+'名':'');
+  if(over.length) msg+='\n\nうち'+over.length+'名は既存の番号を上書きします。';
+  msg+='\n\nよろしいですか？';
+  if(!confirm(msg)) return;
+
+  changes.forEach(c=>{ c.s.jpEmpNo=c.to; });
+
+  // 保存(既存の保存経路に合わせる)
+  try{
+    if(typeof fbSet==='function') fbSet('staff_full', D.staff);
+    if(typeof lsSet==='function') lsSet('nikki_staff_full', D.staff);
+    if(typeof save==='function') save();
+  }catch(e){ console.error('[applyJpNoBulk] 保存エラー', e); }
+
+  closeM('m-jpno');
+  renderStaff($('staff-search')?._flt||'');
+  alert(changes.length+'名に郵便局社員番号を登録しました。');
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  宅配日報 合計ヘッダー (2026/08/17)
+//   一覧が縦に長く、下端の合計まで辿り着けないため上部に固定表示する。
+//   郵便局への請求根拠4列(完了・転送還付・夜間・170超)を強調し、
+//   それ以外(持出・持戻・翌日)は参考値として控えめに出す。
+// ════════════════════════════════════════════════════════════
+function _delSumHeader(rows, opt){
+  opt = opt || {};
+  const t = {mochi:0,kanryo:0,yakan:0,tenso:0,modori:0,yoku:0,ogata:0,shukka:0};
+  const days = new Set(), people = new Set();
+  (rows||[]).forEach(r=>{
+    t.mochi  += (r.mochidashi||0);
+    t.kanryo += (r.kanryo||0);
+    t.yakan  += (r.yakan||0);
+    t.tenso  += (r.tenso||0);
+    t.modori += (r.mochimodoiri||0);
+    t.yoku   += (r['翌日廻し']||0);
+    t.ogata  += (r.ogata||r['170超']||0);
+    t.shukka += (r.shukka||0);
+    if(r.date)  days.add(r.date);
+    if(r.staff) people.add(r.staff);
+  });
+  const rate = t.mochi ? (t.kanryo/t.mochi*100) : 0;
+  const n = v => (v||0).toLocaleString();
+
+  // 請求根拠となる4列
+  const bill = [
+    {l:'配達完了',  v:t.kanryo, c:'var(--grn2)'},
+    {l:'転送・還付',v:t.tenso,  c:'var(--tel2)'},
+    {l:'夜間',      v:t.yakan,  c:'var(--y60)'},
+    {l:'170超',     v:t.ogata,  c:'var(--pur2)'},
+  ];
+  // 参考値
+  const ref = [
+    {l:'持出', v:t.mochi},
+    {l:'持戻', v:t.modori},
+    {l:'翌日', v:t.yoku},
+  ];
+  if(opt.showShukka) ref.push({l:'集荷', v:t.shukka});
+
+  const cell = (o,big) =>
+    `<div style="flex:1 1 0;min-width:74px;padding:${big?'7px 8px':'5px 8px'};text-align:center;">
+       <div style="font-size:9.5px;color:var(--txt2);letter-spacing:.3px;margin-bottom:2px;">${o.l}</div>
+       <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:${big?'19px':'14px'};color:${o.c||'var(--txt)'};line-height:1.15;">${n(o.v)}</div>
+     </div>`;
+
+  return `<div style="position:sticky;top:0;z-index:20;background:var(--sur);border:1px solid var(--brd2);border-radius:7px;padding:8px 10px;margin-bottom:10px;box-shadow:0 2px 6px rgba(0,0,0,.18);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+      <div style="font-size:11px;font-weight:700;color:var(--txt);letter-spacing:.4px;">
+        ${opt.title||'月合計'}
+        <span style="font-size:9.5px;font-weight:400;color:var(--txt2);margin-left:8px;">請求根拠4列</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--txt2);">
+        稼働 <b style="color:var(--txt);">${days.size}</b> 日
+        ${opt.hidePeople?'':` / 延べ <b style="color:var(--txt);">${people.size}</b> 名`}
+        / 完了率 <b style="color:${rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)'};">${rate.toFixed(1)}%</b>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;background:var(--bg3);border-radius:5px;">
+      ${bill.map(o=>cell(o,true)).join('')}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;margin-top:5px;border-top:1px dashed var(--brd);padding-top:3px;">
+      ${ref.map(o=>cell(o,false)).join('')}
+    </div>
+  </div>`;
+}
+
 </script>
 
 <!-- ══ 休業日 追加/編集モーダル(Phase 1: 2026/05/01) ══ -->
