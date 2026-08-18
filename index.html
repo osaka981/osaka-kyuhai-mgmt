@@ -24708,19 +24708,19 @@ function renderOfficeDel(el, name){
       });
       // 日計
       const rate = sum.mochi ? (sum.kanryo/sum.mochi*100) : 0;
-      html+=`<tr style="background:var(--bg3);border-top:1px solid var(--brd2);">
-        <td class="mono" style="font-size:11px;color:var(--txt3);">${g.date||''}</td>
-        <td style="font-size:11.5px;font-weight:700;color:var(--txt2);">日計
-          <span style="font-weight:400;color:var(--txt3);margin-left:4px;">稼動${g.rows.length}人</span>
-          <span style="font-weight:400;color:${rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)'};margin-left:6px;">${rate.toFixed(1)}%</span>
+      html+=`<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">
+        <td class="mono" style="font-size:12.5px;color:var(--txt3);">${g.date||''}</td>
+        <td style="font-size:14.5px;font-weight:700;color:var(--txt);">日計
+          <span style="font-size:13px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動${g.rows.length}人</span>
+          <span style="font-size:13px;font-weight:700;color:${rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)'};margin-left:8px;">${rate.toFixed(1)}%</span>
         </td>
-        <td class="tr fw7" style="font-size:13px;">${sum.mochi}</td>
-        <td class="tr fw7" style="font-size:13px;color:var(--grn2);">${sum.kanryo}</td>
-        <td class="tr fw7" style="color:var(--y60);">${sum.yakan}</td>
-        <td class="tr fw7" style="color:var(--tel2);">${sum.tenso}</td>
-        <td class="tr fw7" style="color:var(--pur2);">${sum.ogata}</td>
-        <td class="tr fw7">${sum.modori}</td>
-        <td class="tr fw7">${sum.yoku}</td>
+        <td class="tr fw7" style="font-size:16px;">${sum.mochi}</td>
+        <td class="tr fw7" style="font-size:16px;color:var(--grn2);">${sum.kanryo}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--y60);">${sum.yakan}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--tel2);">${sum.tenso}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--pur2);">${sum.ogata}</td>
+        <td class="tr fw7" style="font-size:15px;">${sum.modori}</td>
+        <td class="tr fw7" style="font-size:15px;">${sum.yoku}</td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -34983,8 +34983,8 @@ function _delSumHeader(rows, opt){
 
   const refCell = o =>
     `<div style="display:flex;align-items:baseline;gap:7px;padding:4px 14px;border-right:1px solid var(--brd);">
-       <span style="font-size:12px;color:var(--txt2);font-weight:600;">${o.l}</span>
-       <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:19px;color:var(--txt);">${n(o.v)}</span>
+       <span style="font-size:13.5px;color:var(--txt2);font-weight:700;">${o.l}</span>
+       <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:22px;color:var(--txt);">${n(o.v)}</span>
      </div>`;
 
   const rateCol = rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)';
@@ -35005,7 +35005,7 @@ function _delSumHeader(rows, opt){
       ${bill.map(billCell).join('')}
     </div>
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:9px;padding-top:7px;border-top:1px dashed var(--brd);">
-      <span style="font-size:11px;color:var(--txt3);padding-right:10px;font-weight:600;">参考</span>
+      <span style="font-size:13px;color:var(--txt3);padding-right:10px;font-weight:700;">参考</span>
       ${ref.map(refCell).join('')}
       ${_delStaffTabs(opt)}
     </div>
@@ -35132,17 +35132,17 @@ function _delStaffTabs(opt){
     const on = (sel===name);
     const nmEsc = String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<button type="button" onclick="_delStaffPick('${opt.staffKey}','${nmEsc}','${cbEsc}')"
-      style="flex:0 0 auto;padding:5px 12px;border-radius:14px;cursor:pointer;line-height:1.15;
+      style="flex:0 0 auto;padding:7px 15px;border-radius:16px;cursor:pointer;line-height:1.2;
              border:1px solid ${on?'var(--tel)':'var(--brd2)'};
              background:${on?'var(--tel)':'var(--sur2)'};
              color:${on?'#fff':'var(--txt2)'};
-             font-size:12.5px;font-weight:${on?'700':'600'};white-space:nowrap;
+             font-size:14.5px;font-weight:${on?'700':'600'};white-space:nowrap;
              ${on?'box-shadow:0 2px 5px rgba(0,0,0,.25);':''}">${esc(label)}</button>`;
   };
 
   return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;
                       margin-left:auto;padding-left:14px;border-left:1px solid var(--brd);">
-    <span style="font-size:11px;color:var(--txt3);font-weight:600;">ドライバー別</span>
+    <span style="font-size:13px;color:var(--txt3);font-weight:700;">ドライバー別</span>
     ${chip('', '全員')}
     ${opt.staffList.map(nm=>chip(nm, nm)).join('')}
   </div>`;
