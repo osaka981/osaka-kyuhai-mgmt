@@ -24662,10 +24662,14 @@ function renderOfficeDel(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   // 月優先順: ①既存セレクタ値 ②外部から指定された月 ③当月
   const mon=$('fs-of-del-mon')?.value || _fsContextMon || ym;
-  const rows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
+  const allRows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
+  // ドライバー別フィルタ(2026/08/18)
+  const _sf=_delStaffResolve('of-del',allRows);
+  const rows=_sf.sel?allRows.filter(r=>r.staff===_sf.sel):allRows;
   let html=`<div class="fs-card">
     ${_monTabs('fs-of-del-mon',mon,"renderOfficeFSTab('del')")}
-    ${rows.length?_delSumHeader(rows,{title:esc(name)+' '+mon+' 合計'}):''}
+    ${allRows.length?_delSumHeader(rows,{title:esc(name)+' '+mon+' 合計'+(_sf.sel?'  〈'+esc(_sf.sel)+'〉':''),
+        staffKey:'of-del',staffList:_sf.list,staffSel:_sf.sel,staffCb:"renderOfficeFSTab('del')"}):''}
     <div class="ct mb8"><div class="cbar"></div>宅配日報（${rows.length}件）</div>`;
   if(rows.length){
     html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
@@ -24862,10 +24866,14 @@ function renderCompanyDaily(el, name){
     ${_monTabs('fs-co-daily-mon',mon,"renderCompanyFSTab('daily')")}`;
 
   if(delRows.length){
-    html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計'});
-    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${delRows.length}件）</div>`;
+    // ドライバー別フィルタ(2026/08/18)
+    const _sfc=_delStaffResolve('co-daily',delRows);
+    const _cRows=_sfc.sel?delRows.filter(r=>r.staff===_sfc.sel):delRows;
+    html+=_delSumHeader(_cRows,{title:esc(name)+' '+mon+' 合計'+(_sfc.sel?'  〈'+esc(_sfc.sel)+'〉':''),
+      staffKey:'co-daily',staffList:_sfc.list,staffSel:_sfc.sel,staffCb:"renderCompanyFSTab('daily')"});
+    html+=`<div class="ct mb8"><div class="cbar"></div>宅配日報（${_cRows.length}件）</div>`;
     html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th></tr></thead><tbody>`;
-    delRows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
+    _cRows.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
       html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td><td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td><td class="tr" style="color:var(--y60)">${r.yakan||0}</td></tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -34972,9 +34980,10 @@ function _delSumHeader(rows, opt){
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       ${bill.map(billCell).join('')}
     </div>
-    <div style="display:flex;flex-wrap:wrap;align-items:center;margin-top:9px;padding-top:7px;border-top:1px dashed var(--brd);">
-      <span style="font-size:11px;color:var(--txt3);padding-right:12px;font-weight:600;">参考</span>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:9px;padding-top:7px;border-top:1px dashed var(--brd);">
+      <span style="font-size:11px;color:var(--txt3);padding-right:10px;font-weight:600;">参考</span>
       ${ref.map(refCell).join('')}
+      ${_delStaffTabs(opt)}
     </div>
   </div>`;
 }
@@ -35061,6 +35070,58 @@ function _cmpMonSync(){
   const real=document.getElementById('cmp-mon');
   if(real && real.value!==v){ real.value=v; }
   renderCmp();
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  宅配日報 ドライバー別フィルタ (2026/08/18)
+//   合計ヘッダーの「参考」行にドライバータブを置き、
+//   選んだドライバーだけで合計と一覧を絞り込む。
+//   月や営業所を切り替えて対象者が消えた場合は自動で全員に戻す。
+// ════════════════════════════════════════════════════════════
+let _delStaffSel = {};
+
+function _delStaffResolve(key, allRows){
+  const list = [...new Set((allRows||[]).map(r=>r.staff).filter(Boolean))]
+    .sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+  let sel = _delStaffSel[key] || '';
+  if(sel && !list.includes(sel)){ sel=''; _delStaffSel[key]=''; }   // 対象月にいない人は解除
+  return {sel, list};
+}
+
+function _delStaffPick(key, name, cb){
+  _delStaffSel[key] = name || '';
+  try{ if(cb) (new Function(cb))(); }
+  catch(e){ console.error('[_delStaffPick] 実行エラー', cb, e); }
+}
+
+
+// 合計ヘッダーの「参考」行に並べるドライバー別タブ
+//  opt.staffKey / opt.staffList / opt.staffSel / opt.staffCb が揃ったときだけ出す
+function _delStaffTabs(opt){
+  opt = opt || {};
+  if(!opt.staffKey || !opt.staffList || !opt.staffList.length) return '';
+  const cbEsc = String(opt.staffCb||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const sel = opt.staffSel || '';
+
+  const chip = (name, label) => {
+    const on = (sel===name);
+    const nmEsc = String(name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<button type="button" onclick="_delStaffPick('${opt.staffKey}','${nmEsc}','${cbEsc}')"
+      style="flex:0 0 auto;padding:5px 12px;border-radius:14px;cursor:pointer;line-height:1.15;
+             border:1px solid ${on?'var(--tel)':'var(--brd2)'};
+             background:${on?'var(--tel)':'var(--sur2)'};
+             color:${on?'#fff':'var(--txt2)'};
+             font-size:12.5px;font-weight:${on?'700':'600'};white-space:nowrap;
+             ${on?'box-shadow:0 2px 5px rgba(0,0,0,.25);':''}">${esc(label)}</button>`;
+  };
+
+  return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+                      margin-left:auto;padding-left:14px;border-left:1px solid var(--brd);">
+    <span style="font-size:11px;color:var(--txt3);font-weight:600;">ドライバー別</span>
+    ${chip('', '全員')}
+    ${opt.staffList.map(nm=>chip(nm, nm)).join('')}
+  </div>`;
 }
 
 </script>
