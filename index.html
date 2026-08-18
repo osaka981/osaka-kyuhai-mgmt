@@ -1348,8 +1348,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="ct"><div class="cbar"></div>照合フィルター</div>
           <button class="btn b-blu btn-sm" onclick="runAutoCompare()">🔄 自動照合実行</button>
         </div>
+        <div id="cmp-mon-tabs"></div>
         <div class="f3">
-          <div class="fg"><label>対象月</label><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
+          <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
           <div class="fg"><label>営業所</label><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
           <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
         </div>
@@ -7662,6 +7663,9 @@ function renderAll() {
 // ── 欠落関数のスタブ（Firebase未接続時のエラー防止）──
 function renderCmp(){
   const mon=toYM($('cmp-mon')?.value||'');
+  // 月切替サブタブ(2026/08/18) — 実体の input#cmp-mon は hidden のまま残し互換を保つ
+  const _mt=$('cmp-mon-tabs');
+  if(_mt) _mt.innerHTML=_monTabs('cmp-mon-tab',mon,"_cmpMonSync()",{label:'対象月'});
   const off=$('cmp-off')?.value||'';
   const st=$('cmp-st')?.value||'全件';
   const rows=(D.delivery||[]).filter(function(r){
@@ -24053,7 +24057,7 @@ function renderStaffDaily(el, name){
   // ★ 2026/08/10: その場で日報を追加できるボタンを追加(従業員・営業所を自動セット)
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
-      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-daily-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('daily')"></div>
+      ${_monTabs('fs-daily-mon',mon,"renderStaffFSTab('daily')",{style:"margin-bottom:0;flex:1 1 340px;min-width:0;"})}
       <div style="display:flex;gap:6px;margin-left:auto;">
         <button class="btn btn-sm" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:6px 14px;"
           onclick="openStaffDailyEntry('del','${esc(name)}')">＋局日報</button>
@@ -24440,7 +24444,7 @@ function renderStaffAnalysis(el, name){
 
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
-      <div class="fg" style="min-width:150px;"><label>対象月</label><input type="month" id="fs-anl-mon" class="fi" value="${mon}" onchange="renderStaffFSTab('analysis')"></div>
+      ${_monTabs('fs-anl-mon',mon,"renderStaffFSTab('analysis')",{label:'対象月'})}
       <div class="fg" style="min-width:200px;"><label>比較対象</label>
         <select class="fi" id="fs-anl-cmp" onchange="renderStaffFSTab('analysis')">
           <option value="__avg__" ${cmpTarget==='__avg__'?'selected':''}>全体平均</option>
@@ -24573,7 +24577,7 @@ function renderCustDaily(el, name){
 
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
-      <div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-cu-daily-mon" class="fi" value="${mon}" onchange="renderCustFSTab('daily')"></div>
+      ${_monTabs('fs-cu-daily-mon',mon,"renderCustFSTab('daily')")}
     </div>
     <div class="ct mb8"><div class="cbar"></div>集荷日報（${rows.length}件）</div>`;
 
@@ -24660,7 +24664,7 @@ function renderOfficeDel(el, name){
   const mon=$('fs-of-del-mon')?.value || _fsContextMon || ym;
   const rows=(D.delivery||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
   let html=`<div class="fs-card">
-    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-del-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('del')"></div></div>
+    ${_monTabs('fs-of-del-mon',mon,"renderOfficeFSTab('del')")}
     ${rows.length?_delSumHeader(rows,{title:esc(name)+' '+mon+' 合計'}):''}
     <div class="ct mb8"><div class="cbar"></div>宅配日報（${rows.length}件）</div>`;
   if(rows.length){
@@ -24703,7 +24707,7 @@ function renderOfficePU(el, name){
   const mon=$('fs-of-pu-mon')?.value || _fsContextMon || ym;
   const rows=(D.pickup||[]).filter(r=>r.office===name&&(r.date||'').startsWith(mon));
   let html=`<div class="fs-card">
-    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-of-pu-mon" class="fi" value="${mon}" onchange="renderOfficeFSTab('pu')"></div></div>
+    ${_monTabs('fs-of-pu-mon',mon,"renderOfficeFSTab('pu')")}
     <div class="ct mb8"><div class="cbar"></div>集荷日報（${rows.length}件）</div>`;
   if(rows.length){
     html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th>顧客</th><th class="tr">総個数</th></tr></thead><tbody>`;
@@ -24855,7 +24859,7 @@ function renderCompanyDaily(el, name){
   const puRows=(D.pickup||[]).filter(r=>dNames.has(r.staff)&&(r.date||'').startsWith(mon));
 
   let html=`<div class="fs-card">
-    <div class="fla gap6 mb12"><div class="fg" style="min-width:150px;"><label>月</label><input type="month" id="fs-co-daily-mon" class="fi" value="${mon}" onchange="renderCompanyFSTab('daily')"></div></div>`;
+    ${_monTabs('fs-co-daily-mon',mon,"renderCompanyFSTab('daily')")}`;
 
   if(delRows.length){
     html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計'});
@@ -34973,6 +34977,86 @@ function _delSumHeader(rows, opt){
       ${ref.map(refCell).join('')}
     </div>
   </div>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  月切替サブタブ (2026/08/18)
+//   input[type=month] のカレンダーは1回の変更に2〜3クリック要る。
+//   直近の月はタブで1クリック、それ以前はカレンダーで拾う二段構え。
+//   既存コードは $('xxx-mon').value を読むため、
+//   同じidの hidden input を必ず残して互換性を保つ。
+// ════════════════════════════════════════════════════════════
+function _ymAdd(ym, d){
+  const [y,m] = String(ym||'').split('-').map(Number);
+  if(!y||!m) return ym;
+  const dt = new Date(y, m-1+d, 1);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+}
+function _ymNow(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+/**
+ * @param {string} id      既存の input[type=month] の id をそのまま渡す
+ * @param {string} cur     現在選択中の YYYY-MM
+ * @param {string} cb      切替時に実行する式 (例 "renderOfficeFSTab('del')")
+ * @param {object} opt     {count:表示月数, label:見出し}
+ */
+function _monTabs(id, cur, cb, opt){
+  opt = opt || {};
+  const count = opt.count || 12;
+  const now = _ymNow();
+  // 選択中の月が未来なら、そこを右端(最新)に合わせる
+  let head = (cur && cur > now) ? cur : now;
+  const list = [];
+  for(let i=0;i<count;i++) list.push(_ymAdd(head, -i));   // 新しい順
+  const inList = list.includes(cur);
+
+  const chips = list.map(ym=>{
+    const [y,m] = ym.split('-');
+    const on = (ym===cur);
+    const isJan = (m==='01');
+    return `<button type="button" onclick="_monTabPick('${id}','${ym}',${JSON.stringify(cb)})"
+      style="flex:0 0 auto;padding:5px 11px;border-radius:6px;cursor:pointer;
+             border:1px solid ${on?'var(--blu)':'var(--brd2)'};
+             background:${on?'var(--blu)':'var(--sur2)'};
+             color:${on?'#fff':'var(--txt2)'};
+             font-size:${on?'13px':'12.5px'};font-weight:${on?'700':'600'};
+             font-family:'DM Mono',monospace;letter-spacing:.2px;white-space:nowrap;
+             ${on?'box-shadow:0 2px 5px rgba(0,0,0,.25);':''}">
+      ${(on||isJan)?`<span style="font-size:10px;opacity:.8;margin-right:2px;">${y}</span>`:''}${Number(m)}月
+    </button>`;
+  }).join('');
+
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;${opt.style||''}">
+    <span style="font-size:11.5px;font-weight:700;color:var(--txt2);flex:0 0 auto;">${opt.label||'月'}</span>
+    <div style="display:flex;gap:5px;overflow-x:auto;padding:2px 1px 5px;flex:1 1 320px;">${chips}</div>
+    <div style="display:flex;align-items:center;gap:5px;flex:0 0 auto;">
+      <span style="font-size:10.5px;color:var(--txt3);">他の月</span>
+      <input type="month" id="${id}" value="${cur||''}"
+        onchange="_monTabPick('${id}',this.value,${JSON.stringify(cb)})"
+        style="padding:4px 7px;font-size:11.5px;border:1px solid ${inList?'var(--brd)':'var(--amb)'};
+               border-radius:5px;background:var(--sur2);color:var(--txt);min-width:150px;">
+    </div>
+  </div>`;
+}
+
+function _monTabPick(id, ym, cb){
+  const el = document.getElementById(id);
+  if(el) el.value = ym;
+  try{ if(cb) (new Function(cb))(); }
+  catch(e){ console.error('[_monTabPick] 実行エラー', cb, e); }
+}
+
+
+// 郵便局照合: サブタブで選んだ月を実体の input#cmp-mon に反映して再描画
+function _cmpMonSync(){
+  const v=document.getElementById('cmp-mon-tab')?.value||'';
+  const real=document.getElementById('cmp-mon');
+  if(real && real.value!==v){ real.value=v; }
+  renderCmp();
 }
 
 </script>
