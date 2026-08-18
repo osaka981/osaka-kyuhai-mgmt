@@ -24674,30 +24674,54 @@ function renderOfficeDel(el, name){
   if(rows.length){
     html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
     // ★ 2026/08/11: 同じ日付をまとめ、日付が変わるところで区切って見やすくする。
-    //   日付は各グループの先頭行だけに表示し、日ごとの小計を右端に添える。
+    // ★ 2026/08/18: 各日の末尾に日計行を追加(郵便局の調書と同じ粒度で突き合わせるため)
     const _wd=['日','月','火','水','木','金','土'];
     const _sorted = rows.slice().sort((a,b)=>
       (a.date||'').localeCompare(b.date||'') || String(a.staff||'').localeCompare(String(b.staff||''),'ja'));
-    let _prevDate = null;
-    _sorted.forEach((r,idx)=>{
-      const isNew = r.date !== _prevDate;
-      if(isNew && idx>0){
-        // 日付の変わり目に余白の行を挟む
-        html+=`<tr><td colspan="9" style="height:10px;padding:0;border:none;background:transparent;"></td></tr>`;
-      }
-      const dow = (()=>{ const m=String(r.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    // 日付ごとにまとめる
+    const _groups=[];
+    _sorted.forEach(r=>{
+      const g=_groups[_groups.length-1];
+      if(g && g.date===r.date) g.rows.push(r);
+      else _groups.push({date:r.date, rows:[r]});
+    });
+    _groups.forEach((g,gi)=>{
+      if(gi>0) html+=`<tr><td colspan="9" style="height:10px;padding:0;border:none;background:transparent;"></td></tr>`;
+      const dow=(()=>{ const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
       const dowCol = dow==='日'?'var(--red2)':(dow==='土'?'var(--blu)':'var(--txt2)');
-      const topBorder = isNew && idx>0 ? 'border-top:2px solid var(--brd);' : '';
-      html+=`<tr style="${topBorder}">
-        <td class="mono" style="${isNew?'font-weight:700;':'color:transparent;'}">${r.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
-        <td>${staffLink(r.staff)}</td>
-        <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
-        <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
-        <td class="tr" style="color:var(--pur2)">${r.ogata||0}</td>
-        <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+      const sum={mochi:0,kanryo:0,yakan:0,tenso:0,ogata:0,modori:0,yoku:0};
+      g.rows.forEach((r,ri)=>{
+        sum.mochi+=(r.mochidashi||0); sum.kanryo+=(r.kanryo||0); sum.yakan+=(r.yakan||0);
+        sum.tenso+=(r.tenso||0); sum.ogata+=(r.ogata||0);
+        sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0);
+        const isNew=(ri===0);
+        const topBorder = isNew && gi>0 ? 'border-top:2px solid var(--brd);' : '';
+        html+=`<tr style="${topBorder}">
+          <td class="mono" style="${isNew?'font-weight:700;':'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
+          <td>${staffLink(r.staff)}</td>
+          <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
+          <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
+          <td class="tr" style="color:var(--pur2)">${r.ogata||0}</td>
+          <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+        </tr>`;
+      });
+      // 日計
+      const rate = sum.mochi ? (sum.kanryo/sum.mochi*100) : 0;
+      html+=`<tr style="background:var(--bg3);border-top:1px solid var(--brd2);">
+        <td class="mono" style="font-size:11px;color:var(--txt3);">${g.date||''}</td>
+        <td style="font-size:11.5px;font-weight:700;color:var(--txt2);">日計
+          <span style="font-weight:400;color:var(--txt3);margin-left:4px;">稼動${g.rows.length}人</span>
+          <span style="font-weight:400;color:${rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)'};margin-left:6px;">${rate.toFixed(1)}%</span>
+        </td>
+        <td class="tr fw7" style="font-size:13px;">${sum.mochi}</td>
+        <td class="tr fw7" style="font-size:13px;color:var(--grn2);">${sum.kanryo}</td>
+        <td class="tr fw7" style="color:var(--y60);">${sum.yakan}</td>
+        <td class="tr fw7" style="color:var(--tel2);">${sum.tenso}</td>
+        <td class="tr fw7" style="color:var(--pur2);">${sum.ogata}</td>
+        <td class="tr fw7">${sum.modori}</td>
+        <td class="tr fw7">${sum.yoku}</td>
       </tr>`;
-      _prevDate = r.date;
     });
     html+=`</tbody></table></div>`;
   } else html+=`<div class="al al-e"><span>ℹ️</span><span>データなし</span></div>`;
