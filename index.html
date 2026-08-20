@@ -4551,18 +4551,21 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- ══ 郵便局データ 手入力 (2026/08/18) ══ -->
 <div id="m-postentry" class="mbg">
-<div class="modal" style="max-width:1120px;">
+<div class="modal" style="max-width:1360px;width:96vw;">
   <div class="mhd"><div class="mtt">📮 郵便局データ 手入力</div><button class="mx" onclick="closeM('m-postentry')">×</button></div>
 
-  <div style="background:var(--bg3);border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--txt2);line-height:1.65;">
-    Excelを出せない局は、調書を見ながらこの画面で直接入力してください。<br>
-    <b>空欄のままの行は「その日は稼働なし」</b>として保存されません。数量を入れた行だけが登録されます。
+  <div style="font-size:11.5px;color:var(--txt2);margin-bottom:8px;">
+    <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
   </div>
 
   <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
-    <div class="fg" style="min-width:170px;margin:0;">
+    <div class="fg" style="min-width:250px;margin:0;">
       <label>日付</label>
-      <input type="date" id="pe-date" class="fi" onchange="renderPostEntry()" style="font-size:15px;font-weight:700;">
+      <div class="fla gap6">
+        <button class="btn b-gh btn-sm" onclick="_peShiftDay(-1)" title="前日">◀ 前日</button>
+        <input type="date" id="pe-date" class="fi" onchange="renderPostEntry()" style="font-size:15px;font-weight:700;min-width:150px;">
+        <button class="btn b-gh btn-sm" onclick="_peShiftDay(1)" title="翌日">翌日 ▶</button>
+      </div>
     </div>
     <div class="fg" style="min-width:200px;margin:0;">
       <label>郵便局（営業所）</label>
@@ -4575,7 +4578,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <div class="tw" style="max-height:390px;overflow:auto;">
+  <div class="tw" style="max-height:calc(100vh - 330px);overflow:auto;">
     <table>
       <thead><tr>
         <th style="width:100px;">郵便局番号</th>
@@ -4602,8 +4605,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div id="pe-chk-result" style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:6px;"></div>
 
   <div class="mft">
-    <button class="btn b-gh" onclick="closeM('m-postentry')">キャンセル</button>
-    <button class="btn b-grn" onclick="savePostEntry()">この日を保存</button>
+    <button class="btn b-gh" onclick="closeM('m-postentry')">閉じる</button>
+    <button class="btn b-blu" onclick="savePostEntry({close:true})">保存して閉じる</button>
+    <button class="btn b-grn" onclick="savePostEntry({next:true})">保存して翌日へ ▶</button>
   </div>
 </div>
 </div>
@@ -35267,7 +35271,18 @@ function _postLogsAll(){
 // 対象営業所に紐づく従事員(郵便局番号つきを上に)
 function _postEntryStaff(office){
   const all=(D.staff||[]).filter(s=>s.status!=='終了');
-  const inOff = office ? all.filter(s=>s.office===office||s.location===office) : all;
+  // ★ 2026/08/20: メイン営業所(staff.office)だけで絞ると、
+  //   メインが「本社」で担当郵便局に浜寺を持つ人(川村宝・川村知弘など)が漏れる。
+  //   担当郵便局(subOffices)まで見る _getStaffDelOffices() を使う。
+  const inOff = office ? all.filter(s=>{
+    if(s.office===office || s.location===office) return true;
+    if(typeof _getStaffDelOffices==='function'){
+      if(_getStaffDelOffices(s).some(o=>o.office===office)) return true;
+    }
+    // 拠点マスタ未登録などで _getStaffDelOffices が拾えない場合の保険
+    const subs = Array.isArray(s.subOffices) ? s.subOffices : [];
+    return subs.some(x=>(typeof x==='string'?x:(x&&x.name))===office);
+  }) : all;
   const base = inOff.length?inOff:all;
   return base.slice().sort((a,b)=>{
     const aj=String(a.jpEmpNo||'').trim(), bj=String(b.jpEmpNo||'').trim();
@@ -35290,6 +35305,7 @@ function openPostEntry(){
     const uniq=[...new Set(list)];
     sel.innerHTML=uniq.map(o=>`<option value="${esc(o)}"${o===off?' selected':''}>${esc(o)}</option>`).join('');
   }
+  window._peNoJpWarned=false;
   openM('m-postentry');
   renderPostEntry();
 }
@@ -35313,10 +35329,10 @@ function renderPostEntry(){
              logs.find(l=>l.date===date&&l.staff===s.name);
     const cells=POST_COLS.map(c=>{
       const v = ex && ex[c.k]!==undefined && ex[c.k]!==null && ex[c.k]!=='' ? ex[c.k] : '';
-      return `<td style="padding:3px 4px;">
+      return `<td style="padding:2px 4px;">
         <input type="number" min="0" inputmode="numeric" id="pe-${c.k}-${i}" value="${v}"
           oninput="_postEntryCalc()" onfocus="this.select()"
-          style="width:100%;padding:7px 8px;text-align:right;font-size:15px;font-weight:700;
+          style="width:100%;padding:5px 8px;text-align:right;font-size:15px;font-weight:700;
                  font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
                  background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
       </td>`;
@@ -35366,7 +35382,23 @@ function _postEntryCalc(){
   }
 }
 
-async function savePostEntry(){
+function _peShiftDay(d){
+  const el=$('pe-date'); if(!el) return;
+  const v=el.value;
+  if(!v){ return; }
+  const dt=new Date(v+'T00:00:00');
+  if(isNaN(dt)) return;
+  dt.setDate(dt.getDate()+d);
+  el.value=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  renderPostEntry();
+  // 検算欄は日ごとの値なので必ずクリアする(前日の日計が残ると誤検出する)
+  if($('pe-chk-kanryo')) $('pe-chk-kanryo').value='';
+  _postEntryCalc();
+  const first=$('pe-mochi-0'); if(first) first.focus();
+}
+
+async function savePostEntry(opt){
+  opt = opt || {};
   const date=$('pe-date')?.value||'';
   const off =$('pe-off')?.value||'';
   if(!date){ alert('日付を入力してください'); return; }
@@ -35417,12 +35449,15 @@ async function savePostEntry(){
   lsSet(LS_KEYS.POSTLOG, logs);
   try{ if(typeof fbSet==='function') await fbSet('post_logs', logs); }catch(e){ console.error('[savePostEntry] FB保存エラー',e); }
 
-  closeM('m-postentry');
   if(typeof renderCmp==='function') renderCmp();
-  let msg=`${date} の郵便局データを保存しました（新規${add}件 / 更新${upd}件）`;
-  if(noJp) msg+=`\n※ 郵便局社員番号が未設定の従事員が${noJp}名います。氏名で紐付けているため、台帳に番号を登録してください。`;
-  if(typeof _showSaveToast==='function') _showSaveToast(msg.split('\n')[0]);
-  if(noJp) alert(msg);
+  let msg=`${date} を保存しました（新規${add}件 / 更新${upd}件）`;
+  if(typeof _showSaveToast==='function') _showSaveToast(msg);
+  if(noJp && !window._peNoJpWarned){
+    window._peNoJpWarned=true;   // 連続入力のたびに出すと邪魔なので1回だけ
+    alert(`郵便局社員番号が未設定の従事員が${noJp}名います。\n氏名で紐付けているため、従業員台帳に番号を登録してください。`);
+  }
+  if(opt.close){ closeM('m-postentry'); return; }
+  _peShiftDay(1);   // 連続入力: 翌日へ
 }
 
 
