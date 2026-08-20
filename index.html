@@ -7740,8 +7740,12 @@ function renderAll() {
 
 // ── 欠落関数のスタブ（Firebase未接続時のエラー防止）──
 function renderCmp(){
-  const mon=toYM($('cmp-mon')?.value||'');
-  // 月切替サブタブ(2026/08/18) — 実体の input#cmp-mon は hidden のまま残し互換を保つ
+  // ★ 2026/08/20: ここは従来 toYM() で "2026/08" に変換していたが、
+  //   下の比較相手は r.date.substring(0,7) = "2026-08" のためスラッシュ形式では
+  //   1件も一致せず、月を指定すると常に「データなし」になっていた。
+  //   月切替タブも "-" で年月を分解するため NaN月 と表示される原因になっていた。
+  //   保持形式は YYYY-MM に統一する。
+  const mon=_ymNorm($('cmp-mon')?.value||'');
   const _mt=$('cmp-mon-tabs');
   if(_mt) _mt.innerHTML=_monTabs('cmp-mon-tab',mon,"_cmpMonSync()",{label:'対象月'});
   const off=$('cmp-off')?.value||'';
@@ -35101,8 +35105,14 @@ function _delSumHeader(rows, opt){
 //   既存コードは $('xxx-mon').value を読むため、
 //   同じidの hidden input を必ず残して互換性を保つ。
 // ════════════════════════════════════════════════════════════
+// "2026/08" と "2026-08" の両方を受け取り "2026-08" に揃える。
+// 画面によって保持形式が違うため、月ヘルパは必ずこれを通す。
+function _ymNorm(ym){
+  const m = String(ym||'').match(/^(\d{4})[-\/](\d{1,2})/);
+  return m ? m[1]+'-'+String(m[2]).padStart(2,'0') : '';
+}
 function _ymAdd(ym, d){
-  const [y,m] = String(ym||'').split('-').map(Number);
+  const [y,m] = _ymNorm(ym).split('-').map(Number);
   if(!y||!m) return ym;
   const dt = new Date(y, m-1+d, 1);
   return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
@@ -35120,6 +35130,7 @@ function _ymNow(){
  */
 function _monTabs(id, cur, cb, opt){
   opt = opt || {};
+  cur = _ymNorm(cur);   // スラッシュ形式で渡ってきても NaN月 にしない
   const back = (opt.back===undefined) ? 3 : opt.back;   // 何ヶ月前まで出すか
   const now = _ymNow();
   // 選択中が未来ならそこを右端に合わせる
