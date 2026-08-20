@@ -1376,13 +1376,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span>差異がある行の「修正」ボタンから、日報側・郵便局側どちらでも訂正できます。両方誤りの場合も同時に修正可能です。</span>
         </div>
         <div class="tw"><table>
-          <thead><tr>
-            <th>日付</th><th>営業所</th><th>従事員</th>
-            <th class="tr">日報（完了）</th>
-            <th class="tr">郵便局</th>
-            <th class="tr">差異</th>
-            <th>原因</th><th>状態</th><th>操作</th>
-          </tr></thead>
+          <thead>
+            <tr>
+              <th rowspan="2">日付</th><th rowspan="2">営業所</th><th rowspan="2">従事員</th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(60,160,90,.10);">完了＋転送還付</th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(80,140,220,.10);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(150,110,200,.10);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
+            </tr>
+            <tr>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
+            </tr>
+          </thead>
           <tbody id="tb-cmp"></tbody>
         </table></div>
       </div>
@@ -7706,37 +7713,103 @@ function renderCmp(){
   const rows=(D.delivery||[]).filter(function(r){
     if(mon&&(!r.date||r.date.substring(0,7)!==mon)) return false;
     if(off&&r.office!==off) return false;
-    const diff=r.postKanryo!==undefined&&r.postKanryo!==null&&r.kanryo!==r.postKanryo;
-    if(st==='差異あり'&&!diff) return false;
-    if(st==='照合済'&&(diff||!r.cmpOk)) return false;
+    const d=_cmpDiffs(r);
+    if(st==='差異あり'&&!d.any) return false;
+    if(st==='照合済'&&(d.any||!r.cmpOk)) return false;
     if(st==='未照合'&&r.cmpOk) return false;
     return true;
   });
   const ok=rows.filter(function(r){return r.cmpOk;}).length;
-  const ng=rows.filter(function(r){return r.postKanryo!==undefined&&r.kanryo!==r.postKanryo;}).length;
-  const un=rows.filter(function(r){return !r.cmpOk&&(r.postKanryo===undefined||r.postKanryo===null);}).length;
+  const ng=rows.filter(function(r){return _cmpDiffs(r).any;}).length;
+  const un=rows.filter(function(r){return !r.cmpOk&&!_cmpDiffs(r).hasPost;}).length;
   if($('cmp-ok-b')) $('cmp-ok-b').textContent='照合済 '+ok;
   if($('cmp-ng-b')) $('cmp-ng-b').textContent='差異 '+ng;
   if($('cmp-un-b')) $('cmp-un-b').textContent='未照合 '+un;
   const nb=$('nb-diff'); if(nb){nb.textContent=ng+un;nb.style.display=(ng+un)>0?'':'none';}
   const tbody=$('tb-cmp'); if(!tbody) return;
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+
+  // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
+  const sorted=rows.slice().sort(function(a,b){
+    return String(a.date||'').localeCompare(String(b.date||''))
+        || String(a.office||'').localeCompare(String(b.office||''),'ja')
+        || String(a.staff||'').localeCompare(String(b.staff||''),'ja');
+  });
+  const groups=[];
+  sorted.forEach(function(r){
+    const g=groups[groups.length-1];
+    if(g && g.date===r.date) g.rows.push(r);
+    else groups.push({date:r.date, rows:[r]});
+  });
+
+  const WD=['日','月','火','水','木','金','土'];
+  const numCell=function(v){ return v===null||v===undefined ? '&#8212;' : fmt(v); };
+  const diffCell=function(d){
+    if(d===null||d===undefined) return '<td class="tr">&#8212;</td>';
+    if(d===0) return '<td class="tr" style="color:var(--grn2);font-weight:700;">0</td>';
+    return '<td class="tr" style="color:var(--red2);font-weight:700;">'+(d>0?'+':'')+fmt(d)+'</td>';
+  };
+
   const html=[];
-  rows.forEach(function(r){
-    const diff=r.postKanryo!==undefined&&r.kanryo!==r.postKanryo;
-    const cls=diff?'tr-ng':r.cmpOk?'tr-ok':'';
-    const scls=r.cmpOk?'bg':diff?'br':'bz';
-    const stxt=r.cmpOk?'照合済':diff?'差異':'未照合';
-    html.push('<tr class="'+cls+'">');
-    html.push('<td>'+esc(r.date||'')+'</td>');
-    html.push('<td>'+officeLink(r.office||'')+'</td>');
-    html.push('<td>'+staffLink(r.staff||'')+'</td>');
-    html.push('<td class="tr">'+fmt(r.kanryo||0)+'</td>');
-    html.push('<td class="tr">'+(r.postKanryo!==undefined?fmt(r.postKanryo):'&#8212;')+'</td>');
-    html.push('<td class="tr">'+(diff?'<span style="color:var(--red2)">'+fmt((r.kanryo||0)-(r.postKanryo||0))+'</span>':'&#8212;')+'</td>');
-    html.push('<td><span class="bdg '+scls+'">'+stxt+'</span></td>');
-    html.push('<td>'+esc(r.cmpCause||'')+'</td>');
-    html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(r.id||'')+'" onclick="openCmpFix(this.dataset.id)">修正</button></td>');
+  groups.forEach(function(g,gi){
+    if(gi>0) html.push('<tr><td colspan="15" style="height:9px;padding:0;border:none;background:transparent;"></td></tr>');
+    const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
+    const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
+    const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0};
+    let hasPostAny=false;
+
+    g.rows.forEach(function(r,ri){
+      const d=_cmpDiffs(r);
+      const cls=d.any?'tr-ng':r.cmpOk?'tr-ok':'';
+      const scls=r.cmpOk?'bg':d.any?'br':'bz';
+      const stxt=r.cmpOk?'照合済':d.any?'差異':'未照合';
+      sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata;
+      if(d.hasPost){
+        hasPostAny=true;
+        sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
+      }
+      html.push('<tr class="'+cls+'">');
+      html.push('<td class="mono"'+(ri===0?' style="font-weight:700;"':' style="color:transparent;"')+'>'+esc(g.date||'')
+        +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;">'+dow+'</span>':'')+'</td>');
+      html.push('<td>'+officeLink(r.office||'')+'</td>');
+      html.push('<td>'+staffLink(r.staff||'')+'</td>');
+      // 完了＋転送還付
+      html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);">'+fmt(d.nikki.kanryo)+'</td>');
+      html.push('<td class="tr fw7">'+numCell(d.hasPost?d.post.kanryo:null)+'</td>');
+      html.push(diffCell(d.dKanryo));
+      // 夜間
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--y60);">'+fmt(d.nikki.yakan)+'</td>');
+      html.push('<td class="tr" style="color:var(--y60);">'+numCell(d.hasPost?d.post.yakan:null)+'</td>');
+      html.push(diffCell(d.dYakan));
+      // 170超
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+fmt(d.nikki.ogata)+'</td>');
+      html.push('<td class="tr" style="color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
+      html.push(diffCell(d.dOgata));
+      html.push('<td style="border-left:2px solid var(--brd2);">'+esc(r.cmpCause||'')+'</td>');
+      html.push('<td><span class="bdg '+scls+'">'+stxt+'</span></td>');
+      html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(r.id||'')+'" onclick="openCmpFix(this.dataset.id)">修正</button></td>');
+      html.push('</tr>');
+    });
+
+    // 日計
+    const dk=hasPostAny?sum.nk-sum.pk:null;
+    const dy=hasPostAny?sum.ny-sum.py:null;
+    const doo=hasPostAny?sum.no-sum.po:null;
+    html.push('<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">');
+    html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
+    html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
+      +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span></td>');
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);font-size:15px;">'+fmt(sum.nk)+'</td>');
+    html.push('<td class="tr fw7" style="font-size:15px;">'+(hasPostAny?fmt(sum.pk):'&#8212;')+'</td>');
+    html.push(diffCell(dk));
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--y60);">'+fmt(sum.ny)+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--y60);">'+(hasPostAny?fmt(sum.py):'&#8212;')+'</td>');
+    html.push(diffCell(dy));
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+fmt(sum.no)+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
+    html.push(diffCell(doo));
+    html.push('<td colspan="3" style="border-left:2px solid var(--brd2);"></td>');
     html.push('</tr>');
   });
   tbody.innerHTML=html.join('');
@@ -9025,47 +9098,46 @@ function applyFix(){
 }
 
 function runAutoCompare(){
-  // Firebaseから暫定ドライバー情報を取得
+  // ★ 2026/08/20: 旧実装は r.postData(完了数のみの単一値)を見ていたが、
+  //   郵便局データは D.postLogs に入るようになったため postKanryo 等を使う。
+  //   判定は「完了＋転送還付」「夜間」「170超」の3本すべてが一致したときだけ照合済。
+  _cmpJoinPostLogs();
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
   const tempDrivers=fbDrivers.filter(d=>d.isTemp&&d.tempMergeId);
 
+  let ok=0, ng=0, un=0;
   D.delivery.forEach(r=>{
-    if(r.postData!==null&&r.status==='未照合'){
-      if(r.kanryo===r.postData){
-        r.status='照合済';
-      } else if(r.kanryo>r.postData){
-        r.status='差異あり';
-        r._diffDir='over';
-      } else {
-        r.status='差異あり';
-        r._diffDir='under';
+    const d=_cmpDiffs(r);
+    if(!d.hasPost){                       // 郵便局データが未着の日は触らない
+      if(!r.cmpOk){ r.status='未照合'; un++; }
+      return;
+    }
+    if(!d.any){
+      r.status='照合済'; r.cmpOk=true; r._diffDir=null; ok++;
+      return;
+    }
+    r.status='差異あり'; r.cmpOk=false; ng++;
+    r._diffDir = d.dKanryo>0 ? 'over' : d.dKanryo<0 ? 'under' : 'saikei';
 
-        // 暫定ドライバー自動判定：局>日報の場合、合算の可能性をチェック
-        const diff=r.postData-r.kanryo; // 局が多い分
-        const matchTemp=tempDrivers.filter(td=>{
-          // 合算先IDがこのレコードのドライバーと一致するか確認
-          const mergeDriver=D.staff.find(s=>s.empNo===td.tempMergeId||s.id===td.tempMergeId);
-          if(!mergeDriver) return false;
-          const nameMatch=mergeDriver.name===r.staff;
-          if(!nameMatch) return false;
-          // 期間チェック
-          if(td.tempStart&&td.tempStart>r.date) return false;
-          if(td.tempEnd&&td.tempEnd<r.date) return false;
-          return true;
-        });
-        if(matchTemp.length>0){
-          r._tempCandidates=matchTemp.map(td=>({
-            id:td.id, name:td.name, suggestQty:diff
-          }));
-          r._autoNote=`暫定ドライバー合算の可能性（${matchTemp.map(td=>td.name).join('・')} 計${diff}件）`;
-        }
+    // 局のほうが多い場合、暫定ドライバーの合算が原因かもしれないので候補を出す
+    if(d.dKanryo<0){
+      const diff=-d.dKanryo;
+      const matchTemp=tempDrivers.filter(td=>{
+        const mergeDriver=D.staff.find(s=>s.empNo===td.tempMergeId||s.id===td.tempMergeId);
+        if(!mergeDriver) return false;
+        if(mergeDriver.name!==r.staff) return false;
+        if(td.tempStart&&td.tempStart>r.date) return false;
+        if(td.tempEnd&&td.tempEnd<r.date) return false;
+        return true;
+      });
+      if(matchTemp.length>0){
+        r._tempCandidates=matchTemp.map(td=>({id:td.id, name:td.name, suggestQty:diff}));
+        r._autoNote=`暫定ドライバー合算の可能性（${matchTemp.map(td=>td.name).join('・')} 計${diff}件）`;
       }
     }
   });
   renderCmp();renderDash();
-  const ng=D.delivery.filter(r=>r.status==='差異あり').length;
-  const ok=D.delivery.filter(r=>r.status==='照合済').length;
-  alert(`自動照合完了\n照合済:${ok}件 / 差異あり:${ng}件`);
+  alert(`自動照合完了\n照合済:${ok}件 / 差異あり:${ng}件 / 郵便局データ未着:${un}件`);
 }
 
 // ─── 宅配日報入力 ───
@@ -35396,6 +35468,36 @@ function _peGoKey(ev){
       if(last){ last.focus(); if(last.select) last.select(); }
     }
   }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  照合の差異計算 (2026/08/20)
+//   郵便局への請求根拠は「配達完了 ＋ 転送・還付」。
+//   夜間・170超は完了の内数(再掲)なので加算せず、別枠で突き合わせる。
+//   日報側・郵便局側の両方を同じ式で出すこと。片方だけ足すと必ずずれる。
+// ════════════════════════════════════════════════════════════
+function _cmpDiffs(r){
+  const n = v => Math.max(0, parseInt(v)||0);
+  const nikki = {
+    kanryo: n(r.kanryo) + n(r.tenso),   // 完了＋転送還付
+    yakan : n(r.yakan),
+    ogata : n(r.ogata),
+  };
+  const hasPost = (r.postKanryo!==undefined && r.postKanryo!==null);
+  const post = hasPost ? {
+    kanryo: n(r.postKanryo) + n(r.postTenso),
+    yakan : n(r.postYakan),
+    ogata : n(r.postOgata),
+  } : null;
+
+  const dKanryo = hasPost ? nikki.kanryo - post.kanryo : null;
+  const dYakan  = hasPost ? nikki.yakan  - post.yakan  : null;
+  const dOgata  = hasPost ? nikki.ogata  - post.ogata  : null;
+  return {
+    nikki, post, hasPost, dKanryo, dYakan, dOgata,
+    any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
+  };
 }
 
 </script>
