@@ -1346,7 +1346,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card mb12">
         <div class="ch">
           <div class="ct"><div class="cbar"></div>照合フィルター</div>
-          <button class="btn b-blu btn-sm" onclick="runAutoCompare()">🔄 自動照合実行</button>
+          <div class="fla gap6">
+            <button class="btn b-amb btn-sm" onclick="openPostEntry()">📮 郵便局データ 手入力</button>
+            <button class="btn b-blu btn-sm" onclick="runAutoCompare()">🔄 自動照合実行</button>
+          </div>
         </div>
         <div id="cmp-mon-tabs"></div>
         <div class="f3">
@@ -4546,6 +4549,65 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 </div>
 
+<!-- ══ 郵便局データ 手入力 (2026/08/18) ══ -->
+<div id="m-postentry" class="mbg">
+<div class="modal" style="max-width:1120px;">
+  <div class="mhd"><div class="mtt">📮 郵便局データ 手入力</div><button class="mx" onclick="closeM('m-postentry')">×</button></div>
+
+  <div style="background:var(--bg3);border-radius:6px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:var(--txt2);line-height:1.65;">
+    Excelを出せない局は、調書を見ながらこの画面で直接入力してください。<br>
+    <b>空欄のままの行は「その日は稼働なし」</b>として保存されません。数量を入れた行だけが登録されます。
+  </div>
+
+  <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
+    <div class="fg" style="min-width:170px;margin:0;">
+      <label>日付</label>
+      <input type="date" id="pe-date" class="fi" onchange="renderPostEntry()" style="font-size:15px;font-weight:700;">
+    </div>
+    <div class="fg" style="min-width:200px;margin:0;">
+      <label>郵便局（営業所）</label>
+      <select id="pe-off" class="fi" onchange="renderPostEntry()" style="font-size:14px;"></select>
+    </div>
+    <div class="fg" style="min-width:210px;margin:0;">
+      <label>調書の「日計 配達完了」<span style="font-size:9.5px;color:var(--txt3);margin-left:4px;">検算用・任意</span></label>
+      <input type="number" min="0" id="pe-chk-kanryo" class="fi" oninput="_postEntryCalc()"
+        placeholder="例）554" style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;text-align:right;">
+    </div>
+  </div>
+
+  <div class="tw" style="max-height:390px;overflow:auto;">
+    <table>
+      <thead><tr>
+        <th style="width:100px;">郵便局番号</th>
+        <th style="width:120px;">氏名</th>
+        <th class="tr" style="width:110px;">持ち出し</th>
+        <th class="tr" style="width:110px;color:var(--grn2);">配達完了</th>
+        <th class="tr" style="width:110px;color:var(--tel2);">転送・還付</th>
+        <th class="tr" style="width:110px;color:var(--y60);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
+        <th class="tr" style="width:110px;color:var(--pur2);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+      </tr></thead>
+      <tbody id="tb-postentry"></tbody>
+      <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
+        <td colspan="2" style="font-size:14px;font-weight:700;">日計
+          <span style="font-size:12.5px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動 <span id="pe-sum-active">0</span> 人</span></td>
+        <td class="tr mono fw7" id="pe-sum-mochi"  style="font-size:16px;">0</td>
+        <td class="tr mono fw7" id="pe-sum-kanryo" style="font-size:16px;color:var(--grn2);">0</td>
+        <td class="tr mono fw7" id="pe-sum-tenso"  style="font-size:15px;color:var(--tel2);">0</td>
+        <td class="tr mono fw7" id="pe-sum-yakan"  style="font-size:15px;color:var(--y60);">0</td>
+        <td class="tr mono fw7" id="pe-sum-ogata"  style="font-size:15px;color:var(--pur2);">0</td>
+      </tr></tfoot>
+    </table>
+  </div>
+
+  <div id="pe-chk-result" style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:6px;"></div>
+
+  <div class="mft">
+    <button class="btn b-gh" onclick="closeM('m-postentry')">キャンセル</button>
+    <button class="btn b-grn" onclick="savePostEntry()">この日を保存</button>
+  </div>
+</div>
+</div>
+
 <!-- ══ 郵便局社員番号 一括登録 (2026/08/17) ══ -->
 <div id="m-jpno" class="mbg">
 <div class="modal" style="max-width:1020px;">
@@ -4793,6 +4855,9 @@ const LS_KEYS = {
   SURVEY_RESPONSES:   'nikki_survey_responses',    // 回答状況
   SCHEDULE_LOGS:      'nikki_schedule_logs',       // 変更ログ
   CUSTOMER_NOTES:     'nikki_customer_notes',      // 顧客申し送りメモ
+  // ★ 2026/08/18: 郵便局から受領した調書データ(請求根拠)。
+  //   日報(YP)とは別物。相互に上書きせず、郵便局照合タブで突き合わせる。
+  POSTLOG:            'nikki_post_logs',
 };
 
 // 休業調査システム データ(グローバル) - lsGet 後に初期化される
@@ -6002,6 +6067,14 @@ function applyFirebaseData() {
       }
     }catch(e){ console.error('_migrateOfficesToLocations error:', e); }
   }
+
+  // ★ 2026/08/18: 郵便局調書データ(D.postLogs)を復元。
+  //   日報とは別テーブル。ここで読まないと手入力がリロードで消える。
+  try{
+    const _pl = lsGet(LS_KEYS.POSTLOG, null);
+    if (Array.isArray(_pl)) D.postLogs = _pl;
+    if (!Array.isArray(D.postLogs)) D.postLogs = [];
+  }catch(e){ console.error('postLogs load error:', e); D.postLogs = []; }
 
   // 宅配日報（YP_LOGS → D.delivery）
   // 統合形式(form.del/form.col)と旧形式(form.mochidashi直下)の両方に対応
@@ -7576,6 +7649,11 @@ const D = {
   //   顧客マスタと同じく、コードに焼き付けると全削除しても復活し消せなくなる。
   //   実データは Firebase(yp_logs)/localStorage から読み込む。
   delivery: [],
+  // ★ 2026/08/18: 郵便局から受領した調書データ(郵便局への請求根拠)
+  //   { date, office, jpEmpNo, staff, mochi, kanryo, tenso, yakan, ogata,
+  //     src:'manual'|'excel', src2:入力者, at:登録日時 }
+  //   D.delivery(日報=支払根拠)とは独立。片方がもう片方を書き換えることはない。
+  postLogs: [],
   // 宅配事業内集荷（郵便局の定時集荷先別）
   // 日報アプリから {companies:[{name,count}], total, postOffice, ...} で届く
   deliveryCol: [],
@@ -7668,6 +7746,9 @@ function renderCmp(){
   if(_mt) _mt.innerHTML=_monTabs('cmp-mon-tab',mon,"_cmpMonSync()",{label:'対象月'});
   const off=$('cmp-off')?.value||'';
   const st=$('cmp-st')?.value||'全件';
+  // ★ 2026/08/18: 郵便局調書(D.postLogs)を日報へ突き合わせる。
+  //   postLogs は書き換えず、表示用に postKanryo 等を注入するだけ。
+  _cmpJoinPostLogs();
   const rows=(D.delivery||[]).filter(function(r){
     if(mon&&(!r.date||r.date.substring(0,7)!==mon)) return false;
     if(off&&r.office!==off) return false;
@@ -35146,6 +35227,222 @@ function _delStaffTabs(opt){
     ${chip('', '全員')}
     ${opt.staffList.map(nm=>chip(nm, nm)).join('')}
   </div>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  郵便局データ 手入力 (2026/08/18)
+//   Excelを出せない局があるため、調書を見ながら直接打てる画面を用意する。
+//   紙/PDFの調書と同じ「1日ぶんを縦に並べる」レイアウトにして目で追えるようにし、
+//   調書の日計を別途入力させて、打ち間違いをその場で検出する。
+//   保存先は D.postLogs。日報(D.delivery)は絶対に書き換えない。
+// ════════════════════════════════════════════════════════════
+
+const POST_COLS = [
+  {k:'mochi',  l:'持ち出し',   bill:false},
+  {k:'kanryo', l:'配達完了',   bill:true },
+  {k:'tenso',  l:'転送・還付', bill:true },
+  {k:'yakan',  l:'夜間',       bill:true , sub:'再掲'},
+  {k:'ogata',  l:'170超',      bill:true , sub:'再掲'},
+];
+
+function _postKey(date, jpEmpNo){ return String(date)+'__'+String(jpEmpNo); }
+
+function _postLogsAll(){
+  if(!Array.isArray(D.postLogs)) D.postLogs=[];
+  return D.postLogs;
+}
+
+// 対象営業所に紐づく従事員(郵便局番号つきを上に)
+function _postEntryStaff(office){
+  const all=(D.staff||[]).filter(s=>s.status!=='終了');
+  const inOff = office ? all.filter(s=>s.office===office||s.location===office) : all;
+  const base = inOff.length?inOff:all;
+  return base.slice().sort((a,b)=>{
+    const aj=String(a.jpEmpNo||'').trim(), bj=String(b.jpEmpNo||'').trim();
+    if(!!aj!==!!bj) return aj?-1:1;                  // 番号ありを先に
+    if(aj&&bj) return aj.localeCompare(bj);           // 番号順(調書と同じ並び)
+    return String(a.name||'').localeCompare(String(b.name||''),'ja');
+  });
+}
+
+function openPostEntry(){
+  const d=new Date();
+  const today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const off=$('cmp-off')?.value||'';
+  if($('pe-date')) $('pe-date').value=$('pe-date').value||today;
+  // 営業所プルダウン
+  const sel=$('pe-off');
+  if(sel){
+    const list=[...new Set((D.delivery||[]).map(r=>r.office).filter(Boolean))]
+      .concat((D.offices||[]).map(o=>o.name||o).filter(Boolean));
+    const uniq=[...new Set(list)];
+    sel.innerHTML=uniq.map(o=>`<option value="${esc(o)}"${o===off?' selected':''}>${esc(o)}</option>`).join('');
+  }
+  openM('m-postentry');
+  renderPostEntry();
+}
+
+function renderPostEntry(){
+  const date=$('pe-date')?.value||'';
+  const off =$('pe-off')?.value||'';
+  const tb=$('tb-postentry'); if(!tb) return;
+  const logs=_postLogsAll();
+  const staff=_postEntryStaff(off);
+
+  if(!staff.length){
+    tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--txt2);font-size:13px;">
+      対象の従事員がいません。先に従業員台帳を登録してください。</td></tr>`;
+    return;
+  }
+
+  tb.innerHTML=staff.map((s,i)=>{
+    const jp=String(s.jpEmpNo||'').trim();
+    const ex=logs.find(l=>l.date===date&&String(l.jpEmpNo||'')===jp&&jp) ||
+             logs.find(l=>l.date===date&&l.staff===s.name);
+    const cells=POST_COLS.map(c=>{
+      const v = ex && ex[c.k]!==undefined && ex[c.k]!==null && ex[c.k]!=='' ? ex[c.k] : '';
+      return `<td style="padding:3px 4px;">
+        <input type="number" min="0" inputmode="numeric" id="pe-${c.k}-${i}" value="${v}"
+          oninput="_postEntryCalc()" onfocus="this.select()"
+          style="width:100%;padding:7px 8px;text-align:right;font-size:15px;font-weight:700;
+                 font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
+                 background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
+      </td>`;
+    }).join('');
+    return `<tr data-staff="${esc(s.name||'')}" data-jp="${esc(jp)}">
+      <td class="mono" style="font-size:13px;color:${jp?'var(--blu2)':'var(--red2)'};font-weight:700;white-space:nowrap;">
+        ${jp?esc(jp):'未設定'}</td>
+      <td style="font-size:14px;font-weight:600;white-space:nowrap;">${esc(s.name||'')}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+  _postEntryCalc();
+}
+
+// 入力の合計と、調書に印字された日計との突き合わせ
+function _postEntryCalc(){
+  const tb=$('tb-postentry'); if(!tb) return;
+  const rows=[...tb.querySelectorAll('tr[data-staff]')];
+  const sum={}; POST_COLS.forEach(c=>sum[c.k]=0);
+  let active=0;
+  rows.forEach((tr,i)=>{
+    let any=false;
+    POST_COLS.forEach(c=>{
+      const v=parseInt($(`pe-${c.k}-${i}`)?.value);
+      if(!isNaN(v)&&v!==0){ any=true; }
+      if(!isNaN(v)) sum[c.k]+=v;
+    });
+    if(any) active++;
+    tr.style.background = any ? 'rgba(80,140,220,.06)' : 'transparent';
+  });
+  POST_COLS.forEach(c=>{ const e=$('pe-sum-'+c.k); if(e) e.textContent=sum[c.k].toLocaleString(); });
+  const ae=$('pe-sum-active'); if(ae) ae.textContent=active;
+
+  // 調書の日計と照合
+  const chk=$('pe-chk-kanryo')?.value;
+  const box=$('pe-chk-result');
+  if(box){
+    if(chk===''||chk===undefined||chk===null){
+      box.innerHTML=`<span style="color:var(--txt3);font-size:12.5px;">調書の「日計 配達完了」を入れると入力ミスを検出します</span>`;
+    }else{
+      const cv=parseInt(chk)||0;
+      const diff=sum.kanryo-cv;
+      box.innerHTML = diff===0
+        ? `<span style="color:var(--grn2);font-weight:700;font-size:14px;">✓ 日計一致（${cv.toLocaleString()}）</span>`
+        : `<span style="color:var(--red2);font-weight:700;font-size:14px;">✗ 日計不一致　入力 ${sum.kanryo.toLocaleString()} / 調書 ${cv.toLocaleString()}　差 ${diff>0?'+':''}${diff}</span>`;
+    }
+  }
+}
+
+async function savePostEntry(){
+  const date=$('pe-date')?.value||'';
+  const off =$('pe-off')?.value||'';
+  if(!date){ alert('日付を入力してください'); return; }
+  const tb=$('tb-postentry'); if(!tb) return;
+  const rows=[...tb.querySelectorAll('tr[data-staff]')];
+  const logs=_postLogsAll();
+
+  const recs=[]; let noJp=0;
+  rows.forEach((tr,i)=>{
+    const obj={}; let any=false;
+    POST_COLS.forEach(c=>{
+      const raw=$(`pe-${c.k}-${i}`)?.value;
+      const v=(raw===''||raw===undefined)?null:Math.max(0,parseInt(raw)||0);
+      obj[c.k]=v;
+      if(v!==null&&v!==0) any=true;
+    });
+    if(!any) return;                       // 空行=その日は稼働なし
+    const jp=tr.getAttribute('data-jp')||'';
+    if(!jp) noJp++;
+    recs.push({date, office:off, jpEmpNo:jp, staff:tr.getAttribute('data-staff')||'',
+               ...obj, src:'manual', at:new Date().toISOString()});
+  });
+
+  if(!recs.length){ alert('入力された数量がありません'); return; }
+
+  // 検算(調書の日計)が入っていて不一致なら確認する
+  const chk=$('pe-chk-kanryo')?.value;
+  if(chk!==''&&chk!==undefined&&chk!==null){
+    const cv=parseInt(chk)||0;
+    const sk=recs.reduce((a,r)=>a+(r.kanryo||0),0);
+    if(sk!==cv){
+      const ok=await showDialog({icon:'⚠️',title:'日計が一致しません',
+        msg:`入力の配達完了 ${sk}\n調書の日計   ${cv}\n差 ${sk-cv}\n\n入力ミスの可能性があります。このまま保存しますか？`,
+        okText:'保存する',cancelText:'戻って修正'});
+      if(!ok) return;
+    }
+  }
+
+  // 同一(日付×郵便局番号)は上書き。二重計上を防ぐ。
+  let upd=0, add=0;
+  recs.forEach(r=>{
+    const idx=logs.findIndex(l=>l.date===r.date &&
+      (r.jpEmpNo ? String(l.jpEmpNo||'')===r.jpEmpNo : l.staff===r.staff));
+    if(idx>=0){ logs[idx]={...logs[idx], ...r}; upd++; }
+    else { logs.push(r); add++; }
+  });
+
+  lsSet(LS_KEYS.POSTLOG, logs);
+  try{ if(typeof fbSet==='function') await fbSet('post_logs', logs); }catch(e){ console.error('[savePostEntry] FB保存エラー',e); }
+
+  closeM('m-postentry');
+  if(typeof renderCmp==='function') renderCmp();
+  let msg=`${date} の郵便局データを保存しました（新規${add}件 / 更新${upd}件）`;
+  if(noJp) msg+=`\n※ 郵便局社員番号が未設定の従事員が${noJp}名います。氏名で紐付けているため、台帳に番号を登録してください。`;
+  if(typeof _showSaveToast==='function') _showSaveToast(msg.split('\n')[0]);
+  if(noJp) alert(msg);
+}
+
+
+// 郵便局調書(D.postLogs) を日報(D.delivery)へ突き合わせる。
+//  紐付けキーは ①郵便局社員番号(台帳のjpEmpNo経由) ②氏名 の順。
+//  日報側には postKanryo 等を「表示用に」載せるだけで、実績値(kanryo等)は触らない。
+function _cmpJoinPostLogs(){
+  const logs = Array.isArray(D.postLogs) ? D.postLogs : [];
+  if(!logs.length) return;
+  // 郵便局番号 → 氏名
+  const jp2name = {};
+  (D.staff||[]).forEach(s=>{
+    const j=String(s.jpEmpNo||'').trim();
+    if(j) jp2name[j]=s.name;
+  });
+  const map = {};
+  logs.forEach(l=>{
+    const nm = (l.jpEmpNo && jp2name[String(l.jpEmpNo).trim()]) || l.staff || '';
+    if(!nm || !l.date) return;
+    map[l.date+'__'+nm] = l;
+  });
+  (D.delivery||[]).forEach(r=>{
+    const l = map[(r.date||'')+'__'+(r.staff||'')];
+    if(!l) return;
+    r.postMochi  = l.mochi;
+    r.postKanryo = l.kanryo;
+    r.postTenso  = l.tenso;
+    r.postYakan  = l.yakan;
+    r.postOgata  = l.ogata;
+    r.postSrc    = l.src||'';
+  });
 }
 
 </script>
