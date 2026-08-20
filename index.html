@@ -4594,11 +4594,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
 
   <div id="pe-chk-result" style="margin-top:10px;padding:8px 12px;background:var(--bg3);border-radius:6px;"></div>
+  <div id="pe-go-bar" hidden style="margin-top:8px;padding:10px 14px;border-radius:7px;
+       border:1px solid var(--grn);background:rgba(60,160,90,.10);"></div>
 
   <div class="mft">
     <button class="btn b-gh" onclick="closeM('m-postentry')">閉じる</button>
     <button class="btn b-blu" onclick="savePostEntry({close:true})">保存して閉じる</button>
-    <button class="btn b-grn" onclick="savePostEntry({next:true})">保存して翌日へ ▶</button>
+    <button class="btn b-grn" id="pe-btn-next" onclick="savePostEntry({next:true})"
+      onblur="_peHideGo()" onkeydown="_peGoKey(event)"
+      style="outline-offset:2px;">保存して翌日へ ▶</button>
   </div>
 </div>
 </div>
@@ -35028,6 +35032,9 @@ function _postEntryCalc(){
   });
   POST_COLS.forEach(c=>{ const e=$('pe-sum-'+c.k); if(e) e.textContent=sum[c.k].toLocaleString(); });
   const ae=$('pe-sum-active'); if(ae) ae.textContent=active;
+  // 入力欄に戻って打ち直した時点で確認バーは引っ込める
+  try{ if(document.activeElement && document.activeElement.tagName==='INPUT'
+        && document.activeElement.getAttribute('data-col')) _peHideGo(); }catch(e){}
 
   // 調書の日計と照合
   const chk=$('pe-chk-kanryo')?.value;
@@ -35054,10 +35061,14 @@ function _peShiftDay(d){
   dt.setDate(dt.getDate()+d);
   el.value=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   renderPostEntry();
+  if(typeof _peHideGo==='function') _peHideGo();
   // 検算欄は日ごとの値なので必ずクリアする(前日の日計が残ると誤検出する)
   if($('pe-chk-kanryo')) $('pe-chk-kanryo').value='';
   _postEntryCalc();
-  const first=$('pe-mochi-0'); if(first) first.focus();
+  // 翌日の先頭セルへ。並び替え後もDOM先頭から取る。
+  const grid=(typeof _peGrid==='function')?_peGrid():null;
+  const first=(grid&&grid[0]&&grid[0][0])||$('pe-mochi-0');
+  if(first){ first.focus(); if(first.select) first.select(); }
 }
 
 async function savePostEntry(opt){
@@ -35320,13 +35331,70 @@ function _peKeyNav(ev, el){
   if(fwd){
     if(col<lastCol) _peFocus(grid[row][col+1]);
     else if(row<lastRow) _peFocus(grid[row+1][0]);
-    else {
-      const chk=$('pe-chk-kanryo');   // 最終セルの次は検算欄へ
-      if(chk){ chk.focus(); if(chk.select) chk.select(); }
-    }
+    else _peGotoSave();   // 最終行の最終列 → 保存ボタンへ
   } else {
     if(col>0) _peFocus(grid[row][col-1]);
     else if(row>0) _peFocus(grid[row-1][lastCol]);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  最終セル → 保存ボタンへの誘導 (2026/08/20)
+//   最後の従事員の「170超」まで打ち終わったら、そのまま Enter で
+//   保存して翌日へ進めるようにする。押す直前に内容を確認バーで見せ、
+//   打ち終わりの勢いでうっかり確定してしまうのを防ぐ。
+// ════════════════════════════════════════════════════════════
+function _peGotoSave(){
+  const btn=$('pe-btn-next'); if(!btn) return;
+  const bar=$('pe-go-bar');
+  if(bar){
+    // その場の集計を出す(_postEntryCalc が反映済みの値を読む)
+    const kanryo=$('pe-sum-kanryo')?.textContent||'0';
+    const active=$('pe-sum-active')?.textContent||'0';
+    const date=$('pe-date')?.value||'';
+    const chkRaw=$('pe-chk-kanryo')?.value;
+    let chkHtml='';
+    if(chkRaw===''||chkRaw===undefined||chkRaw===null){
+      chkHtml=`<span style="color:var(--amb2);">調書の日計は未入力です（検算なしで保存されます）</span>`;
+    }else{
+      const cv=parseInt(chkRaw)||0;
+      const sv=parseInt(String(kanryo).replace(/,/g,''))||0;
+      chkHtml = (sv===cv)
+        ? `<span style="color:var(--grn2);font-weight:700;">日計一致（${cv.toLocaleString()}）</span>`
+        : `<span style="color:var(--red2);font-weight:700;">日計不一致　入力 ${sv.toLocaleString()} / 調書 ${cv.toLocaleString()}</span>`;
+    }
+    bar.innerHTML=`
+      <div style="font-size:14px;font-weight:700;color:var(--txt);margin-bottom:3px;">
+        最終行まで入力しました。${esc(date)} を保存して翌日へ移動していいですか？
+      </div>
+      <div style="font-size:12.5px;color:var(--txt2);">
+        稼動 <b style="color:var(--txt);">${active}</b> 人 ／ 配達完了 <b style="color:var(--grn2);">${kanryo}</b>　${chkHtml}
+      </div>
+      <div style="font-size:12px;color:var(--txt3);margin-top:5px;">
+        <b style="color:var(--grn2);">Enter</b> で保存して翌日へ　／　<b>Esc</b> または <b>Shift+Enter</b> で入力に戻る
+      </div>`;
+    bar.hidden=false;
+  }
+  btn.focus();
+  if(typeof btn.scrollIntoView==='function') btn.scrollIntoView({block:'nearest'});
+}
+
+function _peHideGo(){
+  const bar=$('pe-go-bar'); if(bar) bar.hidden=true;
+}
+
+// 保存ボタン上でのキー操作。Enterはボタン既定の動作(=保存)に任せる。
+function _peGoKey(ev){
+  if(ev.key==='Escape' || (ev.key==='Enter' && ev.shiftKey)){
+    ev.preventDefault();
+    _peHideGo();
+    // 最終セルへ戻す
+    const grid=(typeof _peGrid==='function')?_peGrid():null;
+    if(grid && grid.length){
+      const last=grid[grid.length-1][POST_COLS.length-1];
+      if(last){ last.focus(); if(last.select) last.select(); }
+    }
   }
 }
 
