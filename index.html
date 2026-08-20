@@ -4540,7 +4540,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;align-items:center;">
     <div style="font-size:11.5px;color:var(--txt2);flex:1 1 auto;">
       <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
-      左端の <span style="color:var(--txt3);">⠿</span> をドラッグすると、調書に合わせて行を並び替えられます。
+      左端の <span style="color:var(--txt3);">⠿</span> をドラッグすると、調書に合わせて行を並び替えられます。<br>
+      <span style="color:var(--txt3);">キー操作：</span>
+      <b>Enter</b> 右へ（行末で次の人）／<b>Shift+Enter</b> 戻る／<b>↑↓</b> 同じ列で上下
     </div>
     <span id="pe-order-state" style="font-size:11px;"></span>
     <button class="btn b-gh btn-sm" onclick="_peResetOrder()">社員番号順に戻す</button>
@@ -34986,7 +34988,7 @@ function renderPostEntry(){
       // data-col で列を識別する。並び替えでDOM順が変わってもidに依存しないため。
       return `<td style="padding:2px 4px;">
         <input type="number" min="0" inputmode="numeric" data-col="${c.k}" id="pe-${c.k}-${i}" value="${v}"
-          oninput="_postEntryCalc()" onfocus="this.select()"
+          oninput="_postEntryCalc()" onfocus="this.select()" onkeydown="_peKeyNav(event,this)"
           style="width:100%;padding:5px 8px;text-align:right;font-size:15px;font-weight:700;
                  font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
                  background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
@@ -35260,6 +35262,72 @@ function _peUpdateOrderBadge(){
   el.innerHTML = has
     ? `<span style="color:var(--amb2);font-weight:700;">並び順: この局の設定</span>`
     : `<span style="color:var(--txt3);">並び順: 社員番号順</span>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  手入力のキーボード移動 (2026/08/20)
+//   調書は1人ぶんを横に読むため Enter は右送り、
+//   縦に追いたいときのために上下キーも用意する。
+//   type=number は矢印キーで値が増減するので必ず preventDefault する。
+// ════════════════════════════════════════════════════════════
+function _peGrid(){
+  const tb=$('tb-postentry'); if(!tb) return null;
+  const rows=[...tb.querySelectorAll('tr[data-staff]')];
+  if(!rows.length) return null;
+  const grid=rows.map(tr=>POST_COLS.map(c=>tr.querySelector(`input[data-col="${c.k}"]`)));
+  return grid;
+}
+
+function _peFocus(el){
+  if(!el) return;
+  el.focus();
+  if(typeof el.select==='function') el.select();
+  // 画面外なら見える位置まで送る
+  if(typeof el.scrollIntoView==='function') el.scrollIntoView({block:'nearest'});
+}
+
+function _peKeyNav(ev, el){
+  const k=ev.key;
+  if(k!=='Enter'&&k!=='ArrowUp'&&k!=='ArrowDown'&&k!=='ArrowLeft'&&k!=='ArrowRight') return;
+
+  // 左右キーは、カーソルが端にあるときだけセル移動にする(数値の編集を邪魔しない)
+  if(k==='ArrowLeft'||k==='ArrowRight'){
+    const v=String(el.value||'');
+    let pos=null;
+    try{ pos=el.selectionStart; }catch(e){ pos=null; }   // number型は取れない環境もある
+    if(pos!==null){
+      if(k==='ArrowLeft'  && pos>0) return;
+      if(k==='ArrowRight' && pos<v.length) return;
+    }
+  }
+
+  const grid=_peGrid(); if(!grid) return;
+  const col=POST_COLS.findIndex(c=>c.k===el.getAttribute('data-col'));
+  let row=-1;
+  for(let i=0;i<grid.length;i++){ if(grid[i][col]===el){ row=i; break; } }
+  if(row<0||col<0) return;
+
+  ev.preventDefault();
+  const back = ev.shiftKey;
+  const lastRow=grid.length-1, lastCol=POST_COLS.length-1;
+
+  if(k==='ArrowUp')    { _peFocus(grid[Math.max(0,row-1)][col]); return; }
+  if(k==='ArrowDown')  { _peFocus(grid[Math.min(lastRow,row+1)][col]); return; }
+
+  // Enter / ←→ : 横送り。行末まで来たら次の行の先頭へ。
+  const fwd = (k==='ArrowRight') || (k==='Enter' && !back);
+  if(fwd){
+    if(col<lastCol) _peFocus(grid[row][col+1]);
+    else if(row<lastRow) _peFocus(grid[row+1][0]);
+    else {
+      const chk=$('pe-chk-kanryo');   // 最終セルの次は検算欄へ
+      if(chk){ chk.focus(); if(chk.select) chk.select(); }
+    }
+  } else {
+    if(col>0) _peFocus(grid[row][col-1]);
+    else if(row>0) _peFocus(grid[row-1][lastCol]);
+  }
 }
 
 </script>
