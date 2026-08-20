@@ -4634,7 +4634,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
        border:1px solid var(--grn);background:rgba(60,160,90,.10);"></div>
 
   <div class="mft">
-    <button class="btn b-gh" onclick="closeM('m-postentry')">閉じる</button>
+    <button class="btn b-gh" onclick="closeM('m-postentry');if(typeof renderCmp==='function')renderCmp();">閉じる</button>
     <button class="btn b-blu" onclick="savePostEntry({close:true})">保存して閉じる</button>
     <button class="btn b-grn" id="pe-btn-next" onclick="savePostEntry({next:true})"
       onblur="_peHideGo()" onkeydown="_peGoKey(event)"
@@ -7851,7 +7851,13 @@ function renderCmp(){
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+fmt(sum.no)+'</td>');
     html.push('<td class="tr fw7" style="color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
     html.push(diffCell(doo));
-    html.push('<td colspan="3" style="border-left:2px solid var(--brd2);"></td>');
+    // その日の郵便局データを手入力する導線。営業所が1つに定まるときだけ渡す。
+    const offs=[...new Set(g.rows.map(function(x){return x.office||'';}).filter(Boolean))];
+    const gOff=offs.length===1?offs[0]:(off||'');
+    const lbl=hasPostAny?'局データ修正':'局データ手入力';
+    html.push('<td colspan="3" style="border-left:2px solid var(--brd2);">'
+      +'<button class="btn btn-sm '+(hasPostAny?'b-gh':'b-amb')+'" '
+      +'onclick="openPostEntry(\''+esc(g.date||'')+'\',\''+esc(gOff)+'\')">'+lbl+'</button></td>');
     html.push('</tr>');
   });
   tbody.innerHTML=html.join('');
@@ -35175,17 +35181,20 @@ function _postEntryStaff(office){
   });
 }
 
-function openPostEntry(){
+// ★ 2026/08/20: 照合結果の日計行からも呼べるよう、日付・営業所を受け取れるようにした。
+//   指定があればその日を開き、無ければ従来どおり(前回の日付 or 当日)。
+function openPostEntry(preDate, preOff){
   const d=new Date();
   const today=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  const off=$('cmp-off')?.value||'';
-  if($('pe-date')) $('pe-date').value=$('pe-date').value||today;
+  const off=preOff || $('cmp-off')?.value || '';
+  if($('pe-date')) $('pe-date').value = preDate || $('pe-date').value || today;
   // 営業所プルダウン
   const sel=$('pe-off');
   if(sel){
     const list=[...new Set((D.delivery||[]).map(r=>r.office).filter(Boolean))]
       .concat((D.offices||[]).map(o=>o.name||o).filter(Boolean));
-    const uniq=[...new Set(list)];
+    if(off) list.push(off);
+    const uniq=[...new Set(list)].filter(Boolean);
     sel.innerHTML=uniq.map(o=>`<option value="${esc(o)}"${o===off?' selected':''}>${esc(o)}</option>`).join('');
   }
   window._peNoJpWarned=false;
