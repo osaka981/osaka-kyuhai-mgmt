@@ -4537,8 +4537,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <div class="modal" style="max-width:1360px;width:96vw;">
   <div class="mhd"><div class="mtt">📮 郵便局データ 手入力</div><button class="mx" onclick="closeM('m-postentry')">×</button></div>
 
-  <div style="font-size:11.5px;color:var(--txt2);margin-bottom:8px;">
-    <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
+  <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;align-items:center;">
+    <div style="font-size:11.5px;color:var(--txt2);flex:1 1 auto;">
+      <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
+      左端の <span style="color:var(--txt3);">⠿</span> をドラッグすると、調書に合わせて行を並び替えられます。
+    </div>
+    <span id="pe-order-state" style="font-size:11px;"></span>
+    <button class="btn b-gh btn-sm" onclick="_peResetOrder()">社員番号順に戻す</button>
   </div>
 
   <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
@@ -4564,6 +4569,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="tw" style="max-height:calc(100vh - 330px);overflow:auto;">
     <table>
       <thead><tr>
+        <th style="width:26px;"></th>
         <th style="width:100px;">社員番号</th>
         <th style="width:140px;">氏名</th>
         <th class="tr" style="width:110px;">持ち出し</th>
@@ -4574,7 +4580,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </tr></thead>
       <tbody id="tb-postentry"></tbody>
       <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
-        <td colspan="2" style="font-size:14px;font-weight:700;">日計
+        <td colspan="3" style="font-size:14px;font-weight:700;">日計
           <span style="font-size:12.5px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動 <span id="pe-sum-active">0</span> 人</span></td>
         <td class="tr mono fw7" id="pe-sum-mochi"  style="font-size:16px;">0</td>
         <td class="tr mono fw7" id="pe-sum-kanryo" style="font-size:16px;color:var(--grn2);">0</td>
@@ -34963,10 +34969,10 @@ function renderPostEntry(){
   const off =$('pe-off')?.value||'';
   const tb=$('tb-postentry'); if(!tb) return;
   const logs=_postLogsAll();
-  const staff=_postEntryStaff(off);
+  const staff=_peApplyOrder(_postEntryStaff(off), off);   // 局ごとの手動並びを適用
 
   if(!staff.length){
-    tb.innerHTML=`<tr><td colspan="7" style="text-align:center;padding:18px;color:var(--txt2);font-size:13px;">
+    tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--txt2);font-size:13px;">
       対象の従事員がいません。先に従業員台帳を登録してください。</td></tr>`;
     return;
   }
@@ -34977,15 +34983,20 @@ function renderPostEntry(){
              logs.find(l=>l.date===date&&l.staff===s.name);
     const cells=POST_COLS.map(c=>{
       const v = ex && ex[c.k]!==undefined && ex[c.k]!==null && ex[c.k]!=='' ? ex[c.k] : '';
+      // data-col で列を識別する。並び替えでDOM順が変わってもidに依存しないため。
       return `<td style="padding:2px 4px;">
-        <input type="number" min="0" inputmode="numeric" id="pe-${c.k}-${i}" value="${v}"
+        <input type="number" min="0" inputmode="numeric" data-col="${c.k}" id="pe-${c.k}-${i}" value="${v}"
           oninput="_postEntryCalc()" onfocus="this.select()"
           style="width:100%;padding:5px 8px;text-align:right;font-size:15px;font-weight:700;
                  font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
                  background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
       </td>`;
     }).join('');
-    return `<tr data-staff="${esc(s.name||'')}" data-emp="${esc(emp)}">
+    return `<tr draggable="true" data-staff="${esc(s.name||'')}" data-emp="${esc(emp)}"
+      ondragstart="_peDragStart(event,this)" ondragover="_peDragOver(event,this)"
+      ondrop="_peDrop(event,this)" ondragend="_peDragEnd(event)">
+      <td style="width:26px;text-align:center;cursor:grab;color:var(--txt3);font-size:15px;user-select:none;"
+          title="ドラッグで並び替え">⠿</td>
       <td class="mono" style="font-size:14px;color:${emp?'var(--amb2)':'var(--red2)'};font-weight:700;white-space:nowrap;">
         ${emp?esc(emp):'未設定'}</td>
       <td style="font-size:14px;font-weight:600;white-space:nowrap;">${esc(s.name||'')}</td>
@@ -34993,6 +35004,7 @@ function renderPostEntry(){
     </tr>`;
   }).join('');
   _postEntryCalc();
+  if(typeof _peUpdateOrderBadge==='function') _peUpdateOrderBadge();
 }
 
 // 入力の合計と、調書に印字された日計との突き合わせ
@@ -35001,10 +35013,11 @@ function _postEntryCalc(){
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
   const sum={}; POST_COLS.forEach(c=>sum[c.k]=0);
   let active=0;
-  rows.forEach((tr,i)=>{
+  rows.forEach(tr=>{
     let any=false;
     POST_COLS.forEach(c=>{
-      const v=parseInt($(`pe-${c.k}-${i}`)?.value);
+      // ★ 2026/08/20: 並び替えでDOM順とidの番号がずれるため、行内から引く
+      const v=parseInt(tr.querySelector(`input[data-col="${c.k}"]`)?.value);
       if(!isNaN(v)&&v!==0){ any=true; }
       if(!isNaN(v)) sum[c.k]+=v;
     });
@@ -35055,10 +35068,10 @@ async function savePostEntry(opt){
   const logs=_postLogsAll();
 
   const recs=[]; let noJp=0;
-  rows.forEach((tr,i)=>{
+  rows.forEach(tr=>{
     const obj={}; let any=false;
     POST_COLS.forEach(c=>{
-      const raw=$(`pe-${c.k}-${i}`)?.value;
+      const raw=tr.querySelector(`input[data-col="${c.k}"]`)?.value;
       const v=(raw===''||raw===undefined)?null:Math.max(0,parseInt(raw)||0);
       obj[c.k]=v;
       if(v!==null&&v!==0) any=true;
@@ -35137,6 +35150,116 @@ function _cmpJoinPostLogs(){
     r.postOgata  = l.ogata;
     r.postSrc    = l.src||'';
   });
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  手入力の行並び替え (2026/08/20)
+//   調書の並び順は局ごとに違うため、社員番号順を初期値にしつつ
+//   ドラッグで自由に入れ替えられるようにする。順序は営業所ごとに保存。
+//   並びは「見た目」だけの話で、保存されるデータは行ごとに独立している。
+// ════════════════════════════════════════════════════════════
+const PE_ORDER_LS = 'nikki_pe_row_order';
+
+// 行の識別子。社員番号があればそれ、なければ氏名。
+function _peRowKey(s){
+  const e=String(s && s.empNo!=null ? s.empNo : '').trim();
+  return e ? 'E:'+e : 'N:'+String((s&&s.name)||'');
+}
+
+function _peAllOrders(){
+  try{ return JSON.parse(localStorage.getItem(PE_ORDER_LS)||'{}')||{}; }
+  catch(e){ return {}; }
+}
+function _peLoadOrder(office){
+  const all=_peAllOrders();
+  const v=all[office||'__all__'];
+  return Array.isArray(v)?v:null;
+}
+function _peSaveOrder(office, keys){
+  const all=_peAllOrders();
+  all[office||'__all__']=keys;
+  try{ localStorage.setItem(PE_ORDER_LS, JSON.stringify(all)); }catch(e){}
+}
+function _peClearOrder(office){
+  const all=_peAllOrders();
+  delete all[office||'__all__'];
+  try{ localStorage.setItem(PE_ORDER_LS, JSON.stringify(all)); }catch(e){}
+}
+
+// 保存済みの並びを適用する。保存順にない人(新入社員など)は末尾に回す。
+function _peApplyOrder(list, office){
+  const order=_peLoadOrder(office);
+  if(!order || !order.length) return list;
+  const pos={}; order.forEach((k,i)=>pos[k]=i);
+  return list.slice().sort((a,b)=>{
+    const pa=pos[_peRowKey(a)], pb=pos[_peRowKey(b)];
+    if(pa===undefined && pb===undefined) return 0;   // 双方未登録なら元の順(社員番号順)を維持
+    if(pa===undefined) return 1;
+    if(pb===undefined) return -1;
+    return pa-pb;
+  });
+}
+
+// ── ドラッグ&ドロップ ──
+let _peDragRow=null;
+
+function _peDragStart(ev, tr){
+  _peDragRow=tr;
+  tr.style.opacity='.4';
+  try{ ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain',''); }catch(e){}
+}
+function _peDragOver(ev, tr){
+  ev.preventDefault();
+  if(!_peDragRow || _peDragRow===tr) return;
+  try{ ev.dataTransfer.dropEffect='move'; }catch(e){}
+  const r=tr.getBoundingClientRect();
+  const after = (ev.clientY - r.top) > r.height/2;
+  tr.style.borderTop    = after ? '' : '2px solid var(--blu)';
+  tr.style.borderBottom = after ? '2px solid var(--blu)' : '';
+}
+function _peDrop(ev, tr){
+  ev.preventDefault();
+  tr.style.borderTop=''; tr.style.borderBottom='';
+  if(!_peDragRow || _peDragRow===tr) return;
+  const r=tr.getBoundingClientRect();
+  const after = (ev.clientY - r.top) > r.height/2;
+  tr.parentNode.insertBefore(_peDragRow, after ? tr.nextSibling : tr);
+  _peCommitOrder();
+}
+function _peDragEnd(ev){
+  if(_peDragRow) _peDragRow.style.opacity='';
+  _peDragRow=null;
+  const tb=$('tb-postentry');
+  if(tb) [...tb.querySelectorAll('tr')].forEach(tr=>{ tr.style.borderTop=''; tr.style.borderBottom=''; });
+}
+
+// 現在のDOM順を保存する。入力中の値は行ごと動くので消えない。
+function _peCommitOrder(){
+  const tb=$('tb-postentry'); if(!tb) return;
+  const off=$('pe-off')?.value||'';
+  const keys=[...tb.querySelectorAll('tr[data-staff]')].map(tr=>{
+    const e=(tr.getAttribute('data-emp')||'').trim();
+    return e ? 'E:'+e : 'N:'+(tr.getAttribute('data-staff')||'');
+  });
+  _peSaveOrder(off, keys);
+  _peUpdateOrderBadge();
+}
+
+function _peResetOrder(){
+  const off=$('pe-off')?.value||'';
+  _peClearOrder(off);
+  renderPostEntry();
+  if(typeof _showSaveToast==='function') _showSaveToast('社員番号順に戻しました');
+}
+
+function _peUpdateOrderBadge(){
+  const el=$('pe-order-state'); if(!el) return;
+  const off=$('pe-off')?.value||'';
+  const has=!!_peLoadOrder(off);
+  el.innerHTML = has
+    ? `<span style="color:var(--amb2);font-weight:700;">並び順: この局の設定</span>`
+    : `<span style="color:var(--txt3);">並び順: 社員番号順</span>`;
 }
 
 </script>
