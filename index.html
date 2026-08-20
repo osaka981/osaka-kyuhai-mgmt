@@ -9049,10 +9049,14 @@ function approveCmp(id){
 
 // 修正モーダルを開く
 function openCmpFix(id) {
-  cmpFixTargetId = id;
-  const r = D.delivery.find(x=>x.id===id);
-  if(!r) return;
-  const diff = r.postData!==null ? r.kanryo-r.postData : null;
+  // ★ 2026/08/20: dataset.id は文字列、r.id は Date.now() の数値なので
+  //   === では絶対に一致せず「修正」ボタンが無反応だった。文字列で比較する。
+  cmpFixTargetId = String(id);
+  const r = D.delivery.find(x=>String(x.id)===String(id));
+  if(!r){ alert('対象の日報が見つかりませんでした'); return; }
+  _cmpJoinPostLogs();
+  const d = _cmpDiffs(r);
+  const diff = d.hasPost ? d.dKanryo : null;
 
   $('cmp-fix-info').innerHTML=`
     <div class="flbc mb8">
@@ -9060,10 +9064,17 @@ function openCmpFix(id) {
       <span class="xs muted">${r.office}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-      <div><div class="xs muted">日報（完了数）</div><div style="font-size:20px;font-weight:700;color:var(--blu2);">${r.kanryo}</div></div>
-      <div><div class="xs muted">郵便局データ</div><div style="font-size:20px;font-weight:700;color:var(--grn2);">${r.postData!==null?r.postData:'未取込'}</div></div>
-      <div><div class="xs muted">差異</div><div style="font-size:20px;font-weight:700;color:var(--red2);">${diff!==null?(diff>0?'+':'')+diff:'−'}</div></div>
-    </div>`;
+      <div><div class="xs muted">日報（完了＋転送）</div><div style="font-size:20px;font-weight:700;color:var(--blu2);">${d.nikki.kanryo}</div></div>
+      <div><div class="xs muted">郵便局データ</div><div style="font-size:20px;font-weight:700;color:var(--grn2);">${d.hasPost?d.post.kanryo:'未取込'}</div></div>
+      <div><div class="xs muted">差異</div><div style="font-size:20px;font-weight:700;color:${diff?'var(--red2)':'var(--grn2)'};">${diff!==null?(diff>0?'+':'')+diff:'−'}</div></div>
+    </div>
+    ${d.hasPost&&(d.dYakan!==0||d.dOgata!==0)?`
+    <div style="margin-top:8px;padding:7px 10px;background:var(--bg3);border-radius:6px;font-size:11.5px;color:var(--txt2);">
+      再掲の差異：
+      ${d.dYakan!==0?`<b style="color:var(--y60);">夜間 日報${d.nikki.yakan} / 局${d.post.yakan}</b>　`:''}
+      ${d.dOgata!==0?`<b style="color:var(--pur2);">170超 日報${d.nikki.ogata} / 局${d.post.ogata}</b>`:''}
+      <span style="color:var(--txt3);">（ここでは完了数のみ修正できます。再掲は日報一覧から訂正してください）</span>
+    </div>`:''}`;
 
   $('cmp-fix-diff-alert').innerHTML = diff===null ? '' :
     diff>0
@@ -9074,9 +9085,9 @@ function openCmpFix(id) {
   document.querySelectorAll('input[name="fix-type"]').forEach(el=>el.checked=false);
   ['fix-report-inp','fix-post-inp','fix-both-inp'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
   if($('fix-report-val'))$('fix-report-val').value=r.kanryo;
-  if($('fix-post-val'))$('fix-post-val').value=r.postData||0;
+  if($('fix-post-val'))$('fix-post-val').value=d.hasPost?r.postKanryo:0;
   if($('fix-both-report'))$('fix-both-report').value=r.kanryo;
-  if($('fix-both-post'))$('fix-both-post').value=r.postData||0;
+  if($('fix-both-post'))$('fix-both-post').value=d.hasPost?r.postKanryo:0;
   if($('fix-reason'))$('fix-reason').value=r.cause||'';
   if($('fix-both-warn'))$('fix-both-warn').style.display='none';
 
@@ -9097,13 +9108,15 @@ function onFixTypeChange(){
 }
 
 function applyFix(){
-  const r=D.delivery.find(x=>x.id===cmpFixTargetId);
+  const r=D.delivery.find(x=>String(x.id)===String(cmpFixTargetId));
   if(!r){closeM('m-cmp-fix');return;}
   const type=document.querySelector('input[name="fix-type"]:checked')?.value;
   if(!type){alert('修正方法を選択してください');return;}
   const reason=$('fix-reason')?.value.trim()||'';
 
-  let newReport=r.kanryo, newPost=r.postData;
+  // ★ 2026/08/20: 郵便局側の値は D.postLogs が正。ここでは postKanryo を書き換え、
+  //   同時に postLogs 本体も更新して、再描画で元に戻らないようにする。
+  let newReport=r.kanryo, newPost=(r.postKanryo!==undefined&&r.postKanryo!==null)?r.postKanryo:0;
 
   if(type==='report'){
     newReport=parseInt($('fix-report-val')?.value)||0;
@@ -9123,16 +9136,33 @@ function applyFix(){
   r.fixHistory.push({
     at:new Date().toISOString(),
     type,
-    before:{kanryo:r.kanryo,postData:r.postData},
-    after:{kanryo:newReport,postData:newPost},
+    before:{kanryo:r.kanryo,post:r.postKanryo},
+    after:{kanryo:newReport,post:newPost},
     reason,
   });
 
-  // データ更新
+  // 日報側
   r.kanryo=newReport;
-  r.postData=newPost;
-  r.cause=reason||type==='report'?'日報誤り':type==='post'?'郵便局誤り':'両方誤り';
-  r.status=newReport===newPost?'照合済':'差異あり';
+  // 郵便局側は postLogs が保存元。表示用の postKanryo と両方そろえる。
+  if(type==='post'||type==='both'){
+    r.postKanryo=newPost;
+    const logs=Array.isArray(D.postLogs)?D.postLogs:[];
+    const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
+    const emp=String(st?.empNo||'').trim();
+    const idx=logs.findIndex(l=>l.date===r.date &&
+      ((emp && String(l.empNo||'').trim()===emp) || l.staff===r.staff));
+    if(idx>=0){
+      logs[idx].kanryo=newPost;
+      logs[idx].fixedAt=new Date().toISOString();
+      lsSet(LS_KEYS.POSTLOG, logs);
+      try{ if(typeof fbSet==='function') fbSet('post_logs', logs); }catch(e){}
+    }
+  }
+  r.cmpCause = reason || (type==='report'?'日報誤り':type==='post'?'郵便局誤り':'両方誤り');
+  r.cause = r.cmpCause;
+  const _d2=_cmpDiffs(r);
+  r.status = _d2.any ? '差異あり' : '照合済';
+  r.cmpOk  = !_d2.any;
 
   closeM('m-cmp-fix');
   renderCmp();renderDash();renderDel();
