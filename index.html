@@ -9048,8 +9048,12 @@ function approveCmp(id){
 }
 
 // 修正モーダルを開く
+// ★ 2026/08/20: 未宣言のまま代入していたため、'use strict' 配下では
+//   ReferenceError になり「修正」ボタンが無反応だった。必ず宣言しておく。
+let cmpFixTargetId = null;
+
 function openCmpFix(id) {
-  // ★ 2026/08/20: dataset.id は文字列、r.id は Date.now() の数値なので
+  // dataset.id は文字列、r.id は Date.now() の数値なので
   //   === では絶対に一致せず「修正」ボタンが無反応だった。文字列で比較する。
   cmpFixTargetId = String(id);
   const r = D.delivery.find(x=>String(x.id)===String(id));
