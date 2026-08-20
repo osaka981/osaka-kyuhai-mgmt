@@ -35016,6 +35016,81 @@ function _delStaffPick(key, name, cb){
 }
 
 
+// ════════════════════════════════════════════════════════════
+//  宅配日報 合計ヘッダー
+//   一覧が縦に長く、下端の合計まで辿り着けないため上部に固定表示する。
+//   郵便局への請求根拠4列(完了・転送還付・夜間・170超)を強調し、
+//   それ以外(持出・持戻・翌日)は参考値として控えめに出す。
+// ════════════════════════════════════════════════════════════
+function _delSumHeader(rows, opt){
+  opt = opt || {};
+  const t = {mochi:0,kanryo:0,yakan:0,tenso:0,modori:0,yoku:0,ogata:0,shukka:0};
+  const days = new Set(), people = new Set();
+  (rows||[]).forEach(r=>{
+    t.mochi  += (r.mochidashi||0);
+    t.kanryo += (r.kanryo||0);
+    t.yakan  += (r.yakan||0);
+    t.tenso  += (r.tenso||0);
+    t.modori += (r.mochimodoiri||0);
+    t.yoku   += (r['翌日廻し']||0);
+    t.ogata  += (r.ogata||r['170超']||0);
+    t.shukka += (r.shukka||0);
+    if(r.date)  days.add(r.date);
+    if(r.staff) people.add(r.staff);
+  });
+  const rate = t.mochi ? (t.kanryo/t.mochi*100) : 0;
+  const n = v => (v||0).toLocaleString();
+
+  const bill = [
+    {l:'配達完了',   v:t.kanryo, c:'var(--grn2)'},
+    {l:'転送・還付', v:t.tenso,  c:'var(--tel2)'},
+    {l:'夜間',       v:t.yakan,  c:'var(--y60)',  sub:'完了の内数'},
+    {l:'170超',      v:t.ogata,  c:'var(--pur2)', sub:'完了の内数'},
+  ];
+  const ref = [
+    {l:'持出', v:t.mochi},
+    {l:'持戻', v:t.modori},
+    {l:'翌日', v:t.yoku},
+  ];
+  if(opt.showShukka) ref.push({l:'集荷', v:t.shukka});
+
+  const billCell = o =>
+    `<div style="flex:1 1 150px;max-width:280px;background:var(--sur2);border:1px solid var(--brd2);border-left:4px solid ${o.c};border-radius:6px;padding:10px 12px;">
+       <div style="font-size:12.5px;font-weight:700;color:var(--txt2);letter-spacing:.5px;margin-bottom:3px;">${o.l}${o.sub?`<span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:5px;">${o.sub}</span>`:''}</div>
+       <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:32px;color:${o.c};line-height:1.05;letter-spacing:-.5px;">${n(o.v)}</div>
+     </div>`;
+
+  const refCell = o =>
+    `<div style="display:flex;align-items:baseline;gap:7px;padding:4px 14px;border-right:1px solid var(--brd);">
+       <span style="font-size:13.5px;color:var(--txt2);font-weight:700;">${o.l}</span>
+       <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:22px;color:var(--txt);">${n(o.v)}</span>
+     </div>`;
+
+  const rateCol = rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)';
+
+  return `<div style="position:sticky;top:0;z-index:20;background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:0 3px 10px rgba(0,0,0,.25);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div style="font-size:15px;font-weight:700;color:var(--txt);letter-spacing:.5px;">
+        ${opt.title||'月合計'}
+        <span style="font-size:11px;font-weight:600;color:var(--amb2);margin-left:10px;border:1px solid var(--amb);border-radius:4px;padding:2px 7px;">郵便局請求 根拠4列</span>
+      </div>
+      <div style="font-size:13px;color:var(--txt2);">
+        稼働 <b style="color:var(--txt);font-size:16px;font-family:'DM Mono',monospace;">${days.size}</b> 日
+        ${opt.hidePeople?'':` <span style="color:var(--txt3);">/</span> 延べ <b style="color:var(--txt);font-size:16px;font-family:'DM Mono',monospace;">${people.size}</b> 名`}
+        <span style="color:var(--txt3);">/</span> 完了率 <b style="color:${rateCol};font-size:17px;font-family:'DM Mono',monospace;">${rate.toFixed(1)}%</b>
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${bill.map(billCell).join('')}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:9px;padding-top:7px;border-top:1px dashed var(--brd);">
+      <span style="font-size:13px;color:var(--txt3);padding-right:10px;font-weight:700;">参考</span>
+      ${ref.map(refCell).join('')}
+      ${_delStaffTabs(opt)}
+    </div>
+  </div>`;
+}
+
 // 合計ヘッダーの「参考」行に並べるドライバー別タブ
 //  opt.staffKey / opt.staffList / opt.staffSel / opt.staffCb が揃ったときだけ出す
 function _delStaffTabs(opt){
