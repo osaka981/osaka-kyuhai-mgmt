@@ -4539,6 +4539,35 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 </div>
 
+<!-- ══ 郵便局データ → 日報へ反映 (2026/08/20) ══ -->
+<div id="m-p2n" class="mbg">
+<div class="modal" style="max-width:720px;">
+  <div class="mhd"><div class="mtt">郵便局データを日報に反映</div><button class="mx" onclick="closeM('m-p2n')">×</button></div>
+
+  <div style="font-size:12px;color:var(--txt2);line-height:1.65;margin-bottom:10px;">
+    この日は郵便局から数量が届いていますが、対応する日報がありません。<br>
+    内容を確認して、日報を作成してください。<b>作成した日報は委託料の計算対象になります。</b>
+  </div>
+
+  <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:8px;" id="p2n-date"></div>
+  <div id="p2n-body" style="margin-bottom:14px;"></div>
+
+  <div class="fg" style="margin-bottom:8px;">
+    <label>どのドライバーの日報として登録しますか
+      <span style="font-size:9.5px;color:var(--txt3);margin-left:4px;">名義と実際に乗った方が違う場合は変更してください</span>
+    </label>
+    <select id="p2n-staff" class="fi" onchange="_p2nCheck()" style="font-size:14px;"></select>
+  </div>
+
+  <div id="p2n-warn" hidden class="al al-w" style="font-size:11.5px;"></div>
+
+  <div class="mft">
+    <button class="btn b-gh" onclick="closeM('m-p2n')">キャンセル</button>
+    <button class="btn b-grn" onclick="applyPostToNikki()">この内容で日報を作成</button>
+  </div>
+</div>
+</div>
+
 <!-- ══ 郵便局データ 手入力 (2026/08/18) ══ -->
 <div id="m-postentry" class="mbg">
 <div class="modal" style="max-width:1360px;width:96vw;">
@@ -7719,18 +7748,21 @@ function renderCmp(){
     if(st==='未照合'&&r.cmpOk) return false;
     return true;
   });
+  // ★ 2026/08/20: 郵便局側だけあって日報が無い日を拾い、同じ一覧に混ぜる
+  let orphans=_cmpOrphanPostLogs(mon, off);
+  if(st==='照合済'||st==='未照合') orphans=[];   // 「日報なし」は差異扱い
   const ok=rows.filter(function(r){return r.cmpOk;}).length;
-  const ng=rows.filter(function(r){return _cmpDiffs(r).any;}).length;
+  const ng=rows.filter(function(r){return _cmpDiffs(r).any;}).length + orphans.length;
   const un=rows.filter(function(r){return !r.cmpOk&&!_cmpDiffs(r).hasPost;}).length;
   if($('cmp-ok-b')) $('cmp-ok-b').textContent='照合済 '+ok;
   if($('cmp-ng-b')) $('cmp-ng-b').textContent='差異 '+ng;
   if($('cmp-un-b')) $('cmp-un-b').textContent='未照合 '+un;
   const nb=$('nb-diff'); if(nb){nb.textContent=ng+un;nb.style.display=(ng+un)>0?'':'none';}
   const tbody=$('tb-cmp'); if(!tbody) return;
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
-  const sorted=rows.slice().sort(function(a,b){
+  const sorted=rows.concat(orphans).sort(function(a,b){
     return String(a.date||'').localeCompare(String(b.date||''))
         || String(a.office||'').localeCompare(String(b.office||''),'ja')
         || String(a.staff||'').localeCompare(String(b.staff||''),'ja');
@@ -7757,38 +7789,47 @@ function renderCmp(){
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
     const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0};
-    let hasPostAny=false;
+    let hasPostAny=false, orphInDay=false;
 
     g.rows.forEach(function(r,ri){
       const d=_cmpDiffs(r);
-      const cls=d.any?'tr-ng':r.cmpOk?'tr-ok':'';
-      const scls=r.cmpOk?'bg':d.any?'br':'bz';
-      const stxt=r.cmpOk?'照合済':d.any?'差異':'未照合';
-      sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata;
+      const orph=!!r.__orphan;
+      const cls=orph?'tr-ng':d.any?'tr-ng':r.cmpOk?'tr-ok':'';
+      const scls=orph?'ba':r.cmpOk?'bg':d.any?'br':'bz';
+      const stxt=orph?'日報なし':r.cmpOk?'照合済':d.any?'差異':'未照合';
+      if(!orph){ sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata; }
       if(d.hasPost){
         hasPostAny=true;
         sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
       }
+      if(orph) orphInDay=true;
       html.push('<tr class="'+cls+'">');
       html.push('<td class="mono"'+(ri===0?' style="font-weight:700;"':' style="color:transparent;"')+'>'+esc(g.date||'')
         +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;">'+dow+'</span>':'')+'</td>');
       html.push('<td>'+officeLink(r.office||'')+'</td>');
       html.push('<td>'+staffLink(r.staff||'')+'</td>');
+      const dash='<span style="color:var(--txt3);">&#8212;</span>';
       // 完了＋転送還付
-      html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);">'+fmt(d.nikki.kanryo)+'</td>');
+      html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);">'+(orph?dash:fmt(d.nikki.kanryo))+'</td>');
       html.push('<td class="tr fw7">'+numCell(d.hasPost?d.post.kanryo:null)+'</td>');
-      html.push(diffCell(d.dKanryo));
+      html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dKanryo));
       // 夜間
-      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--y60);">'+fmt(d.nikki.yakan)+'</td>');
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--y60);">'+(orph?dash:fmt(d.nikki.yakan))+'</td>');
       html.push('<td class="tr" style="color:var(--y60);">'+numCell(d.hasPost?d.post.yakan:null)+'</td>');
-      html.push(diffCell(d.dYakan));
+      html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dYakan));
       // 170超
-      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+fmt(d.nikki.ogata)+'</td>');
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
       html.push('<td class="tr" style="color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
-      html.push(diffCell(d.dOgata));
-      html.push('<td style="border-left:2px solid var(--brd2);">'+esc(r.cmpCause||'')+'</td>');
+      html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
+      html.push('<td style="border-left:2px solid var(--brd2);font-size:11px;">'
+        +(orph?'<span style="color:var(--amb2);">日報の提出なし</span>':esc(r.cmpCause||''))+'</td>');
       html.push('<td><span class="bdg '+scls+'">'+stxt+'</span></td>');
-      html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(r.id||'')+'" onclick="openCmpFix(this.dataset.id)">修正</button></td>');
+      if(orph){
+        html.push('<td><button class="btn btn-sm b-amb" onclick="openPostToNikki(\''+esc(r.date||'')+'\',\''
+          +esc(r._empNo||'')+'\',\''+esc(r.staff||'')+'\')">日報へ反映</button></td>');
+      } else {
+        html.push('<td><button class="btn btn-sm b-blu" data-id="'+esc(r.id||'')+'" onclick="openCmpFix(this.dataset.id)">修正</button></td>');
+      }
       html.push('</tr>');
     });
 
@@ -7799,7 +7840,8 @@ function renderCmp(){
     html.push('<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">');
     html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
     html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
-      +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span></td>');
+      +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span>'
+      +(orphInDay?'<span style="font-size:11px;color:var(--amb2);margin-left:6px;">日報なしを含む</span>':'')+'</td>');
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);font-size:15px;">'+fmt(sum.nk)+'</td>');
     html.push('<td class="tr fw7" style="font-size:15px;">'+(hasPostAny?fmt(sum.pk):'&#8212;')+'</td>');
     html.push(diffCell(dk));
@@ -35498,6 +35540,161 @@ function _cmpDiffs(r){
     nikki, post, hasPost, dKanryo, dYakan, dOgata,
     any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
   };
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  郵便局側のみのデータ → 日報へ反映 (2026/08/20)
+//   局から数量が来ているのに、ドライバーの日報も経営管理側の入力も無い日がある。
+//   これを照合一覧に「日報なし」として出し、確認のうえ日報を起こせるようにする。
+//   ・誰の日報として起こすかは選べる(名義を借りて新人が乗っている場合があるため)
+//   ・持戻り = 持出 −(完了＋転送) で自動計算する
+// ════════════════════════════════════════════════════════════
+
+// 郵便局データのうち、対応する日報が存在しないものを返す
+function _cmpOrphanPostLogs(mon, off){
+  const logs = Array.isArray(D.postLogs) ? D.postLogs : [];
+  if(!logs.length) return [];
+  const emp2name = {};
+  (D.staff||[]).forEach(s=>{
+    const e=String(s.empNo||'').trim();
+    if(e) emp2name[e]=s.name;
+  });
+  const have = new Set();
+  (D.delivery||[]).forEach(r=>{ have.add((r.date||'')+'__'+(r.staff||'')); });
+
+  return logs.filter(l=>{
+    if(!l || !l.date) return false;
+    if(mon && String(l.date).substring(0,7)!==mon) return false;
+    if(off && l.office!==off) return false;
+    const nm=(l.empNo && emp2name[String(l.empNo).trim()]) || l.staff || '';
+    return !have.has((l.date||'')+'__'+nm);
+  }).map(l=>{
+    const nm=(l.empNo && emp2name[String(l.empNo).trim()]) || l.staff || '';
+    return {
+      __orphan:true,
+      date:l.date, office:l.office||'', staff:nm,
+      _empNo:String(l.empNo||'').trim(),
+      postMochi:l.mochi, postKanryo:l.kanryo, postTenso:l.tenso,
+      postYakan:l.yakan, postOgata:l.ogata,
+    };
+  });
+}
+
+// 反映確認モーダルを開く
+function openPostToNikki(date, empNo, staffName){
+  const logs = Array.isArray(D.postLogs) ? D.postLogs : [];
+  const l = logs.find(x=>x.date===date &&
+    (empNo ? String(x.empNo||'').trim()===String(empNo) : (x.staff||'')===staffName));
+  if(!l){ alert('対象の郵便局データが見つかりませんでした'); return; }
+  window._p2nTarget = {date, empNo:String(empNo||''), staffName:staffName||''};
+
+  const n = v => Math.max(0, parseInt(v)||0);
+  const mochi=n(l.mochi), kanryo=n(l.kanryo), tenso=n(l.tenso);
+  const modori=Math.max(0, mochi-kanryo-tenso);
+
+  if($('p2n-date')) $('p2n-date').textContent = date + '　' + (l.office||'');
+  const body=$('p2n-body');
+  if(body){
+    const cell=(lab,val,col)=>`<div style="flex:1 1 90px;text-align:center;padding:6px 4px;">
+      <div style="font-size:10.5px;color:var(--txt2);margin-bottom:2px;">${lab}</div>
+      <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:19px;color:${col||'var(--txt)'};">${val}</div></div>`;
+    body.innerHTML=`<div style="display:flex;flex-wrap:wrap;background:var(--bg3);border-radius:6px;">
+      ${cell('持ち出し',mochi)}
+      ${cell('配達完了',kanryo,'var(--grn2)')}
+      ${cell('転送・還付',tenso,'var(--tel2)')}
+      ${cell('夜間',n(l.yakan),'var(--y60)')}
+      ${cell('170超',n(l.ogata),'var(--pur2)')}
+      ${cell('持戻り(自動)',modori,'var(--amb2)')}
+    </div>`;
+  }
+
+  // ドライバー選択(名義と実際に乗った人が違う場合に備える)
+  const sel=$('p2n-staff');
+  if(sel){
+    const cands=(D.staff||[]).filter(s=>s.status!=='終了')
+      .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||''),'ja',{numeric:true}));
+    sel.innerHTML=cands.map(s=>{
+      const on = (s.name===staffName);
+      return `<option value="${esc(s.name||'')}"${on?' selected':''}>${esc((s.empNo||'—')+'  '+(s.name||''))}${on?'　（郵便局データの名義）':''}</option>`;
+    }).join('');
+  }
+  const warn=$('p2n-warn');
+  if(warn) warn.hidden = true;
+  openM('m-p2n');
+}
+
+function _p2nCheck(){
+  const t=window._p2nTarget||{};
+  const sel=$('p2n-staff');
+  const warn=$('p2n-warn');
+  if(!warn||!sel) return;
+  if(sel.value && t.staffName && sel.value!==t.staffName){
+    warn.hidden=false;
+    warn.innerHTML=`郵便局データの名義は <b>${esc(t.staffName)}</b> ですが、
+      <b>${esc(sel.value)}</b> の日報として登録します。委託料の支払先も ${esc(sel.value)} になります。`;
+  } else warn.hidden=true;
+}
+
+async function applyPostToNikki(){
+  const t=window._p2nTarget; if(!t){ closeM('m-p2n'); return; }
+  const logs = Array.isArray(D.postLogs) ? D.postLogs : [];
+  const l = logs.find(x=>x.date===t.date &&
+    (t.empNo ? String(x.empNo||'').trim()===t.empNo : (x.staff||'')===t.staffName));
+  if(!l){ alert('対象の郵便局データが見つかりませんでした'); return; }
+
+  const staff=$('p2n-staff')?.value||t.staffName;
+  if(!staff){ alert('反映先のドライバーを選択してください'); return; }
+
+  // 既に同じ日付・同じドライバーの日報があれば二重登録しない
+  const dup=(D.delivery||[]).find(r=>r.date===t.date && r.staff===staff);
+  if(dup){
+    alert(`${t.date} の ${staff} の日報は既に存在します。\n照合一覧の「修正」から数量を調整してください。`);
+    closeM('m-p2n'); return;
+  }
+
+  const n = v => Math.max(0, parseInt(v)||0);
+  const mochi=n(l.mochi), kanryo=n(l.kanryo), tenso=n(l.tenso);
+  const rec={
+    id:Date.now(),
+    date:t.date,
+    office:l.office||'',
+    staff,
+    kubun:'個人事業主',
+    postOffice:l.office||'',
+    mochidashi:mochi, kanryo, tenso,
+    yakan:n(l.yakan), ogata:n(l.ogata),
+    mochimodoiri:Math.max(0, mochi-kanryo-tenso),
+    '翌日廻し':0,
+    shukka:0, sonota:[0,0,0,0],
+    note:`郵便局データから作成（${new Date().toLocaleDateString('ja-JP')}）`
+        + (t.staffName && t.staffName!==staff ? `／名義:${t.staffName}` : ''),
+    charters:[], penalties:[], gasRows:[],
+    postData:null, status:'照合済', cmpOk:true,
+    _fromPost:true,
+  };
+  D.delivery.push(rec);
+
+  // 日報アプリ側(yp_logs)にも反映する
+  try{
+    const ypLogs=lsGet(LS_KEYS.YP,[])||[];
+    const _st=(D.staff||[]).find(x=>x&&x.name===staff);
+    const _drvId=String(_st?.empNo||_st?.id||'');
+    ypLogs.push({id:rec.id,type:'yuupack',
+      driver:{id:_drvId,name:staff,office:rec.office,officeType:'delivery'},
+      date:rec.date,
+      form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,
+            mochimodoiri:rec.mochimodoiri,'翌日廻し':0,shukka:0,notes:rec.note},
+      submittedAt:new Date().toISOString()});
+    lsSet(LS_KEYS.YP, ypLogs);
+    if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
+  }catch(e){ console.error('[applyPostToNikki] yp_logs 反映エラー', e); }
+
+  closeM('m-p2n');
+  if(typeof renderCmp==='function') renderCmp();
+  if(typeof renderDel==='function') renderDel();
+  if(typeof renderDash==='function') renderDash();
+  if(typeof _showSaveToast==='function') _showSaveToast(`${t.date} ${staff} の日報を作成しました`);
 }
 
 </script>
