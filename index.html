@@ -289,7 +289,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 /* ★ 2026/08/21: 見出し固定つきの表。
    .tw は overflow-x:auto のため既にスクロール領域になっており、
    高さを与えないと sticky が効かない。2段見出しは上段の高さぶん下段をずらす。 */
-.tw-sticky{max-height:calc(100vh - 300px);overflow:auto;}
+.tw-sticky{max-height:calc(100vh - 300px);overflow:auto;position:relative;}
+/* ★ 2026/08/21: 長い一覧の最上部へ戻るボタン。
+   一覧は .tw-sticky の中でスクロールするため、window ではなくこの要素を戻す。 */
+.to-top-btn{position:fixed;right:26px;bottom:26px;z-index:40;display:none;
+  align-items:center;gap:6px;padding:10px 16px;border-radius:22px;cursor:pointer;
+  border:1px solid var(--brd2);background:var(--sur2);color:var(--txt);
+  font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.35);}
+.to-top-btn:hover{background:var(--sur3);}
+.to-top-btn.show{display:inline-flex;}
 .tw-sticky thead{background:var(--bg3);}
 .tw-sticky thead th{position:sticky;z-index:6;background:var(--bg3);
   box-shadow:inset 0 -1px 0 var(--brd);border-bottom:none;}
@@ -1384,6 +1392,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
         </div>
         <div id="cmp-sum"></div>
+        <button type="button" id="cmp-to-top" class="to-top-btn" onclick="_cmpScrollTop()" title="最上部へ戻る">▲ 最上部へ</button>
         <div class="al al-i mb8" style="font-size:11px;">
           <span>ℹ️</span>
           <span>差異がある行の「修正」ボタンから、日報側・郵便局側どちらでも訂正できます。両方誤りの場合も同時に修正可能です。</span>
@@ -7873,7 +7882,7 @@ function renderCmp(){
   tbody.innerHTML=html.join('');
   _cmpSyncStickyHead();
   // 表を描き終えてから合計カードの位置を合わせる(実寸が確定するのを待つ)
-  requestAnimationFrame(function(){ try{ _cmpAlignSummary(); }catch(e){ console.error(e); } });
+  requestAnimationFrame(function(){ try{ _cmpAlignSummary(); _cmpBindToTop(); }catch(e){ console.error(e); } });
 }
 
 // 2段見出しの下段を、上段の実測高さぶんだけ下げる。
@@ -36086,6 +36095,30 @@ async function _cmpWriteBackYp(r){
     if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
     return true;
   }catch(e){ console.error('[_cmpWriteBackYp] エラー', e); return false; }
+}
+
+
+// ── 照合一覧: 最上部へ戻る (2026/08/21) ──
+//  一覧は .tw-sticky の内側でスクロールするため、ページ本体ではなく
+//  そのコンテナを先頭へ戻す。ページ側も上にいない場合は一緒に戻す。
+function _cmpScrollTop(){
+  const tb=$('tb-cmp');
+  const wrap=tb && tb.closest('.tw-sticky');
+  if(wrap) wrap.scrollTo({top:0, behavior:'smooth'});
+  const sec=$('s-cmp');
+  if(sec && typeof sec.scrollIntoView==='function') sec.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function _cmpBindToTop(){
+  const tb=$('tb-cmp'); if(!tb) return;
+  const wrap=tb.closest('.tw-sticky'); if(!wrap) return;
+  const btn=$('cmp-to-top'); if(!btn) return;
+  const upd=()=>{ btn.classList.toggle('show', wrap.scrollTop>240); };
+  if(!wrap._toTopBound){
+    wrap._toTopBound=true;
+    wrap.addEventListener('scroll', upd);
+  }
+  upd();
 }
 
 </script>
