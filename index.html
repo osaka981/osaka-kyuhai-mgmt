@@ -1398,9 +1398,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
             </tr>
           </thead>
           <tbody id="tb-cmp"></tbody>
@@ -1465,15 +1465,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <table>
           <thead><tr>
             <th style="width:120px;">項目</th>
-            <th class="tr" style="width:110px;">日報</th>
             <th class="tr" style="width:110px;">郵便局</th>
+            <th class="tr" style="width:110px;">日報</th>
             <th class="tr" style="width:80px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
           </tr></thead>
           <tbody id="tb-fix"></tbody>
           <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
             <td style="font-size:12.5px;font-weight:700;">完了＋転送還付<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">請求根拠</div></td>
-            <td class="tr mono fw7" id="fix-sum-n" style="font-size:16px;">0</td>
             <td class="tr mono fw7" id="fix-sum-p" style="font-size:16px;">0</td>
+            <td class="tr mono fw7" id="fix-sum-n" style="font-size:16px;">0</td>
             <td class="tr mono fw7" id="fix-sum-d" style="font-size:16px;">0</td>
           </tr></tfoot>
         </table>
@@ -7776,10 +7776,11 @@ function renderCmp(){
 
   const WD=['日','月','火','水','木','金','土'];
   const numCell=function(v){ return v===null||v===undefined ? '&#8212;' : fmt(v); };
+  // 差異(局−日報): プラス=郵便局のほうが多い=緑 / マイナス=赤 / 0=一致=緑
   const diffCell=function(d){
     if(d===null||d===undefined) return '<td class="tr">&#8212;</td>';
-    if(d===0) return '<td class="tr" style="color:var(--grn2);font-weight:700;">0</td>';
-    return '<td class="tr" style="color:var(--red2);font-weight:700;">'+(d>0?'+':'')+fmt(d)+'</td>';
+    const c = d<0 ? 'var(--red2)' : 'var(--grn2)';
+    return '<td class="tr" style="color:'+c+';font-weight:700;">'+(d>0?'+':'')+fmt(d)+'</td>';
   };
 
   const html=[];
@@ -7810,17 +7811,18 @@ function renderCmp(){
       html.push('<td>'+officeLink(r.office||'')+'</td>');
       html.push('<td>'+staffLink(r.staff||'')+'</td>');
       const dash='<span style="color:var(--txt3);">&#8212;</span>';
+      // 各グループとも 郵便局 → 日報 → 差異(局−日報) の順にそろえる
       // 完了＋転送還付
-      html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);">'+(orph?dash:fmt(d.nikki.kanryo))+'</td>');
-      html.push('<td class="tr fw7">'+numCell(d.hasPost?d.post.kanryo:null)+'</td>');
+      html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);">'+numCell(d.hasPost?d.post.kanryo:null)+'</td>');
+      html.push('<td class="tr fw7">'+(orph?dash:fmt(d.nikki.kanryo))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dKanryo));
       // 夜間
-      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--y60);">'+(orph?dash:fmt(d.nikki.yakan))+'</td>');
-      html.push('<td class="tr" style="color:var(--y60);">'+numCell(d.hasPost?d.post.yakan:null)+'</td>');
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--y60);">'+numCell(d.hasPost?d.post.yakan:null)+'</td>');
+      html.push('<td class="tr" style="color:var(--y60);">'+(orph?dash:fmt(d.nikki.yakan))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dYakan));
       // 170超
-      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
-      html.push('<td class="tr" style="color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
+      html.push('<td class="tr" style="color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
       html.push('<td style="border-left:2px solid var(--brd2);font-size:11px;">'
         +(orph?'<span style="color:var(--amb2);">日報の提出なし</span>':esc(r.cmpCause||''))+'</td>');
@@ -7835,22 +7837,22 @@ function renderCmp(){
     });
 
     // 日計
-    const dk=hasPostAny?sum.nk-sum.pk:null;
-    const dy=hasPostAny?sum.ny-sum.py:null;
-    const doo=hasPostAny?sum.no-sum.po:null;
+    const dk=hasPostAny?sum.pk-sum.nk:null;
+    const dy=hasPostAny?sum.py-sum.ny:null;
+    const doo=hasPostAny?sum.po-sum.no:null;
     html.push('<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">');
     html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
     html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
       +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span>'
       +(orphInDay?'<span style="font-size:11px;color:var(--amb2);margin-left:6px;">日報なしを含む</span>':'')+'</td>');
-    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);font-size:15px;">'+fmt(sum.nk)+'</td>');
-    html.push('<td class="tr fw7" style="font-size:15px;">'+(hasPostAny?fmt(sum.pk):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);font-size:15px;">'+(hasPostAny?fmt(sum.pk):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="font-size:15px;">'+fmt(sum.nk)+'</td>');
     html.push(diffCell(dk));
-    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--y60);">'+fmt(sum.ny)+'</td>');
-    html.push('<td class="tr fw7" style="color:var(--y60);">'+(hasPostAny?fmt(sum.py):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--y60);">'+(hasPostAny?fmt(sum.py):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--y60);">'+fmt(sum.ny)+'</td>');
     html.push(diffCell(dy));
-    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+fmt(sum.no)+'</td>');
-    html.push('<td class="tr fw7" style="color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--pur2);">'+fmt(sum.no)+'</td>');
     html.push(diffCell(doo));
     // その日の郵便局データを手入力する導線。営業所が1つに定まるときだけ渡す。
     const offs=[...new Set(g.rows.map(function(x){return x.office||'';}).filter(Boolean))];
@@ -9096,13 +9098,13 @@ function openCmpFix(id) {
       return `<tr>
         <td style="font-size:12.5px;font-weight:700;color:${c.c};">${c.l}
           ${c.sub?`<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">${c.sub}</div>`:''}</td>
-        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-n-${c.k}" value="${nv}"
-          oninput="_fixCalc()" onfocus="this.select()"
+        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-p-${c.k}" value="${pv}"
+          oninput="_fixCalc()" onfocus="this.select()" placeholder="未取込"
           style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
                  font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
                  background:var(--sur2);color:var(--txt);"></td>
-        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-p-${c.k}" value="${pv}"
-          oninput="_fixCalc()" onfocus="this.select()" placeholder="未取込"
+        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-n-${c.k}" value="${nv}"
+          oninput="_fixCalc()" onfocus="this.select()"
           style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
                  font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
                  background:var(--sur2);color:var(--txt);"></td>
@@ -9136,7 +9138,7 @@ function _fixCalc(){
       else{
         const d=pv-nv;                 // 郵便局 − 日報
         el.textContent=(d>0?'+':'')+d;
-        el.style.color=d===0?'var(--grn2)':'var(--red2)';
+        el.style.color=d<0?'var(--red2)':'var(--grn2)';
         if(d!==0) anyDiff=true;
       }
     }
@@ -9147,7 +9149,7 @@ function _fixCalc(){
   const sd=$('fix-sum-d');
   if(sd){
     if(!hasPost){ sd.textContent='—'; sd.style.color='var(--txt3)'; }
-    else{ const d=sp-sn; sd.textContent=(d>0?'+':'')+d; sd.style.color=d===0?'var(--grn2)':'var(--red2)'; }
+    else{ const d=sp-sn; sd.textContent=(d>0?'+':'')+d; sd.style.color=d<0?'var(--red2)':'var(--grn2)'; }
   }
   const hint=$('fix-hint');
   if(hint){
@@ -35903,7 +35905,7 @@ function _cmpSumHeader(rows, orphans, label){
   const dcell=(nv,pv)=>{
     if(!hasPost) return '<span style="color:var(--txt3);">—</span>';
     const d=pv-nv;
-    return `<span style="color:${d===0?'var(--grn2)':'var(--red2)'};">${d>0?'+':''}${n(d)}</span>`;
+    return `<span style="color:${d<0?'var(--red2)':'var(--grn2)'};">${d>0?'+':''}${n(d)}</span>`;
   };
 
   const group=(lab,col,nv,pv,sub)=>`
@@ -35912,9 +35914,9 @@ function _cmpSumHeader(rows, orphans, label){
       <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">${lab}
         ${sub?`<span style="font-size:9.5px;font-weight:400;color:var(--txt3);margin-left:4px;">${sub}</span>`:''}</div>
       <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
-        <span>日報</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(nv)}</b></div>
-      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
         <span>郵便局</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:${col};">${hasPost?n(pv):'—'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
+        <span>日報</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(nv)}</b></div>
       <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);
                   border-top:1px dashed var(--brd);margin-top:4px;padding-top:4px;">
         <span>差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
