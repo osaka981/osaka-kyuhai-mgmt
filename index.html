@@ -286,6 +286,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 
 /* TABLE */
 .tw{overflow-x:auto;width:100%;max-width:100%;}
+/* ★ 2026/08/21: 見出し固定つきの表。
+   .tw は overflow-x:auto のため既にスクロール領域になっており、
+   高さを与えないと sticky が効かない。2段見出しは上段の高さぶん下段をずらす。 */
+.tw-sticky{max-height:calc(100vh - 300px);overflow:auto;}
+.tw-sticky thead th{position:sticky;z-index:6;background:var(--bg3);
+  box-shadow:inset 0 -1px 0 var(--brd);border-bottom:none;}
+.tw-sticky thead tr:first-child th{top:0;}
+.tw-sticky thead tr:nth-child(2) th{top:var(--cmp-th1,26px);}
+.tw-sticky thead tr:first-child th:first-child{z-index:7;}
 table{width:100%;border-collapse:collapse;font-size:var(--sz-tbl,11.5px);}
 th{background:var(--bg3);padding:var(--sz-p-th,6px 9px);text-align:left;font-size:var(--sz-th,9px);color:var(--txt2);letter-spacing:.5px;font-weight:700;white-space:nowrap;border-bottom:1px solid var(--brd);}
 td{padding:var(--sz-p-td,7px 9px);border-bottom:1px solid var(--brd);}
@@ -1375,7 +1384,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span>ℹ️</span>
           <span>差異がある行の「修正」ボタンから、日報側・郵便局側どちらでも訂正できます。両方誤りの場合も同時に修正可能です。</span>
         </div>
-        <div class="tw"><table>
+        <div class="tw tw-sticky"><table>
           <thead>
             <tr>
               <th rowspan="2">日付</th><th rowspan="2">営業所</th><th rowspan="2">従事員</th>
@@ -1481,7 +1490,18 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
                 <div class="fg"><label>修正後の完了数（日報）</label><input type="number" id="fix-both-report" class="fi" min="0" placeholder="0"></div>
                 <div class="fg"><label>修正後の郵便局数</label><input type="number" id="fix-both-post" class="fi" min="0" placeholder="0"></div>
               </div>
-              <div id="fix-both-warn" style="display:none;margin-top:6px;font-size:10.5px;color:var(--red2);">⚠ 修正後も一致しません</div>
+                <div id="fix-both-warn" style="display:none;margin-top:6px;font-size:10.5px;color:var(--red2);">⚠ 修正後も一致しません</div>
+            </div>
+          </div>
+        </label>
+        <!-- ★ 2026/08/21: 差異を残したまま確定する選択肢。
+             定義の違いなど、そもそも一致しないケースが常にあるため必須。 -->
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--brd2);border-radius:6px;cursor:pointer;transition:background .12s;" id="fix-opt-D">
+          <input type="radio" name="fix-type" value="none" style="margin-top:3px;flex-shrink:0;" onchange="onFixTypeChange()">
+          <div>
+            <div style="font-weight:700;font-size:12px;color:var(--tel2);">差異を認めてこのまま確定する</div>
+            <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">
+              数量は両方そのまま。差異があることを確認済みとして照合済にします（持戻の数え方の違いなど）
             </div>
           </div>
         </label>
@@ -7743,8 +7763,8 @@ function renderCmp(){
     if(mon&&(!r.date||r.date.substring(0,7)!==mon)) return false;
     if(off&&r.office!==off) return false;
     const d=_cmpDiffs(r);
-    if(st==='差異あり'&&!d.any) return false;
-    if(st==='照合済'&&(d.any||!r.cmpOk)) return false;
+    if(st==='差異あり'&&(!d.any||r.cmpOk)) return false;   // 了承済みは差異一覧から外す
+    if(st==='照合済'&&!r.cmpOk) return false;
     if(st==='未照合'&&r.cmpOk) return false;
     return true;
   });
@@ -7752,7 +7772,7 @@ function renderCmp(){
   let orphans=_cmpOrphanPostLogs(mon, off);
   if(st==='照合済'||st==='未照合') orphans=[];   // 「日報なし」は差異扱い
   const ok=rows.filter(function(r){return r.cmpOk;}).length;
-  const ng=rows.filter(function(r){return _cmpDiffs(r).any;}).length + orphans.length;
+  const ng=rows.filter(function(r){return _cmpDiffs(r).any && !r.cmpOk;}).length + orphans.length;
   const un=rows.filter(function(r){return !r.cmpOk&&!_cmpDiffs(r).hasPost;}).length;
   if($('cmp-ok-b')) $('cmp-ok-b').textContent='照合済 '+ok;
   if($('cmp-ng-b')) $('cmp-ng-b').textContent='差異 '+ng;
@@ -7794,9 +7814,10 @@ function renderCmp(){
     g.rows.forEach(function(r,ri){
       const d=_cmpDiffs(r);
       const orph=!!r.__orphan;
-      const cls=orph?'tr-ng':d.any?'tr-ng':r.cmpOk?'tr-ok':'';
-      const scls=orph?'ba':r.cmpOk?'bg':d.any?'br':'bz';
-      const stxt=orph?'日報なし':r.cmpOk?'照合済':d.any?'差異':'未照合';
+      const acc=!orph && r.cmpOk && d.any;             // 差異を了承して確定した行
+      const cls=orph?'tr-ng':(d.any&&!r.cmpOk)?'tr-ng':r.cmpOk?'tr-ok':'';
+      const scls=orph?'ba':acc?'ba':r.cmpOk?'bg':d.any?'br':'bz';
+      const stxt=orph?'日報なし':acc?'差異了承':r.cmpOk?'照合済':d.any?'差異':'未照合';
       if(!orph){ sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata; }
       if(d.hasPost){
         hasPostAny=true;
@@ -7861,6 +7882,19 @@ function renderCmp(){
     html.push('</tr>');
   });
   tbody.innerHTML=html.join('');
+  _cmpSyncStickyHead();
+}
+
+// 2段見出しの下段を、上段の実測高さぶんだけ下げる。
+// 表示サイズ切替(s/m/l/xl)で行の高さが変わるため、固定値にはしない。
+function _cmpSyncStickyHead(){
+  const tb=$('tb-cmp'); if(!tb) return;
+  const table=tb.closest('table'); if(!table) return;
+  const wrap=table.closest('.tw-sticky'); if(!wrap) return;
+  const r1=table.querySelector('thead tr:first-child');
+  if(!r1) return;
+  const h=Math.round(r1.getBoundingClientRect().height);
+  if(h>0) wrap.style.setProperty('--cmp-th1', h+'px');
 }
 
 function renderCustTbl(){
@@ -9110,8 +9144,8 @@ function onFixTypeChange(){
   $('fix-post-inp').style.display=val==='post'?'block':'none';
   $('fix-both-inp').style.display=val==='both'?'block':'none';
   // オプション背景ハイライト
-  ['A','B','C'].forEach((x,i)=>{
-    const types=['report','post','both'];
+  ['A','B','C','D'].forEach((x,i)=>{
+    const types=['report','post','both','none'];
     const el=$('fix-opt-'+x);
     if(el)el.style.background=val===types[i]?'rgba(22,160,133,.08)':'';
   });
@@ -9168,15 +9202,20 @@ function applyFix(){
       try{ if(typeof fbSet==='function') fbSet('post_logs', logs); }catch(e){}
     }
   }
-  r.cmpCause = reason || (type==='report'?'日報誤り':type==='post'?'郵便局誤り':'両方誤り');
+  r.cmpCause = reason || (type==='report'?'日報誤り':type==='post'?'郵便局誤り':type==='both'?'両方誤り':'差異を了承');
   r.cause = r.cmpCause;
+  // ★ 2026/08/21: この画面で確定した時点で人が内容を確認済み。
+  //   差異が残っていても照合済とし、了承したことを別途フラグで残す。
   const _d2=_cmpDiffs(r);
-  r.status = _d2.any ? '差異あり' : '照合済';
-  r.cmpOk  = !_d2.any;
+  r.cmpOk = true;
+  r.diffAccepted = _d2.any;
+  r.status = _d2.any ? '差異了承' : '照合済';
 
   closeM('m-cmp-fix');
   renderCmp();renderDash();renderDel();
-  alert(`修正を適用しました。${r.status==='照合済'?'\n✅ 差異0 → 照合済みになりました':'\n⚠️ まだ差異があります'}`);
+  alert(r.diffAccepted
+    ? `差異を了承して確定しました。\n数量は両方そのままです（この行は差異一覧に出なくなります）`
+    : `修正を適用しました。\n差異0 → 照合済みになりました`);
 }
 
 function runAutoCompare(){
