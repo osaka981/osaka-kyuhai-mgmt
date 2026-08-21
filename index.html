@@ -290,8 +290,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
    .tw は overflow-x:auto のため既にスクロール領域になっており、
    高さを与えないと sticky が効かない。2段見出しは上段の高さぶん下段をずらす。 */
 .tw-sticky{max-height:calc(100vh - 300px);overflow:auto;}
+.tw-sticky thead{background:var(--bg3);}
 .tw-sticky thead th{position:sticky;z-index:6;background:var(--bg3);
   box-shadow:inset 0 -1px 0 var(--brd);border-bottom:none;}
+/* 半透明の色を敷いた見出しでも下の行が透けないよう、不透明の下地を保証する */
+.tw-sticky thead tr:first-child th{background-color:var(--bg3);}
 .tw-sticky thead tr:first-child th{top:0;}
 .tw-sticky thead tr:nth-child(2) th{top:var(--cmp-th1,26px);}
 .tw-sticky thead tr:first-child th:first-child{z-index:7;}
@@ -1388,9 +1391,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <thead>
             <tr>
               <th rowspan="2">日付</th><th rowspan="2">営業所</th><th rowspan="2">従事員</th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(60,160,90,.10);">完了＋転送還付</th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(80,140,220,.10);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:rgba(150,110,200,.10);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">完了＋転送還付</th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(80,140,220,.13),rgba(80,140,220,.13)),var(--bg3);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(150,110,200,.13),rgba(150,110,200,.13)),var(--bg3);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
