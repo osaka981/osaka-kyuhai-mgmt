@@ -1398,9 +1398,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
-              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異</th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
             </tr>
           </thead>
           <tbody id="tb-cmp"></tbody>
@@ -1467,7 +1467,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th style="width:120px;">項目</th>
             <th class="tr" style="width:110px;">日報</th>
             <th class="tr" style="width:110px;">郵便局</th>
-            <th class="tr" style="width:70px;">差異</th>
+            <th class="tr" style="width:80px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
           </tr></thead>
           <tbody id="tb-fix"></tbody>
           <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
@@ -9134,7 +9134,7 @@ function _fixCalc(){
     if(el){
       if(!has){ el.textContent='—'; el.style.color='var(--txt3)'; }
       else{
-        const d=nv-pv;
+        const d=pv-nv;                 // 郵便局 − 日報
         el.textContent=(d>0?'+':'')+d;
         el.style.color=d===0?'var(--grn2)':'var(--red2)';
         if(d!==0) anyDiff=true;
@@ -9147,7 +9147,7 @@ function _fixCalc(){
   const sd=$('fix-sum-d');
   if(sd){
     if(!hasPost){ sd.textContent='—'; sd.style.color='var(--txt3)'; }
-    else{ const d=sn-sp; sd.textContent=(d>0?'+':'')+d; sd.style.color=d===0?'var(--grn2)':'var(--red2)'; }
+    else{ const d=sp-sn; sd.textContent=(d>0?'+':'')+d; sd.style.color=d===0?'var(--grn2)':'var(--red2)'; }
   }
   const hint=$('fix-hint');
   if(hint){
@@ -9246,11 +9246,12 @@ function runAutoCompare(){
       return;
     }
     r.status='差異あり'; r.cmpOk=false; ng++;
-    r._diffDir = d.dKanryo>0 ? 'over' : d.dKanryo<0 ? 'under' : 'saikei';
+    // 郵便局 − 日報。プラスなら局のほうが多い(日報の計上漏れ)。
+    r._diffDir = d.dKanryo>0 ? 'under' : d.dKanryo<0 ? 'over' : 'saikei';
 
     // 局のほうが多い場合、暫定ドライバーの合算が原因かもしれないので候補を出す
-    if(d.dKanryo<0){
-      const diff=-d.dKanryo;
+    if(d.dKanryo>0){
+      const diff=d.dKanryo;
       const matchTemp=tempDrivers.filter(td=>{
         const mergeDriver=D.staff.find(s=>s.empNo===td.tempMergeId||s.id===td.tempMergeId);
         if(!mergeDriver) return false;
@@ -35698,9 +35699,12 @@ function _cmpDiffs(r){
     ogata : n(r.postOgata),
   } : null;
 
-  const dKanryo = hasPost ? nikki.kanryo - post.kanryo : null;
-  const dYakan  = hasPost ? nikki.yakan  - post.yakan  : null;
-  const dOgata  = hasPost ? nikki.ogata  - post.ogata  : null;
+  // ★ 2026/08/21: 差異は「郵便局 − 日報」。
+  //   プラス = 郵便局のほうが多い(＝日報の計上漏れの可能性)。
+  //   請求側を基準に見るため、この向きで全画面そろえる。
+  const dKanryo = hasPost ? post.kanryo - nikki.kanryo : null;
+  const dYakan  = hasPost ? post.yakan  - nikki.yakan  : null;
+  const dOgata  = hasPost ? post.ogata  - nikki.ogata  : null;
   return {
     nikki, post, hasPost, dKanryo, dYakan, dOgata,
     any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
@@ -35895,9 +35899,10 @@ function _cmpSumHeader(rows, orphans, label){
   });
 
   const n=v=>(v||0).toLocaleString();
-  const dcell=(a,b)=>{
+  // 差異は「郵便局 − 日報」
+  const dcell=(nv,pv)=>{
     if(!hasPost) return '<span style="color:var(--txt3);">—</span>';
-    const d=a-b;
+    const d=pv-nv;
     return `<span style="color:${d===0?'var(--grn2)':'var(--red2)'};">${d>0?'+':''}${n(d)}</span>`;
   };
 
@@ -35912,7 +35917,8 @@ function _cmpSumHeader(rows, orphans, label){
         <span>郵便局</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:${col};">${hasPost?n(pv):'—'}</b></div>
       <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);
                   border-top:1px dashed var(--brd);margin-top:4px;padding-top:4px;">
-        <span>差異</span><b style="font-family:'DM Mono',monospace;font-size:17px;">${dcell(nv,pv)}</b></div>
+        <span>差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
+        <b style="font-family:'DM Mono',monospace;font-size:17px;">${dcell(nv,pv)}</b></div>
     </div>`;
 
   return `<div style="background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:11px 13px;margin-bottom:10px;">
