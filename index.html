@@ -4839,6 +4839,9 @@ const LS_KEYS = {
   // ★ 2026/08/18: 郵便局から受領した調書データ(請求根拠)。
   //   日報(YP)とは別物。相互に上書きせず、郵便局照合タブで突き合わせる。
   POSTLOG:            'nikki_post_logs',
+  // ★ 2026/08/21: 照合の状態(照合済/差異了承/原因/履歴)。
+  //   D.delivery は毎回 yp_logs から作り直されるため、状態はここに別途保存する。
+  CMPSTATE:           'nikki_cmp_state',
 };
 
 // 休業調査システム データ(グローバル) - lsGet 後に初期化される
@@ -6124,6 +6127,10 @@ function applyFirebaseData() {
     const fbColIds = new Set(fbDelCol.map(r => String(r.id)));
     D.deliveryCol = [...D.deliveryCol.filter(r => !fbColIds.has(String(r.id))), ...fbDelCol];
   }
+
+  // ★ 2026/08/21: D.delivery を作り直した直後に、保存済みの照合状態を貼り直す
+  try{ if(typeof _cmpStateApply==='function') _cmpStateApply(); }
+  catch(e){ console.error('cmpState apply error:', e); }
 
   // 集荷日報（COL_LOGS → D.pickup）
   const colLogs = lsGet(LS_KEYS.COL, null);
@@ -9222,6 +9229,10 @@ function applyFix(opt){
   r.cmpCause=reason || (d2.any?'差異を了承':'修正済');
   r.cause=r.cmpCause;
 
+  // ★ 2026/08/21: ここまでは全てメモリ上の変更。保存しないとリロードで消える。
+  if(!opt.accept) _cmpWriteBackYp(r);   // 日報側の数量を yp_logs に書き戻す
+  _cmpStateSave(r);                     // 照合状態を別テーブルに保存
+
   closeM('m-cmp-fix');
   renderCmp();renderDash();renderDel();
   const msg = d2.any
@@ -9270,6 +9281,19 @@ function runAutoCompare(){
       }
     }
   });
+  // 自動照合の結果も保存する(リロードで未照合に戻らないように)
+  try{
+    const all=_cmpStateAll();
+    D.delivery.forEach(r=>{
+      if(!r.cmpOk && r.status!=='差異あり') return;
+      all[_cmpStateKey(r)]={cmpOk:!!r.cmpOk, diffAccepted:!!r.diffAccepted,
+        cmpCause:r.cmpCause||'', status:r.status||'',
+        fixHistory:r.fixHistory||[], at:new Date().toISOString()};
+    });
+    lsSet(LS_KEYS.CMPSTATE, all);
+    if(typeof fbSet==='function') fbSet('cmp_state', all);
+  }catch(e){ console.error('[runAutoCompare] 状態保存エラー', e); }
+
   renderCmp();renderDash();
   alert(`自動照合完了\n照合済:${ok}件 / 差異あり:${ng}件 / 郵便局データ未着:${un}件`);
 }
@@ -35996,6 +36020,72 @@ function _cmpAlignSummary(){
     });
     window.addEventListener('resize',()=>{ try{ _cmpAlignSummary(); }catch(e){} });
   }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  照合状態の永続化 (2026/08/21)
+//   D.delivery は起動のたび yp_logs から組み立て直されるため、
+//   そこに書いた cmpOk / cmpCause は次回起動で必ず消える。
+//   日付×従事員をキーに別テーブルへ保存し、読み込み後に貼り直す。
+// ════════════════════════════════════════════════════════════
+function _cmpStateKey(r){ return (r.date||'')+'__'+(r.staff||''); }
+
+function _cmpStateAll(){
+  try{ const v=lsGet(LS_KEYS.CMPSTATE, {}); return (v&&typeof v==='object')?v:{}; }
+  catch(e){ return {}; }
+}
+
+async function _cmpStateSave(r){
+  const all=_cmpStateAll();
+  all[_cmpStateKey(r)]={
+    cmpOk:!!r.cmpOk,
+    diffAccepted:!!r.diffAccepted,
+    cmpCause:r.cmpCause||'',
+    status:r.status||'',
+    fixHistory:r.fixHistory||[],
+    at:new Date().toISOString(),
+  };
+  lsSet(LS_KEYS.CMPSTATE, all);
+  try{ if(typeof fbSet==='function') await fbSet('cmp_state', all); }
+  catch(e){ console.error('[_cmpStateSave] FB保存エラー', e); }
+}
+
+// 起動時・データ再構築後に呼ぶ
+function _cmpStateApply(){
+  const all=_cmpStateAll();
+  if(!all || !Object.keys(all).length) return;
+  (D.delivery||[]).forEach(r=>{
+    const v=all[_cmpStateKey(r)];
+    if(!v) return;
+    r.cmpOk=!!v.cmpOk;
+    r.diffAccepted=!!v.diffAccepted;
+    if(v.cmpCause){ r.cmpCause=v.cmpCause; r.cause=v.cmpCause; }
+    if(v.status) r.status=v.status;
+    if(v.fixHistory) r.fixHistory=v.fixHistory;
+  });
+}
+
+// 日報側の数量を yp_logs にも書き戻す。
+// これをしないと、次回起動時に yp_logs の古い値で D.delivery が作り直される。
+async function _cmpWriteBackYp(r){
+  try{
+    const ypLogs=lsGet(LS_KEYS.YP,[])||[];
+    const i=ypLogs.findIndex(x=>String(x.id)===String(r.id));
+    if(i<0) return false;
+    const f=ypLogs[i].form||(ypLogs[i].form={});
+    const tgt=f.del||f;                       // 統合形式(form.del)と旧形式の両対応
+    tgt.mochidashi=r.mochidashi||0;
+    tgt.kanryo=r.kanryo||0;
+    tgt.tenso=r.tenso||0;
+    tgt.yakan=r.yakan||0;
+    tgt.ogata=r.ogata||0;
+    tgt.mochimodoiri=r.mochimodoiri||0;
+    ypLogs[i].updatedAt=new Date().toISOString();
+    lsSet(LS_KEYS.YP, ypLogs);
+    if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
+    return true;
+  }catch(e){ console.error('[_cmpWriteBackYp] エラー', e); return false; }
 }
 
 </script>
