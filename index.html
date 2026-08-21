@@ -1392,9 +1392,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <thead>
             <tr>
               <th rowspan="2">日付</th><th rowspan="2">営業所</th><th rowspan="2">従事員</th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">完了＋転送還付</th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(80,140,220,.13),rgba(80,140,220,.13)),var(--bg3);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
-              <th colspan="3" class="tr" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(150,110,200,.13),rgba(150,110,200,.13)),var(--bg3);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th colspan="3" class="tr cmp-grp" data-grp="0" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">完了＋転送還付</th>
+              <th colspan="3" class="tr cmp-grp" data-grp="1" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(80,140,220,.13),rgba(80,140,220,.13)),var(--bg3);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th colspan="3" class="tr cmp-grp" data-grp="2" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(150,110,200,.13),rgba(150,110,200,.13)),var(--bg3);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
@@ -7865,6 +7865,8 @@ function renderCmp(){
   });
   tbody.innerHTML=html.join('');
   _cmpSyncStickyHead();
+  // 表を描き終えてから合計カードの位置を合わせる(実寸が確定するのを待つ)
+  requestAnimationFrame(function(){ try{ _cmpAlignSummary(); }catch(e){ console.error(e); } });
 }
 
 // 2段見出しの下段を、上段の実測高さぶんだけ下げる。
@@ -35909,7 +35911,7 @@ function _cmpSumHeader(rows, orphans, label){
   };
 
   const group=(lab,col,nv,pv,sub)=>`
-    <div style="flex:1 1 170px;max-width:300px;background:var(--sur2);border:1px solid var(--brd2);
+    <div class="cmp-sum-card" style="flex:1 1 170px;max-width:300px;background:var(--sur2);border:1px solid var(--brd2);
                 border-left:4px solid ${col};border-radius:6px;padding:8px 12px;">
       <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">${lab}
         ${sub?`<span style="font-size:9.5px;font-weight:400;color:var(--txt3);margin-left:4px;">${sub}</span>`:''}</div>
@@ -35934,7 +35936,7 @@ function _cmpSumHeader(rows, orphans, label){
         ${(orphans&&orphans.length)?`<span class="bdg ba">日報なし ${orphans.length}</span>`:''}
       </div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+    <div id="cmp-sum-cards" style="display:flex;flex-wrap:wrap;gap:8px;">
       ${group('完了＋転送還付','var(--grn2)',t.nk,t.pk,'請求根拠')}
       ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
       ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
@@ -35944,6 +35946,56 @@ function _cmpSumHeader(rows, orphans, label){
       上の差異には未取込分がそのまま含まれています。取込が済むまで差異の数字は目安としてご覧ください。
     </div>`:''}
   </div>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  合計カードを表の列グループに合わせる (2026/08/21)
+//   表の列幅は中身によって決まるため、CSSでは合わせられない。
+//   描画後に実寸を測り、カードの左位置と幅をそろえる。
+//   横スクロール時もずれないよう、スクロール量ぶん平行移動させる。
+//   幅が足りない画面では、そろえるのをやめて折り返す(可読性を優先)。
+// ════════════════════════════════════════════════════════════
+function _cmpAlignSummary(){
+  const cards=$('cmp-sum-cards'); if(!cards) return;
+  const tb=$('tb-cmp'); if(!tb) return;
+  const table=tb.closest('table'); if(!table) return;
+  const wrap=table.closest('.tw-sticky'); if(!wrap) return;
+  const grps=[...table.querySelectorAll('thead th.cmp-grp')];
+  const items=[...cards.querySelectorAll('.cmp-sum-card')];
+  if(grps.length!==3 || items.length!==3) return;
+
+  const reset=()=>{
+    cards.style.flexWrap='wrap';
+    cards.style.paddingLeft='';
+    cards.style.transform='';
+    cards.parentElement.style.overflow='';
+    items.forEach(el=>{ el.style.flex='1 1 170px'; el.style.maxWidth='300px'; });
+  };
+
+  const tRect=table.getBoundingClientRect();
+  const rects=grps.map(g=>g.getBoundingClientRect());
+  const left=rects[0].left - tRect.left;
+  // 表が描画されていない/極端に狭い場合は従来の並びに戻す
+  if(!tRect.width || rects.some(r=>r.width<90) || left<120){ reset(); return; }
+
+  cards.style.flexWrap='nowrap';
+  cards.style.paddingLeft=left+'px';
+  cards.parentElement.style.overflow='hidden';
+  items.forEach((el,i)=>{
+    el.style.flex='0 0 '+Math.max(0, rects[i].width-8)+'px';
+    el.style.maxWidth='none';
+  });
+  // 横スクロールに追従
+  cards.style.transform='translateX('+(-wrap.scrollLeft)+'px)';
+  if(!wrap._cmpAlignBound){
+    wrap._cmpAlignBound=true;
+    wrap.addEventListener('scroll',()=>{
+      const c=$('cmp-sum-cards');
+      if(c && c.style.flexWrap==='nowrap') c.style.transform='translateX('+(-wrap.scrollLeft)+'px)';
+    });
+    window.addEventListener('resize',()=>{ try{ _cmpAlignSummary(); }catch(e){} });
+  }
 }
 
 </script>
