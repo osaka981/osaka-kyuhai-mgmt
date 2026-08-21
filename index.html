@@ -1383,6 +1383,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <span class="bdg bz" id="cmp-un-b">未照合 0</span>
           </div>
         </div>
+        <div id="cmp-sum"></div>
         <div class="al al-i mb8" style="font-size:11px;">
           <span>ℹ️</span>
           <span>差異がある行の「修正」ボタンから、日報側・郵便局側どちらでも訂正できます。両方誤りの場合も同時に修正可能です。</span>
@@ -1453,71 +1454,42 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- 照合修正モーダル -->
     <div id="m-cmp-fix" class="mbg">
-    <div class="modal modal-n">
-      <div class="mhd"><div class="mtt">🔧 照合差異の修正</div><button class="mx" onclick="closeM('m-cmp-fix')">×</button></div>
-      <div id="cmp-fix-info" style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:12px;font-size:11.5px;"></div>
+    <div class="modal modal-n" style="max-width:640px;">
+      <div class="mhd"><div class="mtt">照合差異の修正</div><button class="mx" onclick="closeM('m-cmp-fix')">×</button></div>
 
-      <div class="al al-w mb12" id="cmp-fix-diff-alert" style="font-size:11px;"></div>
+      <div id="cmp-fix-info" style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;"></div>
 
-      <!-- 修正方法選択 -->
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--brd2);border-radius:6px;cursor:pointer;transition:background .12s;" id="fix-opt-A">
-          <input type="radio" name="fix-type" value="report" style="margin-top:3px;flex-shrink:0;" onchange="onFixTypeChange()">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:var(--blu2);">📋 日報側を修正する</div>
-            <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">日報の完了数が誤っていた場合</div>
-            <div id="fix-report-inp" style="display:none;margin-top:8px;">
-              <div class="fg"><label>修正後の完了数</label><input type="number" id="fix-report-val" class="fi" min="0" placeholder="0"></div>
-            </div>
-          </div>
-        </label>
-
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--brd2);border-radius:6px;cursor:pointer;transition:background .12s;" id="fix-opt-B">
-          <input type="radio" name="fix-type" value="post" style="margin-top:3px;flex-shrink:0;" onchange="onFixTypeChange()">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:var(--grn2);">📮 郵便局側を修正する</div>
-            <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">郵便局データが誤っていた場合</div>
-            <div id="fix-post-inp" style="display:none;margin-top:8px;">
-              <div class="fg"><label>修正後の郵便局数</label><input type="number" id="fix-post-val" class="fi" min="0" placeholder="0"></div>
-            </div>
-          </div>
-        </label>
-
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--brd2);border-radius:6px;cursor:pointer;transition:background .12s;" id="fix-opt-C">
-          <input type="radio" name="fix-type" value="both" style="margin-top:3px;flex-shrink:0;" onchange="onFixTypeChange()">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:var(--amb2);">⚠️ 両方修正する</div>
-            <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">日報・郵便局データどちらも誤っていた場合</div>
-            <div id="fix-both-inp" style="display:none;margin-top:8px;">
-              <div class="f2" style="gap:8px;">
-                <div class="fg"><label>修正後の完了数（日報）</label><input type="number" id="fix-both-report" class="fi" min="0" placeholder="0"></div>
-                <div class="fg"><label>修正後の郵便局数</label><input type="number" id="fix-both-post" class="fi" min="0" placeholder="0"></div>
-              </div>
-                <div id="fix-both-warn" style="display:none;margin-top:6px;font-size:10.5px;color:var(--red2);">⚠ 修正後も一致しません</div>
-            </div>
-          </div>
-        </label>
-        <!-- ★ 2026/08/21: 差異を残したまま確定する選択肢。
-             定義の違いなど、そもそも一致しないケースが常にあるため必須。 -->
-        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--brd2);border-radius:6px;cursor:pointer;transition:background .12s;" id="fix-opt-D">
-          <input type="radio" name="fix-type" value="none" style="margin-top:3px;flex-shrink:0;" onchange="onFixTypeChange()">
-          <div>
-            <div style="font-weight:700;font-size:12px;color:var(--tel2);">差異を認めてこのまま確定する</div>
-            <div style="font-size:10.5px;color:var(--txt2);margin-top:2px;">
-              数量は両方そのまま。差異があることを確認済みとして照合済にします（持戻の数え方の違いなど）
-            </div>
-          </div>
-        </label>
+      <!-- ★ 2026/08/21: 完了数だけでなく4項目すべてを両側で直せるようにした。
+           夜間・170超は完了の内数(再掲)なので、完了＋転送とは別に突き合わせる。 -->
+      <div class="tw" style="margin-bottom:10px;">
+        <table>
+          <thead><tr>
+            <th style="width:120px;">項目</th>
+            <th class="tr" style="width:110px;">日報</th>
+            <th class="tr" style="width:110px;">郵便局</th>
+            <th class="tr" style="width:70px;">差異</th>
+          </tr></thead>
+          <tbody id="tb-fix"></tbody>
+          <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
+            <td style="font-size:12.5px;font-weight:700;">完了＋転送還付<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">請求根拠</div></td>
+            <td class="tr mono fw7" id="fix-sum-n" style="font-size:16px;">0</td>
+            <td class="tr mono fw7" id="fix-sum-p" style="font-size:16px;">0</td>
+            <td class="tr mono fw7" id="fix-sum-d" style="font-size:16px;">0</td>
+          </tr></tfoot>
+        </table>
       </div>
+
+      <div id="fix-hint" style="font-size:11px;color:var(--txt2);margin-bottom:10px;"></div>
 
       <div class="fg mb12">
         <label>修正理由・メモ</label>
-        <input type="text" id="fix-reason" class="fi" placeholder="例：入力ミス、郵便局データ誤り など">
+        <input type="text" id="fix-reason" class="fi" placeholder="例：入力ミス、郵便局データ誤り、持戻の数え方の違い など">
       </div>
 
       <div class="mft">
         <button class="btn b-gh" onclick="closeM('m-cmp-fix')">キャンセル</button>
-        <button class="btn b-grn" onclick="applyFix()">✅ 修正を適用して照合済みにする</button>
+        <button class="btn b-blu" onclick="applyFix({accept:true})">差異を認めて確定</button>
+        <button class="btn b-grn" onclick="applyFix()">修正を適用</button>
       </div>
     </div>
     </div>
@@ -7781,6 +7753,11 @@ function renderCmp(){
   if($('cmp-ng-b')) $('cmp-ng-b').textContent='差異 '+ng;
   if($('cmp-un-b')) $('cmp-un-b').textContent='未照合 '+un;
   const nb=$('nb-diff'); if(nb){nb.textContent=ng+un;nb.style.display=(ng+un)>0?'':'none';}
+  // 絞り込んだ範囲全体の合計(2026/08/21)
+  const _cs=$('cmp-sum');
+  if(_cs) _cs.innerHTML=(rows.length||orphans.length)
+    ? _cmpSumHeader(rows, orphans, (mon||'全期間')+(off?'　'+off:''))
+    : '';
   const tbody=$('tb-cmp'); if(!tbody) return;
   if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
@@ -9096,129 +9073,157 @@ function approveCmp(id){
 let cmpFixTargetId = null;
 
 function openCmpFix(id) {
-  // dataset.id は文字列、r.id は Date.now() の数値なので
-  //   === では絶対に一致せず「修正」ボタンが無反応だった。文字列で比較する。
+  // dataset.id は文字列、r.id は Date.now() の数値なので String で比較する
   cmpFixTargetId = String(id);
   const r = D.delivery.find(x=>String(x.id)===String(id));
   if(!r){ alert('対象の日報が見つかりませんでした'); return; }
   _cmpJoinPostLogs();
-  const d = _cmpDiffs(r);
-  const diff = d.hasPost ? d.dKanryo : null;
 
-  $('cmp-fix-info').innerHTML=`
-    <div class="flbc mb8">
-      <span class="fw7">${r.date} ／ ${r.staff}</span>
-      <span class="xs muted">${r.office}</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
-      <div><div class="xs muted">日報（完了＋転送）</div><div style="font-size:20px;font-weight:700;color:var(--blu2);">${d.nikki.kanryo}</div></div>
-      <div><div class="xs muted">郵便局データ</div><div style="font-size:20px;font-weight:700;color:var(--grn2);">${d.hasPost?d.post.kanryo:'未取込'}</div></div>
-      <div><div class="xs muted">差異</div><div style="font-size:20px;font-weight:700;color:${diff?'var(--red2)':'var(--grn2)'};">${diff!==null?(diff>0?'+':'')+diff:'−'}</div></div>
-    </div>
-    ${d.hasPost&&(d.dYakan!==0||d.dOgata!==0)?`
-    <div style="margin-top:8px;padding:7px 10px;background:var(--bg3);border-radius:6px;font-size:11.5px;color:var(--txt2);">
-      再掲の差異：
-      ${d.dYakan!==0?`<b style="color:var(--y60);">夜間 日報${d.nikki.yakan} / 局${d.post.yakan}</b>　`:''}
-      ${d.dOgata!==0?`<b style="color:var(--pur2);">170超 日報${d.nikki.ogata} / 局${d.post.ogata}</b>`:''}
-      <span style="color:var(--txt3);">（ここでは完了数のみ修正できます。再掲は日報一覧から訂正してください）</span>
-    </div>`:''}`;
+  const info=$('cmp-fix-info');
+  if(info){
+    info.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:14px;font-weight:700;color:var(--txt);">${esc(r.date||'')}　${esc(r.staff||'')}</div>
+      <div style="font-size:12px;color:var(--txt2);">${esc(r.office||'')}</div>
+    </div>`;
+  }
+  if($('fix-reason')) $('fix-reason').value=r.cmpCause||'';
 
-  $('cmp-fix-diff-alert').innerHTML = diff===null ? '' :
-    diff>0
-      ? `🚨 <strong>要確認</strong>：日報が郵便局より<strong>${Math.abs(diff)}件多い</strong>です。過大申告の可能性があります。`
-      : `ℹ️ 郵便局が日報より<strong>${Math.abs(diff)}件多い</strong>です。修正せずそのまま確定できます。`;
-
-  // ラジオ・入力をリセット
-  document.querySelectorAll('input[name="fix-type"]').forEach(el=>el.checked=false);
-  ['fix-report-inp','fix-post-inp','fix-both-inp'].forEach(id=>{const el=$(id);if(el)el.style.display='none';});
-  if($('fix-report-val'))$('fix-report-val').value=r.kanryo;
-  if($('fix-post-val'))$('fix-post-val').value=d.hasPost?r.postKanryo:0;
-  if($('fix-both-report'))$('fix-both-report').value=r.kanryo;
-  if($('fix-both-post'))$('fix-both-post').value=d.hasPost?r.postKanryo:0;
-  if($('fix-reason'))$('fix-reason').value=r.cause||'';
-  if($('fix-both-warn'))$('fix-both-warn').style.display='none';
-
+  const tb=$('tb-fix');
+  if(tb){
+    tb.innerHTML=FIX_COLS.map(c=>{
+      const nv=Math.max(0,parseInt(r[c.n])||0);
+      const pv=(r[c.p]===undefined||r[c.p]===null)?'':Math.max(0,parseInt(r[c.p])||0);
+      return `<tr>
+        <td style="font-size:12.5px;font-weight:700;color:${c.c};">${c.l}
+          ${c.sub?`<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">${c.sub}</div>`:''}</td>
+        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-n-${c.k}" value="${nv}"
+          oninput="_fixCalc()" onfocus="this.select()"
+          style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
+                 font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
+                 background:var(--sur2);color:var(--txt);"></td>
+        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-p-${c.k}" value="${pv}"
+          oninput="_fixCalc()" onfocus="this.select()" placeholder="未取込"
+          style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
+                 font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
+                 background:var(--sur2);color:var(--txt);"></td>
+        <td class="tr mono fw7" id="fx-d-${c.k}" style="font-size:14px;">0</td>
+      </tr>`;
+    }).join('');
+  }
+  _fixCalc();
   openM('m-cmp-fix');
 }
 
-function onFixTypeChange(){
-  const val=document.querySelector('input[name="fix-type"]:checked')?.value;
-  $('fix-report-inp').style.display=val==='report'||val==='both'?'block':'none';
-  $('fix-post-inp').style.display=val==='post'?'block':'none';
-  $('fix-both-inp').style.display=val==='both'?'block':'none';
-  // オプション背景ハイライト
-  ['A','B','C','D'].forEach((x,i)=>{
-    const types=['report','post','both','none'];
-    const el=$('fix-opt-'+x);
-    if(el)el.style.background=val===types[i]?'rgba(22,160,133,.08)':'';
+// 修正画面で扱う4項目(日報側フィールド / 郵便局側フィールド)
+const FIX_COLS=[
+  {k:'kanryo', n:'kanryo', p:'postKanryo', l:'配達完了',   c:'var(--grn2)'},
+  {k:'tenso',  n:'tenso',  p:'postTenso',  l:'転送・還付', c:'var(--tel2)'},
+  {k:'yakan',  n:'yakan',  p:'postYakan',  l:'夜間',       c:'var(--y60)',  sub:'完了の内数'},
+  {k:'ogata',  n:'ogata',  p:'postOgata',  l:'170超',      c:'var(--pur2)', sub:'完了の内数'},
+];
+
+function _fixCalc(){
+  let sn=0, sp=0, anyDiff=false, hasPost=false;
+  FIX_COLS.forEach(c=>{
+    const nv=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
+    const praw=$('fx-p-'+c.k)?.value;
+    const has=!(praw===''||praw===undefined||praw===null);
+    const pv=has?Math.max(0,parseInt(praw)||0):null;
+    if(has) hasPost=true;
+    const el=$('fx-d-'+c.k);
+    if(el){
+      if(!has){ el.textContent='—'; el.style.color='var(--txt3)'; }
+      else{
+        const d=nv-pv;
+        el.textContent=(d>0?'+':'')+d;
+        el.style.color=d===0?'var(--grn2)':'var(--red2)';
+        if(d!==0) anyDiff=true;
+      }
+    }
+    if(c.k==='kanryo'||c.k==='tenso'){ sn+=nv; if(has) sp+=pv; }
   });
+  if($('fix-sum-n')) $('fix-sum-n').textContent=sn.toLocaleString();
+  if($('fix-sum-p')) $('fix-sum-p').textContent=hasPost?sp.toLocaleString():'—';
+  const sd=$('fix-sum-d');
+  if(sd){
+    if(!hasPost){ sd.textContent='—'; sd.style.color='var(--txt3)'; }
+    else{ const d=sn-sp; sd.textContent=(d>0?'+':'')+d; sd.style.color=d===0?'var(--grn2)':'var(--red2)'; }
+  }
+  const hint=$('fix-hint');
+  if(hint){
+    hint.innerHTML = !hasPost
+      ? '<span style="color:var(--amb2);">郵便局データが未取込です。空欄のままなら郵便局側は登録されません。</span>'
+      : anyDiff
+        ? '差異が残っています。数量を直すか、<b>差異を認めて確定</b>で現状のまま照合済にできます。'
+        : '<span style="color:var(--grn2);">全項目が一致しています。</span>';
+  }
 }
 
-function applyFix(){
+function applyFix(opt){
+  opt=opt||{};
   const r=D.delivery.find(x=>String(x.id)===String(cmpFixTargetId));
   if(!r){closeM('m-cmp-fix');return;}
-  const type=document.querySelector('input[name="fix-type"]:checked')?.value;
-  if(!type){alert('修正方法を選択してください');return;}
   const reason=$('fix-reason')?.value.trim()||'';
 
-  // ★ 2026/08/20: 郵便局側の値は D.postLogs が正。ここでは postKanryo を書き換え、
-  //   同時に postLogs 本体も更新して、再描画で元に戻らないようにする。
-  let newReport=r.kanryo, newPost=(r.postKanryo!==undefined&&r.postKanryo!==null)?r.postKanryo:0;
+  const before={};
+  FIX_COLS.forEach(c=>{ before[c.k]={n:r[c.n], p:r[c.p]}; });
 
-  if(type==='report'){
-    newReport=parseInt($('fix-report-val')?.value)||0;
-  } else if(type==='post'){
-    newPost=parseInt($('fix-post-val')?.value)||0;
-  } else if(type==='both'){
-    newReport=parseInt($('fix-both-report')?.value)||0;
-    newPost=parseInt($('fix-both-post')?.value)||0;
-    if(newReport!==newPost){
-      if($('fix-both-warn'))$('fix-both-warn').style.display='block';
-      if(!confirm(`修正後も差異があります（日報:${newReport} / 郵便局:${newPost}）。\nこのまま適用しますか？`))return;
-    }
-  }
-
-  // 修正履歴を追加
-  if(!r.fixHistory)r.fixHistory=[];
-  r.fixHistory.push({
-    at:new Date().toISOString(),
-    type,
-    before:{kanryo:r.kanryo,post:r.postKanryo},
-    after:{kanryo:newReport,post:newPost},
-    reason,
-  });
-
-  // 日報側
-  r.kanryo=newReport;
-  // 郵便局側は postLogs が保存元。表示用の postKanryo と両方そろえる。
-  if(type==='post'||type==='both'){
-    r.postKanryo=newPost;
+  if(!opt.accept){
+    // 日報側を更新
+    FIX_COLS.forEach(c=>{
+      r[c.n]=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
+    });
+    // 郵便局側は D.postLogs が保存元。表示用フィールドと両方そろえる。
     const logs=Array.isArray(D.postLogs)?D.postLogs:[];
     const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
     const emp=String(st?.empNo||'').trim();
-    const idx=logs.findIndex(l=>l.date===r.date &&
+    let idx=logs.findIndex(l=>l.date===r.date &&
       ((emp && String(l.empNo||'').trim()===emp) || l.staff===r.staff));
-    if(idx>=0){
-      logs[idx].kanryo=newPost;
-      logs[idx].fixedAt=new Date().toISOString();
+    let hasAnyPost=false;
+    const vals={};
+    FIX_COLS.forEach(c=>{
+      const raw=$('fx-p-'+c.k)?.value;
+      if(raw===''||raw===undefined||raw===null){ vals[c.k]=null; return; }
+      vals[c.k]=Math.max(0,parseInt(raw)||0);
+      hasAnyPost=true;
+    });
+    if(hasAnyPost){
+      if(idx<0){
+        logs.push({date:r.date, office:r.office||'', empNo:emp, staff:r.staff||'',
+                   mochi:null, kanryo:vals.kanryo, tenso:vals.tenso, yakan:vals.yakan, ogata:vals.ogata,
+                   src:'manual', at:new Date().toISOString()});
+        idx=logs.length-1;
+      }else{
+        logs[idx].kanryo=vals.kanryo; logs[idx].tenso=vals.tenso;
+        logs[idx].yakan=vals.yakan;   logs[idx].ogata=vals.ogata;
+        logs[idx].fixedAt=new Date().toISOString();
+      }
+      D.postLogs=logs;
       lsSet(LS_KEYS.POSTLOG, logs);
-      try{ if(typeof fbSet==='function') fbSet('post_logs', logs); }catch(e){}
+      try{ if(typeof fbSet==='function') fbSet('post_logs', logs); }catch(e){ console.error('[applyFix] FB保存エラー', e); }
+      FIX_COLS.forEach(c=>{ r[c.p]=vals[c.k]; });
     }
   }
-  r.cmpCause = reason || (type==='report'?'日報誤り':type==='post'?'郵便局誤り':type==='both'?'両方誤り':'差異を了承');
-  r.cause = r.cmpCause;
-  // ★ 2026/08/21: この画面で確定した時点で人が内容を確認済み。
-  //   差異が残っていても照合済とし、了承したことを別途フラグで残す。
-  const _d2=_cmpDiffs(r);
-  r.cmpOk = true;
-  r.diffAccepted = _d2.any;
-  r.status = _d2.any ? '差異了承' : '照合済';
+
+  if(!r.fixHistory) r.fixHistory=[];
+  const after={};
+  FIX_COLS.forEach(c=>{ after[c.k]={n:r[c.n], p:r[c.p]}; });
+  r.fixHistory.push({at:new Date().toISOString(), mode:opt.accept?'accept':'edit', before, after, reason});
+
+  // この画面で確定した時点で人が内容を確認済み。差異が残っていても照合済とする。
+  const d2=_cmpDiffs(r);
+  r.cmpOk=true;
+  r.diffAccepted=d2.any;
+  r.status=d2.any?'差異了承':'照合済';
+  r.cmpCause=reason || (d2.any?'差異を了承':'修正済');
+  r.cause=r.cmpCause;
 
   closeM('m-cmp-fix');
   renderCmp();renderDash();renderDel();
-  alert(r.diffAccepted
-    ? `差異を了承して確定しました。\n数量は両方そのままです（この行は差異一覧に出なくなります）`
-    : `修正を適用しました。\n差異0 → 照合済みになりました`);
+  const msg = d2.any
+    ? `差異を了承して確定しました（完了＋転送 差${d2.dKanryo>0?'+':''}${d2.dKanryo}）`
+    : '修正を適用しました。差異0 → 照合済みになりました';
+  if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
 }
 
 function runAutoCompare(){
@@ -35855,6 +35860,82 @@ async function applyPostToNikki(){
   if(typeof renderDel==='function') renderDel();
   if(typeof renderDash==='function') renderDash();
   if(typeof _showSaveToast==='function') _showSaveToast(`${t.date} ${staff} の日報を作成しました`);
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  照合結果の合計 (2026/08/21)
+//   一覧は日ごとの日計しか出ないため、絞り込んだ範囲全体の
+//   日報 / 郵便局 / 差異 を3指標ぶんまとめて上部に出す。
+//   郵便局側だけの行(日報なし)も郵便局側の合計には含める。
+// ════════════════════════════════════════════════════════════
+function _cmpSumHeader(rows, orphans, label){
+  const t={nk:0,pk:0,ny:0,py:0,no:0,po:0};
+  let hasPost=false, okN=0, accN=0, ngN=0, unN=0, noPost=0;
+
+  (rows||[]).forEach(r=>{
+    const d=_cmpDiffs(r);
+    t.nk+=d.nikki.kanryo; t.ny+=d.nikki.yakan; t.no+=d.nikki.ogata;
+    if(d.hasPost){
+      hasPost=true;
+      t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
+    }
+    if(!d.hasPost) noPost++;
+    if(r.cmpOk && d.any) accN++;
+    else if(r.cmpOk) okN++;
+    else if(d.any) ngN++;
+    else unN++;
+  });
+  (orphans||[]).forEach(r=>{
+    const d=_cmpDiffs(r);
+    if(d.hasPost){
+      hasPost=true;
+      t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
+    }
+  });
+
+  const n=v=>(v||0).toLocaleString();
+  const dcell=(a,b)=>{
+    if(!hasPost) return '<span style="color:var(--txt3);">—</span>';
+    const d=a-b;
+    return `<span style="color:${d===0?'var(--grn2)':'var(--red2)'};">${d>0?'+':''}${n(d)}</span>`;
+  };
+
+  const group=(lab,col,nv,pv,sub)=>`
+    <div style="flex:1 1 170px;max-width:300px;background:var(--sur2);border:1px solid var(--brd2);
+                border-left:4px solid ${col};border-radius:6px;padding:8px 12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">${lab}
+        ${sub?`<span style="font-size:9.5px;font-weight:400;color:var(--txt3);margin-left:4px;">${sub}</span>`:''}</div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
+        <span>日報</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(nv)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
+        <span>郵便局</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:${col};">${hasPost?n(pv):'—'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);
+                  border-top:1px dashed var(--brd);margin-top:4px;padding-top:4px;">
+        <span>差異</span><b style="font-family:'DM Mono',monospace;font-size:17px;">${dcell(nv,pv)}</b></div>
+    </div>`;
+
+  return `<div style="background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:11px 13px;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:9px;">
+      <div style="font-size:14px;font-weight:700;color:var(--txt);">${esc(label||'')} 合計</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;">
+        <span class="bdg bg">照合済 ${okN}</span>
+        <span class="bdg ba">差異了承 ${accN}</span>
+        <span class="bdg br">差異 ${ngN}</span>
+        <span class="bdg bz">未照合 ${unN}</span>
+        ${(orphans&&orphans.length)?`<span class="bdg ba">日報なし ${orphans.length}</span>`:''}
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${group('完了＋転送還付','var(--grn2)',t.nk,t.pk,'請求根拠')}
+      ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
+      ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
+    </div>
+    ${noPost?`<div style="margin-top:8px;font-size:11px;color:var(--amb2);">
+      郵便局データ未取込が ${noPost} 件あります。その分の日報の数量は郵便局側に計上されないため、
+      上の差異には未取込分がそのまま含まれています。取込が済むまで差異の数字は目安としてご覧ください。
+    </div>`:''}
+  </div>`;
 }
 
 </script>
