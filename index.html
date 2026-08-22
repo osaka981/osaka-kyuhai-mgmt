@@ -5298,10 +5298,11 @@ function openLocModal(id){
   // 単価
   const p = l?.prices || {};
   // 単価履歴を編集用に読み込む(2026/08/21)
-  _locPriceHistDraft = Array.isArray(loc && loc.priceHistory) ? JSON.parse(JSON.stringify(loc.priceHistory)) : [];
+  // ★ この関数内の拠点オブジェクトは l。loc という変数は存在しない。
+  _locPriceHistDraft = Array.isArray(l && l.priceHistory) ? JSON.parse(JSON.stringify(l.priceHistory)) : [];
   if(typeof renderLocPriceHist==='function') renderLocPriceHist();
   // 繁忙期間配達委託(2026/08/21)
-  if(typeof loadBusyDraft==='function') loadBusyDraft(loc && loc.id);
+  if(typeof loadBusyDraft==='function') loadBusyDraft(l && l.id);
   if(document.getElementById('loc-price-from')) document.getElementById('loc-price-from').value='';
   document.getElementById('loc-price-kanryo').value = p.kanryo || '';
   document.getElementById('loc-price-tenso').value = p.tenso || '';
