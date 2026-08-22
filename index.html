@@ -4315,6 +4315,38 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       ※「集荷(定時)」単価は下記の定時集荷先全てに自動反映されます。指定事業所集荷の単価は会社ごとに個別設定できます。
     </div>
 
+    <!-- ★ 2026/08/21: 単価の適用開始日つき履歴。
+         年度替わりの改定を事前に登録でき、過去月の金額は当時の単価のまま保たれる。 -->
+    <div style="background:var(--bg3);border-radius:6px;padding:9px 11px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+        <span style="font-size:11.5px;font-weight:700;color:var(--txt);">単価の適用履歴</span>
+        <div class="fla gap6" style="align-items:center;">
+          <input type="date" id="loc-price-from" class="fi" style="font-size:12px;padding:4px 7px;width:150px;">
+          <button type="button" class="btn b-blu btn-sm" onclick="addLocPriceHistory()">この日から適用として追加</button>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--txt2);line-height:1.55;margin-bottom:6px;">
+        上の単価欄に金額を入れ、適用開始日を指定して追加します。終了日は不要です（次の単価が始まると自動的に切り替わります）。<br>
+        例：2月に「2026-04-01から適用」で登録しておけば、3月分の請求は旧単価のまま計算されます。
+      </div>
+      <div id="loc-price-hist" style="display:flex;flex-direction:column;gap:4px;"></div>
+    </div>
+
+    <!-- ★ 2026/08/21: 繁忙期間配達委託(請求書の名目に合わせた表記)。
+         期間は全拠点で共通、加算額は拠点ごとに持つ。
+         対象は「完了＋転送還付」1個あたりの円加算。 -->
+    <div style="background:var(--bg3);border-radius:6px;padding:9px 11px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+        <span style="font-size:11.5px;font-weight:700;color:var(--txt);">繁忙期間配達委託</span>
+        <button type="button" class="btn b-blu btn-sm" onclick="addBusyRow()">＋ 期間を追加</button>
+      </div>
+      <div style="font-size:10px;color:var(--txt2);line-height:1.55;margin-bottom:6px;">
+        中元期・歳暮期などの加算です。<b>「完了＋転送還付」1個あたりの円加算</b>として、基本単価に上乗せされます。<br>
+        期間は全拠点で共通、<b>加算額は拠点ごと</b>に設定できます。加算額0円なら請求に影響しません。
+      </div>
+      <div id="loc-busy-list" style="display:flex;flex-direction:column;gap:5px;"></div>
+    </div>
+
     <!-- 集荷先登録(定時集荷先・指定事業所集荷先) -->
     <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 集荷先登録 (明細・支払表示用)</div>
     <div style="font-size:10px;color:var(--txt2);margin-bottom:8px;line-height:1.5;">
@@ -5265,6 +5297,12 @@ function openLocModal(id){
 
   // 単価
   const p = l?.prices || {};
+  // 単価履歴を編集用に読み込む(2026/08/21)
+  _locPriceHistDraft = Array.isArray(loc && loc.priceHistory) ? JSON.parse(JSON.stringify(loc.priceHistory)) : [];
+  if(typeof renderLocPriceHist==='function') renderLocPriceHist();
+  // 繁忙期間配達委託(2026/08/21)
+  if(typeof loadBusyDraft==='function') loadBusyDraft(loc && loc.id);
+  if(document.getElementById('loc-price-from')) document.getElementById('loc-price-from').value='';
   document.getElementById('loc-price-kanryo').value = p.kanryo || '';
   document.getElementById('loc-price-tenso').value = p.tenso || '';
   document.getElementById('loc-price-night').value = p.night || '';
@@ -5463,6 +5501,7 @@ function collectLocShukkaCompanies(){
 }
 
 function saveLocation(){
+  let _savedLocId = null;
   const id = document.getElementById('loc-edit-id').value;
   const code = document.getElementById('loc-code').value.trim();
   const name = document.getElementById('loc-name').value.trim();
@@ -5526,6 +5565,9 @@ function saveLocation(){
     : { shukkaCompaniesTeiji: [], shukkaCompaniesShitei: [] };
 
   const data = {
+    // 単価履歴(2026/08/21)。適用開始日順に整えて保存する。
+    priceHistory: (_locPriceHistDraft||[]).slice()
+      .sort((x,y)=>String(x.from||'').localeCompare(String(y.from||''))),
     code, name, type, deptIds,
     tel:  document.getElementById('loc-tel').value.trim(),
     fax:  document.getElementById('loc-fax').value.trim(),
@@ -5549,13 +5591,18 @@ function saveLocation(){
     const idx = D.locations.findIndex(x=>String(x.id)===String(id));
     if(idx>=0){
       D.locations[idx] = {...D.locations[idx], ...data};
+      _savedLocId = D.locations[idx].id;
     }
   } else {
     const newId = (D.locations.reduce((m,x)=>Math.max(m,x.id||0),100))+1;
     D.locations.push({id:newId, ...data});
+    _savedLocId = newId;
   }
   lsSet(LS_KEYS.LOCATIONS, D.locations);
   if(typeof fbSet==='function') fbSet('locations', D.locations);
+  // 繁忙期間配達委託を確定(2026/08/21)。拠点IDが確定してから書き込む。
+  try{ if(typeof commitBusyDraft==='function') commitBusyDraft(_savedLocId); }
+  catch(e){ console.error('[saveLocation] 繁忙期の保存エラー', e); }
 
   // 対応する D.offices レコードがあれば事業種別 (typesDel/typesCol) を同期
   // (拠点モーダルからの編集を営業所マスタに反映 → 担当郵便局バッジ表示が即座に正しくなる)
@@ -6063,6 +6110,13 @@ function applyFirebaseData() {
 
   // ★ 2026/08/18: 郵便局調書データ(D.postLogs)を復元。
   //   日報とは別テーブル。ここで読まないと手入力がリロードで消える。
+  // 繁忙期間配達委託(2026/08/21)
+  try{
+    const _bs = lsGet('nikki_busy_seasons', null);
+    if(Array.isArray(_bs)) D.busySeasons = _bs;
+    if(!Array.isArray(D.busySeasons)) D.busySeasons = [];
+  }catch(e){ console.error('busySeasons load error:', e); D.busySeasons = []; }
+
   try{
     const _pl = lsGet(LS_KEYS.POSTLOG, null);
     if (Array.isArray(_pl)) D.postLogs = _pl;
@@ -7620,6 +7674,10 @@ const D = {
     {id:2, code:'DEL', name:'宅配事業部', type:'del',  active:true, order:20, note:'郵便局委託業務'},
     {id:3, code:'COL', name:'集荷事業部', type:'col',  active:true, order:30, note:'集荷・ルート・チャーター'},
   ],
+  // 繁忙期加算 (2026/08/21)
+  //  期間は全局共通、加算額は拠点ごと。対象は「完了＋転送還付」1個あたり(円)。
+  //  { id, name, from, to, rates:{ <locationId>: {del:円/個, col:円/個} }, note }
+  busySeasons: [],
   // 拠点マスタ (Phase 1 新設: 旧D.officesの置換先)
   // type: 'head'=本社, 'post_office'=郵便局, 'col_office'=集荷営業所
   // deptIds: この拠点を利用する部署ID配列(兼用可)
@@ -36119,6 +36177,209 @@ function _cmpBindToTop(){
     wrap.addEventListener('scroll', upd);
   }
   upd();
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  単価履歴と繁忙期加算 (2026/08/21)
+//   単価は「適用開始日」だけを持ち、終了日は持たない。
+//   次の単価が始まった時点で前が自動的に終わるため、
+//   期間の隙間や重複が構造的に起きない。
+//   繁忙期加算は本質的に期間限定なので基本単価と混ぜず別枠にする
+//   (混ぜると毎回「繁忙期が終わったら戻す」作業が発生し、戻し忘れが起きる)。
+// ════════════════════════════════════════════════════════════
+
+const PRICE_KEYS = ['kanryo','tenso','night','ogata','shukka','mochimodoiri'];
+
+// 日付(YYYY-MM-DD)時点で有効な単価を返す。無ければ従来の prices をそのまま使う。
+function _locPriceAt(loc, date){
+  if(!loc) return null;
+  const hist = Array.isArray(loc.priceHistory) ? loc.priceHistory : [];
+  if(!hist.length) return loc.prices || null;
+  const d = String(date||'').slice(0,10);
+  // 適用開始日が対象日以下のもののうち、最も新しいもの
+  const hit = hist
+    .filter(h=>h && h.from && String(h.from).slice(0,10) <= d)
+    .sort((a,b)=>String(a.from).localeCompare(String(b.from)))
+    .slice(-1)[0];
+  if(!hit) return null;                 // その日より前の単価が未登録
+  const out = {};
+  PRICE_KEYS.forEach(k=>{ out[k]=Number(hit[k])||0; });
+  if(loc.prices && loc.prices.colCompanies) out.colCompanies = loc.prices.colCompanies;
+  return out;
+}
+
+// 対象日に適用される繁忙期加算(円/個)を返す。{del, col}
+//  del は「完了＋転送還付」1個あたり、col は集荷1個あたり。
+function _busyAddAt(locId, date){
+  const list = Array.isArray(D.busySeasons) ? D.busySeasons : [];
+  const d = String(date||'').slice(0,10);
+  let del=0, col=0;
+  list.forEach(s=>{
+    if(!s || !s.from || !s.to) return;
+    if(d < String(s.from).slice(0,10) || d > String(s.to).slice(0,10)) return;
+    const r = (s.rates && (s.rates[String(locId)] || s.rates[locId])) || null;
+    if(!r) return;
+    del += Number(r.del)||0;
+    col += Number(r.col)||0;
+  });
+  return {del, col};
+}
+
+// 単価履歴を適用開始日の新しい順に整えて返す(表示用)
+function _priceHistSorted(loc){
+  const hist = Array.isArray(loc && loc.priceHistory) ? loc.priceHistory.slice() : [];
+  return hist.sort((a,b)=>String(b.from||'').localeCompare(String(a.from||'')));
+}
+
+
+// ── 拠点マスタ: 単価履歴の編集 (2026/08/21) ──
+let _locPriceHistDraft = [];
+
+function renderLocPriceHist(){
+  const box=$('loc-price-hist'); if(!box) return;
+  if(!_locPriceHistDraft.length){
+    box.innerHTML='<div style="font-size:11px;color:var(--amb2);">単価が未登録です。金額を入力し、適用開始日を指定して追加してください。</div>';
+    return;
+  }
+  const lab={kanryo:'完了',tenso:'転送',night:'夜間',ogata:'大型',shukka:'集荷',mochimodoiri:'持戻'};
+  const sorted=_locPriceHistDraft.slice().sort((a,b)=>String(b.from||'').localeCompare(String(a.from||'')));
+  const today=new Date().toISOString().slice(0,10);
+  box.innerHTML=sorted.map(h=>{
+    const future=String(h.from)>today;
+    const idx=_locPriceHistDraft.indexOf(h);
+    const cells=PRICE_KEYS.map(k=>`<span style="margin-right:9px;"><span style="color:var(--txt3);">${lab[k]}</span> <b style="font-family:'DM Mono',monospace;">${Number(h[k])||0}</b></span>`).join('');
+    return `<div style="display:flex;align-items:center;gap:8px;background:var(--sur2);border:1px solid ${future?'var(--amb)':'var(--brd2)'};border-radius:5px;padding:6px 9px;">
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${future?'var(--amb2)':'var(--blu2)'};white-space:nowrap;">
+        ${esc(h.from||'')}〜${future?' <span style="font-size:9.5px;">(予定)</span>':''}</span>
+      <span style="flex:1;font-size:11px;color:var(--txt2);">${cells}</span>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="removeLocPriceHistory(${idx})">削除</button>
+    </div>`;
+  }).join('');
+}
+
+function addLocPriceHistory(){
+  const from=$('loc-price-from')?.value||'';
+  if(!from){ alert('適用開始日を入力してください'); return; }
+  const rec={from};
+  let any=false;
+  PRICE_KEYS.forEach(k=>{
+    const id = k==='mochimodoiri' ? 'loc-price-mochi' : 'loc-price-'+k;
+    const v=parseFloat(document.getElementById(id)?.value)||0;
+    rec[k]=v;
+    if(v>0) any=true;
+  });
+  if(!any){ alert('単価がすべて0です。上の単価欄に金額を入力してください'); return; }
+  const dup=_locPriceHistDraft.findIndex(h=>String(h.from)===String(from));
+  if(dup>=0){
+    if(!confirm(`${from} からの単価は既に登録されています。上書きしますか？`)) return;
+    _locPriceHistDraft[dup]=rec;
+  } else {
+    _locPriceHistDraft.push(rec);
+  }
+  if($('loc-price-from')) $('loc-price-from').value='';
+  renderLocPriceHist();
+}
+
+function removeLocPriceHistory(i){
+  const h=_locPriceHistDraft[i]; if(!h) return;
+  if(!confirm(`${h.from} からの単価を削除しますか？\n\nこの期間の請求金額の計算根拠がなくなります。`)) return;
+  _locPriceHistDraft.splice(i,1);
+  renderLocPriceHist();
+}
+
+
+// ── 拠点マスタ: 繁忙期間配達委託の編集 (2026/08/21) ──
+//  D.busySeasons は全拠点共通の期間マスタ。加算額だけが拠点ごと。
+//  この画面では「期間そのもの」と「この拠点の加算額」を同時に編集する。
+let _busyDraft = [];
+
+function _busySeasonsAll(){
+  if(!Array.isArray(D.busySeasons)) D.busySeasons=[];
+  return D.busySeasons;
+}
+
+function loadBusyDraft(locId){
+  const key=String(locId||'');
+  _busyDraft=_busySeasonsAll().map(s=>{
+    const r=(s.rates && (s.rates[key]||s.rates[locId])) || {};
+    return {id:s.id, name:s.name||'', from:s.from||'', to:s.to||'',
+            del:Number(r.del)||0, col:Number(r.col)||0};
+  }).sort((a,b)=>String(b.from||'').localeCompare(String(a.from||'')));
+  renderBusyRows();
+}
+
+function renderBusyRows(){
+  const box=$('loc-busy-list'); if(!box) return;
+  if(!_busyDraft.length){
+    box.innerHTML='<div style="font-size:11px;color:var(--txt2);">未設定です。中元期・歳暮期などがあれば「＋ 期間を追加」から登録してください。</div>';
+    return;
+  }
+  box.innerHTML=_busyDraft.map((b,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--sur2);border:1px solid var(--brd2);border-radius:5px;padding:6px 8px;">
+      <input type="text" value="${esc(b.name)}" placeholder="中元期" onchange="_busySet(${i},'name',this.value)"
+        style="width:110px;padding:4px 7px;font-size:12px;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+      <input type="date" value="${esc(b.from)}" onchange="_busySet(${i},'from',this.value)"
+        style="width:142px;padding:4px 6px;font-size:12px;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+      <span style="color:var(--txt3);font-size:11px;">〜</span>
+      <input type="date" value="${esc(b.to)}" onchange="_busySet(${i},'to',this.value)"
+        style="width:142px;padding:4px 6px;font-size:12px;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+      <span style="font-size:10.5px;color:var(--txt2);margin-left:4px;">完了＋転送</span>
+      <input type="number" step="0.01" value="${b.del}" onchange="_busySet(${i},'del',this.value)"
+        style="width:78px;padding:4px 7px;font-size:13px;font-weight:700;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+      <span style="font-size:10.5px;color:var(--txt3);">円/個</span>
+      <span style="font-size:10.5px;color:var(--txt2);margin-left:4px;">集荷</span>
+      <input type="number" step="0.01" value="${b.col}" onchange="_busySet(${i},'col',this.value)"
+        style="width:70px;padding:4px 7px;font-size:13px;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+      <span style="font-size:10.5px;color:var(--txt3);">円/個</span>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;margin-left:auto;" onclick="removeBusyRow(${i})">削除</button>
+    </div>`).join('');
+}
+
+function _busySet(i,k,v){
+  if(!_busyDraft[i]) return;
+  _busyDraft[i][k] = (k==='del'||k==='col') ? (parseFloat(v)||0) : v;
+}
+
+function addBusyRow(){
+  _busyDraft.unshift({id:null, name:'', from:'', to:'', del:0, col:0});
+  renderBusyRows();
+}
+
+function removeBusyRow(i){
+  const b=_busyDraft[i]; if(!b) return;
+  if(!confirm(`「${b.name||'(名称未設定)'}」をこの拠点から外しますか？\n\n期間そのものは他拠点でも使われるため残ります。この拠点の加算額のみ削除されます。`)) return;
+  _busyDraft.splice(i,1);
+  renderBusyRows();
+}
+
+// 保存: 期間マスタを更新し、この拠点の加算額を書き込む
+function commitBusyDraft(locId){
+  const key=String(locId||'');
+  const list=_busySeasonsAll();
+  const keepIds=new Set();
+  _busyDraft.forEach(b=>{
+    if(!b.name || !b.from || !b.to) return;          // 未入力の行は無視
+    let s = b.id!=null ? list.find(x=>String(x.id)===String(b.id)) : null;
+    if(!s) s = list.find(x=>x.name===b.name && x.from===b.from && x.to===b.to);
+    if(!s){
+      s={id:Date.now()+Math.floor(Math.random()*1000), name:b.name, from:b.from, to:b.to, rates:{}};
+      list.push(s);
+    }
+    s.name=b.name; s.from=b.from; s.to=b.to;
+    if(!s.rates) s.rates={};
+    s.rates[key]={del:Number(b.del)||0, col:Number(b.col)||0};
+    keepIds.add(String(s.id));
+  });
+  // 画面から消された期間は、この拠点の加算額だけ取り除く
+  list.forEach(s=>{
+    if(!keepIds.has(String(s.id)) && s.rates && s.rates[key] !== undefined) delete s.rates[key];
+  });
+  D.busySeasons=list;
+  try{
+    lsSet('nikki_busy_seasons', list);
+    if(typeof fbSet==='function') fbSet('busy_seasons', list);
+  }catch(e){ console.error('[commitBusyDraft] 保存エラー', e); }
 }
 
 </script>
