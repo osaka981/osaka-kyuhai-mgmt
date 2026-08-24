@@ -2629,10 +2629,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="xs muted mb8">ブラウザのlocalStorageに保存されているデータをJSONファイルで書出・復元できます</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn b-blu btn-sm" onclick="exportAllData()">全データをJSONで書出</button>
-          <button class="btn b-gh btn-sm" onclick="document.getElementById('sys-restore-file').click()">JSONから復元</button>
+          <button class="btn b-gh btn-sm" onclick="document.getElementById('sys-restore-file').click()">JSONから復元（この端末のみ）</button>
           <input type="file" id="sys-restore-file" accept=".json" style="display:none;" onchange="importAllData(this)">
         </div>
         <div id="sys-backup-status" class="xs muted mt8"></div>
+
+        <!-- ★ 2026/08/24: 自動バックアップ(nikki_YYYYMMDD_*.json)からの完全復元。
+             Firebase にも書き戻すため、再読込しても消えない。 -->
+        <div style="border-top:1px solid var(--brd);margin-top:12px;padding-top:12px;">
+          <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:4px;">自動バックアップから復元</div>
+          <div class="xs muted mb8" style="line-height:1.6;">
+            Googleドライブの <b>nikki_YYYYMMDD_HHMMSS.json</b> を読み込みます。<br>
+            日報・郵便局データ・照合状態を含む全項目を、<b>Firebaseにも書き戻します</b>（他端末にも反映されます）。<br>
+            実行前に、現在の状態が自動でファイルに書き出されます。
+          </div>
+          <button class="btn b-red btn-sm" onclick="document.getElementById('sys-full-restore-file').click()">自動バックアップから完全復元</button>
+          <input type="file" id="sys-full-restore-file" accept=".json" style="display:none;" onchange="restoreFullBackup(this)">
+          <div id="sys-restore-status" class="xs muted mt8"></div>
+        </div>
       </div>
 
       <!-- Firebase設定確認（読取専用） -->
@@ -35973,8 +35987,13 @@ async function applyPostToNikki(){
       form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,
             mochimodoiri:rec.mochimodoiri,'翌日廻し':0,shukka:0,notes:rec.note},
       submittedAt:new Date().toISOString()});
-    lsSet(LS_KEYS.YP, ypLogs);
-    if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
+    const okYp = await _safeSetYpLogs(ypLogs, '郵便局データから日報を作成');
+    if(!okYp){
+      // 日報アプリ側に書けなかったので、経営管理側の追加も取り消す
+      const bi=D.delivery.indexOf(rec);
+      if(bi>=0) D.delivery.splice(bi,1);
+      return;
+    }
   }catch(e){ console.error('[applyPostToNikki] yp_logs 反映エラー', e); }
 
   closeM('m-p2n');
@@ -36172,9 +36191,7 @@ async function _cmpWriteBackYp(r){
     tgt.ogata=r.ogata||0;
     tgt.mochimodoiri=r.mochimodoiri||0;
     ypLogs[i].updatedAt=new Date().toISOString();
-    lsSet(LS_KEYS.YP, ypLogs);
-    if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
-    return true;
+    return await _safeSetYpLogs(ypLogs, '照合修正の書き戻し');
   }catch(e){ console.error('[_cmpWriteBackYp] エラー', e); return false; }
 }
 
@@ -36426,6 +36443,122 @@ function commitBusyDraft(locId){
     lsSet('nikki_busy_seasons', list);
     if(typeof fbSet==='function') fbSet('busy_seasons', list);
   }catch(e){ console.error('[commitBusyDraft] 保存エラー', e); }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  yp_logs 書き込みの安全装置 (2026/08/24)
+//   yp_logs は配列まるごと置き換えで保存される。
+//   同期前など localStorage が空のタイミングで書くと、
+//   Firebase 側の全日報が1件に置き換わって消える。
+//   件数が減る書き込みは既定で拒否する。
+// ════════════════════════════════════════════════════════════
+async function _safeSetYpLogs(next, reason){
+  try{
+    if(!Array.isArray(next)){ console.error('[_safeSetYpLogs] 配列ではありません', reason); return false; }
+    const prev = lsGet(LS_KEYS.YP, null);
+    const prevN = Array.isArray(prev) ? prev.length : 0;
+
+    // 直前の件数より減る書き込みは止める(削除機能はここを通さない)
+    if(prevN > 0 && next.length < prevN){
+      console.error('[_safeSetYpLogs] 件数が減るため中止', {reason, prevN, nextN:next.length});
+      alert(`日報データの保存を中止しました。\n\n保存前 ${prevN} 件 → 保存後 ${next.length} 件 と減るため、`
+        + `既存データを失う可能性があります。\n（${reason||''}）\n\n`
+        + `画面を再読み込みして、日報一覧に件数が出るか確認してください。`);
+      return false;
+    }
+    // 手元が空なのに書き込もうとしている = 同期前の可能性が高い
+    if(prevN === 0 && (D.delivery||[]).length > 0){
+      console.error('[_safeSetYpLogs] 同期前の可能性があるため中止', {reason});
+      alert('日報データがまだ読み込まれていないため、保存を中止しました。\n'
+        + '画面を再読み込みしてから、もう一度お試しください。');
+      return false;
+    }
+    lsSet(LS_KEYS.YP, next);
+    if(typeof fbSet==='function') await fbSet('yp_logs', next);
+    return true;
+  }catch(e){ console.error('[_safeSetYpLogs] エラー', e); return false; }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  自動バックアップからの完全復元 (2026/08/24)
+//   Googleドライブの nikki_YYYYMMDD_*.json をそのまま読み込む。
+//   既存の importAllData は localStorage にしか書かないため、
+//   再読込時に Firebase の内容で上書きされて復元が消えてしまう。
+//   ここでは Firebase にも書き戻し、両者を一致させる。
+// ════════════════════════════════════════════════════════════
+
+// 復元対象。バックアップのキー名がそのまま Firebase / localStorage のキーになる。
+const RESTORE_KEYS = [
+  'yp_logs','col_logs','att_logs','drivers','staff_full','customers','companies',
+  'offices','locations','regions','departments','col_routes','customer_notes',
+  'post_logs','cmp_state','gas_records','monthly_confirmations','notifications',
+  'schedule_logs','schedule_overrides','schedule_surveys','survey_responses',
+  'edit_logs','owner_pins','settings'
+];
+
+function _restoreCount(v){ return Array.isArray(v) ? v.length : (v && typeof v==='object' ? Object.keys(v).length : 0); }
+
+async function restoreFullBackup(inputEl){
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if(!file) return;
+  inputEl.value='';
+  let data;
+  try{ data = JSON.parse(await file.text()); }
+  catch(err){ alert('ファイルを読み込めませんでした: '+err.message); return; }
+
+  // 何が入っているかを数えて提示する(黙って上書きしない)
+  const found = RESTORE_KEYS.filter(k=>data[k]!==undefined);
+  if(!found.length){ alert('復元できるデータが見つかりませんでした。\nファイルが違う可能性があります。'); return; }
+  const ypN = _restoreCount(data.yp_logs);
+  const lines = found.map(k=>`  ${k}: ${_restoreCount(data[k])}`).join('\n');
+
+  const ok = await showDialog({
+    icon:'⚠️', title:'バックアップから復元',
+    msg:`ファイル: ${file.name}\n\n復元される内容:\n${lines}\n\n`
+      + `※ 現在のデータは完全に置き換わります。\n`
+      + `※ Firebase にも書き戻すため、他の端末にも反映されます。\n\n`
+      + `復元前に、現在の状態を自動で書き出して保存します。`,
+    okText:'復元する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  // ① 復元前の状態を必ず控える(復元自体が失敗したとき戻せるように)
+  try{
+    const before={exportedAt:new Date().toISOString(), _note:'復元前の自動退避'};
+    RESTORE_KEYS.forEach(k=>{ const v=lsGet('nikki_'+k, null); if(v!==null) before[k]=v; });
+    const blob=new Blob([JSON.stringify(before,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`before_restore_${new Date().toISOString().slice(0,19).replace(/[:]/g,'-')}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }catch(e){ console.error('[restoreFullBackup] 退避に失敗', e); }
+
+  // ② 書き戻し(Firebase + localStorage)
+  const st=$('sys-restore-status');
+  let done=0, failed=[];
+  for(const k of found){
+    try{
+      if(st) st.textContent=`復元中… ${k} (${done+1}/${found.length})`;
+      if(typeof fbSet==='function') await fbSet(k, data[k]);
+      else lsSet('nikki_'+k, data[k]);
+      done++;
+    }catch(e){ console.error('[restoreFullBackup] 失敗:', k, e); failed.push(k); }
+  }
+
+  if(st){
+    st.textContent = failed.length
+      ? `完了 ${done}/${found.length}　失敗: ${failed.join(', ')}`
+      : `復元完了 (${done}件)。ページを再読込します`;
+    st.style.color = failed.length ? 'var(--red2)' : 'var(--grn2)';
+  }
+  await showAlert({msg:
+    (failed.length ? `一部が失敗しました: ${failed.join(', ')}\n\n` : '')
+    + `日報 ${ypN} 件を含む ${done} 種類のデータを復元しました。\n`
+    + `OKを押すとページを再読込します。`});
+  location.reload();
 }
 
 </script>
