@@ -4318,16 +4318,38 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- ★ 2026/08/21: 単価の適用開始日つき履歴。
          年度替わりの改定を事前に登録でき、過去月の金額は当時の単価のまま保たれる。 -->
     <div style="background:var(--bg3);border-radius:6px;padding:9px 11px;margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
-        <span style="font-size:11.5px;font-weight:700;color:var(--txt);">単価の適用履歴</span>
-        <div class="fla gap6" style="align-items:center;">
-          <input type="date" id="loc-price-from" class="fi" style="font-size:12px;padding:4px 7px;width:150px;">
-          <button type="button" class="btn b-blu btn-sm" onclick="addLocPriceHistory()">この日から適用として追加</button>
-        </div>
+      <div style="font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:6px;">単価の適用履歴</div>
+      <div style="font-size:10px;color:var(--txt2);line-height:1.55;margin-bottom:8px;">
+        終了日は不要です（次の単価が始まると自動的に切り替わります）。<br>
+        例：2月に「2026-04-01から適用」で登録しておけば、<b>3月分の請求は旧単価のまま</b>計算されます。
       </div>
-      <div style="font-size:10px;color:var(--txt2);line-height:1.55;margin-bottom:6px;">
-        上の単価欄に金額を入れ、適用開始日を指定して追加します。終了日は不要です（次の単価が始まると自動的に切り替わります）。<br>
-        例：2月に「2026-04-01から適用」で登録しておけば、3月分の請求は旧単価のまま計算されます。
+
+      <!-- ★ 2026/08/24: 現単価を壊さずに新単価を登録できるよう、入力欄を分離。
+           上の「郵便局単価」欄は現行値、こちらは次に適用する値。 -->
+      <div style="background:var(--sur2);border:1px solid var(--brd2);border-radius:5px;padding:8px 10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+          <span style="font-size:11px;font-weight:700;color:var(--blu2);">新しい単価を登録</span>
+          <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 9px;" onclick="copyCurPriceToNew()">上の単価をコピー</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;">
+          <div>
+            <div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">適用開始日</div>
+            <input type="date" id="lph-from" style="width:148px;padding:5px 7px;font-size:12px;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);">
+          </div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">完了</div>
+            <input type="number" step="0.01" id="lph-kanryo" style="width:78px;padding:5px 7px;font-size:13px;font-weight:700;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">転送</div>
+            <input type="number" step="0.01" id="lph-tenso" style="width:78px;padding:5px 7px;font-size:13px;font-weight:700;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">夜間</div>
+            <input type="number" step="0.01" id="lph-night" style="width:70px;padding:5px 7px;font-size:13px;font-weight:700;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">大型</div>
+            <input type="number" step="0.01" id="lph-ogata" style="width:70px;padding:5px 7px;font-size:13px;font-weight:700;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">集荷(定時)</div>
+            <input type="number" step="0.01" id="lph-shukka" style="width:78px;padding:5px 7px;font-size:13px;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <div><div style="font-size:9.5px;color:var(--txt2);margin-bottom:2px;">持戻</div>
+            <input type="number" step="0.01" id="lph-mochi" style="width:70px;padding:5px 7px;font-size:13px;text-align:right;font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;background:var(--bg3);color:var(--txt);"></div>
+          <button type="button" class="btn b-blu btn-sm" onclick="addLocPriceHistory()">追加</button>
+        </div>
       </div>
       <div id="loc-price-hist" style="display:flex;flex-direction:column;gap:4px;"></div>
     </div>
@@ -5303,7 +5325,7 @@ function openLocModal(id){
   if(typeof renderLocPriceHist==='function') renderLocPriceHist();
   // 繁忙期間配達委託(2026/08/21)
   if(typeof loadBusyDraft==='function') loadBusyDraft(l && l.id);
-  if(document.getElementById('loc-price-from')) document.getElementById('loc-price-from').value='';
+  if(typeof clearNewPriceInputs==='function') clearNewPriceInputs();
   document.getElementById('loc-price-kanryo').value = p.kanryo || '';
   document.getElementById('loc-price-tenso').value = p.tenso || '';
   document.getElementById('loc-price-night').value = p.night || '';
@@ -36246,31 +36268,54 @@ function renderLocPriceHist(){
   const lab={kanryo:'完了',tenso:'転送',night:'夜間',ogata:'大型',shukka:'集荷',mochimodoiri:'持戻'};
   const sorted=_locPriceHistDraft.slice().sort((a,b)=>String(b.from||'').localeCompare(String(a.from||'')));
   const today=new Date().toISOString().slice(0,10);
+  // いま適用中のもの(適用開始日が今日以下で最も新しい)
+  const cur=sorted.filter(h=>String(h.from||'')<=today)[0];
   box.innerHTML=sorted.map(h=>{
     const future=String(h.from)>today;
+    const isCur=(h===cur);
     const idx=_locPriceHistDraft.indexOf(h);
     const cells=PRICE_KEYS.map(k=>`<span style="margin-right:9px;"><span style="color:var(--txt3);">${lab[k]}</span> <b style="font-family:'DM Mono',monospace;">${Number(h[k])||0}</b></span>`).join('');
-    return `<div style="display:flex;align-items:center;gap:8px;background:var(--sur2);border:1px solid ${future?'var(--amb)':'var(--brd2)'};border-radius:5px;padding:6px 9px;">
-      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${future?'var(--amb2)':'var(--blu2)'};white-space:nowrap;">
-        ${esc(h.from||'')}〜${future?' <span style="font-size:9.5px;">(予定)</span>':''}</span>
+    return `<div style="display:flex;align-items:center;gap:8px;background:${isCur?'rgba(60,160,90,.10)':'var(--sur2)'};border:1px solid ${future?'var(--amb)':isCur?'var(--grn)':'var(--brd2)'};border-radius:5px;padding:6px 9px;">
+      <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${future?'var(--amb2)':isCur?'var(--grn2)':'var(--txt2)'};white-space:nowrap;">
+        ${esc(h.from||'')}〜${future?' <span style="font-size:9.5px;">(予定)</span>':isCur?' <span style="font-size:9.5px;">(適用中)</span>':''}</span>
       <span style="flex:1;font-size:11px;color:var(--txt2);">${cells}</span>
       <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="removeLocPriceHistory(${idx})">削除</button>
     </div>`;
   }).join('');
 }
 
+// 新単価の入力欄のid(上の「郵便局単価」欄とは別物)
+const LPH_ID={kanryo:'lph-kanryo',tenso:'lph-tenso',night:'lph-night',
+              ogata:'lph-ogata',shukka:'lph-shukka',mochimodoiri:'lph-mochi'};
+// 上の「郵便局単価」欄のid(現行値)
+const LOC_ID={kanryo:'loc-price-kanryo',tenso:'loc-price-tenso',night:'loc-price-night',
+              ogata:'loc-price-ogata',shukka:'loc-price-shukka',mochimodoiri:'loc-price-mochi'};
+
+// 現単価を新単価の欄へ写す(改定は据え置き項目が多いため、差分だけ直せるようにする)
+function copyCurPriceToNew(){
+  PRICE_KEYS.forEach(k=>{
+    const src=document.getElementById(LOC_ID[k]);
+    const dst=document.getElementById(LPH_ID[k]);
+    if(src && dst) dst.value = src.value || '';
+  });
+}
+
+function clearNewPriceInputs(){
+  if($('lph-from')) $('lph-from').value='';
+  PRICE_KEYS.forEach(k=>{ const el=document.getElementById(LPH_ID[k]); if(el) el.value=''; });
+}
+
 function addLocPriceHistory(){
-  const from=$('loc-price-from')?.value||'';
+  const from=$('lph-from')?.value||'';
   if(!from){ alert('適用開始日を入力してください'); return; }
   const rec={from};
   let any=false;
   PRICE_KEYS.forEach(k=>{
-    const id = k==='mochimodoiri' ? 'loc-price-mochi' : 'loc-price-'+k;
-    const v=parseFloat(document.getElementById(id)?.value)||0;
+    const v=parseFloat(document.getElementById(LPH_ID[k])?.value)||0;
     rec[k]=v;
     if(v>0) any=true;
   });
-  if(!any){ alert('単価がすべて0です。上の単価欄に金額を入力してください'); return; }
+  if(!any){ alert('単価がすべて0です。「新しい単価を登録」の欄に金額を入力してください\n（上の単価をそのまま使う場合は「上の単価をコピー」を押してください）'); return; }
   const dup=_locPriceHistDraft.findIndex(h=>String(h.from)===String(from));
   if(dup>=0){
     if(!confirm(`${from} からの単価は既に登録されています。上書きしますか？`)) return;
@@ -36278,7 +36323,7 @@ function addLocPriceHistory(){
   } else {
     _locPriceHistDraft.push(rec);
   }
-  if($('loc-price-from')) $('loc-price-from').value='';
+  clearNewPriceInputs();
   renderLocPriceHist();
 }
 
