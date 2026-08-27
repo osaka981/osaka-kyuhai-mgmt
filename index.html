@@ -1372,9 +1372,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
         </div>
         <div id="cmp-mon-tabs"></div>
+        <!-- ★ 2026/08/24: 営業所もタブ選択に。実体の select は残して互換を保つ。 -->
+        <div id="cmp-off-tabs"></div>
         <div class="f3">
           <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
-          <div class="fg"><label>営業所</label><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
+          <div class="fg" id="cmp-off-holder" hidden><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
           <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
         </div>
       </div>
@@ -7841,6 +7843,8 @@ function renderCmp(){
   const _mt=$('cmp-mon-tabs');
   if(_mt) _mt.innerHTML=_monTabs('cmp-mon-tab',mon,"_cmpMonSync()",{label:'対象月'});
   const off=$('cmp-off')?.value||'';
+  const _ot=$('cmp-off-tabs');
+  if(_ot) _ot.innerHTML=_offTabs(off, mon);
   const st=$('cmp-st')?.value||'全件';
   // ★ 2026/08/18: 郵便局調書(D.postLogs)を日報へ突き合わせる。
   //   postLogs は書き換えず、表示用に postKanryo 等を注入するだけ。
@@ -7896,7 +7900,8 @@ function renderCmp(){
 
   const html=[];
   groups.forEach(function(g,gi){
-    if(gi>0) html.push('<tr><td colspan="15" style="height:9px;padding:0;border:none;background:transparent;"></td></tr>');
+    // ★ 2026/08/27: 日の切れ目を目で追えるよう、日計と翌日の間を大きく空ける
+    if(gi>0) html.push('<tr class="no-hover"><td colspan="15" style="height:20px;padding:0;border:none;background:transparent;"></td></tr>');
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
@@ -7916,8 +7921,12 @@ function renderCmp(){
         sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
       }
       if(orph) orphInDay=true;
-      html.push('<tr class="'+cls+'">');
-      html.push('<td class="mono"'+(ri===0?' style="font-weight:700;"':' style="color:transparent;"')+'>'+esc(g.date||'')
+      // 日の先頭行は上に太線を引き、日付セルに色の縦棒を添えて区切りを示す
+      const rowTop = (ri===0 && gi>0) ? 'border-top:3px solid var(--brd2);' : '';
+      html.push('<tr class="'+cls+'" style="'+rowTop+'">');
+      html.push('<td class="mono" style="'+(ri===0
+          ? 'font-weight:700;font-size:13px;box-shadow:inset 3px 0 0 '+dowCol+';'
+          : 'color:transparent;')+'">'+esc(g.date||'')
         +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;">'+dow+'</span>':'')+'</td>');
       html.push('<td>'+officeLink(r.office||'')+'</td>');
       html.push('<td>'+staffLink(r.staff||'')+'</td>');
@@ -7951,7 +7960,8 @@ function renderCmp(){
     const dk=hasPostAny?sum.pk-sum.nk:null;
     const dy=hasPostAny?sum.py-sum.ny:null;
     const doo=hasPostAny?sum.po-sum.no:null;
-    html.push('<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">');
+    html.push('<tr class="no-hover" style="background:var(--sur2);border-top:2px solid var(--brd2);'
+      +'box-shadow:inset 3px 0 0 var(--blu), inset 0 -3px 0 var(--brd2);">');
     html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
     html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
       +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span>'
@@ -25039,7 +25049,8 @@ function renderOfficeDel(el, name){
       else _groups.push({date:r.date, rows:[r]});
     });
     _groups.forEach((g,gi)=>{
-      if(gi>0) html+=`<tr><td colspan="9" style="height:10px;padding:0;border:none;background:transparent;"></td></tr>`;
+      // ★ 2026/08/27: 日の切れ目を広げる(照合結果と同じ間隔にそろえる)
+      if(gi>0) html+=`<tr class="no-hover"><td colspan="9" style="height:20px;padding:0;border:none;background:transparent;"></td></tr>`;
       const dow=(()=>{ const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
       const dowCol = dow==='日'?'var(--red2)':(dow==='土'?'var(--blu)':'var(--txt2)');
@@ -25049,9 +25060,9 @@ function renderOfficeDel(el, name){
         sum.tenso+=(r.tenso||0); sum.ogata+=(r.ogata||0);
         sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0);
         const isNew=(ri===0);
-        const topBorder = isNew && gi>0 ? 'border-top:2px solid var(--brd);' : '';
+        const topBorder = (isNew && gi>0) ? 'border-top:3px solid var(--brd2);' : '';
         html+=`<tr style="${topBorder}">
-          <td class="mono" style="${isNew?'font-weight:700;':'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
+          <td class="mono" style="${isNew?`font-weight:700;font-size:13px;box-shadow:inset 3px 0 0 ${dowCol};`:'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
           <td>${staffLink(r.staff)}</td>
           <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
@@ -25061,7 +25072,7 @@ function renderOfficeDel(el, name){
       });
       // 日計
       const rate = sum.mochi ? (sum.kanryo/sum.mochi*100) : 0;
-      html+=`<tr style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu);">
+      html+=`<tr class="no-hover" style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu), inset 0 -3px 0 var(--brd2);">
         <td class="mono" style="font-size:12.5px;color:var(--txt3);">${g.date||''}</td>
         <td style="font-size:14.5px;font-weight:700;color:var(--txt);">日計
           <span style="font-size:13px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動${g.rows.length}人</span>
@@ -36559,6 +36570,69 @@ async function restoreFullBackup(inputEl){
     + `日報 ${ypN} 件を含む ${done} 種類のデータを復元しました。\n`
     + `OKを押すとページを再読込します。`});
   location.reload();
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  営業所の切替タブ (2026/08/24)
+//   月タブと同じ操作感にそろえる。実体の select は隠したまま残し、
+//   既存の $('cmp-off').value を読むコードには手を入れない。
+//   件数を添えて、その月にデータのある局が一目で分かるようにする。
+// ════════════════════════════════════════════════════════════
+function _cmpOffList(mon){
+  const names=new Set();
+  // 拠点マスタの郵便局(宅配)を基本に、実データに出てくる営業所も拾う
+  (D.locations||[]).forEach(l=>{
+    if(l && l.active!==false && (l.type==='post_office' || l.typesDel)) names.add(l.name);
+  });
+  (D.delivery||[]).forEach(r=>{ if(r.office) names.add(r.office); });
+  (D.postLogs||[]).forEach(l=>{ if(l.office) names.add(l.office); });
+
+  const cnt={};
+  const inMon = d => !mon || String(d||'').slice(0,7)===mon;
+  (D.delivery||[]).forEach(r=>{ if(inMon(r.date)&&r.office) cnt[r.office]=(cnt[r.office]||0)+1; });
+  (D.postLogs||[]).forEach(l=>{ if(inMon(l.date)&&l.office) cnt[l.office]=(cnt[l.office]||0)+1; });
+
+  return [...names].filter(Boolean)
+    .sort((a,b)=>(cnt[b]||0)-(cnt[a]||0) || String(a).localeCompare(String(b),'ja'))
+    .map(n=>({name:n, n:cnt[n]||0}));
+}
+
+function _offTabs(cur, mon){
+  const list=_cmpOffList(mon);
+  const chip=(val,label,cntTxt,on)=>{
+    const v=String(val).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<button type="button" onclick="_cmpOffPick('${v}')"
+      style="flex:0 0 auto;padding:7px 14px;border-radius:8px;cursor:pointer;line-height:1.2;
+             border:1px solid ${on?'var(--tel)':'var(--brd2)'};
+             background:${on?'var(--tel)':'var(--sur2)'};
+             color:${on?'#fff':'var(--txt2)'};
+             font-size:${on?'14px':'13px'};font-weight:700;white-space:nowrap;
+             ${on?'box-shadow:0 2px 6px rgba(0,0,0,.28);':''}">
+      ${esc(label)}${cntTxt?`<span style="font-size:10px;font-weight:400;opacity:.75;margin-left:5px;">${cntTxt}</span>`:''}
+    </button>`;
+  };
+  const total=list.reduce((a,x)=>a+x.n,0);
+  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+    <span style="font-size:13px;font-weight:700;color:var(--txt2);flex:0 0 auto;">営業所</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      ${chip('', '全営業所', total?total+'件':'', !cur)}
+      ${list.map(o=>chip(o.name, o.name, o.n?o.n+'件':'—', cur===o.name)).join('')}
+    </div>
+  </div>`;
+}
+
+function _cmpOffPick(name){
+  const sel=$('cmp-off');
+  if(sel){
+    // select に該当 option が無い場合は補ってから選択する
+    if(name && ![...sel.options].some(o=>o.value===name)){
+      const op=document.createElement('option');
+      op.value=name; op.textContent=name; sel.appendChild(op);
+    }
+    sel.value=name||'';
+  }
+  renderCmp();
 }
 
 </script>
