@@ -7900,8 +7900,10 @@ function renderCmp(){
 
   const html=[];
   groups.forEach(function(g,gi){
-    // ★ 2026/08/27: 日の切れ目を目で追えるよう、日計と翌日の間を大きく空ける
-    if(gi>0) html.push('<tr class="no-hover"><td colspan="15" style="height:20px;padding:0;border:none;background:transparent;"></td></tr>');
+    // ★ 2026/08/27: 日の切れ目。影は使わず、余白の中央に線を1本引くだけにする。
+    if(gi>0) html.push('<tr class="no-hover"><td colspan="15" style="height:8px;padding:0;'
+      +'border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>'
+      +'<tr class="no-hover"><td colspan="15" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
@@ -7922,10 +7924,11 @@ function renderCmp(){
       }
       if(orph) orphInDay=true;
       html.push('<tr class="'+cls+'">');
+      // 日付は先頭行だけ表示。日が変わったことが分かるよう少し大きく、曜日を色分けする。
       html.push('<td class="mono" style="'+(ri===0
-          ? 'font-weight:700;font-size:13px;'
+          ? 'font-weight:700;font-size:13.5px;color:var(--txt);'
           : 'color:transparent;')+'">'+esc(g.date||'')
-        +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;">'+dow+'</span>':'')+'</td>');
+        +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;font-size:14px;">'+dow+'</span>':'')+'</td>');
       html.push('<td>'+officeLink(r.office||'')+'</td>');
       html.push('<td>'+staffLink(r.staff||'')+'</td>');
       const dash='<span style="color:var(--txt3);">&#8212;</span>';
@@ -25048,8 +25051,9 @@ function renderOfficeDel(el, name){
       else _groups.push({date:r.date, rows:[r]});
     });
     _groups.forEach((g,gi)=>{
-      // ★ 2026/08/27: 日の切れ目を広げる(照合結果と同じ間隔にそろえる)
-      if(gi>0) html+=`<tr class="no-hover"><td colspan="9" style="height:20px;padding:0;border:none;background:transparent;"></td></tr>`;
+      // ★ 2026/08/27: 日の切れ目(照合結果と同じ表現にそろえる)
+      if(gi>0) html+=`<tr class="no-hover"><td colspan="9" style="height:8px;padding:0;border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>`
+        +`<tr class="no-hover"><td colspan="9" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>`;
       const dow=(()=>{ const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
       const dowCol = dow==='日'?'var(--red2)':(dow==='土'?'var(--blu)':'var(--txt2)');
