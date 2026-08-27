@@ -7921,11 +7921,9 @@ function renderCmp(){
         sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
       }
       if(orph) orphInDay=true;
-      // 日の先頭行は上に太線を引き、日付セルに色の縦棒を添えて区切りを示す
-      const rowTop = (ri===0 && gi>0) ? 'border-top:3px solid var(--brd2);' : '';
-      html.push('<tr class="'+cls+'" style="'+rowTop+'">');
+      html.push('<tr class="'+cls+'">');
       html.push('<td class="mono" style="'+(ri===0
-          ? 'font-weight:700;font-size:13px;box-shadow:inset 3px 0 0 '+dowCol+';'
+          ? 'font-weight:700;font-size:13px;'
           : 'color:transparent;')+'">'+esc(g.date||'')
         +(ri===0&&dow?' <span style="color:'+dowCol+';font-weight:700;">'+dow+'</span>':'')+'</td>');
       html.push('<td>'+officeLink(r.office||'')+'</td>');
@@ -7960,8 +7958,9 @@ function renderCmp(){
     const dk=hasPostAny?sum.pk-sum.nk:null;
     const dy=hasPostAny?sum.py-sum.ny:null;
     const doo=hasPostAny?sum.po-sum.no:null;
-    html.push('<tr class="no-hover" style="background:var(--sur2);border-top:2px solid var(--brd2);'
-      +'box-shadow:inset 3px 0 0 var(--blu), inset 0 -3px 0 var(--brd2);">');
+    // ★ 2026/08/27: 影は立体的に見えて落ち着かないため使わない。
+    //   区切りは背景色と1本の罫線、そして日の間の余白だけで表す。
+    html.push('<tr class="no-hover" style="background:var(--sur2);border-top:1px solid var(--brd2);">');
     html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
     html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
       +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span>'
@@ -25060,9 +25059,8 @@ function renderOfficeDel(el, name){
         sum.tenso+=(r.tenso||0); sum.ogata+=(r.ogata||0);
         sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0);
         const isNew=(ri===0);
-        const topBorder = (isNew && gi>0) ? 'border-top:3px solid var(--brd2);' : '';
-        html+=`<tr style="${topBorder}">
-          <td class="mono" style="${isNew?`font-weight:700;font-size:13px;box-shadow:inset 3px 0 0 ${dowCol};`:'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
+        html+=`<tr>
+          <td class="mono" style="${isNew?'font-weight:700;font-size:13px;':'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
           <td>${staffLink(r.staff)}</td>
           <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
@@ -25072,7 +25070,7 @@ function renderOfficeDel(el, name){
       });
       // 日計
       const rate = sum.mochi ? (sum.kanryo/sum.mochi*100) : 0;
-      html+=`<tr class="no-hover" style="background:var(--sur2);border-top:2px solid var(--brd2);box-shadow:inset 3px 0 0 var(--blu), inset 0 -3px 0 var(--brd2);">
+      html+=`<tr class="no-hover" style="background:var(--sur2);border-top:1px solid var(--brd2);">
         <td class="mono" style="font-size:12.5px;color:var(--txt3);">${g.date||''}</td>
         <td style="font-size:14.5px;font-weight:700;color:var(--txt);">日計
           <span style="font-size:13px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動${g.rows.length}人</span>
@@ -35269,7 +35267,7 @@ function _delSumHeader(rows, opt){
 
   const rateCol = rate>=90?'var(--grn2)':rate>=80?'var(--amb2)':'var(--red2)';
 
-  return `<div style="position:sticky;top:0;z-index:20;background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:12px 14px;margin-bottom:12px;box-shadow:0 3px 10px rgba(0,0,0,.25);">
+  return `<div style="position:sticky;top:0;z-index:20;background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:12px 14px;margin-bottom:12px;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
       <div style="font-size:15px;font-weight:700;color:var(--txt);letter-spacing:.5px;">
         ${opt.title||'月合計'}
