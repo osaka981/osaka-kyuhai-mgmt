@@ -8063,7 +8063,7 @@ function renderCustTbl(){
 }
 
 function renderPUInv(){
-  const mon=toYM($('pinv-mon')?.value||'');
+  const mon=_ymNorm($('pinv-mon')?.value||'');
   const filter=$('pinv-filter')?.value||'all';
   // 顧客ごとに集計
   const rows=(D.pickup||[]).filter(function(r){return !mon||r.date?.startsWith(mon);});
@@ -8146,7 +8146,7 @@ function togglePuInvAll(checked){
 }
 
 function bulkGenInvoices(){
-  const mon=toYM($('pinv-mon')?.value||'');
+  const mon=_ymNorm($('pinv-mon')?.value||'');
   if(!mon){ showAlert({msg:'対象月を選択してください'}); return; }
   const names=[...document.querySelectorAll('.pinv-chk:checked')].map(c=>c.dataset.name);
   if(!names.length){ showAlert({msg:'発行対象の顧客を選択してください'}); return; }
@@ -8666,7 +8666,7 @@ function renderDash() {
   // 未登録ドライバーアラート
   _renderUnregisteredDriversAlert();
   
-  const tm = toYM($('del-mon')?.value || '');
+  const tm = _ymNorm($('del-mon')?.value || '');
   const mDel = D.delivery.filter(r=>r.date.startsWith(tm));
   const mPU  = D.pickup.filter(r=>r.date.startsWith(tm));
   const totK = mDel.reduce((s,r)=>s+r.kanryo,0);
@@ -8766,7 +8766,7 @@ function renderDelOtabs() {
 function setOff(n){D.curOff=n;renderDelOtabs();renderDel();}
 
 function renderDel() {
-  const mon = toYM($('del-mon')?.value||'');
+  const mon = _ymNorm($('del-mon')?.value||'');
   const rows = D.delivery.filter(r=>
     (!D.curOff||r.office===D.curOff) &&
     (!mon||r.date.startsWith(mon))
@@ -8806,7 +8806,7 @@ function renderDel() {
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
 function renderPU() {
-  const mon = toYM($('pu-mon')?.value||'');
+  const mon = _ymNorm($('pu-mon')?.value||'');
   const cf  = $('pu-cf')?.value||'';
   const rows = D.pickup.filter(r=>(!mon||r.date.startsWith(mon))&&(!cf||r.customerName===cf));
 
@@ -8840,7 +8840,7 @@ function renderPU() {
 
 // ─── 品目別集計（4ビュー）───
 function renderSum() {
-  const mon  = toYM($('sum-mon')?.value||'');
+  const mon  = _ymNorm($('sum-mon')?.value||'');
   const view = $('sum-view')?.value||'item';
   const rows = D.pickup.filter(r=>!mon||r.date.startsWith(mon));
   const el   = $('sum-content');
@@ -23757,8 +23757,8 @@ function _openGasFor(staffName, ym){
 function renderSalary(){
   let h='',tot=0,paid=0,unpaid=0,gasNeed=0,gasTarget=0;
   // 表示月を取得
-  const salMon=toYM($('sal-mon')?.value||'');
-  const salMonStr=salMon||toYM(new Date().toISOString().slice(0,7));
+  const salMon=_ymNorm($('sal-mon')?.value||'');
+  const salMonStr=salMon||_ymNorm(new Date().toISOString().slice(0,7));
 
   D.staff.forEach((s,i)=>{
     // ★ 2026/06/29: 委託会社所属ドライバーは給与計算の対象外(大阪急配から直接支払いなし)。
@@ -31718,7 +31718,7 @@ function generatePostInvoice(locationId, monStr){
 
 // 郵便局請求書 一覧の再描画
 function renderPostInvList(){
-  const mon = toYM($('delinv-post-mon')?.value||'');
+  const mon = _ymNorm($('delinv-post-mon')?.value||'');
   const filterId = $('delinv-post-off')?.value||'';
 
   // 請求対象拠点リスト(isBilling:trueのみ)
