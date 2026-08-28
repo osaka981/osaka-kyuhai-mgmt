@@ -1531,6 +1531,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expPUCSV()">📥 CSV出力</button>
+          <button class="btn b-gh btn-sm" onclick="openCustNameFixer()" title="日報の顧客名を顧客マスタの正式名称に揃えます">顧客名の表記ゆれを修正</button>
           <button class="btn b-grn btn-sm" onclick="openM('m-pu')">＋ 集荷日報入力</button>
         </div>
       </div>
@@ -19983,9 +19984,10 @@ function _findCustomerByName(name){
 }
 
 /** 顧客×月の集計を取得 */
-// 顧客名の照合。空白・記号に加えて法人格の違いも吸収する。
-//  日報に「ジェットグループ」、顧客マスタに「ジェットグループ株式会社」のように
-//  登録時期のずれで法人格の有無が食い違い、請求書に出てこない事例があったため。
+// 顧客名の名寄せ判定。
+//  ★ 金額の集計には使わないこと。「株式会社中野」と「中野」が別会社の場合に
+//    誤って合算され、誤請求になる。用途は次の2つに限る:
+//    ① 画面遷移(顧客ページを開く) ② 表記ゆれの検出と修正候補の提示
 function _custNameNorm(s){
   return String(s||'')
     .replace(/[\s　・,、.]+/g,'')
@@ -20016,7 +20018,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     const f = r.form || {};
     
     // 配達(郵便局名で照合)
-    if(_custNameEq(r.postOffice || '', customerName)){
+    if((r.postOffice || '') === customerName){
       const del = f.del || {};
       result.delivery.kanryo += del.kanryo || 0;
       result.delivery.tenso += del.tenso || 0;
@@ -20028,7 +20030,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     // 定時集荷(集荷会社名で照合)
     ((f.col && f.col.companies) || []).forEach(c => {
       const cn = c.name || c.companyName || '';
-      if(_custNameEq(cn, customerName)){
+      if(cn === customerName){
         result.shu += c.count || 0;
       }
     });
@@ -20042,7 +20044,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     blocks.forEach(b => {
       const collectFrom = (cust) => {
         const cn = cust.custName || cust.name || '';
-        if(!_custNameEq(cn, customerName)) return;
+        if(cn !== customerName) return;
         if(cust.rest) return;                       // 本日集荷なし=非稼働
         // 数量0でも確定していれば稼働1日(車建ての請求根拠)
         if(r.date) result._workDaySet.add(r.date);
@@ -20055,7 +20057,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
           }
         });
       };
-      if(b.type === 'indiv' && _custNameEq(b.custName, customerName)){
+      if(b.type === 'indiv' && b.custName === customerName){
         if(!b.rest){
           if(r.date) result._workDaySet.add(r.date);   // 稼働1日
           const items = b.items || {};
@@ -36683,6 +36685,93 @@ function _cmpOffPick(name){
     sel.value=name||'';
   }
   renderCmp();
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  顧客名の表記ゆれ修正 (2026/08/28)
+//   日報に古い名称(例「ジェットグループ」)が残ると、顧客マスタ
+//   (「ジェットグループ株式会社」)と一致せず、請求から漏れる。
+//   照合を緩めると別会社を合算する危険があるため、
+//   データそのものを正式名称に揃える。
+// ════════════════════════════════════════════════════════════
+
+// 表記ゆれ候補を洗い出す。完全一致するものは対象外。
+function findCustNameMismatches(){
+  const masters = (D.customers||[]).map(c=>c.name).filter(Boolean);
+  const exact = new Set(masters);
+  const found = {};   // 日報上の名称 → {to, count, dates:[]}
+
+  const check = (nm, date) => {
+    if(!nm || exact.has(nm)) return;
+    const hits = masters.filter(m=>_custNameEq(m, nm));
+    if(hits.length !== 1) return;            // 候補が0または複数なら自動修正しない
+    const k = nm;
+    if(!found[k]) found[k] = {from:nm, to:hits[0], count:0, dates:[]};
+    found[k].count++;
+    if(date && found[k].dates.length<5 && !found[k].dates.includes(date)) found[k].dates.push(date);
+  };
+
+  (lsGet(LS_KEYS.COL,[])||[]).forEach(r=>{
+    (r.rows||[]).forEach(row=>{
+      if(row.masterKey==='route') return;    // ルート名は顧客名ではない
+      check(row.customerName, r.date);
+    });
+  });
+  return Object.values(found).sort((a,b)=>b.count-a.count);
+}
+
+// col_logs の安全な保存(件数が減る書き込みは拒否)
+async function _safeSetColLogs(next, reason){
+  const prev = lsGet(LS_KEYS.COL, null);
+  const prevN = Array.isArray(prev) ? prev.length : 0;
+  if(!Array.isArray(next)){ console.error('[_safeSetColLogs] 配列ではありません'); return false; }
+  if(prevN > 0 && next.length < prevN){
+    alert(`保存を中止しました。\n${prevN}件 → ${next.length}件 と減るため（${reason||''}）`);
+    return false;
+  }
+  lsSet(LS_KEYS.COL, next);
+  try{ if(typeof fbSet==='function') await fbSet('col_logs', next); }
+  catch(e){ console.error('[_safeSetColLogs]', e); return false; }
+  return true;
+}
+
+async function openCustNameFixer(){
+  const list = findCustNameMismatches();
+  if(!list.length){
+    showAlert({msg:'顧客名の表記ゆれは見つかりませんでした。\n日報の顧客名はすべて顧客マスタと一致しています。'});
+    return;
+  }
+  const body = list.map(x=>
+    `・「${x.from}」→「${x.to}」　${x.count}件` + (x.dates.length?`（${x.dates.join(' / ')}${x.count>x.dates.length?' ほか':''}）`:'')
+  ).join('\n');
+
+  const ok = await showDialog({
+    icon:'⚠️', title:'顧客名を正式名称に揃える',
+    msg:`日報に、顧客マスタと一致しない名称が残っています。\n\n${body}\n\n`
+      + `これらを正式名称に書き換えます。数量や日付は変更しません。\n\n`
+      + `※ 実行前に「管理 → システム設定 → 全データをJSONで書出」で\n`
+      + `　 バックアップを取ることを強くお勧めします。`,
+    okText:'書き換える', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  const map = {};
+  list.forEach(x=>{ map[x.from] = x.to; });
+  const logs = JSON.parse(JSON.stringify(lsGet(LS_KEYS.COL,[])||[]));
+  let changed = 0;
+  logs.forEach(r=>{
+    (r.rows||[]).forEach(row=>{
+      if(row.masterKey==='route') return;
+      if(map[row.customerName]){ row.customerName = map[row.customerName]; changed++; }
+    });
+  });
+  if(!changed){ showAlert({msg:'対象が見つかりませんでした'}); return; }
+
+  const saved = await _safeSetColLogs(logs, '顧客名の表記ゆれ修正');
+  if(!saved) return;
+  showAlert({msg:`${changed}件の顧客名を正式名称に書き換えました。\n画面を再読み込みします。`});
+  setTimeout(()=>location.reload(), 800);
 }
 
 </script>
