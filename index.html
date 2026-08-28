@@ -5933,9 +5933,12 @@ function applyFirebaseData() {
       visitFrom: c.visitFrom || '',
       visitTo: c.visitTo || '',
       visitNote: c.visitNote || '',
-      // 集荷単価(colPricesがあればそれを優先、なければデフォルト)
+      // 集荷単価。★ 2026/08/28: 未登録の顧客に既定単価(60サイズ150円など)を
+      //   自動で埋めていたため、契約していない個建て単価で請求されていた。
+      //   請求書は colPrices が空だと prices を見にいくため、ここが誤請求の元になる。
+      //   未登録は空のままにし、請求は0円とする(既定単価は新規登録画面の初期値としてのみ使う)。
       colPrices: c.colPrices || {},
-      prices: c.prices || buildDefaultPrices(),
+      prices: c.prices || {},
       // 顧客詳細
       zip: c.zip || '',
       addr: c.addr || '',
@@ -10008,16 +10011,25 @@ const IK_COL_MAP = {
   'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
   'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te','チャーター':'charter'
 };
+// ★ 2026/08/28: 単価が未登録の顧客に既定単価(60サイズ150円など)を当てていたため、
+//   車建て(日額)で個建て単価を持たない顧客にも数量×既定単価が請求されていた。
+//   契約していない単価を勝手に当てるのは誤請求に直結するので、未登録は0円とする。
+//   既定単価は「新規登録時の初期値」としてのみ使う(buildDefaultPrices)。
 function getCustPrice(cu, k){
-  if(!cu) return ITEMS[k]?.defPrice||0;
+  if(!cu) return 0;
   // 新形式 colPrices
   if(cu.colPrices){
     const ck=IK_COL_MAP[k];
-    if(ck && ck!=='charter' && cu.colPrices[ck]) return cu.colPrices[ck];
+    if(ck && ck!=='charter'){
+      const v = cu.colPrices[ck];
+      if(v !== undefined && v !== null && v !== '') return Number(v)||0;
+    }
   }
   // 旧形式 prices フォールバック
-  if(cu.prices && cu.prices[k]) return cu.prices[k];
-  return ITEMS[k]?.defPrice||0;
+  if(cu.prices && cu.prices[k] !== undefined && cu.prices[k] !== null && cu.prices[k] !== ''){
+    return Number(cu.prices[k])||0;
+  }
+  return 0;   // 未登録 = 請求しない
 }
 
 // ══════════════════════════════════════════════════
@@ -12413,7 +12425,8 @@ window._ivOpenLabelEditor = function(){
 
 window._ivOpenLabelEditorFor = function(custName){
   document.getElementById('m-iv-label-pick')?.remove();
-  const cust = (D.customers||[]).find(c => c.name === custName);
+  const cust = (D.customers||[]).find(c => c.name === custName)
+            || (D.customers||[]).find(c => _custNameEq(c.name, custName));
   if(!cust){ showAlert({msg:'顧客が見つかりません'}); return; }
   
   // 標準ラベルの一覧(IK + ルート + チャーター)
@@ -12472,7 +12485,8 @@ window._ivOpenLabelEditorFor = function(custName){
 };
 
 window._ivSaveLabelEditor = function(custName){
-  const cust = (D.customers||[]).find(c => c.name === custName);
+  const cust = (D.customers||[]).find(c => c.name === custName)
+            || (D.customers||[]).find(c => _custNameEq(c.name, custName));
   if(!cust){ showAlert({msg:'顧客が見つかりません'}); return; }
   const inputs = document.querySelectorAll('#m-iv-label-editor input[data-label-key]');
   const labels = {};
@@ -24938,9 +24952,12 @@ function saveStaffFromFS(){/* 既存モーダルの保存で対応 */}
 // ─── 顧客集約ページ ───
 // ═══════════════════════════════════════════════
 function openCustFS(nameOrId){
+  // ★ 2026/08/28: 日報の「ジェットグループ」と顧客マスタの「ジェットグループ株式会社」のように
+  //   法人格の有無で名称が食い違う場合があるため、完全一致で見つからなければ緩く照合する。
   const cu = typeof nameOrId==='number'
     ? (D.customers||[]).find(c=>c.id===nameOrId)
-    : (D.customers||[]).find(c=>c.name===nameOrId);
+    : ((D.customers||[]).find(c=>c.name===nameOrId)
+       || (D.customers||[]).find(c=>_custNameEq(c.name, nameOrId)));
   if(!cu){ showAlert({msg:'顧客が見つかりません'}); closeFS(); return; }
   _fsId=cu.name;
   $('fs-title').textContent=cu.name;
