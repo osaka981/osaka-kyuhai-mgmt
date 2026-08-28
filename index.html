@@ -19969,11 +19969,31 @@ function _findCustomerByName(name){
 }
 
 /** 顧客×月の集計を取得 */
+// 顧客名の照合。空白・記号に加えて法人格の違いも吸収する。
+//  日報に「ジェットグループ」、顧客マスタに「ジェットグループ株式会社」のように
+//  登録時期のずれで法人格の有無が食い違い、請求書に出てこない事例があったため。
+function _custNameNorm(s){
+  return String(s||'')
+    .replace(/[\s　・,、.]+/g,'')
+    .replace(/(株式会社|有限会社|合同会社|合資会社|合名会社|一般社団法人|公益社団法人)/g,'')
+    .replace(/[（(]株[)）]|[（(]有[)）]/g,'')
+    .toLowerCase();
+}
+function _custNameEq(a,b){
+  if(!a||!b) return false;
+  if(String(a)===String(b)) return true;
+  return _custNameNorm(a) === _custNameNorm(b);
+}
+
 function _getCustomerMonthlyData(customerName, ymPrefix){
   const result = {
     delivery: { kanryo:0, tenso:0, kangenpu:0, yakan:0, ogata:0, total:0 },
     shu: 0,
     collection: { items: {}, total: 0 },
+    // ★ 2026/08/28: 日額(車建て)用の稼働日数。
+    //   数量確定を押した日を1日と数える(本日集荷なしの日は数えない)。
+    workDays: 0,
+    _workDaySet: new Set(),
   };
   
   // YP_LOGS(配達)
@@ -19982,7 +20002,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     const f = r.form || {};
     
     // 配達(郵便局名で照合)
-    if((r.postOffice || '') === customerName){
+    if(_custNameEq(r.postOffice || '', customerName)){
       const del = f.del || {};
       result.delivery.kanryo += del.kanryo || 0;
       result.delivery.tenso += del.tenso || 0;
@@ -19994,7 +20014,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     // 定時集荷(集荷会社名で照合)
     ((f.col && f.col.companies) || []).forEach(c => {
       const cn = c.name || c.companyName || '';
-      if(cn === customerName){
+      if(_custNameEq(cn, customerName)){
         result.shu += c.count || 0;
       }
     });
@@ -20007,9 +20027,11 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     const blocks = _qmNormalizeBlocks(r.blocks);
     blocks.forEach(b => {
       const collectFrom = (cust) => {
-        if(cust.rest) return;
         const cn = cust.custName || cust.name || '';
-        if(cn !== customerName) return;
+        if(!_custNameEq(cn, customerName)) return;
+        if(cust.rest) return;                       // 本日集荷なし=非稼働
+        // 数量0でも確定していれば稼働1日(車建ての請求根拠)
+        if(r.date) result._workDaySet.add(r.date);
         const items = cust.items || {};
         Object.entries(items).forEach(([k, v]) => {
           const cnt = parseInt(v) || 0;
@@ -20019,21 +20041,25 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
           }
         });
       };
-      if(b.type === 'indiv' && !b.rest && (b.custName === customerName)){
-        const items = b.items || {};
-        Object.entries(items).forEach(([k, v]) => {
-          const cnt = parseInt(v) || 0;
-          if(cnt > 0){
-            result.collection.items[k] = (result.collection.items[k] || 0) + cnt;
-            result.collection.total += cnt;
-          }
-        });
+      if(b.type === 'indiv' && _custNameEq(b.custName, customerName)){
+        if(!b.rest){
+          if(r.date) result._workDaySet.add(r.date);   // 稼働1日
+          const items = b.items || {};
+          Object.entries(items).forEach(([k, v]) => {
+            const cnt = parseInt(v) || 0;
+            if(cnt > 0){
+              result.collection.items[k] = (result.collection.items[k] || 0) + cnt;
+              result.collection.total += cnt;
+            }
+          });
+        }
       } else if(b.type === 'route'){
         (b.customers || []).forEach(collectFrom);
       }
     });
   });
-  
+  result.workDays = result._workDaySet.size;
+  delete result._workDaySet;
   return result;
 }
 
@@ -20234,12 +20260,17 @@ function _calcInvoiceAmount(row, cust){
     if(itemUnit === '月額'){
       // 月額: 1×単価で固定(回数は明細用)
       subtotal = count > 0 ? unit : 0;
+    } else if(itemUnit === '日額'){
+      // ★ 2026/08/28: 日額(車建て)は稼働日数×単価。
+      //   荷物が0でも車を出した日は請求対象なので、日報の数量では数えない。
+      displayCount = data.workDays || 0;
+      subtotal = displayCount * unit;
     } else {
-      // 件・個・日額: 数量×単価
+      // 件・個: 数量×単価
       subtotal = count * unit;
     }
     
-    if(count > 0 || unit > 0){
+    if(displayCount > 0 || count > 0 || unit > 0){
       customAmount += subtotal;
       customDetails.push({
         name: o.name,
