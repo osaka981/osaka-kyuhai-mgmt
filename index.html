@@ -25842,7 +25842,10 @@ function _calcCustBilling(custName, monStr){
   rows.forEach(r=>IK.forEach(k=>{ itemSum[k]=(itemSum[k]||0)+(iq(r,k)||0); }));
   Object.entries(itemSum).forEach(([k,q])=>{
     if(q>0){
-      const price=cu.prices?.[k]||0;
+      // ★ 2026/08/29: 単価は新形式 colPrices に保存される。
+      //   ここが旧形式 prices しか見ておらず、単価が入っていても0円で計算されていた。
+      //   getCustPrice が新旧どちらにも対応しているのでそれを使う。
+      const price=(typeof getCustPrice==='function') ? getCustPrice(cu, k) : (cu.prices?.[k]||0);
       // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
       const taxFlag = (cu.prices?._tax && cu.prices._tax[k]) || 'ex';
       const amt = (typeof calcUnitTotal === 'function') ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
