@@ -9184,12 +9184,12 @@ function openTempSplit(recordId){
 
 
 function setCmpCause(id, val) {
-  const r = D.delivery.find(x=>x.id===id);
+  const r = D.delivery.find(x=>String(x.id)===String(id));
   if(r) r.cause = val;
 }
 
 function approveCmp(id){
-  const r=D.delivery.find(x=>x.id===id);
+  const r=D.delivery.find(x=>String(x.id)===String(id));
   if(!r)return;
   if(r.postData!==null && r.kanryo!==r.postData){
     const diff=r.kanryo-r.postData; // 正:日報>局 / 負:局>日報
@@ -9695,7 +9695,15 @@ function _resetDelForm(){
 }
 
 function editDel(id){
-  const r=D.delivery.find(x=>x.id===id);if(!r)return;
+  // ★ 2026/08/29: id は数値と文字列が混在しうる(取込経路により型が変わる)。
+  //   厳密比較だと一致せず、しかも return だけなので前回の状態のまま
+  //   モーダルが開き「新規に見える」状態になっていた。
+  const r=D.delivery.find(x=>String(x.id)===String(id));
+  if(!r){
+    console.error('[editDel] 対象の日報が見つかりません', id);
+    showAlert({msg:'対象の日報が見つかりませんでした。\n画面を再読み込みしてお試しください。'});
+    return;
+  }
   window._delEditMode = true;
   // openMを使わず直接モーダルを開く（openM内のリセット処理を回避）
   const mDelEl = document.getElementById('m-del');
@@ -9748,7 +9756,7 @@ function editDel(id){
 // ─── 集荷日報入力 ───
 function onCustChange(){
   const id=parseInt($('pu-cust')?.value);
-  const cu=D.customers.find(c=>c.id===id);
+  const cu=D.customers.find(c=>String(c.id)===String(id));
   if($('pu-reg'))$('pu-reg').value=cu?.region||'';
   updPUPrev();
 }
@@ -9763,7 +9771,13 @@ function updPUPrev(){
   if(!tot){el.style.display='none';return;}
   const amt=IK.reduce((s,k)=>{const q=items[k]||0;return s+q*(getCustPrice(cu, k));},0);
   el.style.display='block';
-  el.innerHTML=`<div class="flbc"><span>合計数量：<strong class="mono">${fmt(tot)}</strong>個・件</span>${cu?`<span style="color:var(--tel2)">金額概算：<strong class="mono">¥${fmt(amt)}</strong></span>`:''}</div>`;
+  // ★ 2026/08/29: 燃料費の直下に出るため、燃料費の金額と誤読されていた。
+  //   何の合計かを明示する(集荷品目の数量と概算金額であって、燃料費ではない)。
+  el.innerHTML=`<div class="flbc">
+    <span>集荷品目 合計数量：<strong class="mono">${fmt(tot)}</strong>個・件</span>
+    ${cu?`<span style="color:var(--tel2)">集荷 金額概算：<strong class="mono">¥${fmt(amt)}</strong></span>`:''}
+  </div>
+  <div style="font-size:9.5px;color:var(--txt3);margin-top:3px;">※ 上の品目別数量の合計です。燃料費・違約金・チャーターは含みません</div>`;
 }
 
 function savePU(){
@@ -9849,7 +9863,12 @@ function _resetPUForm(){
 }
 
 function editPU(id){
-  const r=D.pickup.find(x=>x.id===id);if(!r)return;
+  const r=D.pickup.find(x=>String(x.id)===String(id));
+  if(!r){
+    console.error('[editPU] 対象の集荷日報が見つかりません', id);
+    showAlert({msg:'対象の集荷日報が見つかりませんでした。\n画面を再読み込みしてお試しください。'});
+    return;
+  }
   $('pu-date').value=r.date.replace(/\//g,'-');
   // 営業所コンボ復元
   if($('pu-off'))$('pu-off').value=r.office;
@@ -11592,7 +11611,7 @@ async function saveCust(){
 }
 
 function deleteCust(id){
-  const cu=D.customers.find(c=>c.id===id);
+  const cu=D.customers.find(c=>String(c.id)===String(id));
   if(!cu) return;
   showDialog({icon:'⚠️', title:'削除の確認', msg:`「${cu.name}」を削除しますか？\n\n関連する集荷データは残りますが、顧客情報は復元できません。`, okText:'削除', cancelText:'キャンセル'}).then(ok=>{
     if(!ok)return;
@@ -12728,10 +12747,10 @@ function renderArchive(){
 // アーカイブから復元
 function archiveRestore(kind, id){
   let item, label;
-  if(kind==='cust'){ item = D.customers.find(c=>c.id===id); label = '顧客'; }
-  else if(kind==='staff'){ item = D.staff.find(s=>s.id===id); label = '従業員'; }
-  else if(kind==='company'){ item = D.companies.find(c=>c.id===id); label = '委託会社'; }
-  else if(kind==='office'){ item = D.offices.find(o=>o.id===id); label = '営業所'; }
+  if(kind==='cust'){ item = D.customers.find(c=>String(c.id)===String(id)); label = '顧客'; }
+  else if(kind==='staff'){ item = D.staff.find(s=>String(s.id)===String(id)); label = '従業員'; }
+  else if(kind==='company'){ item = D.companies.find(c=>String(c.id)===String(id)); label = '委託会社'; }
+  else if(kind==='office'){ item = D.offices.find(o=>String(o.id)===String(id)); label = '営業所'; }
   if(!item) return;
 
   showDialog({
@@ -12781,10 +12800,10 @@ function archiveRestore(kind, id){
 // アーカイブから完全削除（警告レベル）
 function archiveDelete(kind, id){
   let item, label, listKey, lsKey;
-  if(kind==='cust'){ item = D.customers.find(c=>c.id===id); label = '顧客'; listKey='customers'; lsKey=LS_KEYS.CUSTOMERS; }
-  else if(kind==='staff'){ item = D.staff.find(s=>s.id===id); label = '従業員'; listKey='staff'; lsKey=LS_KEYS.DRIVERS; }
-  else if(kind==='company'){ item = D.companies.find(c=>c.id===id); label = '委託会社'; listKey='companies'; lsKey=LS_KEYS.COMPANIES; }
-  else if(kind==='office'){ item = D.offices.find(o=>o.id===id); label = '営業所'; listKey='offices'; lsKey=LS_KEYS.OFFICES; }
+  if(kind==='cust'){ item = D.customers.find(c=>String(c.id)===String(id)); label = '顧客'; listKey='customers'; lsKey=LS_KEYS.CUSTOMERS; }
+  else if(kind==='staff'){ item = D.staff.find(s=>String(s.id)===String(id)); label = '従業員'; listKey='staff'; lsKey=LS_KEYS.DRIVERS; }
+  else if(kind==='company'){ item = D.companies.find(c=>String(c.id)===String(id)); label = '委託会社'; listKey='companies'; lsKey=LS_KEYS.COMPANIES; }
+  else if(kind==='office'){ item = D.offices.find(o=>String(o.id)===String(id)); label = '営業所'; listKey='offices'; lsKey=LS_KEYS.OFFICES; }
   if(!item) return;
 
   const warning = `⚠️ 警告：完全削除はすべての関連データが失われます\n\n` +
@@ -12881,7 +12900,7 @@ function _doArchiveDelete(kind, id, item, label, listKey, lsKey){
 
 
 function editCust(id){
-  const c=D.customers.find(x=>x.id===id);if(!c)return;
+  const c=D.customers.find(x=>String(x.id)===String(id));if(!c)return;
   if($('cu-no')){
     // 顧客番号を3桁ゼロパディング形式で表示
     $('cu-no').value=_normalizeCustNo(c.custNo)||c.custNo||'';
@@ -13332,7 +13351,7 @@ function onCompanySelChange(){
     ['st-company-name','st-company-tel','st-company-contact','st-company-addr'].forEach(i=>{const e=$(i);if(e)e.value='';});
     return;
   }
-  const co=(D.companies||[]).find(c=>c.id===id);
+  const co=(D.companies||[]).find(c=>String(c.id)===String(id));
   if(!co)return;
   if($('st-company-name'))$('st-company-name').value=co.name||'';
   if($('st-company-tel'))$('st-company-tel').value=co.tel||'';
@@ -15203,7 +15222,7 @@ function showAlert({icon='ℹ️', title='お知らせ', msg=''} = {}){
 
 // 個人別日別集計書から日報を削除
 function delDelRecord(id){
-  const r = D.delivery.find(x=>x.id===id);
+  const r = D.delivery.find(x=>String(x.id)===String(id));
   if(!r) return;
   showDialog({
     icon:'🗑', title:'日報削除の確認',
@@ -17253,7 +17272,7 @@ function renderRtCustChips(){
 
 // 立寄り順を上下に移動
 function moveRtCust(id, delta){
-  const idx = _rtSelCusts.findIndex(c=>c.id===id);
+  const idx = _rtSelCusts.findIndex(c=>String(c.id)===String(id));
   if(idx === -1) return;
   const newIdx = idx + delta;
   if(newIdx < 0 || newIdx >= _rtSelCusts.length) return;
@@ -17327,7 +17346,7 @@ function filterRtCust(q){
 
 function addRtCust(id,name){
   // 重複防止しつつ、常に複数選択可能(2026/05/19 修正: 上書き挙動を廃止)
-  if(!_rtSelCusts.find(c=>c.id===id)){
+  if(!_rtSelCusts.find(c=>String(c.id)===String(id))){
     _rtSelCusts.push({id,name});
   }
   renderRtCustChips();
@@ -23025,7 +23044,7 @@ function saveDriver(){
   const subLocs = driverOffices
     .filter(id=>id!==primaryOff?.id)
     .map(id=>{
-      const o = D.offices.find(x=>x.id===id);
+      const o = D.offices.find(x=>String(x.id)===String(id));
       return o ? getLocationByName(o.name)?.id : null;
     }).filter(x=>x);
   const newDrv={
@@ -24078,7 +24097,7 @@ function renderSalary(){
 // ─── 営業所 ───
 
 function editOffice(id){
-  const o=D.offices.find(x=>x.id===id);if(!o)return;
+  const o=D.offices.find(x=>String(x.id)===String(id));if(!o)return;
   const delBtn=$('of-del-btn');if(delBtn)delBtn.style.display='';
   const saveBtn=$('of-save-btn');if(saveBtn)saveBtn.textContent='💾 保存';
   // 既存データをモーダルに流し込む
@@ -24345,7 +24364,7 @@ function showConfirm(msg, onOk){
 }
 
 function deleteOfficeById(id){
-  const o=D.offices.find(x=>x.id===id);if(!o)return;
+  const o=D.offices.find(x=>String(x.id)===String(id));if(!o)return;
   showConfirm(`「${o.name}」を削除しますか？\n※ 関連する日報データは残ります`,()=>{
     const targetName = o.name;
     D.offices=D.offices.filter(x=>x.id!==id);
@@ -33053,7 +33072,7 @@ function _editStaffImpl(id){
   //   (新規追加時と同様にすべてのフィールドを初期化してから既存値を読み込む)
   if(typeof resetStaffModal === 'function') resetStaffModal();
   // ID型不一致対応: 厳密比較(===)だと数字↔文字列で見つからないため、両方試す
-  let s = D.staff.find(x=>x.id===id);
+  let s = D.staff.find(x=>String(x.id)===String(id));
   if(!s) s = D.staff.find(x=>String(x.id)===String(id));
   if(!s) return;
   resetStaffModal();
@@ -33481,7 +33500,7 @@ function onCtDriverChange(){
   if(!sel || !prev){ return; }
   const id = parseInt(sel.value);
   if(!id){ prev.innerHTML = '<span style="color:var(--txt3);">テンプレート印刷モード</span>'; return; }
-  const s = (D.staff||[]).find(x=>x.id===id);
+  const s = (D.staff||[]).find(x=>String(x.id)===String(id));
   if(!s){ prev.innerHTML = ''; return; }
   const parts = [];
   if(s.addr) parts.push(`📍 ${esc(s.addr)}`);
@@ -34359,7 +34378,7 @@ function renderDqHistory(){
 window.renderDqHistory = renderDqHistory;
 
 window.dqEditQuote = function(id){
-  const q = _dqQuotes.find(x=>x.id===id);
+  const q = _dqQuotes.find(x=>String(x.id)===String(id));
   if(!q) return;
   _dqEditId = id;
   const setV = (eid, v)=>{const e=document.getElementById(eid);if(e)e.value=v||'';};
@@ -34393,7 +34412,7 @@ window.dqDeleteQuote = function(id){
 };
 
 window.dqPrintHistQuote = function(id){
-  const q = _dqQuotes.find(x=>x.id===id);
+  const q = _dqQuotes.find(x=>String(x.id)===String(id));
   if(!q) return;
   _dqEditId = id;
   dqEditQuote(id);
