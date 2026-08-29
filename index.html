@@ -6285,6 +6285,14 @@ function applyFirebaseData() {
     D.deliveryCol = [...D.deliveryCol.filter(r => !fbColIds.has(String(r.id))), ...fbDelCol];
   }
 
+  // ★ 2026/08/29: 自社情報をFirebaseから取り込む(端末間で共有)
+  try{ if(typeof loadSystemInfoFromFB==='function') loadSystemInfoFromFB(); }
+  catch(e){ console.error('systemInfo load error:', e); }
+  try{ if(typeof loadItemGroupsFromFB==='function') loadItemGroupsFromFB(); }
+  catch(e){ console.error('itemGroups load error:', e); }
+  try{ if(typeof _loadCharters==='function') _loadCharters(); }
+  catch(e){ console.error('charters load error:', e); }
+
   // ★ 2026/08/21: D.delivery を作り直した直後に、保存済みの照合状態を貼り直す
   try{ if(typeof _cmpStateApply==='function') _cmpStateApply(); }
   catch(e){ console.error('cmpState apply error:', e); }
@@ -7658,7 +7666,23 @@ function getItemGroups(){
   return [];
 }
 function saveItemGroupsData(groups){
+  // ★ 2026/08/29: この端末にしか保存されず、他端末では未設定のままだった。
+  //   請求書・明細の表示に関わるため、端末間で揃える必要がある。
   localStorage.setItem('nikki_item_groups',JSON.stringify(groups));
+  try{ if(typeof fbSet==='function') fbSet('item_groups', groups); }
+  catch(e){ console.error('[saveItemGroupsData] FB保存エラー', e); }
+}
+
+// 起動時に品目グループを取り込む
+async function loadItemGroupsFromFB(){
+  try{
+    if(!fbDB || !window._fbImports) return;
+    const { ref, get } = window._fbImports;
+    const snap = await get(ref(fbDB, 'nikki/item_groups'));
+    if(!snap.exists()) return;
+    const v = snap.val();
+    if(v) localStorage.setItem('nikki_item_groups', JSON.stringify(v));
+  }catch(e){ console.error('[loadItemGroupsFromFB]', e); }
 }
 
 // 品目グループ設定UI描画
@@ -13510,6 +13534,8 @@ function saveCharter(){
   rows.forEach(r => {
     D.charters.push({id:Date.now()+Math.random(), type:charterType, mon, office:off, staff, ...r});
   });
+  // ★ 2026/08/29: メモリに積むだけで保存されておらず、再読み込みで消えていた。
+  _saveCharters();
   closeM('m-charter');
   renderCharters();
   alert(`チャーター ${rows.length}件 を保存しました`);
@@ -13527,7 +13553,7 @@ function renderCharters(){
     <td>${r.client||'−'}</td>
     <td class="tr fw7" style="color:var(--tel2)">¥${fmt(r.amt||0)}</td>
     <td class="xs muted">${r.note||'−'}</td>
-    <td><button class="btn b-gh btn-sm" onclick="D.charters=D.charters.filter(x=>x.id!==${r.id});renderCharters()">削除</button></td>
+    <td><button class="btn b-gh btn-sm" onclick="D.charters=D.charters.filter(x=>String(x.id)!==String(${r.id}));_saveCharters();renderCharters()">削除</button></td>
   </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--txt2)">データなし</td></tr>';
 }
 
@@ -29461,7 +29487,32 @@ function _getSystemInfo(){
   try{ return JSON.parse(localStorage.getItem('systemInfo')||'{}'); }catch(e){ return {}; }
 }
 function _saveSystemInfoLS(info){
+  // ★ 2026/08/29: この端末のブラウザにしか保存しておらず、
+  //   別端末に反映されないうえ、保存データを消すと失われていた。
+  //   Firebase にも書き、起動時に読み戻す。
   try{ localStorage.setItem('systemInfo', JSON.stringify(info)); }catch(e){}
+  try{ if(typeof fbSet==='function') fbSet('system_info', info); }
+  catch(e){ console.error('[_saveSystemInfoLS] FB保存エラー', e); }
+}
+
+// 起動時に Firebase の自社情報を取り込む(この端末が未設定でも引き継げるように)
+async function loadSystemInfoFromFB(){
+  try{
+    if(!fbDB || !window._fbImports) return;
+    const { ref, get } = window._fbImports;
+    const snap = await get(ref(fbDB, 'nikki/system_info'));
+    if(!snap.exists()) return;
+    const remote = snap.val() || {};
+    const local  = _getSystemInfo() || {};
+    // 手元に無い項目だけ補う(この端末での編集中の値を消さない)
+    const merged = {...remote, ...local};
+    Object.keys(remote).forEach(k=>{
+      if(local[k] === undefined || local[k] === '') merged[k] = remote[k];
+    });
+    try{ localStorage.setItem('systemInfo', JSON.stringify(merged)); }catch(e){}
+    if(typeof loadSystemInfoToForm==='function') loadSystemInfoToForm();
+    if(typeof loadRoundSettings==='function') loadRoundSettings();
+  }catch(e){ console.error('[loadSystemInfoFromFB]', e); }
 }
 
 function saveSystemInfo(){
@@ -29477,7 +29528,7 @@ function saveSystemInfo(){
   _saveSystemInfoLS(info);
   // 銀行セットを保存
   saveBankSetsFromUI();
-  showAlert({msg:'自社情報・振込先口座を保存しました'});
+  showAlert({msg:'自社情報・振込先口座を保存しました。\n他の端末にも反映されます。'});
 }
 
 // 雇用保険料率 保存・読込・プレビュー
@@ -29486,11 +29537,21 @@ function saveEmpInsSettings(){
   const rateBiz = parseFloat($('sys-emp-ins-rate-biz')?.value)||0.95;
   localStorage.setItem('sys_emp_ins_rate', String(rate/100));
   localStorage.setItem('sys_emp_ins_rate_biz', String(rateBiz/100));
-  showAlert({msg:`雇用保険料率を保存しました（労働者 ${rate}% / 事業主 ${rateBiz}%）`});
+  // ★ 2026/08/29: この端末にしか残らず、他端末や再インストールで既定値に戻っていた。
+  //   systemInfo にも持たせて Firebase 経由で共有する。
+  const info=_getSystemInfo();
+  info.empInsRate=rate/100;
+  info.empInsRateBiz=rateBiz/100;
+  _saveSystemInfoLS(info);
+  showAlert({msg:`雇用保険料率を保存しました（労働者 ${rate}% / 事業主 ${rateBiz}%）\n他の端末にも反映されます。`});
 }
 function loadEmpInsSettings(){
-  const r = parseFloat(localStorage.getItem('sys_emp_ins_rate')||'0.006');
-  const rb = parseFloat(localStorage.getItem('sys_emp_ins_rate_biz')||'0.0095');
+  // systemInfo(共有)を優先し、無ければこの端末の値、それも無ければ既定値
+  const info=_getSystemInfo()||{};
+  const r  = (info.empInsRate!==undefined)    ? Number(info.empInsRate)
+           : parseFloat(localStorage.getItem('sys_emp_ins_rate')||'0.006');
+  const rb = (info.empInsRateBiz!==undefined) ? Number(info.empInsRateBiz)
+           : parseFloat(localStorage.getItem('sys_emp_ins_rate_biz')||'0.0095');
   if($('sys-emp-ins-rate'))$('sys-emp-ins-rate').value=(r*100).toFixed(2);
   if($('sys-emp-ins-rate-biz'))$('sys-emp-ins-rate-biz').value=(rb*100).toFixed(2);
   previewEmpInsRate();
@@ -31117,7 +31178,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
+    if(section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
     return;
   }
   tsPendingAction = {type:'nav', section, navEl};
@@ -31187,7 +31248,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();},100);
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
@@ -37346,6 +37407,24 @@ function _stBreakHint(){
 
   el.innerHTML = `${desc}<br>例）12:00〜18:05（${hm(sample)}）→ 休憩 ${cut}分 → `
     + `<b style="color:var(--txt);">実働 ${hm(net)}</b>`;
+}
+
+
+// ── チャーターの保存 (2026/08/29) ──
+//  従来はメモリ上の D.charters に積むだけで、再読み込みすると消えていた。
+function _saveCharters(){
+  try{
+    const list = Array.isArray(D.charters) ? D.charters : [];
+    lsSet('nikki_charters', list);
+    if(typeof fbSet==='function') fbSet('charters', list);
+  }catch(e){ console.error('[_saveCharters]', e); }
+}
+function _loadCharters(){
+  try{
+    const v = lsGet('nikki_charters', null);
+    if(Array.isArray(v)) D.charters = v;
+    if(!Array.isArray(D.charters)) D.charters = [];
+  }catch(e){ D.charters = []; }
 }
 
 </script>
