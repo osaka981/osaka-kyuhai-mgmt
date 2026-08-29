@@ -25972,6 +25972,35 @@ function _calcCustBilling(custName, monStr){
 
   // 税別小計に消費税10%を加算 → 税込小計と合算 → 1円未満切り捨て(契約書準拠)
   // 例: 税別15円×10001個=150015円(税別) → 165016.5円(税込) → 切り捨て165016円
+  // ★ 2026/08/29: カスタム品目(その他・立替・チャーター・日額)を計上する。
+  //   ここで扱っていなかったため、産直の「横持チャーター」が請求書・月報・
+  //   売上分析のいずれにも出ていなかった。
+  //   日額は「稼働日数×単価」。稼働日 = 集荷実績のある日(本日集荷なしは除く)。
+  (function(){
+    const oi = (cu.otherItems||[]).filter(o=>o && (o.name||'').trim());
+    if(!oi.length) return;
+    const workDays = new Set(rows.map(r=>r.date).filter(Boolean)).size;
+    oi.forEach(o=>{
+      const unit  = Number(o.amt)||0;
+      const uType = o.unit || '月額';
+      const oTax  = o._tax || ((cu.priceType==='tax_included') ? 'in' : 'ex');
+      let qty = 0;
+      if(uType === '月額'){
+        qty = rows.length > 0 ? 1 : 0;             // 実績のある月だけ1回
+      } else if(uType === '日額'){
+        qty = workDays;                            // 稼働日数
+      } else {
+        // 件・個: 日報アプリで入力された数量
+        rows.forEach(r=>{ qty += (r.items && (r.items['__custom__'+o.name]||0)) || 0; });
+      }
+      if(qty <= 0 || unit <= 0) return;
+      const amt = Math.floor(qty * unit);
+      breakdown.push({label:o.name, itemKey:'__custom__'+o.name, qty, unit, amount:amt, taxFlag:oTax});
+      total += amt;
+      if(oTax === 'in') subtotalIn += amt; else subtotalEx += amt;
+    });
+  })();
+
   const tax = Math.floor(subtotalEx * 0.1);  // 消費税(税別小計×10%)
   const taxIncOfEx = subtotalEx + tax;        // 税別品目の税込合計
 
