@@ -9670,13 +9670,18 @@ function _showSaveToast(msg){
 }
 
 function _resetDelForm(){
+  // ★ 2026/08/29: 連続入力中はここで日付を今日に戻さない。
+  //   直後に翌日を入れ直すため、一瞬だけ今日の日付が見えてしまっていた。
+  //   (8/2を保存 → 8/29が一瞬表示 → 8/3 に変わる、という見え方)
   const today=new Date().toISOString().slice(0,10);
-  if($('dd-date'))$('dd-date').value=today;
-  // 新規・連続モードは営業所・従事員もリセット（編集後はリセット済みフラグ）
-  if($('dd-off'))$('dd-off').value='';
-  if($('dd-off-input')){$('dd-off-input').value='';$('dd-off-input').placeholder='1・１・大阪北...';}
-  if($('dd-staff'))$('dd-staff').value='';
-  if($('dd-staff-input')){$('dd-staff-input').value='';$('dd-staff-input').placeholder='001・1001・田中...';}
+  if($('dd-date') && !window._delContinueMode) $('dd-date').value=today;
+  // 連続入力中は営業所・従事員を保持する(直後に入れ直すため、ちらつきの原因になる)
+  if(!window._delContinueMode){
+    if($('dd-off'))$('dd-off').value='';
+    if($('dd-off-input')){$('dd-off-input').value='';$('dd-off-input').placeholder='1・１・大阪北...';}
+    if($('dd-staff'))$('dd-staff').value='';
+    if($('dd-staff-input')){$('dd-staff-input').value='';$('dd-staff-input').placeholder='001・1001・田中...';}
+  }
   if($('dd-post'))$('dd-post').value='';
   window._delEditMode = false;
   ['dd-kanryo','dd-tenso','dd-yakan','dd-ogata','dd-shukka',
@@ -32125,6 +32130,16 @@ function saveDelContinue(){
   window._delEditMode = false;
   saveDel();
   setTimeout(()=>{
+    // ★ 2026/08/29: 翌日にすでに日報があるなら、空欄ではなく既存データを開く。
+    //   空欄のまま保存すると同じ日に2件でき、集計・請求・給与が二重になる。
+    const _stf = _keep.stf;
+    const _dup = (D.delivery||[]).find(r=>r.staff===_stf && (r.date||'')===_keep.nextDate);
+    if(_dup && typeof editDel==='function'){
+      window._delContinueMode = false;
+      editDel(_dup.id);
+      setTimeout(()=>{ const e=$('dd-mochi'); if(e){e.focus(); if(e.select)e.select();} },80);
+      return;
+    }
     openM('m-del');
     if($('dd-date'))$('dd-date').value=_keep.nextDate;
     // openM で消された営業所・従業員を戻す
