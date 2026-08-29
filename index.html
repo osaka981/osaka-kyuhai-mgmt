@@ -2583,6 +2583,37 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
 
       <!-- 書類共通 ヘッダー/フッター -->
+      <!-- ★ 2026/08/29: 勤務時間の丸め設定(全社共通)。日報アプリの打刻もこの設定に従う。 -->
+      <div class="card mb12" style="max-width:700px;">
+        <div class="ct mb12"><div class="cbar"></div>勤務時間の丸め</div>
+        <div class="xs muted mb8">
+          日報アプリの打刻と、経営管理システムでの手入力の両方に適用されます。<br>
+          時間単価・時間給の給与計算はこの丸めの結果を使います。
+        </div>
+        <div class="f2 mb8">
+          <div class="fg">
+            <label>丸め単位</label>
+            <select id="sys-round-unit" class="fi">
+              <option value="1">1分（丸めない）</option>
+              <option value="5">5分</option>
+              <option value="10">10分</option>
+              <option value="15">15分</option>
+              <option value="30">30分</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>丸め方式</label>
+            <select id="sys-round-mode" class="fi">
+              <option value="ceil">切り上げ</option>
+              <option value="round">四捨五入</option>
+              <option value="floor">切り捨て</option>
+            </select>
+          </div>
+        </div>
+        <div id="sys-round-sample" class="xs muted mb8"></div>
+        <button class="btn b-blu btn-sm" onclick="saveRoundSettings()">保存</button>
+      </div>
+
       <div class="card mb12" style="max-width:700px;">
         <div class="ct mb12"><div class="cbar"></div>書類共通ヘッダー/フッター</div>
         <div class="xs muted mb8">請求書・明細書など全書類の下部に表示される注意書きを編集できます</div>
@@ -3657,6 +3688,26 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <input type="number" id="st-tk" class="fi" placeholder="280000" style="margin-top:3px;">
         <div id="st-tk-hint" style="font-size:9px;color:var(--amb2);margin-top:2px;"></div>
       </div>
+    </div>
+
+    <!-- ★ 2026/08/29: 休憩控除。時間単価・時間給の勤務時間から差し引く。 -->
+    <div style="background:var(--bg3);border-radius:6px;padding:9px 11px;margin-bottom:10px;">
+      <div style="font-size:11.5px;font-weight:700;color:var(--txt);margin-bottom:5px;">休憩控除</div>
+      <div class="f2">
+        <div class="fg" style="margin:0;">
+          <label>控除方式</label>
+          <select id="st-break-mode" class="fi" onchange="_stBreakHint()">
+            <option value="auto">法定どおり（自動）</option>
+            <option value="fixed">固定時間を控除</option>
+            <option value="none">控除しない</option>
+          </select>
+        </div>
+        <div class="fg" style="margin:0;">
+          <label>固定控除（分）</label>
+          <input type="number" min="0" step="5" id="st-break-min" class="fi" placeholder="60" oninput="_stBreakHint()">
+        </div>
+      </div>
+      <div id="st-break-hint" style="font-size:10px;color:var(--txt2);margin-top:5px;line-height:1.6;"></div>
     </div>
 
     <!-- 2段目：区分連動ラベル + 保証・手当・役員報酬 -->
@@ -16888,6 +16939,9 @@ function saveStaff(continueAdd=false){
   const newDrv={
     id:Date.now(),
     empNo,
+    // 休憩控除(2026/08/29)
+    breakMode:$('st-break-mode')?.value||'auto',
+    breakMin:Math.max(0,parseInt($('st-break-min')?.value)||0),
     name,
     kana:$('st-kana')?.value||'',
     officeType,
@@ -23975,8 +24029,16 @@ function renderSalary(){
       const matchName=a.driverName===s.name;
       return (matchId||matchName) && a.date.startsWith(salMonStr);
     });
-    // 月合計稼働時間（分）→ 時間単位
-    const totalWorkMin=attRows.reduce((sum,a)=>sum+(a.workMin||0),0);
+    // ★ 2026/08/29: 休憩控除と丸めを日ごとに適用してから合計する。
+    //   月合計に対して丸めると、日々の端数が相殺されて実態とずれる。
+    //   workMin は拘束時間(打刻差)なので、ここで休憩を引く。
+    const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : {unit:15,mode:'ceil'};
+    const totalWorkMin=attRows.reduce((sum,a)=>{
+      const span = a.workMin||0;
+      const net  = (typeof applyBreak==='function') ? applyBreak(span, s) : span;
+      const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
+      return sum + rnd;
+    },0);
     const totalWorkH=totalWorkMin/60; // 小数時間
 
     // 時間単価：稼働時間（att_logs）× 時間単価
@@ -33169,6 +33231,9 @@ function _editStaffImpl(id){
   if($('st-sei'))$('st-sei').value=s.sei||nameParts[0]||'';
   if($('st-mei'))$('st-mei').value=s.mei||nameParts.slice(1).join(' ')||'';
   if($('st-name'))$('st-name').value=s.name||'';
+  if($('st-break-mode'))$('st-break-mode').value=s.breakMode||'auto';
+  if($('st-break-min'))$('st-break-min').value=(s.breakMin!==undefined&&s.breakMin!==null)?s.breakMin:'';
+  if(typeof _stBreakHint==='function')_stBreakHint();
   const kanaParts=(s.kana||'').split(/\s+/);
   if($('st-kana-sei'))$('st-kana-sei').value=s.kanaSei||kanaParts[0]||'';
   if($('st-kana-mei'))$('st-kana-mei').value=s.kanaMei||kanaParts.slice(1).join(' ')||'';
@@ -37152,6 +37217,135 @@ function _buildCustDetailHTML(custName, monStr){
   </div>`;
 
   return {html, title:`集荷明細書_${custName}_${monStr}`};
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  勤務時間の丸め (2026/08/29)
+//   全社共通の設定。日報アプリの打刻・経営管理の手入力の両方で使う。
+//   既定は「15分・切り上げ」。
+//   ── 法的な背景（画面には出さない） ──
+//   労働時間は1分単位での計上が原則(労基法24条 賃金全額払い)。
+//   日々の切り捨て・四捨五入は切り捨て分が未払いになりうる。
+//   切り上げは労働者に不利益がないため問題にならない。
+//   月合計の時間外1時間未満の端数のみ、通達で30分基準の処理が容認されている。
+//   設定で切り捨ても選べるようにしているが、既定を切り上げにしているのはこのため。
+// ════════════════════════════════════════════════════════════
+const ROUND_DEFAULT = {unit:15, mode:'ceil'};
+
+function getRoundSettings(){
+  try{
+    const info = _getSystemInfo() || {};
+    const unit = parseInt(info.workRoundUnit);
+    const mode = info.workRoundMode;
+    return {
+      unit: [1,5,10,15,30].includes(unit) ? unit : ROUND_DEFAULT.unit,
+      mode: ['ceil','round','floor'].includes(mode) ? mode : ROUND_DEFAULT.mode,
+    };
+  }catch(e){ return {...ROUND_DEFAULT}; }
+}
+
+// 分を設定に従って丸める
+function roundWorkMin(totalMin, st){
+  const n = Math.max(0, Math.round(Number(totalMin)||0));
+  const {unit, mode} = st || getRoundSettings();
+  if(unit <= 1) return n;
+  if(mode === 'ceil')  return Math.ceil(n/unit)*unit;
+  if(mode === 'floor') return Math.floor(n/unit)*unit;
+  return Math.round(n/unit)*unit;   // round
+}
+
+function _fmtHM(min){
+  const h = Math.floor(min/60), m = min%60;
+  return `${h}時間${String(m).padStart(2,'0')}分`;
+}
+
+function renderRoundSample(){
+  const el = $('sys-round-sample'); if(!el) return;
+  const st = {
+    unit: parseInt($('sys-round-unit')?.value) || 15,
+    mode: $('sys-round-mode')?.value || 'ceil',
+  };
+  // 12:00〜18:05 を例に表示(実務でよくある端数)
+  const raw = 365;
+  el.innerHTML = `例）12:00〜18:05（実働 ${_fmtHM(raw)}）→ <b style="color:var(--txt);">`
+    + `${_fmtHM(roundWorkMin(raw, st))}</b> として計上`;
+}
+
+function loadRoundSettings(){
+  const st = getRoundSettings();
+  if($('sys-round-unit')) $('sys-round-unit').value = String(st.unit);
+  if($('sys-round-mode')) $('sys-round-mode').value = st.mode;
+  renderRoundSample();
+  ['sys-round-unit','sys-round-mode'].forEach(id=>{
+    const el = $(id);
+    if(el && !el._roundBound){ el._roundBound = true; el.addEventListener('change', renderRoundSample); }
+  });
+}
+
+async function saveRoundSettings(){
+  const info = _getSystemInfo();
+  info.workRoundUnit = parseInt($('sys-round-unit')?.value) || 15;
+  info.workRoundMode = $('sys-round-mode')?.value || 'ceil';
+  _saveSystemInfoLS(info);
+  // 日報アプリからも読めるよう共有ノードに保存する
+  try{
+    const shared = {unit:info.workRoundUnit, mode:info.workRoundMode, at:new Date().toISOString()};
+    lsSet('nikki_work_round', shared);
+    if(typeof fbSet==='function') await fbSet('work_round', shared);
+  }catch(e){ console.error('[saveRoundSettings]', e); }
+  showAlert({msg:'勤務時間の丸め設定を保存しました。\n日報アプリの打刻にも適用されます。'});
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  休憩控除 (2026/08/29)
+//   時間単価・時間給の勤務時間から休憩を差し引く。
+//   既定は労働基準法34条の基準:
+//     実働6時間以下   … 0分
+//     6時間超8時間以下 … 45分
+//     8時間超         … 60分
+//   従業員台帳で固定値も設定できる(auto / fixed / none)。
+// ════════════════════════════════════════════════════════════
+function legalBreakMin(workMin){
+  const m = Math.max(0, Number(workMin)||0);
+  if(m <= 360) return 0;      // 6時間以下
+  if(m <= 480) return 45;     // 6時間超 8時間以下
+  return 60;                  // 8時間超
+}
+
+// 拘束時間(分)から休憩を引いた実働(分)を返す
+function applyBreak(spanMin, staff){
+  const span = Math.max(0, Number(spanMin)||0);
+  const mode = (staff && staff.breakMode) || 'auto';
+  if(mode === 'none') return span;
+  if(mode === 'fixed'){
+    const fixed = Math.max(0, parseInt(staff && staff.breakMin) || 0);
+    return Math.max(0, span - fixed);
+  }
+  return Math.max(0, span - legalBreakMin(span));
+}
+
+function _stBreakHint(){
+  const el = $('st-break-hint'); if(!el) return;
+  const mode = $('st-break-mode')?.value || 'auto';
+  const fixed = parseInt($('st-break-min')?.value) || 0;
+  const inp = $('st-break-min');
+  if(inp) inp.disabled = (mode !== 'fixed');
+
+  const sample = 365;   // 12:00〜18:05 の拘束
+  const st = {breakMode:mode, breakMin:fixed};
+  const net = applyBreak(sample, st);
+  const cut = sample - net;
+  const hm = m => `${Math.floor(m/60)}時間${String(m%60).padStart(2,'0')}分`;
+
+  let desc = '';
+  if(mode === 'auto')      desc = '実働6時間以下は0分、6時間超8時間以下は45分、8時間超は60分を控除します。';
+  else if(mode === 'fixed')desc = `勤務時間にかかわらず ${fixed} 分を控除します。`;
+  else                     desc = '休憩を控除しません。拘束時間がそのまま実働になります。';
+
+  el.innerHTML = `${desc}<br>例）12:00〜18:05（${hm(sample)}）→ 休憩 ${cut}分 → `
+    + `<b style="color:var(--txt);">実働 ${hm(net)}</b>`;
 }
 
 </script>
