@@ -6266,7 +6266,28 @@ function applyFirebaseData() {
 
       // 顧客名はチャーター優先(その顧客の請求書に含めるため)、次にrows先頭、次にroute
       let cuName = charterRow?.customerName || rows[0]?.customerName || routeRow?.customerName || '';
-      let cuId = charterRow?.customerId || 0;
+      // ★ 2026/08/29: 顧客の同定は「ID優先・名称は最後の手段」にする。
+      //   日報側は顧客IDを保存しているので、名称が旧名のままでも正しく紐付く。
+      //   名称の表記ゆれ修正が必要なのは、IDが取れない古いデータだけになる。
+      let cuId = charterRow?.customerId || rows.find(r=>r.customerId)?.customerId || 0;
+      if(cuId){
+        const byId = D.customers.find(c => String(c.id) === String(cuId));
+        if(byId){
+          // ★ IDが示す顧客と、日報に記録された名称が食い違う場合は要注意。
+          //   顧客IDの振り直しや再利用が起きると、別会社に計上されうる。
+          //   名称が別物と判断できるときはIDを信用せず、名称照合に委ねる。
+          if(cuName && byId.name !== cuName && !_custNameEq(byId.name, cuName)){
+            console.warn('[顧客同定] IDと名称が不一致', {cuId, idName:byId.name, rowName:cuName});
+            cuId = 0;                        // IDを採用しない
+          } else {
+            cuName = byId.name;              // 表示・集計は正式名称に揃える
+          }
+        } else {
+          // マスタに存在しないID(削除・振り直しの可能性) → 名称で探し直す
+          console.warn('[顧客同定] 該当IDが顧客マスタにありません', {cuId, cuName});
+          cuId = 0;
+        }
+      }
       if(!cuId){
         const cuMatch = D.customers.find(c => c.name === cuName);
         cuId = cuMatch?.id || 0;
@@ -12366,17 +12387,44 @@ window._ivBulkPreviewOne = function(key){
   const kind = key.split(':')[0];
   const name = key.split(':').slice(1).join(':');
   const month = _ivBulkState.month;
+  // ★ 2026/08/29: 個別プレビューも「書類タイプ」のチェックに従う。
+  //   請求書だけを開く固定動作だったため、明細書にチェックしても出なかった。
+  const wantInv = _ivBulkState.docTypes?.invoice !== false;
+  const wantDet = !!_ivBulkState.docTypes?.detail;
+  const parts = [];
+
   if(kind==='personal' || kind==='company'){
-    const doc = _buildInvoiceProxyHTML(name, month);
-    if(!doc){ showAlert({msg:'データがありません'}); return; }
-    _printDocWindow(doc.title, doc.html);
+    if(wantInv){
+      const doc = _buildInvoiceProxyHTML(name, month);
+      if(doc) parts.push(doc.html);
+    }
+    if(wantDet){
+      if((D.delivery||[]).some(r=>r.staff===name && (r.date||'').startsWith(month))){
+        const d1 = _buildInvoiceDetailHTML(name, month);
+        if(d1) parts.push(d1.html);
+      }
+      if((D.pickup||[]).some(r=>r.staff===name && (r.date||'').startsWith(month))){
+        const d2 = _buildCollectionDetailHTML(name, month);
+        if(d2) parts.push(d2.html);
+      }
+    }
   } else if(kind==='customer'){
-    if(typeof _buildCustInvoiceHTML==='function'){
+    if(wantInv && typeof _buildCustInvoiceHTML==='function'){
       const doc = _buildCustInvoiceHTML(name, month);
-      if(!doc){ showAlert({msg:'データがありません'}); return; }
-      _printDocWindow(doc.title, doc.html);
+      if(doc) parts.push(doc.html);
+    }
+    if(wantDet && typeof _buildCustDetailHTML==='function'){
+      const doc = _buildCustDetailHTML(name, month);
+      if(doc) parts.push(doc.html);
     }
   }
+
+  if(!parts.length){
+    showAlert({msg:'出力できる書類がありません。\n「書類タイプ」のチェックと、対象月のデータをご確認ください。'});
+    return;
+  }
+  _printDocWindow(`${name} ${month}`,
+    parts.map(h=>`<div style="page-break-after:always;">${h}</div>`).join(''));
 };
 
 // ── 請求書 項目名カスタマイズ機能 (2026/05/13 Step4) ──
@@ -12533,6 +12581,12 @@ window._ivBulkPreviewAll = function(){
       if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
     }
     if(includeDetail){
+      // ★ 2026/08/29: 顧客向けの集荷明細書。日付×品目の内訳を出す。
+      //   従来は個人事業主・委託会社のみで、顧客に明細書を出せなかった。
+      if(kind==='customer' && typeof _buildCustDetailHTML==='function'){
+        const doc = _buildCustDetailHTML(name, month);
+        if(doc){ htmlParts.push(`<div style="page-break-after:always;">${doc.html}</div>`); }
+      }
       // 明細書(日報・金額非表示): 個人事業主・委託会社のみ生成
       // 宅配日報があれば宅配明細、集荷日報があれば集荷明細の両方を出力
       if(kind==='personal' || kind==='company'){
@@ -36746,12 +36800,23 @@ function findCustNameMismatches(){
   const exact = new Set(masters);
   const found = {};   // 日報上の名称 → {to, count, dates:[]}
 
-  const check = (nm, date) => {
+  // ★ 2026/08/29: まず顧客IDで突き合わせる。IDがあれば名称が違っても確実に特定でき、
+  //   「候補が複数で判断できない」ケースも起きない。名称照合はIDが無い古いデータの保険。
+  const check = (nm, date, cid) => {
     if(!nm || exact.has(nm)) return;
-    const hits = masters.filter(m=>_custNameEq(m, nm));
-    if(hits.length !== 1) return;            // 候補が0または複数なら自動修正しない
-    const k = nm;
-    if(!found[k]) found[k] = {from:nm, to:hits[0], count:0, dates:[]};
+    let to = null, by = '';
+    if(cid){
+      const byId = (D.customers||[]).find(c=>String(c.id)===String(cid));
+      if(byId){ to = byId.name; by = '顧客番号 '+(byId.custNo||byId.id); }
+    }
+    if(!to){
+      const hits = masters.filter(m=>_custNameEq(m, nm));
+      if(hits.length !== 1) return;          // 名称だけで一意に決まらないなら対象外
+      to = hits[0]; by = '名称';
+    }
+    if(to === nm) return;
+    const k = nm+'||'+to;
+    if(!found[k]) found[k] = {from:nm, to, by, count:0, dates:[]};
     found[k].count++;
     if(date && found[k].dates.length<5 && !found[k].dates.includes(date)) found[k].dates.push(date);
   };
@@ -36759,7 +36824,7 @@ function findCustNameMismatches(){
   (lsGet(LS_KEYS.COL,[])||[]).forEach(r=>{
     (r.rows||[]).forEach(row=>{
       if(row.masterKey==='route') return;    // ルート名は顧客名ではない
-      check(row.customerName, r.date);
+      check(row.customerName, r.date, row.customerId);
     });
   });
   return Object.values(found).sort((a,b)=>b.count-a.count);
@@ -36787,7 +36852,8 @@ async function openCustNameFixer(){
     return;
   }
   const body = list.map(x=>
-    `・「${x.from}」→「${x.to}」　${x.count}件` + (x.dates.length?`（${x.dates.join(' / ')}${x.count>x.dates.length?' ほか':''}）`:'')
+    `・「${x.from}」→「${x.to}」　${x.count}件　[${x.by}で特定]`
+    + (x.dates.length?`\n　　${x.dates.join(' / ')}${x.count>x.dates.length?' ほか':''}`:'')
   ).join('\n');
 
   const ok = await showDialog({
@@ -36807,7 +36873,14 @@ async function openCustNameFixer(){
   logs.forEach(r=>{
     (r.rows||[]).forEach(row=>{
       if(row.masterKey==='route') return;
-      if(map[row.customerName]){ row.customerName = map[row.customerName]; changed++; }
+      // IDがあればIDの示す正式名称へ。無ければ名称対応表で置き換える。
+      let to = null;
+      if(row.customerId){
+        const byId = (D.customers||[]).find(c=>String(c.id)===String(row.customerId));
+        if(byId) to = byId.name;
+      }
+      if(!to) to = map[row.customerName];
+      if(to && to !== row.customerName){ row.customerName = to; changed++; }
     });
   });
   if(!changed){ showAlert({msg:'対象が見つかりませんでした'}); return; }
@@ -36922,6 +36995,105 @@ function renderCustSales(el, name){
   }
   html += `</div>`;
   el.innerHTML = html;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  顧客向け 集荷明細書 (2026/08/29)
+//   請求書は品目ごとの合計しか載らないため、内訳の問い合わせに
+//   答えられるよう「日付 × 品目 × 数量」を出す。
+//   金額は請求書と同じ _calcCustBilling を使い、二重計算をしない。
+// ════════════════════════════════════════════════════════════
+function _buildCustDetailHTML(custName, monStr){
+  const cu = (D.customers||[]).find(c=>c.name===custName);
+  const rows = (D.pickup||[]).filter(r=>r.customerName===custName && (r.date||'').startsWith(monStr));
+  if(!rows.length) return null;
+
+  const info = (typeof _getSystemInfo==='function') ? _getSystemInfo() : {};
+  const fromCompany = info.companyName || '大阪急配株式会社';
+  const [y,m] = monStr.split('-').map(Number);
+  const dows = ['日','月','火','水','木','金','土'];
+
+  // 使われている品目だけを列にする(空列で横に広がるのを避ける)
+  const usedKeys = [];
+  (typeof IK!=='undefined'?IK:[]).forEach(k=>{
+    if(rows.some(r=>(typeof iq==='function'?iq(r,k):0) > 0)) usedKeys.push(k);
+  });
+  // カスタム品目(件・個)も列に含める
+  const customNames = [];
+  (cu?.otherItems||[]).forEach(o=>{
+    if(!o || !o.name) return;
+    if(['月額','日額'].includes(o.unit||'月額')) return;
+    if(rows.some(r=>(r.items && r.items['__custom__'+o.name])>0)) customNames.push(o.name);
+  });
+
+  const sorted = rows.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const totals = {}; usedKeys.forEach(k=>totals[k]=0); customNames.forEach(n=>totals['c:'+n]=0);
+  let workDays = 0;
+
+  const body = sorted.map(r=>{
+    const d = new Date(r.date+'T00:00:00');
+    const dow = isNaN(d) ? '' : dows[d.getDay()];
+    const dcol = dow==='日' ? '#c0392b' : dow==='土' ? '#2471a3' : '#333';
+    workDays++;
+    const cells = usedKeys.map(k=>{
+      const v = (typeof iq==='function'?iq(r,k):0)||0;
+      totals[k]+=v;
+      return `<td style="text-align:right;">${v||''}</td>`;
+    }).join('') + customNames.map(n=>{
+      const v = (r.items && r.items['__custom__'+n]) || 0;
+      totals['c:'+n]+=v;
+      return `<td style="text-align:right;">${v||''}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="white-space:nowrap;">${String(r.date).slice(5).replace('-','/')}
+        <span style="color:${dcol};font-weight:700;">${dow}</span></td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const heads = usedKeys.map(k=>`<th style="text-align:right;">${esc((typeof ITEMS!=='undefined'&&ITEMS[k]?.label)||k)}</th>`).join('')
+              + customNames.map(n=>`<th style="text-align:right;">${esc(n)}</th>`).join('');
+  const foot  = usedKeys.map(k=>`<td style="text-align:right;font-weight:700;">${totals[k]||0}</td>`).join('')
+              + customNames.map(n=>`<td style="text-align:right;font-weight:700;">${totals['c:'+n]||0}</td>`).join('');
+
+  const bill = (typeof _calcCustBilling==='function') ? _calcCustBilling(custName, monStr) : null;
+
+  const html = `
+  <div style="font-family:'Hiragino Kaku Gothic ProN','Yu Gothic',Meiryo,sans-serif;color:#111;padding:18px 22px;font-size:12px;">
+    <div style="text-align:center;font-size:20px;font-weight:700;letter-spacing:.4em;margin-bottom:14px;">集 荷 明 細 書</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;border-bottom:1px solid #333;padding-bottom:2px;">${esc(custName)} 御中</div>
+        <div style="font-size:11px;color:#555;margin-top:5px;">${y}年${m}月分　稼働 ${workDays} 日</div>
+      </div>
+      <div style="text-align:right;font-size:11px;">
+        <div style="font-weight:700;font-size:13px;">${esc(fromCompany)}</div>
+        <div>${esc(info.addr||'')}</div>
+        <div>TEL ${esc(info.tel||'')}</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="background:#f0f3f7;">
+        <th style="border:1px solid #bbb;padding:4px 6px;text-align:left;">日付</th>
+        ${heads.replace(/<th /g,'<th style="border:1px solid #bbb;padding:4px 6px;" ')}
+      </tr></thead>
+      <tbody>${body.replace(/<td /g,'<td style="border:1px solid #ddd;padding:3px 6px;" ')}</tbody>
+      <tfoot><tr style="background:#f7f9fb;">
+        <td style="border:1px solid #bbb;padding:4px 6px;font-weight:700;">合計</td>
+        ${foot.replace(/<td /g,'<td style="border:1px solid #bbb;padding:4px 6px;" ')}
+      </tr></tfoot>
+    </table>
+
+    ${bill ? `<div style="margin-top:12px;text-align:right;font-size:12px;">
+      <span style="color:#555;">ご請求金額（税込）</span>
+      <span style="font-size:17px;font-weight:700;margin-left:10px;">¥${fmt(bill.total||0)}</span>
+      <div style="font-size:10px;color:#777;margin-top:3px;">※ 金額の内訳は請求書をご確認ください</div>
+    </div>` : ''}
+  </div>`;
+
+  return {html, title:`集荷明細書_${custName}_${monStr}`};
 }
 
 </script>
