@@ -24993,7 +24993,8 @@ function renderCustFSTab(key){
   else if(key==='ledger') renderCustLedger(body, name);
   else if(key==='docs') renderCustDocs(body, name);
   else if(key==='mail') renderCustMail(body, name);
-  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>売上分析</div><div class="xs muted mt8">Phase 3で対応予定</div></div>`;
+  else if(key==='sales') renderCustSales(body, name);
+  else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>売上分析</div><div class="xs muted mt8">この画面は未実装です</div></div>`;
 }
 
 function renderCustDaily(el, name){
@@ -36795,6 +36796,100 @@ function custDisplayName(nm){
   if(list.some(c=>c.name===nm)) return nm;
   const hits = list.filter(c=>_custNameEq(c.name, nm));
   return hits.length===1 ? hits[0].name : nm;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  顧客ページ: 売上分析 (2026/08/29)
+//   直近12か月の請求額と数量の推移、当月の内訳、稼働日数を出す。
+//   金額は請求書と同じ _calcCustBilling を使い、二重計算をしない。
+// ════════════════════════════════════════════════════════════
+function renderCustSales(el, name){
+  if(!el) return;
+  const cu = (D.customers||[]).find(c=>c.name===name);
+  const now = new Date();
+  const months = [];
+  for(let i=11;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+  }
+
+  const rows = months.map(m=>{
+    const b = (typeof _calcCustBilling==='function') ? _calcCustBilling(name, m) : {total:0};
+    const pu = (D.pickup||[]).filter(r=>r.customerName===name && (r.date||'').startsWith(m));
+    const qty = pu.reduce((a,r)=>a+(typeof puTotal==='function'?puTotal(r):0),0);
+    const days = new Set(pu.map(r=>r.date)).size;
+    return {mon:m, amount:b.total||0, qty, days, count:pu.length};
+  });
+
+  const max = Math.max(1, ...rows.map(r=>r.amount));
+  const withData = rows.filter(r=>r.amount>0 || r.qty>0 || r.days>0);
+  const totalAmt = rows.reduce((a,r)=>a+r.amount,0);
+  const avgAmt = withData.length ? Math.round(totalAmt/withData.length) : 0;
+  const cur = rows[rows.length-1];
+  const prev = rows[rows.length-2] || {amount:0};
+  const diff = cur.amount - prev.amount;
+
+  const kpi = (lab,val,sub,col)=>`
+    <div style="flex:1 1 150px;background:var(--sur2);border:1px solid var(--brd2);border-radius:7px;padding:10px 12px;">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:3px;">${lab}</div>
+      <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:20px;color:${col||'var(--txt)'};">${val}</div>
+      ${sub?`<div style="font-size:10.5px;color:var(--txt3);margin-top:2px;">${sub}</div>`:''}
+    </div>`;
+
+  let html = `<div class="fs-card">
+    <div class="ct mb8"><div class="cbar"></div>売上分析　<span class="xs muted">${esc(name)}</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      ${kpi('当月請求額','¥'+fmt(cur.amount), cur.mon, 'var(--grn2)')}
+      ${kpi('前月比', (diff>0?'+':'')+'¥'+fmt(diff), '前月 ¥'+fmt(prev.amount), diff<0?'var(--red2)':'var(--grn2)')}
+      ${kpi('12か月合計','¥'+fmt(totalAmt), '実績'+withData.length+'か月')}
+      ${kpi('月平均','¥'+fmt(avgAmt), '実績のある月のみ')}
+      ${kpi('当月 稼働日', cur.days+'日', '数量 '+fmt(cur.qty)+'個')}
+    </div>`;
+
+  html += `<div class="ct mb8" style="margin-top:6px;"><div class="cbar"></div>月別推移（直近12か月）</div>
+    <div class="tw"><table><thead><tr>
+      <th>月</th><th class="tr">請求額</th><th class="tr">数量</th><th class="tr">稼働日</th><th style="width:34%;">推移</th>
+    </tr></thead><tbody>`;
+  rows.forEach(r=>{
+    const w = Math.round(r.amount/max*100);
+    const isCur = (r.mon===cur.mon);
+    html += `<tr${isCur?' style="background:var(--sur2);"':''}>
+      <td class="mono"${isCur?' style="font-weight:700;"':''}>${r.mon}</td>
+      <td class="tr fw7">${r.amount?'¥'+fmt(r.amount):'−'}</td>
+      <td class="tr">${r.qty?fmt(r.qty):'−'}</td>
+      <td class="tr">${r.days?r.days+'日':'−'}</td>
+      <td><div style="background:var(--bg3);border-radius:3px;height:14px;overflow:hidden;">
+        <div style="width:${w}%;height:100%;background:${isCur?'var(--grn2)':'var(--blu)'};"></div></div></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  // 当月の内訳(請求書と同じ計算)
+  const b = (typeof _calcCustBilling==='function') ? _calcCustBilling(name, cur.mon) : {breakdown:[]};
+  const bd = b.breakdown||[];
+  html += `<div class="ct mb8" style="margin-top:14px;"><div class="cbar"></div>当月の内訳（${cur.mon}）</div>`;
+  if(!bd.length){
+    html += `<div class="al al-e"><span>ℹ️</span><span>当月の請求対象データがありません</span></div>`;
+  } else {
+    html += `<div class="tw"><table><thead><tr>
+      <th>品目</th><th class="tr">数量</th><th class="tr">単価</th><th class="tr">金額</th>
+    </tr></thead><tbody>`;
+    bd.forEach(x=>{
+      html += `<tr><td>${esc(x.label||x.name||'')}</td>
+        <td class="tr">${fmt(x.qty||x.count||0)}</td>
+        <td class="tr">${x.price!==undefined?'¥'+fmt(x.price):(x.unitPrice!==undefined?'¥'+fmt(x.unitPrice):'−')}</td>
+        <td class="tr fw7">¥${fmt(x.amount||x.subtotal||0)}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  if(!cu){
+    html += `<div class="al al-w" style="margin-top:10px;font-size:11px;">
+      顧客マスタに「${esc(name)}」が見つかりません。単価が引けないため金額は0円で表示されます。</div>`;
+  }
+  html += `</div>`;
+  el.innerHTML = html;
 }
 
 </script>
