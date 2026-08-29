@@ -24525,6 +24525,16 @@ function renderStaffFSTab(key){
 //   従業員名・営業所・日付を自動でセットしてモーダルを開く。
 function openStaffDailyEntry(kind, staffName, dateStr){
   const st = (D.staff||[]).find(s=>s.name===staffName);
+  // ★ 2026/08/29: すでにその日の日報があるなら、新規ではなく編集を開く。
+  //   同じ日に2件できると、集計・請求・給与のすべてが二重計上になる。
+  if(dateStr){
+    const src = kind==='del' ? (D.delivery||[]) : (D.pickup||[]);
+    const dup = src.find(r=>r.staff===staffName && (r.date||'')===dateStr);
+    if(dup){
+      if(kind==='del' && typeof editDel==='function'){ editDel(dup.id); return; }
+      if(kind==='pu'  && typeof editPU==='function'){  editPU(dup.id);  return; }
+    }
+  }
   const office = st?.office || '';
   const mon = $('fs-daily-mon')?.value || '';
   // 日付未指定なら、その月の1日を初期値にする(当月なら今日)
@@ -24539,10 +24549,17 @@ function openStaffDailyEntry(kind, staffName, dateStr){
   setTimeout(()=>{
     const p = kind==='del' ? 'dd' : 'pu';
     if($(p+'-date')) $(p+'-date').value = d;
+    // ★ 2026/08/29: 表示用の入力欄は編集画面と同じ「番号 名称」の形式にする。
+    //   名称だけを入れると、コンボの候補と一致せず選択が確定しないことがあり、
+    //   編集で開いた場合と見た目・挙動が食い違っていた。
+    const offData = (D.offices||[]).find(o=>o.name===office);
+    const offDisp = (offData && typeof dispCode==='function')
+      ? `${dispCode(offData.officeCode)} ${office}` : office;
     if($(p+'-off'))        $(p+'-off').value = office;
-    if($(p+'-off-input'))  $(p+'-off-input').value = office;
+    if($(p+'-off-input')){ $(p+'-off-input').value = offDisp; $(p+'-off-input').placeholder = offDisp; }
+    const stDisp = (st && st.empNo) ? `${st.empNo} ${staffName}` : staffName;
     if($(p+'-staff'))       $(p+'-staff').value = staffName;
-    if($(p+'-staff-input')) $(p+'-staff-input').value = staffName;
+    if($(p+'-staff-input')){ $(p+'-staff-input').value = stDisp; $(p+'-staff-input').placeholder = stDisp; }
     try{ if(kind==='del'){ valDel && valDel(); calcDelAmt && calcDelAmt(); } }catch(e){}
   }, 120);
 }
