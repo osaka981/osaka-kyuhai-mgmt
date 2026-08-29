@@ -20345,7 +20345,8 @@ function _calcInvoiceAmount(row, cust){
       subtotal = count * unit;
     }
     
-    if(displayCount > 0 || count > 0 || unit > 0){
+    // 単価0の品目は請求対象にしない(0円行を出さない)
+    if(unit > 0 && (displayCount > 0 || count > 0)){
       customAmount += subtotal;
       customDetails.push({
         name: o.name,
@@ -25903,10 +25904,16 @@ function _calcCustBilling(custName, monStr){
       // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
       const taxFlag = (cu.prices?._tax && cu.prices._tax[k]) || 'ex';
       const amt = (typeof calcUnitTotal === 'function') ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
-      breakdown.push({label:ITEMS[k]?.label||k, itemKey: k, qty:q, unit:price, amount:amt, taxFlag});
-      total+=amt;
-      if(taxFlag==='in') subtotalIn += amt;
-      else subtotalEx += amt;
+      // ★ 2026/08/29: 単価が未設定(0円)の品目は請求書に載せない。
+      //   車建て(日額)の顧客は数量を記録用に入力するだけで、金額は発生しない。
+      //   0円の行が並ぶと、請求先に「請求漏れでは」と余計な確認をさせてしまう。
+      //   数量の記録は集荷明細書に残るため、情報は失われない。
+      if(price > 0){
+        breakdown.push({label:ITEMS[k]?.label||k, itemKey: k, qty:q, unit:price, amount:amt, taxFlag});
+        total+=amt;
+        if(taxFlag==='in') subtotalIn += amt;
+        else subtotalEx += amt;
+      }
     }
   });
 
