@@ -15161,18 +15161,29 @@ function scanDuplicates(){
 
 // 1件だけ削除
 function deleteSingle(type, id){
-  showDialog({icon:'🗑', title:'削除の確認', msg:'この1件を削除しますか？',
-    okText:'削除する', cancelText:'キャンセル'}).then(ok=>{
+  // ★ 2026/08/31: 同じIDの日報が複数ある場合(日報アプリの多重送信で発生)、
+  //   IDで filter すると全件消える。「この1件」の約束どおり、1件だけ消す。
+  const src = type==='del' ? (D.delivery||[]) : (D.pickup||[]);
+  const same = src.filter(r=>String(r.id)===String(id)).length;
+  const msg = same > 1
+    ? `同じIDの日報が ${same} 件あります（多重送信の可能性）。\nそのうち1件だけを削除します。`
+    : 'この1件を削除しますか？';
+  showDialog({icon:'🗑', title:'削除の確認', msg, okText:'削除する', cancelText:'キャンセル'}).then(ok=>{
     if(!ok) return;
+    const removeOne = arr => {
+      const i = arr.findIndex(r=>String(r.id)===String(id));
+      if(i>=0) arr.splice(i,1);
+      return arr;
+    };
     if(type==='del'){
-      D.delivery = D.delivery.filter(r=>r.id!==id);
-      // yp_logsからも削除（Firebaseとの再同期で復活しないように）
-      const ypLogs = (lsGet(LS_KEYS.YP,[])||[]).filter(r=>String(r.id)!==String(id));
+      removeOne(D.delivery);
+      // yp_logsからも1件だけ削除（Firebaseとの再同期で復活しないように）
+      const ypLogs = removeOne(lsGet(LS_KEYS.YP,[])||[]);
       lsSet(LS_KEYS.YP, ypLogs);
       if(typeof fbSet==='function'){ fbSet('delivery', D.delivery); fbSet('yp_logs', ypLogs); }
     } else {
-      D.pickup = D.pickup.filter(r=>r.id!==id);
-      const colLogs = (lsGet(LS_KEYS.COL,[])||[]).filter(r=>String(r.id)!==String(id));
+      removeOne(D.pickup);
+      const colLogs = removeOne(lsGet(LS_KEYS.COL,[])||[]);
       lsSet(LS_KEYS.COL, colLogs);
       if(typeof fbSet==='function'){ fbSet('pickup', D.pickup); fbSet('col_logs', colLogs); }
     }
