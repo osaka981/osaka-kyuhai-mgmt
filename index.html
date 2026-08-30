@@ -2746,7 +2746,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 基本情報 -->
   <input type="hidden" id="dd-post">
   <div style="display:grid;grid-template-columns:160px 1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel()" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel();_ddWorkSync&&_ddWorkSync()" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
 
     <!-- ① 営業所コンボ：番号/名前で検索、確定で郵便局・従業員に連動 -->
     <div class="fg">
@@ -2904,6 +2904,29 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="vrow"><span>完了＋転送＋持戻＋翌日</span><span id="v-sum" class="fw7 mono">0</span></div>
     <div class="vrow xs muted"><span>夜間 ≤ 完了</span><span id="v-yakan">−</span></div>
     <div class="veq vp" id="v-res">数値を入力してください</div>
+  </div>
+
+  <!-- ★ 2026/08/29: 勤務時間。時間単価・時間給の従事員のみ表示する。
+       本来は日報アプリの打刻で入るが、打ち漏れ・訂正時に内勤者がここから入力する。 -->
+  <div id="dd-work-wrap" style="display:none;background:var(--bg3);border-radius:6px;padding:9px 11px;margin-top:10px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+      <span style="font-size:11.5px;font-weight:700;color:var(--txt);">勤務時間</span>
+      <span id="dd-work-kyuyo" style="font-size:10px;color:var(--amb2);font-weight:700;"></span>
+      <span id="dd-work-src" style="font-size:10px;color:var(--txt3);margin-left:auto;"></span>
+    </div>
+    <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="margin:0;width:120px;">
+        <label>開始</label>
+        <input type="time" id="dd-work-in" class="fi" oninput="_ddWorkCalc()">
+      </div>
+      <span style="color:var(--txt3);padding-bottom:8px;">〜</span>
+      <div class="fg" style="margin:0;width:120px;">
+        <label>終了</label>
+        <input type="time" id="dd-work-out" class="fi" oninput="_ddWorkCalc()">
+      </div>
+      <button type="button" class="btn b-gh btn-sm" onclick="_ddWorkClear()">クリア</button>
+    </div>
+    <div id="dd-work-calc" style="font-size:10.5px;color:var(--txt2);margin-top:6px;line-height:1.6;"></div>
   </div>
 
   <div class="fg mt8"><label>備考</label><input type="text" id="dd-note" class="fi" placeholder="特記事項など"></div>
@@ -9713,6 +9736,9 @@ async function saveDel(){
   _refreshOpenLedger();   // ★ 2026/08/10: 開いている台帳画面も更新する
   // 保存確認バーを消す
   const bar=document.getElementById('enter-save-confirm');if(bar)bar.remove();
+  // ★ 2026/08/29: 勤務時間(時間単価・時間給のみ)を att_logs に保存
+  try{ if(typeof _ddWorkSave==='function') _ddWorkSave(); }
+  catch(e){ console.error('[saveDel] 勤務時間の保存エラー', e); }
   // 連続入力：フォームをリセットして入力続行
   _resetDelForm();
   // 完了トースト表示
@@ -9750,6 +9776,8 @@ function _resetDelForm(){
   //   (8/2を保存 → 8/29が一瞬表示 → 8/3 に変わる、という見え方)
   const today=new Date().toISOString().slice(0,10);
   if($('dd-date') && !window._delContinueMode) $('dd-date').value=today;
+  if($('dd-work-in'))  $('dd-work-in').value='';
+  if($('dd-work-out')) $('dd-work-out').value='';
   // 連続入力中は営業所・従事員を保持する(直後に入れ直すため、ちらつきの原因になる)
   if(!window._delContinueMode){
     if($('dd-off'))$('dd-off').value='';
@@ -9799,6 +9827,7 @@ function editDel(id){
     $('dd-off-input').placeholder = offVal;
   }
   if($('dd-staff')) $('dd-staff').value = r.staff;
+  setTimeout(()=>{ try{ _ddWorkSync && _ddWorkSync(); }catch(e){} }, 60);
   const stData=D.staff.find(s=>s.name===r.staff);
   if($('dd-staff-input')){
     const stVal = stData?`${stData.empNo} ${r.staff}`:r.staff;
@@ -31012,6 +31041,8 @@ function selectDdStaff(name,empNo){
   calcDelAmt();
   // 郵便局を従業員の直近日報から自動入力
   _autoFillPostOffice(name);
+  // ★ 2026/08/29: 時間単価・時間給なら勤務時間欄を出す
+  try{ _ddWorkSync && _ddWorkSync(); }catch(e){}
 }
 function _autoFillPostOffice(staffName){
   const post=$('dd-post');if(!post||post.value)return;
@@ -37425,6 +37456,144 @@ function _loadCharters(){
     if(Array.isArray(v)) D.charters = v;
     if(!Array.isArray(D.charters)) D.charters = [];
   }catch(e){ D.charters = []; }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ＋局日報の勤務時間 (2026/08/29)
+//   時間単価・時間給の従事員だけに表示する。
+//   保存先は att_logs（日報アプリの打刻と同じ場所）。
+//   給与計算は att_logs しか見ないため、ここを分けると二重管理になる。
+// ════════════════════════════════════════════════════════════
+
+// いま選ばれている従事員
+function _ddStaff(){
+  const nm = $('dd-staff')?.value || '';
+  return (D.staff||[]).find(s=>s.name===nm) || null;
+}
+function _isHourly(st){
+  return !!st && (st.kyuyo === '時間単価' || st.kyuyo === '時間給');
+}
+
+// 勤務時間欄の表示/非表示を切り替え、既存の勤怠があれば読み込む
+function _ddWorkSync(){
+  const wrap = $('dd-work-wrap'); if(!wrap) return;
+  const st = _ddStaff();
+  if(!_isHourly(st)){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  const kl = $('dd-work-kyuyo');
+  if(kl) kl.textContent = st.kyuyo + '（入力が必要です）';
+
+  const date = $('dd-date')?.value || '';
+  const att  = _findAtt(st, date);
+  const srcEl = $('dd-work-src');
+  if(att){
+    if($('dd-work-in'))  $('dd-work-in').value  = _hhmm(att.clockIn);
+    if($('dd-work-out')) $('dd-work-out').value = _hhmm(att.adjustedOut || att.clockOut);
+    if(srcEl) srcEl.textContent = att.source==='manual' ? '経営管理で入力済み' : '日報アプリの打刻';
+  }else{
+    if($('dd-work-in'))  $('dd-work-in').value  = '';
+    if($('dd-work-out')) $('dd-work-out').value = '';
+    if(srcEl) srcEl.textContent = '未入力';
+  }
+  _ddWorkCalc();
+}
+
+function _hhmm(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+
+function _findAtt(st, date){
+  if(!st || !date) return null;
+  const logs = lsGet(LS_KEYS.ATT, []) || [];
+  return logs.find(a => a && a.date===date &&
+    (String(a.driverId)===String(st.id) || String(a.driverId)===String(st.empNo) || a.driverName===st.name)) || null;
+}
+
+// 開始・終了から実働を計算して表示
+function _ddWorkCalc(){
+  const el = $('dd-work-calc'); if(!el) return;
+  const st = _ddStaff();
+  const i = $('dd-work-in')?.value || '', o = $('dd-work-out')?.value || '';
+  if(!i || !o){ el.innerHTML = '<span style="color:var(--txt3);">開始と終了を入力すると実働時間を計算します</span>'; return; }
+  const span = _spanMin(i, o);
+  if(span <= 0){ el.innerHTML = '<span style="color:var(--red2);">終了が開始より前です</span>'; return; }
+  const net = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+  const rnd = (typeof roundWorkMin==='function') ? roundWorkMin(net) : net;
+  const hm = m => `${Math.floor(m/60)}時間${String(m%60).padStart(2,'0')}分`;
+  const rs = (typeof getRoundSettings==='function') ? getRoundSettings() : {unit:15,mode:'ceil'};
+  const modeJa = {ceil:'切り上げ', round:'四捨五入', floor:'切り捨て'}[rs.mode] || rs.mode;
+  el.innerHTML = `拘束 ${hm(span)} → 休憩 ${span-net}分 → 実働 ${hm(net)}`
+    + ` → <b style="color:var(--txt);">${hm(rnd)}</b>`
+    + `<span style="color:var(--txt3);"> （${rs.unit}分${modeJa}）で計上</span>`;
+}
+
+// 日をまたぐ勤務にも対応(終了が開始より小さければ翌日とみなす)
+function _spanMin(inHM, outHM){
+  const [ih,im] = inHM.split(':').map(Number);
+  const [oh,om] = outHM.split(':').map(Number);
+  let m = (oh*60+om) - (ih*60+im);
+  if(m < 0) m += 24*60;
+  return m;
+}
+
+function _ddWorkClear(){
+  if($('dd-work-in'))  $('dd-work-in').value='';
+  if($('dd-work-out')) $('dd-work-out').value='';
+  _ddWorkCalc();
+}
+
+// 保存: att_logs に書く(打刻と同じ場所)
+async function _ddWorkSave(){
+  const st = _ddStaff();
+  if(!_isHourly(st)) return;
+  const date = $('dd-date')?.value || '';
+  const i = $('dd-work-in')?.value || '', o = $('dd-work-out')?.value || '';
+  if(!date) return;
+
+  const logs = lsGet(LS_KEYS.ATT, []) || [];
+  const idx = logs.findIndex(a => a && a.date===date &&
+    (String(a.driverId)===String(st.id) || String(a.driverId)===String(st.empNo) || a.driverName===st.name));
+
+  if(!i || !o){
+    // 空にした場合、経営管理で入れた分だけ取り消す(打刻は消さない)
+    if(idx>=0 && logs[idx].source==='manual'){
+      logs.splice(idx,1);
+      lsSet(LS_KEYS.ATT, logs);
+      try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }catch(e){}
+    }
+    return;
+  }
+
+  const span = _spanMin(i,o);
+  const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+  const mk = hm => { const [h,m]=hm.split(':').map(Number);
+    const d=new Date(date+'T00:00:00'); d.setHours(h,m,0,0); return d.toISOString(); };
+  const outIso = (()=>{ const [h,m]=o.split(':').map(Number);
+    const d=new Date(date+'T00:00:00'); d.setHours(h,m,0,0);
+    if(_spanMin(i,o)>0 && (h*60+m) < (Number(i.split(':')[0])*60+Number(i.split(':')[1]))) d.setDate(d.getDate()+1);
+    return d.toISOString(); })();
+
+  const rec = {
+    ...(idx>=0 ? logs[idx] : {}),
+    id: (idx>=0 ? logs[idx].id : Date.now()),
+    date,
+    driverId: String(st.empNo || st.id || ''),
+    driverName: st.name,
+    kyuyo: st.kyuyo || '',
+    clockIn: mk(i),
+    clockOut: outIso,
+    workMin: net,                 // 休憩控除後(丸めは給与計算側で行う)
+    source: 'manual',             // 経営管理で入力した印
+    updatedAt: new Date().toISOString(),
+  };
+  if(idx>=0) logs[idx] = rec; else logs.push(rec);
+  lsSet(LS_KEYS.ATT, logs);
+  try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
+  catch(e){ console.error('[_ddWorkSave]', e); }
 }
 
 </script>
