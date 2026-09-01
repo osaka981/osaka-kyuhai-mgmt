@@ -9048,7 +9048,86 @@ function _jetRowsForMonth(mon){
   rows.sort((p,q)=> (p.j.date+String(p.j.startedAt||0)).localeCompare(q.j.date+String(q.j.startedAt||0)));
   return rows;
 }
+// ── 差出票の写真（nikki/jet_photos/日付/便キー）。行ごとに必要なときだけ読む ──
+async function jetPhotos(date, key, btn){
+  const cell = btn.parentElement.querySelector('.jc-ph');
+  if(!fbDB){ cell.innerHTML='<span class="xs muted">オフライン</span>'; return; }
+  const { ref, get } = window._fbImports;
+  btn.disabled=true; btn.textContent='読込中';
+  try{
+    const snap = await get(ref(fbDB, 'nikki/jet_photos/'+date+'/'+key));
+    const v = snap.exists() ? snap.val() : null;
+    const ids = v ? Object.keys(v).sort() : [];
+    cell.innerHTML = ids.length
+      ? ids.map(id=>`<img src="${v[id].thumb||''}" title="${new Date(v[id].at||0).toLocaleString('ja-JP')}" style="height:54px;border-radius:4px;cursor:pointer;border:1px solid var(--brd,#ddd)" onclick="jetPhotoOpen('${date}','${key}','${id}')">`).join('')
+      : '<span class="xs muted">写真なし</span>';
+    cell.innerHTML += `<label class="btn b-gh btn-sm" style="cursor:pointer;">追加<input type="file" accept="image/*" style="display:none" onchange="jetPhotoUpload('${date}','${key}',this)"></label>`;
+  }catch(e){ cell.innerHTML='<span class="xs" style="color:var(--red)">読込失敗</span>'; }
+  btn.disabled=false; btn.textContent='写真';
+}
+async function jetPhotoOpen(date, key, id){
+  const { ref, get } = window._fbImports;
+  const snap = await get(ref(fbDB, 'nikki/jet_photos/'+date+'/'+key+'/'+id));
+  if(!snap.exists()) return;
+  const v = snap.val();
+  let ov = document.getElementById('jet-photo-ov');
+  if(!ov){
+    ov = document.createElement('div'); ov.id='jet-photo-ov';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;';
+    ov.onclick = e => { if(e.target===ov) ov.remove(); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<img src="${v.full||v.thumb}" style="max-width:92vw;max-height:84vh;border-radius:6px;background:#fff">
+    <div style="display:flex;gap:8px;">
+      <button class="btn b-gh btn-sm" onclick="document.getElementById('jet-photo-ov').remove()">閉じる</button>
+      <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="jetPhotoDelete('${date}','${key}','${id}')">この写真を削除</button>
+    </div>`;
+}
+async function jetPhotoDelete(date, key, id){
+  if(!confirm('この写真を削除します。よろしいですか。')) return;
+  const { ref, set } = window._fbImports;
+  await set(ref(fbDB, 'nikki/jet_photos/'+date+'/'+key+'/'+id), null);
+  document.getElementById('jet-photo-ov')?.remove();
+  const btn = document.querySelector(`#tb-jc tr[data-key="${key}"] .jc-ph`)?.parentElement.querySelector('button');
+  if(btn) jetPhotos(date, key, btn);
+}
+function _jetShrink(file, longEdge, quality){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader(); fr.onerror=()=>reject(new Error('read'));
+    fr.onload=()=>{ const img=new Image(); img.onerror=()=>reject(new Error('img'));
+      img.onload=()=>{ let w=img.width,h=img.height; const sc=Math.min(1,longEdge/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+        const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const ctx=cv.getContext('2d');
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h); resolve(cv.toDataURL('image/jpeg',quality)); };
+      img.src=fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+async function jetPhotoUpload(date, key, input){
+  const f = input.files && input.files[0]; if(!f) return;
+  const { ref, set } = window._fbImports;
+  try{
+    const full = await _jetShrink(f, 1400, .62), thumb = await _jetShrink(f, 240, .6);
+    const id = 'p'+Date.now();
+    await set(ref(fbDB, 'nikki/jet_photos/'+date+'/'+key+'/'+id), {full, thumb, at:Date.now(), by:'mgmt'});
+    const btn = input.closest('td').querySelector('button');
+    if(btn) jetPhotos(date, key, btn);
+  }catch(e){ alert('写真の保存に失敗しました'); }
+}
+// 90日より古い写真を日付ノードごと削除（セッション中1回だけ、キー一覧のみ取得して判定）
+let _jetPurged=false;
+async function _jetPurgePhotos(){
+  if(_jetPurged || !fbDB) return; _jetPurged=true;
+  try{
+    const r = await fetch(FB_CONFIG.databaseURL + '/nikki/jet_photos.json?shallow=true');
+    const keys = Object.keys((await r.json()) || {});
+    const cut = new Date(); cut.setDate(cut.getDate()-90);
+    const cutStr = cut.getFullYear()+'-'+String(cut.getMonth()+1).padStart(2,'0')+'-'+String(cut.getDate()).padStart(2,'0');
+    const { ref, set } = window._fbImports;
+    for(const d of keys){ if(/^\d{4}-\d{2}-\d{2}$/.test(d) && d < cutStr) await set(ref(fbDB, 'nikki/jet_photos/'+d), null); }
+  }catch(e){ console.warn('[jet_photos purge]', e); }
+}
 function renderJetCmp(){
+  _jetPurgePhotos();
   const monEl=$('jc-mon'); if(!monEl) return;
   if(!monEl.value){ const d=new Date(); monEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
   const mon=monEl.value;
@@ -9077,7 +9156,7 @@ function renderJetCmp(){
       <td class="tr"><input type="number" min="0" class="fi jc-c5" style="width:64px;text-align:right" value="${has(a.c5)?a.c5:''}" placeholder="${j.c5||0}"></td>
       <td class="tr mono fw7" style="color:${diff?'var(--red)':'var(--txt2)'}">${diff>0?'+':''}${diff||'0'}</td>
       <td><input type="text" class="fi jc-reason" style="width:150px" value="${esc(a.reason||'')}" placeholder="差異の理由"></td>
-      <td><input type="text" class="fi jc-photo" style="width:120px" value="${esc(a.photo||'')}" placeholder="写真URL">${a.photo?` <a href="${esc(a.photo)}" target="_blank" class="xs">開く</a>`:''}</td>
+      <td><button class="btn b-gh btn-sm" onclick="jetPhotos('${esc(j.date||'')}','${esc(j.key)}',this)">写真</button><div class="jc-ph" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;"></div></td>
       <td><select class="fi jc-status" style="color:${stCol};font-weight:700">
         ${['未照合','照合済','差異あり','協議中'].map(x=>`<option${st===x?' selected':''}>${x}</option>`).join('')}
       </select></td>
@@ -9098,7 +9177,7 @@ async function saveJetAdj(key){
   adj[key]={
     c3: v3===''?null:Number(v3), c5: v5===''?null:Number(v5),
     reason: tr.querySelector('.jc-reason').value.trim(),
-    photo:  tr.querySelector('.jc-photo').value.trim(),
+    photo:  prev.photo || '',
     status,
     history: [...(prev.history||[]), {at:new Date().toISOString(), c3:v3===''?null:Number(v3), c5:v5===''?null:Number(v5), status}].slice(-20),
     updatedAt: Date.now(),
