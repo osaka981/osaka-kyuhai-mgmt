@@ -1558,6 +1558,34 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 品目別集計 -->
+    <!-- 計数照合（バーコード計数アプリの便別実績と郵便局引受数の突き合わせ） -->
+    <div id="s-pu-count" class="sec">
+      <div class="flbc mb12">
+        <div class="fla gap6">
+          <input type="month" id="jc-mon" class="fi" onchange="renderJetCmp()">
+          <select id="jc-cust" class="fi" style="width:230px" onchange="saveJetCust()"></select>
+          <span class="xs muted">計数の実績はこの顧客の集荷として計上されます</span>
+        </div>
+        <div class="fla gap6">
+          <button class="btn b-gh btn-sm" onclick="expJetCSV()">CSV出力</button>
+        </div>
+      </div>
+      <div class="krow" id="jc-kpi"></div>
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="cbar"></div>便別 計数と引受数の照合</div>
+          <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span></div>
+        <div class="tw"><table>
+          <thead><tr>
+            <th>日付</th><th>便</th><th>ドライバー</th><th>企業</th>
+            <th class="tr">計数 通常</th><th class="tr">計数 5cm</th><th class="tr">計</th>
+            <th class="tr">引受 通常</th><th class="tr">引受 5cm</th><th class="tr">差異</th>
+            <th>理由</th><th>写真</th><th>状態</th><th></th>
+          </tr></thead>
+          <tbody id="tb-jc"></tbody>
+        </table></div>
+      </div>
+    </div>
+
     <div id="s-pu-sum" class="sec">
       <div class="flbc mb12">
         <div class="fla gap6">
@@ -4998,6 +5026,10 @@ const LS_KEYS = {
   // ★ 2026/08/21: 照合の状態(照合済/差異了承/原因/履歴)。
   //   D.delivery は毎回 yp_logs から作り直されるため、状態はここに別途保存する。
   CMPSTATE:           'nikki_cmp_state',
+  // ★ 2026/09/01: バーコード計数アプリ(j-scan)の便別実績・照合状態・設定
+  JET:                'nikki_jet_scan',
+  JETADJ:             'nikki_jet_adjust',
+  JETSET:             'nikki_jet_settings',
 };
 
 // 休業調査システム データ(グローバル) - lsGet 後に初期化される
@@ -6420,6 +6452,44 @@ function applyFirebaseData() {
     const fbIds = new Set(fbPu.map(r => String(r.id)));
     D.pickup = [...D.pickup.filter(r => !fbIds.has(String(r.id))), ...fbPu];
   }
+
+  // ★ 2026/09/01: バーコード計数(nikki/jet_scan) → D.pickup へ合流
+  //   ・締め済み(closed)の便だけ計上する
+  //   ・引受数の訂正(nikki/jet_adjust)があればスキャン数より優先
+  //   ・顧客は jet_settings.customerId、未設定なら名称に「ジェットグループ」を含む顧客
+  //   ・col_logs には一切書かない(別ノードのまま合流するだけ)
+  try{
+    const jetAll = lsGet(LS_KEYS.JET, null);
+    const jetRows = [];
+    if(jetAll && typeof jetAll === 'object'){
+      const adj  = lsGet(LS_KEYS.JETADJ, {}) || {};
+      const jset = lsGet(LS_KEYS.JETSET, {}) || {};
+      let cust = jset.customerId ? (D.customers||[]).find(c=>String(c.id)===String(jset.customerId)) : null;
+      if(!cust) cust = (D.customers||[]).find(c=>/ジェットグループ/.test(c.name||'')) || null;
+      Object.values(jetAll).forEach(byKey=>{
+        Object.values(byKey||{}).forEach(j=>{
+          if(!j || !j.key || !j.closed) return;
+          const a  = adj[j.key] || {};
+          const has = v => v!==null && v!==undefined && v!=='';
+          const c3 = has(a.c3) ? Number(a.c3) : (j.c3||0);
+          const c5 = has(a.c5) ? Number(a.c5) : (j.c5||0);
+          const st = (D.staff||[]).find(x=>String(x.empNo||x.id)===String(j.driverId||''));
+          jetRows.push({
+            id: 'jet_'+j.key, date: j.date,
+            office: st?.office || '',
+            staff:  j.driverName || '',
+            customerId: cust?.id || 0, customerName: cust?.name || '',
+            region: '',
+            items: { 'ゆうパケット_通常': c3, 'ゆうパケット_7cm以上': c5 },
+            route: null, charter: null,
+            note: 'バーコード計数 '+(j.bin||'')+(j.registered===false?'（未登録ドライバー）':''),
+            _fromJet: true, _jet: j, _jetAdj: a,
+          });
+        });
+      });
+    }
+    D.pickup = [...(D.pickup||[]).filter(r => !r._fromJet), ...jetRows];
+  }catch(e){ console.warn('[jet_scan 合流] 失敗:', e); }
   // ★ 2026/08/10: 取り込み後に日付形式を統一する。
   //   経営管理から保存した分がスラッシュ形式で、月の絞り込みから漏れていた。
   try{ normalizeReportDates(); }catch(e){ console.warn('日付正規化に失敗:', e); }
@@ -6507,6 +6577,25 @@ function setupRealtimeSync() {
     lsSet(LS_KEYS.COMPANIES, arr);
     applyFirebaseData();
     if(typeof renderCompanyPage === 'function' && document.getElementById('s-company')) renderCompanyPage();
+  });
+  // ★ 2026/09/01: バーコード計数(j-scan) 便別実績。col_logs とは別ノード。読むだけで書かない。
+  onValue(ref(fbDB, 'nikki/jet_scan'), snap => {
+    lsSet(LS_KEYS.JET, snap.exists() ? snap.val() : {});
+    applyFirebaseData();
+    if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
+    renderDash(); renderPU(); renderSum();
+  });
+  onValue(ref(fbDB, 'nikki/jet_adjust'), snap => {
+    if(window._fbWritingGuard && window._fbWritingGuard['jet_adjust']) return;
+    lsSet(LS_KEYS.JETADJ, snap.exists() ? snap.val() : {});
+    applyFirebaseData();
+    if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
+  });
+  onValue(ref(fbDB, 'nikki/jet_settings'), snap => {
+    if(window._fbWritingGuard && window._fbWritingGuard['jet_settings']) return;
+    lsSet(LS_KEYS.JETSET, snap.exists() ? snap.val() : {});
+    applyFirebaseData();
+    if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
   });
   onValue(ref(fbDB, 'nikki/offices'), snap => {
     if (!snap.exists()) return;
@@ -7471,6 +7560,7 @@ const _TOP_TABS = {
     { s:'pu-sum',     label:'品目別集計' },
     { s:'pu-cust',    label:'顧客・契約管理' },
     { s:'pu-inv',     label:'請求書' },
+    { s:'pu-count',   label:'計数照合', badge:'new' },
     { s:'schedule-mgmt',   label:'休業日管理' },
     { s:'schedule-survey', label:'休業調査', badge:'survey' },
   ]},
@@ -7578,6 +7668,7 @@ function navByS(s) {
   if (s==='pu-sum')      _call('renderSum');
   if (s==='pu-cust')     {} /* onValue自動更新 */
   if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
+  if (s==='pu-count')    _call('renderJetCmp');
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
@@ -8930,6 +9021,104 @@ function renderDel() {
 }
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
+// ══════════════════════════════════════════
+// 計数照合（バーコード計数アプリ nikki/jet_scan）
+// ══════════════════════════════════════════
+function _jetSettings(){ return lsGet(LS_KEYS.JETSET, {}) || {}; }
+function _jetCustomer(){
+  const js=_jetSettings();
+  let c = js.customerId ? (D.customers||[]).find(x=>String(x.id)===String(js.customerId)) : null;
+  if(!c) c = (D.customers||[]).find(x=>/ジェットグループ/.test(x.name||'')) || null;
+  return c;
+}
+function saveJetCust(){
+  const v=$('jc-cust')?.value||'';
+  const js=_jetSettings(); js.customerId = v;
+  fbSet('jet_settings', js).then(()=>{ applyFirebaseData(); renderJetCmp(); });
+}
+function _jetRowsForMonth(mon){
+  const jetAll = lsGet(LS_KEYS.JET, null) || {};
+  const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
+  const rows=[];
+  Object.values(jetAll).forEach(byKey=>Object.values(byKey||{}).forEach(j=>{
+    if(!j||!j.key) return;
+    if(mon && !(j.date||'').startsWith(mon)) return;
+    rows.push({ j, a: adj[j.key]||{} });
+  }));
+  rows.sort((p,q)=> (p.j.date+String(p.j.startedAt||0)).localeCompare(q.j.date+String(q.j.startedAt||0)));
+  return rows;
+}
+function renderJetCmp(){
+  const monEl=$('jc-mon'); if(!monEl) return;
+  if(!monEl.value){ const d=new Date(); monEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+  const mon=monEl.value;
+  // 顧客セレクト
+  const sel=$('jc-cust'); const cur=_jetCustomer();
+  sel.innerHTML='<option value="">（顧客を選択）</option>'+(D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false)
+    .map(c=>`<option value="${esc(String(c.id))}"${cur&&String(cur.id)===String(c.id)?' selected':''}>${esc(c.name)}</option>`).join('');
+  const rows=_jetRowsForMonth(mon);
+  let scan3=0,scan5=0,fix3=0,fix5=0,open=0,diffN=0;
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  let h='';
+  rows.forEach(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    const diff=(c3+c5)-((j.c3||0)+(j.c5||0));
+    scan3+=j.c3||0; scan5+=j.c5||0; fix3+=c3; fix5+=c5; if(!j.closed) open++; if(diff) diffN++;
+    const st=a.status||(j.closed?'未照合':'計数中');
+    const stCol=st==='照合済'?'var(--tel2)':st==='協議中'?'var(--red)':st==='差異あり'?'var(--amb2)':'var(--txt2)';
+    const drv=esc(j.driverName||'')+(j.driverId?`<div class="xs mono muted">${esc(j.driverId)}</div>`:'')+(j.registered===false?'<div class="xs" style="color:var(--red)">未登録</div>':'');
+    h+=`<tr data-key="${esc(j.key)}">
+      <td class="mono">${esc(j.date||'')}</td>
+      <td>${esc(j.bin||'')}${j.closed?'':'<div class="xs" style="color:var(--amb2)">未締め</div>'}</td>
+      <td class="fw7">${drv}</td>
+      <td class="xs">${esc(j.corpName||'')}</td>
+      <td class="tr mono">${fmt(j.c3||0)}</td><td class="tr mono">${fmt(j.c5||0)}</td><td class="tr mono fw7">${fmt((j.c3||0)+(j.c5||0))}</td>
+      <td class="tr"><input type="number" min="0" class="fi jc-c3" style="width:64px;text-align:right" value="${has(a.c3)?a.c3:''}" placeholder="${j.c3||0}"></td>
+      <td class="tr"><input type="number" min="0" class="fi jc-c5" style="width:64px;text-align:right" value="${has(a.c5)?a.c5:''}" placeholder="${j.c5||0}"></td>
+      <td class="tr mono fw7" style="color:${diff?'var(--red)':'var(--txt2)'}">${diff>0?'+':''}${diff||'0'}</td>
+      <td><input type="text" class="fi jc-reason" style="width:150px" value="${esc(a.reason||'')}" placeholder="差異の理由"></td>
+      <td><input type="text" class="fi jc-photo" style="width:120px" value="${esc(a.photo||'')}" placeholder="写真URL">${a.photo?` <a href="${esc(a.photo)}" target="_blank" class="xs">開く</a>`:''}</td>
+      <td><select class="fi jc-status" style="color:${stCol};font-weight:700">
+        ${['未照合','照合済','差異あり','協議中'].map(x=>`<option${st===x?' selected':''}>${x}</option>`).join('')}
+      </select></td>
+      <td><button class="btn b-blu btn-sm" onclick="saveJetAdj('${esc(j.key)}')">保存</button></td>
+    </tr>`;
+  });
+  $('tb-jc').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
+  $('jc-kpi').innerHTML=[
+    ['便数',rows.length],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],['差異あり',diffN],['未締め',open]
+  ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
+}
+async function saveJetAdj(key){
+  const tr=document.querySelector(`#tb-jc tr[data-key="${key}"]`); if(!tr) return;
+  const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
+  const v3=tr.querySelector('.jc-c3').value, v5=tr.querySelector('.jc-c5').value;
+  const status=tr.querySelector('.jc-status').value;
+  const prev=adj[key]||{};
+  adj[key]={
+    c3: v3===''?null:Number(v3), c5: v5===''?null:Number(v5),
+    reason: tr.querySelector('.jc-reason').value.trim(),
+    photo:  tr.querySelector('.jc-photo').value.trim(),
+    status,
+    history: [...(prev.history||[]), {at:new Date().toISOString(), c3:v3===''?null:Number(v3), c5:v5===''?null:Number(v5), status}].slice(-20),
+    updatedAt: Date.now(),
+  };
+  await fbSet('jet_adjust', adj);
+  applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
+}
+function expJetCSV(){
+  const mon=$('jc-mon')?.value||'';
+  const rows=_jetRowsForMonth(mon);
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  let out='\uFEFF日付,便,ドライバー,ID,企業,計数通常,計数5cm,計数計,引受通常,引受5cm,計上計,差異,状態,理由,写真\n';
+  rows.forEach(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    out+=[j.date,j.bin,j.driverName,j.driverId,j.corpName,j.c3||0,j.c5||0,(j.c3||0)+(j.c5||0),c3,c5,c3+c5,(c3+c5)-((j.c3||0)+(j.c5||0)),a.status||'',(a.reason||'').replace(/,/g,'、'),a.photo||''].join(',')+'\n';
+  });
+  const bl=new Blob([out],{type:'text/csv;charset=utf-8'}); const u=URL.createObjectURL(bl);
+  const el=document.createElement('a'); el.href=u; el.download='keisu_'+(mon||'all')+'.csv'; el.click(); setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+
 function renderPU() {
   const mon = _ymNorm($('pu-mon')?.value||'');
   const cf  = $('pu-cf')?.value||'';
@@ -8957,7 +9146,7 @@ function renderPU() {
       ${cells}
       <td class="tr fw7">${fmt(tot)}</td>
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
-      <td><button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button></td>
+      <td>${r._fromJet?'<span class="xs muted">計数</span>':`<button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button>`}</td>
     </tr>`;
   });
   $('tb-pu').innerHTML=h||`<tr><td colspan="20" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
