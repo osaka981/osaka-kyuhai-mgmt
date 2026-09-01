@@ -1547,7 +1547,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th>日付</th><th>従事員</th><th>営業所</th><th>顧客名</th><th>地域</th>
             <th class="tr c60">60</th><th class="tr c80">80</th><th class="tr c100">100</th>
             <th class="tr c120">120</th><th class="tr c140">140</th><th class="tr c160">160</th>
-            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT7cm</th>
+            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT5cm</th>
             <th class="tr ccp">CP</th><th class="tr cke">ケース</th>
             <th class="tr cte">定形外</th><th class="tr cch">チャーター</th>
             <th class="tr">合計</th><th class="tr">金額</th><th></th>
@@ -1595,7 +1595,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th>番号</th><th>顧客名</th><th>地域</th>
             <th class="tr c60">60</th><th class="tr c80">80</th><th class="tr c100">100</th>
             <th class="tr c120">120</th><th class="tr c140">140</th><th class="tr c160">160</th>
-            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT7cm</th>
+            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT5cm</th>
             <th class="tr ccp">CP</th><th class="tr cke">ケース</th>
             <th class="tr cte">定形外</th>
             <th>その他契約</th>
@@ -3023,7 +3023,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg"><label class="c140">ゆうパック 140サイズ</label><input type="number" id="p-y140" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
     <div class="fg"><label class="c160">ゆうパック 160サイズ</label><input type="number" id="p-y160" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
     <div class="fg"><label class="cpk1">ゆうパケット 通常</label><input type="number" id="p-pk1" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
-    <div class="fg"><label class="cpk2">ゆうパケット 7cm以上</label><input type="number" id="p-pk2" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
+    <div class="fg"><label class="cpk2">ゆうパケット 5cm以上</label><input type="number" id="p-pk2" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
     <div class="fg"><label class="ccp">クリックポスト</label><input type="number" id="p-cp" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
     <div class="fg"><label class="cke">ケース</label><input type="number" id="p-ke" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
     <div class="fg"><label class="cte">定形外(ゆうメール)</label><input type="number" id="p-te" class="fi" min="0" value="0" oninput="updPUPrev()"></div>
@@ -3239,7 +3239,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-cu-cp140" data-tax="ex"><button onclick="setItemTax('cu-cp140','in')" class="">税込</button><button onclick="setItemTax('cu-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp140" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-cu-cp160" data-tax="ex"><button onclick="setItemTax('cu-cp160','in')" class="">税込</button><button onclick="setItemTax('cu-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp160" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-cu-cpk1" data-tax="ex"><button onclick="setItemTax('cu-cpk1','in')" class="">税込</button><button onclick="setItemTax('cu-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()" onblur="onCuPk1Change()"></div>
-      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット7cm〜<span class="tax-tog" id="tt-cu-cpk2" data-tax="ex"><button onclick="setItemTax('cu-cpk2','in')" class="">税込</button><button onclick="setItemTax('cu-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
+      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット5cm〜<span class="tax-tog" id="tt-cu-cpk2" data-tax="ex"><button onclick="setItemTax('cu-cpk2','in')" class="">税込</button><button onclick="setItemTax('cu-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-cu-ccp" data-tax="ex"><button onclick="setItemTax('cu-ccp','in')" class="">税込</button><button onclick="setItemTax('cu-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-ccp" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-cu-cke" data-tax="ex"><button onclick="setItemTax('cu-cke','in')" class="">税込</button><button onclick="setItemTax('cu-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cke" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
       <div class="fg"><label class="cte" style="font-size:9px;">定形外(ゆうメール)<span class="tax-tog" id="tt-cu-cte" data-tax="ex"><button onclick="setItemTax('cu-cte','in')" class="">税込</button><button onclick="setItemTax('cu-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cte" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
@@ -3977,7 +3977,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-st-cp140" data-tax="ex"><button onclick="setItemTax('st-cp140','in')" class="">税込</button><button onclick="setItemTax('st-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp140" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="300" step="0.01"></div>
       <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-st-cp160" data-tax="ex"><button onclick="setItemTax('st-cp160','in')" class="">税込</button><button onclick="setItemTax('st-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp160" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="350" step="0.01"></div>
       <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-st-cpk1" data-tax="ex"><button onclick="setItemTax('st-cpk1','in')" class="">税込</button><button onclick="setItemTax('st-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="80" oninput="onStCpk1Change()" step="0.01"></div>
-      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット7cm〜<span class="tax-tog" id="tt-st-cpk2" data-tax="ex"><button onclick="setItemTax('st-cpk2','in')" class="">税込</button><button onclick="setItemTax('st-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="100" step="0.01"></div>
+      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット5cm〜<span class="tax-tog" id="tt-st-cpk2" data-tax="ex"><button onclick="setItemTax('st-cpk2','in')" class="">税込</button><button onclick="setItemTax('st-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="100" step="0.01"></div>
       <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-st-ccp" data-tax="ex"><button onclick="setItemTax('st-ccp','in')" class="">税込</button><button onclick="setItemTax('st-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-ccp" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="60" step="0.01"></div>
       <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-st-cke" data-tax="ex"><button onclick="setItemTax('st-cke','in')" class="">税込</button><button onclick="setItemTax('st-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cke" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="120" step="0.01"></div>
       <div class="fg"><label class="cte" style="font-size:9px;">定形外<span class="tax-tog" id="tt-st-cte" data-tax="ex"><button onclick="setItemTax('st-cte','in')" class="">税込</button><button onclick="setItemTax('st-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cte" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="50" step="0.01"></div>
@@ -4025,7 +4025,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
           <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;">
             <div class="fg"><label style="font-size:9px;">PKT通常</label><input type="number" id="st-col-cust-pk1" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">PKT7cm+</label><input type="number" id="st-col-cust-pk2" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
+            <div class="fg"><label style="font-size:9px;">PKT5cm+</label><input type="number" id="st-col-cust-pk2" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
             <div class="fg"><label style="font-size:9px;">CP</label><input type="number" id="st-col-cust-cp"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
             <div class="fg"><label style="font-size:9px;">ケース</label><input type="number" id="st-col-cust-ke" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
             <div class="fg"><label style="font-size:9px;">定形外</label><input type="number" id="st-col-cust-te" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
@@ -4922,6 +4922,8 @@ function _buildFbDriverEntry(s){
     driverNo: s.driverNo || s.empNo || '',
     // ★ 誕生日お祝い用に生年月日も連携(2026/06/23)
     birth:    s.birth    || '',
+    // ★ 2026/09/01: バーコード計数アプリのID照合で氏名と一緒に自動入力するため電話番号も連携
+    tel:      s.tel      || '',
   };
 }
 
@@ -7672,7 +7674,7 @@ const ITEMS = {
   'ゆうパック_140':       { label:'140サイズ',     cls:'c140', defPrice:300,  unit:'個', group:'ゆうパック',   modalId:'p-y140', cuId:'cu-y140' },
   'ゆうパック_160':       { label:'160サイズ',     cls:'c160', defPrice:350,  unit:'個', group:'ゆうパック',   modalId:'p-y160', cuId:'cu-y160' },
   'ゆうパケット_通常':    { label:'PKT 通常',      cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk1',  cuId:'cu-pk1'  },
-  'ゆうパケット_7cm以上': { label:'PKT 7cm〜',    cls:'cpk2', defPrice:100,  unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2'  },
+  'ゆうパケット_7cm以上': { label:'PKT 5cm〜',    cls:'cpk2', defPrice:100,  unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2'  },
   'クリックポスト':       { label:'クリックポスト', cls:'ccp',  defPrice:60,   unit:'個', group:'その他',       modalId:'p-cp',   cuId:'cu-cp'   },
   'ケース':               { label:'ケース',         cls:'cke',  defPrice:120,  unit:'個', group:'その他',       modalId:'p-ke',   cuId:'cu-ke'   },
   '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  defPrice:50,   unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te'   },
@@ -8827,7 +8829,7 @@ function renderDash() {
   });
   let ih='';
   IK.filter(k=>itot[k]>0).forEach(k=>{
-    ih+=`<tr><td class="${ITEMS[k].cls}">${ITEMS[k].group==='ゆうパック'?`ゆうパック ${ITEMS[k].label}`:ITEMS[k].label==='PKT 通常'?'ゆうパケット 通常':ITEMS[k].label==='PKT 7cm〜'?'ゆうパケット 7cm以上':ITEMS[k].label}</td><td class="tr">${fmt(itot[k])}</td><td class="tr" style="color:var(--tel2)">¥${fmt(iamt[k])}</td></tr>`;
+    ih+=`<tr><td class="${ITEMS[k].cls}">${ITEMS[k].group==='ゆうパック'?`ゆうパック ${ITEMS[k].label}`:ITEMS[k].label==='PKT 通常'?'ゆうパケット 通常':ITEMS[k].label==='PKT 5cm〜'?'ゆうパケット 5cm以上':ITEMS[k].label}</td><td class="tr">${fmt(itot[k])}</td><td class="tr" style="color:var(--tel2)">¥${fmt(iamt[k])}</td></tr>`;
   });
   $('tb-is').innerHTML = ih || '<tr><td colspan="3" style="text-align:center;padding:12px;color:var(--txt2)">データなし</td></tr>';
 
@@ -9028,7 +9030,7 @@ function openCustDetail(custId){
   const cp=cu.colPrices||cu.prices||{};
   const priceMap={'p60':'ゆうパック 60サイズ','p80':'ゆうパック 80サイズ','p100':'ゆうパック 100サイズ',
     'p120':'ゆうパック 120サイズ','p140':'ゆうパック 140サイズ','p160':'ゆうパック 160サイズ',
-    'pk1':'ゆうパケット 通常','pk2':'ゆうパケット 7cm〜','cp':'クリックポスト','ke':'ケース','te':'定形外(ゆうメール)'};
+    'pk1':'ゆうパケット 通常','pk2':'ゆうパケット 5cm〜','cp':'クリックポスト','ke':'ケース','te':'定形外(ゆうメール)'};
   const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120',
     'ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
     'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
@@ -10030,7 +10032,7 @@ function setCuTax(type){
 }
 function updCuTaxPreview(){
   const body = $('cu-tax-preview-body'); if(!body) return;
-  const labels = {'cu-cp60':'60','cu-cp80':'80','cu-cp100':'100','cu-cp120':'120','cu-cp140':'140','cu-cp160':'160','cu-cpk1':'PKT通常','cu-cpk2':'PKT7cm+','cu-ccp':'CP','cu-cke':'ケース','cu-cte':'定形外'};
+  const labels = {'cu-cp60':'60','cu-cp80':'80','cu-cp100':'100','cu-cp120':'120','cu-cp140':'140','cu-cp160':'160','cu-cpk1':'PKT通常','cu-cpk2':'PKT5cm+','cu-ccp':'CP','cu-cke':'ケース','cu-cte':'定形外'};
   let h='';
   Object.entries(labels).forEach(([id,lbl])=>{
     const v=parseInt($(id)?.value)||0;
@@ -10581,7 +10583,7 @@ function onCuYP60Change(){
     const el=$(id);if(el&&!el.value)el.value=v;
   });
 }
-// ─── ゆうパケット通常入力→7cm〜へ自動反映（顧客モーダル） ───
+// ─── ゆうパケット通常入力→5cm〜へ自動反映（顧客モーダル） ───
 function onCuPk1Change(){
   const v=$('cu-cpk1')?.value;
   if(!v)return;
@@ -20815,7 +20817,7 @@ function openInvoiceLabelEditor(customerName, ymInput){
     {key:'p140', label:'ゆうパック140'},
     {key:'p160', label:'ゆうパック160'},
     {key:'pk1',  label:'ゆうパケット(通常)'},
-    {key:'pk2',  label:'ゆうパケット(7cm以上)'},
+    {key:'pk2',  label:'ゆうパケット(5cm以上)'},
     {key:'cp',   label:'クリックポスト'},
     {key:'ke',   label:'ケース'},
     {key:'te',   label:'定形外(ゆうメール)'},
@@ -22653,7 +22655,7 @@ function restoreCoOtherRows(items){
 // ─── 集荷 顧客別単価（セレクト＋タブ方式） ───
 const CO_COL_ITEMS = ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'];
 const CO_COL_LABELS = {p60:'YP60',p80:'YP80',p100:'YP100',p120:'YP120',p140:'YP140',p160:'YP160',
-  pk1:'PKT通常',pk2:'PKT7cm〜',cp:'CP',ke:'ケース',te:'定形外'};
+  pk1:'PKT通常',pk2:'PKT5cm〜',cp:'CP',ke:'ケース',te:'定形外'};
 // _coCustPrices: [{custId, taxType, prices:{p60,p80,...}}]
 let _coCustPrices = [];
 let _coCustSelId = null; // 現在選択中のcustId（タブ）
@@ -35011,7 +35013,7 @@ window.dqImportJson = function(){
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c140">YP 140サイズ</label><input type="number" id="co-cp140" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp140')"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="c160">YP 160サイズ</label><input type="number" id="co-cp160" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0" oninput="_markCoColManual('co-cp160')"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cpk1">ゆうパケット通常</label><input type="number" id="co-cpk1" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cpk2">ゆうパケット7cm〜</label><input type="number" id="co-cpk2" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
+          <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cpk2">ゆうパケット5cm〜</label><input type="number" id="co-cpk2" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="ccp">クリックポスト</label><input type="number" id="co-ccp" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cke">ケース</label><input type="number" id="co-cke" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg" style="margin:0;"><label style="font-size:10px;" class="cte">定形外(ゆうメール)</label><input type="number" id="co-cte" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
@@ -35343,7 +35345,7 @@ window.dqImportJson = function(){
       <div class="fg"><label style="font-size:11px;" class="c140">YP 140サイズ</label><input type="number" id="rt-p140" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="c160">YP 160サイズ</label><input type="number" id="rt-p160" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="cpk1">ゆうパケット通常</label><input type="number" id="rt-pk1" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
-      <div class="fg"><label style="font-size:11px;" class="cpk2">ゆうパケット7cm〜</label><input type="number" id="rt-pk2" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
+      <div class="fg"><label style="font-size:11px;" class="cpk2">ゆうパケット5cm〜</label><input type="number" id="rt-pk2" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="ccp">クリックポスト</label><input type="number" id="rt-cp" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="cke">ケース</label><input type="number" id="rt-ke" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
       <div class="fg"><label style="font-size:11px;" class="cte">定形外(ゆうメール)</label><input type="number" id="rt-te" class="fi" style="font-size:13px;padding:5px 8px;" placeholder="0"></div>
