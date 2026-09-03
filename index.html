@@ -1572,6 +1572,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
       <div class="krow" id="jc-kpi"></div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="ch"><div class="ct"><div class="cbar"></div>便に紐づかない回収資料</div>
+          <span class="xs muted">計数アプリで「ドライバーなし」として提出された写真です</span></div>
+        <div style="padding:10px 12px" id="jc-noshift"><span class="xs muted">読み込み中</span></div>
+      </div>
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>便別 計数と引受数の照合</div>
           <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span></div>
@@ -9127,6 +9132,28 @@ async function _jetPurgePhotos(){
     for(const d of keys){ if(/^\d{4}-\d{2}-\d{2}$/.test(d) && d < cutStr) await set(ref(fbDB, 'nikki/jet_photos/'+d), null); }
   }catch(e){ console.warn('[jet_photos purge]', e); }
 }
+async function loadNoShiftPhotos(mon){
+  const el=$('jc-noshift'); if(!el) return;
+  el.innerHTML='<span class="xs muted">読み込み中</span>';
+  if(!fbDB){ el.innerHTML='<span class="xs muted">オフライン</span>'; return; }
+  const { ref, get } = window._fbImports;
+  try{
+    const r=await fetch(FB_CONFIG.databaseURL+'/nikki/jet_photos.json?shallow=true');
+    const dates=Object.keys((await r.json())||{}).filter(d=>d.startsWith(mon)).sort().reverse();
+    let html='';
+    for(const date of dates){
+      const snap=await get(ref(fbDB,'nikki/jet_photos/'+date+'/noshift'));
+      if(!snap.exists()) continue;
+      const v=snap.val()||{};
+      const ids=Object.keys(v).sort();
+      if(!ids.length) continue;
+      html+=`<div style="margin-bottom:8px"><div class="xs fw7" style="margin-bottom:4px">${date}　${ids.length}枚</div>`+
+        ids.map(id=>`<img src="${v[id].thumb||''}" title="${new Date(v[id].at||0).toLocaleString('ja-JP')}" style="height:54px;border-radius:4px;margin-right:4px;cursor:pointer;border:1px solid var(--brd,#ddd)" onclick="jetPhotoOpen('${date}','noshift','${id}')">`).join('')+
+        '</div>';
+    }
+    el.innerHTML=html||'<span class="xs muted">この月は提出がありません</span>';
+  }catch(e){ el.innerHTML='<span class="xs" style="color:var(--red)">読込失敗</span>'; }
+}
 function renderJetCmp(){
   _jetPurgePhotos();
   const monEl=$('jc-mon'); if(!monEl) return;
@@ -9136,6 +9163,7 @@ function renderJetCmp(){
   const sel=$('jc-cust'); const cur=_jetCustomer();
   sel.innerHTML='<option value="">（顧客を選択）</option>'+(D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false)
     .map(c=>`<option value="${esc(String(c.id))}"${cur&&String(cur.id)===String(c.id)?' selected':''}>${esc(c.name)}</option>`).join('');
+  loadNoShiftPhotos(mon);
   const rows=_jetRowsForMonth(mon);
   let scan3=0,scan5=0,fix3=0,fix5=0,open=0,diffN=0;
   const has=v=>v!==null&&v!==undefined&&v!=='';
