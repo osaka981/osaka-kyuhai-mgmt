@@ -725,7 +725,8 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue };
+import { getAuth, signInAnonymously, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue, getAuth, signInAnonymously, onIdTokenChanged };
 window._fbReady = true;
 document.dispatchEvent(new Event('fb-sdk-ready'));
 </script>
@@ -7723,6 +7724,18 @@ async function initFirebase() {
     const { initializeApp, getDatabase } = window._fbImports || {};
     if (!initializeApp) { showFbStatus(false); return; }
     const app = initializeApp(FB_CONFIG, 'kyuhai-mgmt');
+    // ★ 2026/09/03: 匿名認証。ルールを「認証済みのみ」に締めるための準備。
+    try {
+      const { getAuth, signInAnonymously, onIdTokenChanged } = window._fbImports;
+      const auth = getAuth(app);
+      window._fbToken = null;
+      onIdTokenChanged(auth, async u => { if (u) { try { window._fbToken = await u.getIdToken(); } catch(e){} } });
+      await Promise.race([
+        signInAnonymously(auth).then(async c => { window._fbToken = await c.user.getIdToken(); }),
+        new Promise(r => setTimeout(r, 6000))
+      ]);
+      setInterval(async () => { try { const u = auth.currentUser; if (u) window._fbToken = await u.getIdToken(); } catch(e){} }, 30*60*1000);
+    } catch(e) { console.warn('匿名認証に失敗（続行します）:', e); }
     fbDB = getDatabase(app);
     fbOnline = true;
     await syncFromFirebase();
@@ -9038,9 +9051,15 @@ function _jetCustomer(){
   return c;
 }
 function saveJetCust(){
+  // ★ 2026/09/03: 全体を置き換えると計数アプリ側の発信先(postName/postTel)が消えるため、
+  //   customerId だけを部分更新する。
   const v=$('jc-cust')?.value||'';
   const js=_jetSettings(); js.customerId = v;
-  fbSet('jet_settings', js).then(()=>{ applyFirebaseData(); renderJetCmp(); });
+  lsSet(LS_KEYS.JETSET, js);
+  const { ref, set } = window._fbImports || {};
+  const done=()=>{ applyFirebaseData(); renderJetCmp(); };
+  if(fbDB && ref && set) set(ref(fbDB,'nikki/jet_settings/customerId'), v).then(done).catch(done);
+  else done();
 }
 function _jetRowsForMonth(mon){
   const jetAll = lsGet(LS_KEYS.JET, null) || {};
@@ -9053,6 +9072,11 @@ function _jetRowsForMonth(mon){
   }));
   rows.sort((p,q)=> (p.j.date+String(p.j.startedAt||0)).localeCompare(q.j.date+String(q.j.startedAt||0)));
   return rows;
+}
+// Firebase REST 呼び出しに認証トークンを付ける
+function fbRest(path){
+  const t = window._fbToken;
+  return FB_CONFIG.databaseURL + path + (t ? (path.indexOf('?')<0 ? '?' : '&') + 'auth=' + encodeURIComponent(t) : '');
 }
 // ── 差出票の写真（nikki/jet_photos/日付/便キー）。行ごとに必要なときだけ読む ──
 async function jetPhotos(date, key, btn){
@@ -9124,7 +9148,7 @@ let _jetPurged=false;
 async function _jetPurgePhotos(){
   if(_jetPurged || !fbDB) return; _jetPurged=true;
   try{
-    const r = await fetch(FB_CONFIG.databaseURL + '/nikki/jet_photos.json?shallow=true');
+    const r = await fetch(fbRest('/nikki/jet_photos.json?shallow=true'));
     const keys = Object.keys((await r.json()) || {});
     const cut = new Date(); cut.setDate(cut.getDate()-90);
     const cutStr = cut.getFullYear()+'-'+String(cut.getMonth()+1).padStart(2,'0')+'-'+String(cut.getDate()).padStart(2,'0');
@@ -9138,7 +9162,7 @@ async function loadNoShiftPhotos(mon){
   if(!fbDB){ el.innerHTML='<span class="xs muted">オフライン</span>'; return; }
   const { ref, get } = window._fbImports;
   try{
-    const r=await fetch(FB_CONFIG.databaseURL+'/nikki/jet_photos.json?shallow=true');
+    const r=await fetch(fbRest('/nikki/jet_photos.json?shallow=true'));
     const dates=Object.keys((await r.json())||{}).filter(d=>d.startsWith(mon)).sort().reverse();
     let html='';
     for(const date of dates){
@@ -9220,7 +9244,7 @@ async function expJetMonthlyCSV(btn){
   if(btn){ btn.disabled=true; btn.textContent='取得中'; }
   try{
     const base=FB_CONFIG.databaseURL;
-    const r=await fetch(base+'/nikki/jet_scan.json?shallow=true');
+    const r=await fetch(fbRest('/nikki/jet_scan.json?shallow=true'));
     const dates=Object.keys((await r.json())||{}).filter(d=>d.startsWith(mon)).sort();
     if(!dates.length){ alert('この月の計数データがありません'); return; }
     let out='\uFEFF日付,便,ドライバー,ID,企業,サイズcm,お問い合わせ番号,読取時刻\n';
@@ -9228,8 +9252,8 @@ async function expJetMonthlyCSV(btn){
     const hms=t=>{ if(!t) return ''; const d=new Date(t); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); };
     for(const date of dates){
       const [sr,nr]=await Promise.all([
-        fetch(base+'/nikki/jet_scan/'+date+'.json'),
-        fetch(base+'/nikki/jet_scan_nos/'+date+'.json')
+        fetch(fbRest('/nikki/jet_scan/'+date+'.json')),
+        fetch(fbRest('/nikki/jet_scan_nos/'+date+'.json'))
       ]);
       const sum=(await sr.json())||{}, nos=(await nr.json())||{};
       Object.values(sum).forEach(j=>{
