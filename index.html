@@ -9188,6 +9188,8 @@ function renderJetCmp(){
   sel.innerHTML='<option value="">（顧客を選択）</option>'+(D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false)
     .map(c=>`<option value="${esc(String(c.id))}"${cur&&String(cur.id)===String(c.id)?' selected':''}>${esc(c.name)}</option>`).join('');
   loadNoShiftPhotos(mon);
+  // ★ 2026/09/07: 写真の有無を先に取得(枚数のみ。画像は開いたときに読む)
+  loadJetPhotoCounts(mon).then(()=>{ try{ _jetRefreshPhotoBadges(); }catch(e){} });
   const rows=_jetRowsForMonth(mon);
   let scan3=0,scan5=0,fix3=0,fix5=0,open=0,diffN=0;
   const has=v=>v!==null&&v!==undefined&&v!=='';
@@ -9201,7 +9203,15 @@ function renderJetCmp(){
     const drv=esc(j.driverName||'')+(j.driverId?`<div class="xs mono muted">${esc(j.driverId)}</div>`:'')+(j.registered===false?'<div class="xs" style="color:var(--red)">未登録</div>':'');
     h+=`<tr data-key="${esc(j.key)}">
       <td class="mono">${esc(j.date||'')}</td>
-      <td>${esc(j.bin||'')}${j.closed?'':'<div class="xs" style="color:var(--amb2)">未締め</div>'}</td>
+      <td>${esc(j.bin||'')}
+        ${j.closed
+          ? `<div class="xs" style="color:var(--tel2)">締め済</div>
+             <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:2px;"
+               onclick="jetToggleClosed('${esc(j.key)}')">解除</button>`
+          : `<div class="xs" style="color:var(--amb2)">未締め</div>
+             <button class="btn b-amb btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:2px;"
+               onclick="jetToggleClosed('${esc(j.key)}')">締める</button>`}
+      </td>
       <td class="fw7">${drv}</td>
       <td class="xs">${esc(j.corpName||'')}</td>
       <td class="tr mono">${fmt(j.c3||0)}</td><td class="tr mono">${fmt(j.c5||0)}</td><td class="tr mono fw7">${fmt((j.c3||0)+(j.c5||0))}</td>
@@ -9209,11 +9219,19 @@ function renderJetCmp(){
       <td class="tr"><input type="number" min="0" class="fi jc-c5" style="width:64px;text-align:right" value="${has(a.c5)?a.c5:''}" placeholder="${j.c5||0}"></td>
       <td class="tr mono fw7" style="color:${diff?'var(--red)':'var(--txt2)'}">${diff>0?'+':''}${diff||'0'}</td>
       <td><input type="text" class="fi jc-reason" style="width:150px" value="${esc(a.reason||'')}" placeholder="差異の理由"></td>
-      <td><button class="btn b-gh btn-sm" onclick="jetPhotos('${esc(j.date||'')}','${esc(j.key)}',this)">写真</button><div class="jc-ph" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;"></div></td>
+      <td>
+        <div class="jc-phb" data-key="${esc(j.key)}" style="margin-bottom:3px;">${jetPhotoBadge(j.key)}</div>
+        <button class="btn b-gh btn-sm" onclick="jetPhotos('${esc(j.date||'')}','${esc(j.key)}',this)">写真</button>
+        <div class="jc-ph" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;"></div>
+      </td>
       <td><select class="fi jc-status" style="color:${stCol};font-weight:700">
         ${['未照合','照合済','差異あり','協議中'].map(x=>`<option${st===x?' selected':''}>${x}</option>`).join('')}
       </select></td>
-      <td><button class="btn b-blu btn-sm" onclick="saveJetAdj('${esc(j.key)}')">保存</button></td>
+      <td>
+        <button class="btn b-blu btn-sm" onclick="saveJetAdj('${esc(j.key)}')">保存</button>
+        <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:3px;color:var(--red2);"
+          onclick="jetDeleteRow('${esc(j.key)}')">削除</button>
+      </td>
     </tr>`;
   });
   $('tb-jc').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
@@ -37964,6 +37982,116 @@ async function _ddWorkSave(){
   lsSet(LS_KEYS.ATT, logs);
   try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
   catch(e){ console.error('[_ddWorkSave]', e); }
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  計数照合: 写真の有無表示と締め操作 (2026/09/07)
+//   ・写真は「写真」ボタンを押すまで有無が分からなかったため、
+//     一覧を描くときに月ぶんの枚数だけ先に取得して件数を出す。
+//     画像本体は開いたときに読むので、通信量は増えない。
+//   ・未締めの確定/解除・行の削除を経営管理側から行えるようにする。
+// ════════════════════════════════════════════════════════════
+let JET_PHOTO_COUNT = {};   // key -> 枚数
+
+// 月ぶんの写真枚数だけを取得(サムネイルは読まない)
+async function loadJetPhotoCounts(mon){
+  JET_PHOTO_COUNT = {};
+  if(!fbDB || !window._fbImports) return;
+  try{
+    const { ref, get } = window._fbImports;
+    const snap = await get(ref(fbDB, 'nikki/jet_photos'));
+    if(!snap.exists()) return;
+    const all = snap.val() || {};
+    Object.keys(all).forEach(date=>{
+      if(mon && !String(date).startsWith(mon)) return;
+      const byKey = all[date] || {};
+      Object.keys(byKey).forEach(k=>{
+        JET_PHOTO_COUNT[k] = Object.keys(byKey[k]||{}).length;
+      });
+    });
+  }catch(e){ console.error('[loadJetPhotoCounts]', e); }
+}
+
+// 写真セルの表示(有無が一目で分かるようにする)
+function jetPhotoBadge(key){
+  const n = JET_PHOTO_COUNT[key] || 0;
+  return n > 0
+    ? `<span style="display:inline-block;min-width:34px;text-align:center;padding:2px 7px;border-radius:10px;
+         background:var(--tel,#1f8a70);color:#fff;font-size:10.5px;font-weight:700;">${n}枚</span>`
+    : `<span style="display:inline-block;min-width:34px;text-align:center;padding:2px 7px;border-radius:10px;
+         background:var(--bg3,#eee);color:var(--txt3,#999);font-size:10.5px;">なし</span>`;
+}
+
+// 計数データは {日付: {便キー: {...}}} の入れ子。該当の1件を探す。
+function _jetFind(key){
+  const all = lsGet(LS_KEYS.JET, null) || {};
+  for(const date of Object.keys(all)){
+    const byKey = all[date] || {};
+    for(const k of Object.keys(byKey)){
+      if(String(byKey[k] && byKey[k].key) === String(key) || String(k) === String(key)){
+        return {all, date, k, rec: byKey[k]};
+      }
+    }
+  }
+  return null;
+}
+
+async function _jetSave(all){
+  lsSet(LS_KEYS.JET, all);
+  try{ if(typeof fbSet==='function') await fbSet('jet_scan', all); }
+  catch(e){ console.error('[_jetSave]', e); }
+}
+
+// 締め状態の切り替え(未締め ⇄ 締め済)
+async function jetToggleClosed(key){
+  const f = _jetFind(key);
+  if(!f){ showAlert({msg:'対象の便が見つかりませんでした'}); return; }
+  const cur = !!f.rec.closed;
+  const ok = await showDialog({
+    icon: cur ? '🔓' : '🔒',
+    title: cur ? '締めを解除' : '締めを確定',
+    msg: cur
+      ? `${f.rec.date||''} ${f.rec.bin||''} の締めを解除します。\n計数アプリ側で再入力できる状態に戻ります。`
+      : `${f.rec.date||''} ${f.rec.bin||''} を締め済にします。\n以降は計数アプリからの変更が入らなくなります。`,
+    okText: cur ? '解除する' : '締める', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  f.rec.closed = !cur;
+  f.rec.closedAt = !cur ? new Date().toISOString() : null;
+  f.rec.closedBy = !cur ? '経営管理' : null;
+  f.all[f.date][f.k] = f.rec;
+  await _jetSave(f.all);
+  applyFirebaseData(); renderJetCmp();
+  _showSaveToast(cur ? '締めを解除しました' : '締め済にしました');
+}
+
+// 行の削除(計数データそのものを消す)
+async function jetDeleteRow(key){
+  const f = _jetFind(key);
+  if(!f){ showAlert({msg:'対象の便が見つかりませんでした'}); return; }
+  const t = f.rec;
+  const ok = await showDialog({
+    icon:'🗑', title:'計数データの削除',
+    msg:`${t.date||''} ${t.bin||''} ${t.driverName||''}\n計数 ${(t.c3||0)+(t.c5||0)}件\n\n`
+      + `この便の計数データを削除します。\n※ 写真と調整値（計上・理由）は残ります。`,
+    okText:'削除する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  delete f.all[f.date][f.k];
+  if(!Object.keys(f.all[f.date]||{}).length) delete f.all[f.date];
+  await _jetSave(f.all);
+  applyFirebaseData(); renderJetCmp();
+  _showSaveToast('1件削除しました');
+}
+
+
+// 写真枚数の取得が終わったあとにバッジだけ差し替える(表全体は描き直さない)
+function _jetRefreshPhotoBadges(){
+  document.querySelectorAll('#tb-jc .jc-phb').forEach(el=>{
+    const k = el.getAttribute('data-key');
+    if(k) el.innerHTML = jetPhotoBadge(k);
+  });
 }
 
 </script>
