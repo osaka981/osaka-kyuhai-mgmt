@@ -1583,7 +1583,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span></div>
         <div class="tw"><table>
           <thead><tr>
-            <th>日付</th><th>便</th><th>ドライバー</th><th>企業</th>
+            <th>日付</th><th>便</th><th>計数ドライバー</th><th>運搬ドライバー</th><th>企業</th>
             <th class="tr">計数 通常</th><th class="tr">計数 5cm</th><th class="tr">計</th>
             <th class="tr">引受 通常</th><th class="tr">引受 5cm</th><th class="tr">差異</th>
             <th>理由</th><th>写真</th><th>状態</th><th></th>
@@ -6480,16 +6480,21 @@ function applyFirebaseData() {
           const has = v => v!==null && v!==undefined && v!=='';
           const c3 = has(a.c3) ? Number(a.c3) : (j.c3||0);
           const c5 = has(a.c5) ? Number(a.c5) : (j.c5||0);
-          const st = (D.staff||[]).find(x=>String(x.empNo||x.id)===String(j.driverId||''));
+          // ★ 2026/09/07: 局へ運んだドライバーを支払対象とする（計数した人と異なる場合がある）
+          const carrierName = j.carrierName || j.driverName || '';
+          const carrierId   = j.carrierId   || j.driverId   || '';
+          const st = (D.staff||[]).find(x=>String(x.empNo||x.id)===String(carrierId));
           jetRows.push({
             id: 'jet_'+j.key, date: j.date,
             office: st?.office || '',
-            staff:  j.driverName || '',
+            staff:  carrierName,
             customerId: cust?.id || 0, customerName: cust?.name || '',
             region: '',
             items: { 'ゆうパケット_通常': c3, 'ゆうパケット_7cm以上': c5 },
             route: null, charter: null,
-            note: 'バーコード計数 '+(j.bin||'')+(j.registered===false?'（未登録ドライバー）':''),
+            note: 'バーコード計数 '+(j.bin||'')+
+                  ((j.carrierName && j.carrierName!==j.driverName) ? '／計数 '+j.driverName+'・運搬 '+j.carrierName : '')+
+                  (j.registered===false?'（未登録ドライバー）':''),
             _fromJet: true, _jet: j, _jetAdj: a,
           });
         });
@@ -9036,7 +9041,7 @@ function renderDel() {
       <td><button class="btn b-gh btn-sm" onclick="editDel(${r.id})">編集</button></td>
     </tr>`;
   });
-  $('tb-del').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
+  $('tb-del').innerHTML=h||`<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
 }
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
@@ -9213,6 +9218,9 @@ function renderJetCmp(){
                onclick="jetToggleClosed('${esc(j.key)}')">締める</button>`}
       </td>
       <td class="fw7">${drv}</td>
+      <td class="xs">${(j.carrierName&&j.carrierName!==j.driverName)
+        ? `<b style="color:var(--amb2)">${esc(j.carrierName)}</b><div class="xs muted">支払対象</div>`
+        : `<span class="muted">同じ</span>`}</td>
       <td class="xs">${esc(j.corpName||'')}</td>
       <td class="tr mono">${fmt(j.c3||0)}</td><td class="tr mono">${fmt(j.c5||0)}</td><td class="tr mono fw7">${fmt((j.c3||0)+(j.c5||0))}</td>
       <td class="tr"><input type="number" min="0" class="fi jc-c3" style="width:64px;text-align:right" value="${has(a.c3)?a.c3:''}" placeholder="${j.c3||0}"></td>
@@ -9234,7 +9242,7 @@ function renderJetCmp(){
       </td>
     </tr>`;
   });
-  $('tb-jc').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
+  $('tb-jc').innerHTML=h||`<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
   $('jc-kpi').innerHTML=[
     ['便数',rows.length],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],['差異あり',diffN],['未締め',open]
   ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
@@ -9265,7 +9273,7 @@ async function expJetMonthlyCSV(btn){
     const r=await fetch(fbRest('/nikki/jet_scan.json?shallow=true'));
     const dates=Object.keys((await r.json())||{}).filter(d=>d.startsWith(mon)).sort();
     if(!dates.length){ alert('この月の計数データがありません'); return; }
-    let out='\uFEFF日付,便,ドライバー,ID,企業,サイズcm,お問い合わせ番号,読取時刻\n';
+    let out='\uFEFF日付,便,計数ドライバー,ID,運搬ドライバー,企業,サイズcm,お問い合わせ番号,読取時刻\n';
     let total=0;
     const hms=t=>{ if(!t) return ''; const d=new Date(t); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); };
     for(const date of dates){
@@ -9279,7 +9287,7 @@ async function expJetMonthlyCSV(btn){
         const arr=Array.isArray(j.scans)?j.scans.map(x=>({n:x.no,s:x.size,t:x.ts}))
                  :(Array.isArray(nos[j.key])?nos[j.key]:[]);
         arr.forEach(x=>{
-          out+=[date,j.bin||'',j.driverName||'',j.driverId||'',j.corpName||'',x.s,x.n,hms(x.t)].join(',')+'\n';
+          out+=[date,j.bin||'',j.driverName||'',j.driverId||'',(j.carrierName||j.driverName||''),j.corpName||'',x.s,x.n,hms(x.t)].join(',')+'\n';
           total++;
         });
       });
@@ -9296,10 +9304,10 @@ function expJetCSV(){
   const mon=$('jc-mon')?.value||'';
   const rows=_jetRowsForMonth(mon);
   const has=v=>v!==null&&v!==undefined&&v!=='';
-  let out='\uFEFF日付,便,ドライバー,ID,企業,計数通常,計数5cm,計数計,引受通常,引受5cm,計上計,差異,状態,理由,写真\n';
+  let out='\uFEFF日付,便,計数ドライバー,ID,運搬ドライバー,企業,計数通常,計数5cm,計数計,引受通常,引受5cm,計上計,差異,状態,理由,写真\n';
   rows.forEach(({j,a})=>{
     const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
-    out+=[j.date,j.bin,j.driverName,j.driverId,j.corpName,j.c3||0,j.c5||0,(j.c3||0)+(j.c5||0),c3,c5,c3+c5,(c3+c5)-((j.c3||0)+(j.c5||0)),a.status||'',(a.reason||'').replace(/,/g,'、'),a.photo||''].join(',')+'\n';
+    out+=[j.date,j.bin,j.driverName,j.driverId,(j.carrierName||j.driverName||''),j.corpName,j.c3||0,j.c5||0,(j.c3||0)+(j.c5||0),c3,c5,c3+c5,(c3+c5)-((j.c3||0)+(j.c5||0)),a.status||'',(a.reason||'').replace(/,/g,'、'),a.photo||''].join(',')+'\n';
   });
   const bl=new Blob([out],{type:'text/csv;charset=utf-8'}); const u=URL.createObjectURL(bl);
   const el=document.createElement('a'); el.href=u; el.download='keisu_'+(mon||'all')+'.csv'; el.click(); setTimeout(()=>URL.revokeObjectURL(u),2000);
