@@ -1570,6 +1570,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expJetCSV()">照合CSV</button>
           <button class="btn b-gh btn-sm" onclick="expJetMonthlyCSV(this)">月次CSV（番号明細）</button>
+          <button class="btn b-blu btn-sm" onclick="jetManualOpen()">手入力で便を追加</button>
         </div>
       </div>
       <div class="krow" id="jc-kpi"></div>
@@ -1578,12 +1579,26 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span class="xs muted">計数アプリで「ドライバーなし」として提出された写真です</span></div>
         <div style="padding:10px 12px" id="jc-noshift"><span class="xs muted">読み込み中</span></div>
       </div>
-      <div class="card">
-        <div class="ch"><div class="ct"><div class="cbar"></div>便別 計数と引受数の照合</div>
+      <div class="card" id="jc-daycard">
+        <div class="ch"><div class="ct"><div class="cbar"></div>日別 集計（日付をタップで便の明細）</div>
+          <span class="xs muted">計上は引受数を入れた便はその値、空欄なら計数値です</span></div>
+        <div class="tw"><table>
+          <thead><tr>
+            <th>日付</th><th class="tr">便数</th>
+            <th class="tr">計数 通常</th><th class="tr">計数 5cm</th><th class="tr">計数 計</th>
+            <th class="tr">計上 計</th><th class="tr">差異</th><th>状態</th><th>写真</th><th></th>
+          </tr></thead>
+          <tbody id="tb-jcday"></tbody>
+        </table></div>
+      </div>
+
+      <div class="card" id="jc-detailcard" style="display:none">
+        <div class="ch"><div class="ct"><div class="cbar"></div><span id="jc-detail-title">便の明細</span></div>
+          <button class="btn b-gh btn-sm" onclick="jetCloseDay()">日別一覧に戻る</button></div>
           <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span></div>
         <div class="tw"><table>
           <thead><tr>
-            <th>日付</th><th>便</th><th>計数ドライバー</th><th>運搬ドライバー</th><th>企業</th>
+            <th>便</th><th>計数ドライバー</th><th>運搬ドライバー</th><th>企業</th>
             <th class="tr">計数 通常</th><th class="tr">計数 5cm</th><th class="tr">計</th>
             <th class="tr">引受 通常</th><th class="tr">引受 5cm</th><th class="tr">差異</th>
             <th>理由</th><th>写真</th><th>状態</th><th></th>
@@ -8114,7 +8129,7 @@ function renderCmp(){
     ? _cmpSumHeader(rows, orphans, (mon||'全期間')+(off?'　'+off:''))
     : '';
   const tbody=$('tb-cmp'); if(!tbody) return;
-  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
   const sorted=rows.concat(orphans).sort(function(a,b){
@@ -9041,7 +9056,7 @@ function renderDel() {
       <td><button class="btn b-gh btn-sm" onclick="editDel(${r.id})">編集</button></td>
     </tr>`;
   });
-  $('tb-del').innerHTML=h||`<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
+  $('tb-del').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
 }
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
@@ -9183,6 +9198,26 @@ async function loadNoShiftPhotos(mon){
     el.innerHTML=html||'<span class="xs muted">この月は提出がありません</span>';
   }catch(e){ el.innerHTML='<span class="xs" style="color:var(--red)">読込失敗</span>'; }
 }
+let _jcDay=null;   // 明細を開いている日付（null=日別一覧）
+function jetOpenDay(d){ _jcDay=d; renderJetCmp(); }
+function jetCloseDay(){ _jcDay=null; renderJetCmp(); }
+function _jetDaySummary(mon){
+  const rows=_jetRowsForMonth(mon);
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  const m=new Map();
+  rows.forEach(({j,a})=>{
+    const d=j.date||''; if(!d) return;
+    const v=m.get(d)||{date:d,n:0,s3:0,s5:0,f3:0,f5:0,open:0,diff:0,st:new Set(),ph:0};
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    v.n++; v.s3+=j.c3||0; v.s5+=j.c5||0; v.f3+=c3; v.f5+=c5;
+    if(!j.closed) v.open++;
+    v.diff+=(c3+c5)-((j.c3||0)+(j.c5||0));
+    v.st.add(a.status||(j.closed?'未照合':'計数中'));
+    v.ph+=JET_PHOTO_COUNT[j.key]||0;
+    m.set(d,v);
+  });
+  return Array.from(m.values()).sort((a,b)=>b.date.localeCompare(a.date));
+}
 function renderJetCmp(){
   _jetPurgePhotos();
   const monEl=$('jc-mon'); if(!monEl) return;
@@ -9195,7 +9230,8 @@ function renderJetCmp(){
   loadNoShiftPhotos(mon);
   // ★ 2026/09/07: 写真の有無を先に取得(枚数のみ。画像は開いたときに読む)
   loadJetPhotoCounts(mon).then(()=>{ try{ _jetRefreshPhotoBadges(); }catch(e){} });
-  const rows=_jetRowsForMonth(mon);
+  const rowsAll=_jetRowsForMonth(mon);
+  const rows=_jcDay?rowsAll.filter(r=>r.j.date===_jcDay):rowsAll;
   let scan3=0,scan5=0,fix3=0,fix5=0,open=0,diffN=0;
   const has=v=>v!==null&&v!==undefined&&v!=='';
   let h='';
@@ -9207,8 +9243,10 @@ function renderJetCmp(){
     const stCol=st==='照合済'?'var(--tel2)':st==='協議中'?'var(--red)':st==='差異あり'?'var(--amb2)':'var(--txt2)';
     const drv=esc(j.driverName||'')+(j.driverId?`<div class="xs mono muted">${esc(j.driverId)}</div>`:'')+(j.registered===false?'<div class="xs" style="color:var(--red)">未登録</div>':'');
     h+=`<tr data-key="${esc(j.key)}">
-      <td class="mono">${esc(j.date||'')}</td>
       <td>${esc(j.bin||'')}
+        ${j.manual?`<div class="xs" style="color:var(--blu)">手入力</div>
+          <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:2px;"
+            onclick='jetManualOpen(${JSON.stringify({key:j.key,date:j.date,bin:j.bin,driverId:j.driverId,carrierId:j.carrierId,c3:j.c3,c5:j.c5,manualNote:j.manualNote||""}).replace(/'/g,"&#39;")})'>編集</button>`:''}
         ${j.closed
           ? `<div class="xs" style="color:var(--tel2)">締め済</div>
              <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:2px;"
@@ -9242,9 +9280,33 @@ function renderJetCmp(){
       </td>
     </tr>`;
   });
-  $('tb-jc').innerHTML=h||`<tr><td colspan="15" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
+  $('tb-jc').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">この日の計数データがありません</td></tr>`;
+
+  // 日別一覧
+  const days=_jetDaySummary(mon);
+  $('tb-jcday').innerHTML=days.length?days.map(v=>{
+    const st=v.open?'計数中あり':(v.st.has('協議中')?'協議中':(v.st.has('差異あり')?'差異あり':(v.st.has('未照合')?'未照合':'照合済')));
+    const stCol=st==='照合済'?'var(--tel2)':(st==='協議中'?'var(--red)':(st==='未照合'?'var(--txt2)':'var(--amb2)'));
+    return `<tr style="cursor:pointer" onclick="jetOpenDay('${esc(v.date)}')">
+      <td class="mono fw7">${esc(v.date)}</td>
+      <td class="tr mono">${v.n}</td>
+      <td class="tr mono">${fmt(v.s3)}</td><td class="tr mono">${fmt(v.s5)}</td>
+      <td class="tr mono fw7">${fmt(v.s3+v.s5)}</td>
+      <td class="tr mono fw7">${fmt(v.f3+v.f5)}</td>
+      <td class="tr mono fw7" style="color:${v.diff?'var(--red)':'var(--txt2)'}">${v.diff>0?'+':''}${v.diff||'0'}</td>
+      <td class="xs fw7" style="color:${stCol}">${st}</td>
+      <td class="xs">${v.ph?v.ph+'枚':'<span class="muted">—</span>'}</td>
+      <td class="xs" style="color:var(--blu)">明細 ›</td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
+
+  // 表示の切替
+  const showDetail=!!_jcDay;
+  $('jc-daycard').style.display=showDetail?'none':'';
+  $('jc-detailcard').style.display=showDetail?'':'none';
+  if(showDetail) $('jc-detail-title').textContent=_jcDay+' の便の明細';
   $('jc-kpi').innerHTML=[
-    ['便数',rows.length],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],['差異あり',diffN],['未締め',open]
+    ['便数',rowsAll.length],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],['差異あり',diffN],['未締め',open]
   ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
 }
 async function saveJetAdj(key){
@@ -38029,6 +38091,75 @@ function jetPhotoBadge(key){
          background:var(--tel,#1f8a70);color:#fff;font-size:10.5px;font-weight:700;">${n}枚</span>`
     : `<span style="display:inline-block;min-width:34px;text-align:center;padding:2px 7px;border-radius:10px;
          background:var(--bg3,#eee);color:var(--txt3,#999);font-size:10.5px;">なし</span>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// 手入力で便を追加する（リーダーが使えなかった日の救済）
+// 計数アプリと同じ形で nikki/jet_scan に書き込む。番号は持たない。
+// ════════════════════════════════════════════════════════════
+function _jetToday(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _jetStaffOptions(sel){
+  const t=_jetToday();
+  const list=(D.staff||[]).filter(s=>!s.endDate||s.endDate>=t);
+  return '<option value="">（選択）</option>'+list.map(s=>{
+    const no=String(s.empNo||s.driverNo||s.id||'');
+    return `<option value="${esc(no)}" data-name="${esc(s.name||'')}"${String(sel)===no?' selected':''}>${esc(s.name||'')}　${esc(no)}</option>`;
+  }).join('');
+}
+function jetManualOpen(edit){
+  const d=edit||{};
+  const cust=_jetCustomer();
+  const body=`
+    <div class="fg"><label>日付</label>
+      <input type="date" id="jm-date" class="fi" value="${esc(d.date||_jetToday())}"></div>
+    <div class="fg"><label>便名</label>
+      <input type="text" id="jm-bin" class="fi" placeholder="第1便" value="${esc(d.bin||'')}"></div>
+    <div class="fg"><label>計数したドライバー</label>
+      <select id="jm-drv" class="fi">${_jetStaffOptions(d.driverId||'')}</select></div>
+    <div class="fg"><label>局へ運んだドライバー（空欄なら計数した人と同じ）</label>
+      <select id="jm-car" class="fi">${_jetStaffOptions(d.carrierId||'')}</select></div>
+    <div class="fla gap6">
+      <div class="fg" style="flex:1"><label>通常（1〜3cm）</label>
+        <input type="number" min="0" id="jm-c3" class="fi" value="${d.c3||0}"></div>
+      <div class="fg" style="flex:1"><label>5cm以上</label>
+        <input type="number" min="0" id="jm-c5" class="fi" value="${d.c5||0}"></div>
+    </div>
+    <div class="fg"><label>理由・備考</label>
+      <input type="text" id="jm-note" class="fi" placeholder="リーダー不調のため手入力 など" value="${esc(d.manualNote||'')}"></div>
+    <div class="xs muted">顧客：${esc(cust?cust.name:'（未設定）')}　この便は番号の記録を持ちません。CSVの番号明細には出ません。</div>`;
+  showDialog({icon:'✏️',title:(edit?'手入力の便を編集':'手入力で便を追加'),bodyHtml:body,
+    okText:'保存する',cancelText:'キャンセル'}).then(ok=>{ if(ok) jetManualSave(edit?edit.key:null); });
+}
+async function jetManualSave(editKey){
+  const date=$('jm-date')?.value||'';
+  if(!date){ showAlert({msg:'日付を入力してください'}); return; }
+  const c3=Math.max(0,parseInt($('jm-c3')?.value)||0);
+  const c5=Math.max(0,parseInt($('jm-c5')?.value)||0);
+  if(!c3&&!c5){ showAlert({msg:'個数を入力してください'}); return; }
+  const dsel=$('jm-drv'), csel=$('jm-car');
+  const drvId=dsel?.value||'', drvName=dsel?.selectedOptions[0]?.dataset.name||'';
+  const carId=csel?.value||'', carName=csel?.selectedOptions[0]?.dataset.name||'';
+  if(!drvName){ showAlert({msg:'計数したドライバーを選んでください'}); return; }
+  const all=lsGet(LS_KEYS.JET,null)||{};
+  const key=editKey||('manual_'+Date.now().toString(36));
+  if(editKey){ const f=_jetFind(editKey); if(f&&f.date!==date){ delete f.all[f.date][f.k]; Object.assign(all,f.all); } }
+  const now=Date.now();
+  all[date]=all[date]||{};
+  all[date][key]={
+    key:key, date:date, device:'mgmt',
+    bin:($('jm-bin')?.value||'').trim()||'手入力',
+    driverId:drvId, driverName:drvName, tel:'',
+    carrierId:carId||drvId, carrierName:carName||drvName,
+    carrierDiffers:!!(carName&&carName!==drvName),
+    corp:'', corpName:'', registered:true,
+    startedAt:new Date(date+'T00:00:00').getTime(), closedAt:now, closed:true,
+    c3:c3, c5:c5, total:c3+c5,
+    dupCount:0, delCount:0, exportedAt:null,
+    manual:true, manualNote:($('jm-note')?.value||'').trim(), updatedAt:now
+  };
+  await _jetSave(all);
+  applyFirebaseData(); renderJetCmp();
+  _showSaveToast(editKey?'手入力の便を更新しました':'手入力で1便を追加しました');
 }
 
 // 計数データは {日付: {便キー: {...}}} の入れ子。該当の1件を探す。
