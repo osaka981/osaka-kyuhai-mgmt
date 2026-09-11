@@ -4974,6 +4974,10 @@ function _buildFbDriverEntry(s){
     birth:    s.birth    || '',
     // ★ 2026/09/01: バーコード計数アプリのID照合で氏名と一緒に自動入力するため電話番号も連携
     tel:      s.tel      || '',
+    // ★ 2026/09/10: 計数アプリの「局へ運ぶ人」選択で使う。集荷の登録がある人だけを一覧に出す。
+    workType: s.workType || '',            // 委託ドライバー：delivery / collection / both
+    companyId: s.companyId || null,
+    retired:  !!(s.endDate && s.endDate < (new Date()).toISOString().slice(0,10)),
   };
 }
 
