@@ -382,6 +382,7 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .c60{color:var(--y60);}.c80{color:var(--y80);}.c100{color:var(--y100);}
 .c120{color:var(--y120);}.c140{color:var(--y140);}.c160{color:var(--y160);}.c170{color:var(--y170);}
 .cpk1{color:var(--pk1);}.cpk2{color:var(--pk2);}
+.cusr{color:var(--tel2);}
 .ccp{color:var(--cp);}.cke{color:var(--ke);}.cte{color:var(--te);}.cch{color:var(--ch);}
 
 
@@ -2518,6 +2519,36 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div style="font-size:10px;color:var(--txt2);">請求・精算 › システム設定</div></div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
+      <!-- ★ 2026/09/12(第4段階): 品目マスタ -->
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>集荷品目マスタ
+          <span style="font-size:9px;color:var(--txt2);margin-left:8px;">画面から品目を追加できます</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;">
+          追加した品目は「顧客ごとに使うかを選ぶ品目」になります。顧客編集画面の集荷単価タブでチェックした顧客にだけ、単価欄と日報の数量欄が出ます。<br>
+          品目名は日報データのキーになるため、追加後は変更できません（表示名だけ変更できます）。
+        </div>
+        <div id="item-def-list" style="margin-bottom:12px;"></div>
+        <div style="border-top:1px solid var(--brd);padding-top:10px;">
+          <div class="xs muted fw7 mb8">品目を追加</div>
+          <div style="display:grid;grid-template-columns:2fr 1.2fr 1fr 1fr auto;gap:6px;align-items:flex-end;">
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">品目名</label>
+              <input type="text" id="idf-name" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="例：ゆうパック_200"></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">区分</label>
+              <select id="idf-group" class="fi" style="font-size:12px;padding:4px 6px;">
+                <option>ゆうパック</option><option>ゆうパケット</option><option selected>その他</option>
+              </select></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">単位</label>
+              <select id="idf-unit" class="fi" style="font-size:12px;padding:4px 6px;">
+                <option>個</option><option>件</option>
+              </select></div>
+            <div class="fg" style="margin:0;"><label style="font-size:10px;">既定単価（円）</label>
+              <input type="number" id="idf-price" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
+            <button class="btn b-blu btn-sm" onclick="addItemDef()">＋ 追加</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 品目グループ設定 -->
       <div class="card mb12">
         <div class="ct mb12"><div class="cbar"></div>集荷品目グループ設定
@@ -6341,6 +6372,9 @@ function applyFirebaseData() {
   catch(e){ console.error('systemInfo load error:', e); }
   try{ if(typeof loadItemGroupsFromFB==='function') loadItemGroupsFromFB(); }
   catch(e){ console.error('itemGroups load error:', e); }
+  // ★ 2026/09/12(第4段階): 画面から追加した品目定義を取り込む
+  try{ if(typeof loadUserItemDefsFromFB==='function') loadUserItemDefsFromFB(); }
+  catch(e){ console.error('itemDefs load error:', e); }
   try{ if(typeof _loadCharters==='function') _loadCharters(); }
   catch(e){ console.error('charters load error:', e); }
 
@@ -7771,7 +7805,7 @@ const _origSaveCust   = typeof saveCust   !== 'undefined' ? saveCust   : null;
 // ★ 2026/09/12: 品目の定義はここだけ。以下の派生表は必ずこの ITEMS から自動生成する。
 //   ck = 顧客単価(colPrices)のキー。短縮ラベル(shortLabel)は単価画面などの狭い欄で使う。
 //   品目を増やすときはこの表に1行足すだけでよい（派生表は触らない）。
-const ITEMS = {
+const BASE_ITEMS = {
   'ゆうパック_60':        { label:'60サイズ',      cls:'c60',  defPrice:150,  unit:'個', group:'ゆうパック',   modalId:'p-y60',  cuId:'cu-y60',  ck:'p60',  shortLabel:'YP60',    longLabel:'ゆうパック60'      },
   'ゆうパック_80':        { label:'80サイズ',      cls:'c80',  defPrice:180,  unit:'個', group:'ゆうパック',   modalId:'p-y80',  cuId:'cu-y80',  ck:'p80',  shortLabel:'YP80',    longLabel:'ゆうパック80'      },
   'ゆうパック_100':       { label:'100サイズ',     cls:'c100', defPrice:220,  unit:'個', group:'ゆうパック',   modalId:'p-y100', cuId:'cu-y100', ck:'p100', shortLabel:'YP100',   longLabel:'ゆうパック100'     },
@@ -7793,16 +7827,47 @@ const ITEMS = {
   '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  defPrice:50,   unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te',   ck:'te',   shortLabel:'定形外',  longLabel:'定形外(ゆうメール)' },
   'チャーター':           { label:'チャーター',     cls:'cch',  defPrice:5000, unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch',   ck:null,   shortLabel:'チャーター', longLabel:'チャーター'      },
 };
-const IK = Object.keys(ITEMS); // masterKey の配列
+// ★ 2026/09/12(第4段階): 画面から追加した品目。BASE_ITEMS に重ねて ITEMS を作る。
+//   localStorage 'nikki_item_defs' と Firebase nikki/item_defs に保存し、端末間で共有する。
+let USER_ITEMS = {};
+// ITEMS は参照を保ったまま中身だけ差し替える（各所が ITEMS を直接見ているため）。
+const ITEMS = {};
 
-// ── ここから下はすべて ITEMS からの派生。直接書き換えないこと。 ──
-const IK_PRICED   = IK.filter(k=>ITEMS[k].ck);                        // 集荷単価を持つ品目
-const CK_LIST     = IK_PRICED.map(k=>ITEMS[k].ck);                    // ['p60',...]
-const CK_TO_ITEM  = (()=>{ const m={}; IK_PRICED.forEach(k=>m[ITEMS[k].ck]=k); return m; })();
+// ── ここから下はすべて ITEMS からの派生。直接書き換えず rebuildItemDerived() で作る。 ──
+let IK = [];                 // masterKey の配列
+let IK_PRICED   = [];        // 集荷単価を持つ品目
+let CK_LIST     = [];        // ['p60',...]
+let CK_TO_ITEM  = {};
+let IK_YP       = [];
+let IK_PKT      = [];
+let IK_OTHER    = [];
+let IK_OPTIONAL = [];
+let IK_DEFAULT  = [];
+let CO_COL_ITEMS  = [];
+let CO_COL_LABELS = {};
+let IK_COL_MAP    = {};
 const IK_BY_GROUP = g => IK.filter(k=>ITEMS[k].group===g);
-const IK_YP       = IK_BY_GROUP('ゆうパック');
-const IK_PKT      = IK_BY_GROUP('ゆうパケット');
-const IK_OTHER    = IK_BY_GROUP('その他');
+
+function rebuildItemDerived(){
+  IK        = Object.keys(ITEMS);
+  IK_PRICED = IK.filter(k=>ITEMS[k].ck);
+  CK_LIST   = IK_PRICED.map(k=>ITEMS[k].ck);
+  CK_TO_ITEM= {}; IK_PRICED.forEach(k=>{ CK_TO_ITEM[ITEMS[k].ck]=k; });
+  IK_YP     = IK_BY_GROUP('ゆうパック');
+  IK_PKT    = IK_BY_GROUP('ゆうパケット');
+  IK_OTHER  = IK_BY_GROUP('その他');
+  IK_OPTIONAL = IK.filter(k=>ITEMS[k].optional);
+  IK_DEFAULT  = IK.filter(k=>!ITEMS[k].optional);
+  CO_COL_ITEMS  = CK_LIST.slice();
+  CO_COL_LABELS = {}; CK_LIST.forEach(ck=>{ CO_COL_LABELS[ck]=ckLabel(ck); });
+  // チャーターのみ例外で 'charter'
+  IK_COL_MAP = {}; IK.forEach(k=>{ const ck=ITEMS[k].ck; IK_COL_MAP[k]= ck || (k==='チャーター'?'charter':null); });
+}
+function rebuildItems(){
+  Object.keys(ITEMS).forEach(k=>{ delete ITEMS[k]; });
+  Object.assign(ITEMS, BASE_ITEMS, USER_ITEMS);
+  rebuildItemDerived();
+}
 const ckOf        = k => ITEMS[k] && ITEMS[k].ck;
 const itemOfCk    = ck => CK_TO_ITEM[ck];
 const ckLabel     = (ck,long) => { const k=CK_TO_ITEM[ck]; if(!k) return ck;
@@ -7812,8 +7877,6 @@ const ckLabel     = (ck,long) => { const k=CK_TO_ITEM[ck]; if(!k) return ck;
 //   顧客の useItems（masterKey の配列）に入っている品目だけ欄を出す。
 //   ただし既に単価が入っている optional 品目は、設定漏れで欄が消えて
 //   データが失われないよう常に表示する（安全側）。
-const IK_OPTIONAL = IK.filter(k=>ITEMS[k].optional);
-const IK_DEFAULT  = IK.filter(k=>!ITEMS[k].optional);
 function custUseItems(cu, forceKeys){
   const on    = new Set(Array.isArray(cu && cu.useItems) ? cu.useItems : []);
   const force = new Set(Array.isArray(forceKeys) ? forceKeys : []);
@@ -7842,6 +7905,184 @@ function itemThs(keys){
 // 一括税区分ボタンの対象（★ ITEMS から導出。画面に無い欄は除外）
 function otherTaxFields(){
   return IK_OTHER.map(k=>'cu-c'+ITEMS[k].ck).filter(id=>document.getElementById(id));
+}
+
+// ══ ★ 2026/09/12(第4段階): 画面から追加する品目の定義 ══
+//   保存形: [{key, label, group, unit, defPrice, ck}]
+//   key は日報データの品目キーそのものなので、作成後は変更しない（表示名だけ変えられる）。
+//   追加品目は必ず optional 扱い＝顧客ごとに使うかを選ぶ。全顧客の入力欄が
+//   際限なく増えるのを避けるため、既定品目には昇格させない。
+const ITEM_DEFS_LS = 'nikki_item_defs';
+function getUserItemDefs(){
+  try{
+    const v = JSON.parse(localStorage.getItem(ITEM_DEFS_LS) || '[]');
+    return Array.isArray(v) ? v : [];
+  }catch(e){ return []; }
+}
+function applyUserItemDefs(defs){
+  USER_ITEMS = {};
+  (defs||[]).forEach(d=>{
+    if(!d || !d.key || !d.ck) return;
+    if(BASE_ITEMS[d.key]) return;                 // 既定品目は上書きさせない
+    const label = d.label || d.key;
+    USER_ITEMS[d.key] = {
+      label:      label,
+      cls:        'cusr',
+      defPrice:   Number(d.defPrice)||0,
+      unit:       d.unit==='件' ? '件' : '個',
+      group:      d.group || 'その他',
+      modalId:    'p-'+d.ck,
+      cuId:       'cu-'+d.ck,
+      ck:         d.ck,
+      shortLabel: label,
+      longLabel:  label,
+      optional:   true,
+      user:       true,
+    };
+  });
+  rebuildItems();
+}
+function saveUserItemDefs(defs){
+  try{ localStorage.setItem(ITEM_DEFS_LS, JSON.stringify(defs)); }
+  catch(e){ console.error('[saveUserItemDefs] localStorage', e); }
+  applyUserItemDefs(defs);
+  try{ if(typeof fbSet==='function') fbSet('item_defs', defs); }
+  catch(e){ console.error('[saveUserItemDefs] FB保存エラー', e); }
+}
+async function loadUserItemDefsFromFB(){
+  try{
+    if(!fbDB || !window._fbImports) return;
+    const { ref, get } = window._fbImports;
+    const snap = await get(ref(fbDB, 'nikki/item_defs'));
+    if(!snap.exists()) return;
+    const v = snap.val();
+    if(!Array.isArray(v)) return;
+    localStorage.setItem(ITEM_DEFS_LS, JSON.stringify(v));
+    applyUserItemDefs(v);
+    if(typeof renderItemDefList==='function') renderItemDefList();
+  }catch(e){ console.error('[loadUserItemDefsFromFB]', e); }
+}
+// 起動時：まず端末に保存された定義で ITEMS を組み立てる（Firebase は後から上書き）
+applyUserItemDefs(getUserItemDefs());
+
+// ══ ★ 2026/09/12(第4段階): 品目マスタの管理UI ══
+// 追加品目が実データで使われているかを調べる（削除の可否判定）
+function itemDefUsage(key){
+  const it = ITEMS[key] || {};
+  const ck = it.ck;
+  const puCount = (D.pickup||[]).filter(r=>Number(iq(r,key))>0).length;
+  const custNames = (D.customers||[]).filter(cu=>{
+    const cp = cu.colPrices || cu.prices || {};
+    const on = Array.isArray(cu.useItems) && cu.useItems.includes(key);
+    return on || (ck && Number(cp[ck])>0);
+  }).map(cu=>cu.name);
+  return { puCount, custNames };
+}
+function renderItemDefList(){
+  const wrap = document.getElementById('item-def-list');
+  if(!wrap) return;
+  const defs = getUserItemDefs();
+  const rows = IK.map(k=>{
+    const it = ITEMS[k];
+    const isUser = !!it.user;
+    const u = isUser ? itemDefUsage(k) : null;
+    const badge = isUser
+      ? '<span class="bdg" style="background:rgba(46,125,183,.16);color:#2c62c4;font-size:9px;padding:1px 5px;">追加</span>'
+      : '<span class="bdg" style="background:var(--bg3);color:var(--txt2);font-size:9px;padding:1px 5px;">既定</span>';
+    const note = isUser
+      ? `<span class="xs muted">日報 ${u.puCount}件 / 顧客 ${u.custNames.length}社</span>`
+      : '';
+    const act = isUser
+      ? `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;" onclick="renameItemDef('${k.replace(/'/g,"\\'")}')">表示名</button>`
+        + `<button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;background:transparent;border:1px solid var(--red2);color:var(--red2);" onclick="deleteItemDef('${k.replace(/'/g,"\\'")}')">削除</button>`
+      : '';
+    return `<tr>
+      <td>${badge}</td>
+      <td class="mono xs">${esc(k)}</td>
+      <td class="fw7 ${it.cls||''}">${esc(it.label||'')}</td>
+      <td class="xs muted">${esc(it.group||'')}</td>
+      <td class="xs muted">${esc(it.unit||'')}</td>
+      <td class="tr mono xs">${it.defPrice?('¥'+it.defPrice):'-'}</td>
+      <td class="xs">${it.optional?'顧客ごと':'全顧客'}</td>
+      <td class="xs">${note}</td>
+      <td style="white-space:nowrap;">${act}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="tw"><table>
+    <thead><tr>
+      <th></th><th>品目キー</th><th>表示名</th><th>区分</th><th>単位</th>
+      <th class="tr">既定単価</th><th>表示範囲</th><th>使用状況</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <div style="font-size:9px;color:var(--txt2);margin-top:5px;">
+      既定品目（${IK_DEFAULT.length}件）は削除できません。追加品目は使用中でなければ削除できます。
+    </div>`;
+}
+// 追加品目の ck（単価キー・入力欄IDの元）を採番する。u1, u2 ... と振る。
+function _nextItemCk(defs){
+  const used = new Set(IK.map(k=>ITEMS[k].ck).filter(Boolean));
+  (defs||[]).forEach(d=>{ if(d && d.ck) used.add(d.ck); });
+  for(let i=1;i<1000;i++){ const ck='u'+i; if(!used.has(ck)) return ck; }
+  return null;
+}
+function addItemDef(){
+  const name  = ($('idf-name')?.value||'').trim();
+  const group = $('idf-group')?.value||'その他';
+  const unit  = $('idf-unit')?.value||'個';
+  const price = parseInt($('idf-price')?.value)||0;
+  if(!name){ showAlert({icon:'⚠️', title:'入力不足', msg:'品目名を入力してください'}); return; }
+  // Firebase のキーに使えない文字と、データの取り違えを防ぐための検査
+  if(/[.#$/\[\]]/.test(name)){
+    showAlert({icon:'⚠️', title:'使えない文字', msg:'品目名に . # $ / [ ] は使えません'}); return;
+  }
+  if(ITEMS[name]){
+    showAlert({icon:'⚠️', title:'重複', msg:'同じ名前の品目がすでにあります'}); return;
+  }
+  const defs = getUserItemDefs();
+  const ck = _nextItemCk(defs);
+  if(!ck){ showAlert({icon:'⚠️', title:'追加できません', msg:'追加品目の上限に達しました'}); return; }
+  defs.push({ key:name, label:name, group, unit, defPrice:price, ck });
+  saveUserItemDefs(defs);
+  if($('idf-name')) $('idf-name').value='';
+  if($('idf-price')) $('idf-price').value='';
+  renderItemDefList();
+  _showSaveToast('品目「'+name+'」を追加しました');
+}
+function renameItemDef(key){
+  const defs = getUserItemDefs();
+  const d = defs.find(x=>x && x.key===key);
+  if(!d){ showAlert({icon:'⚠️', title:'対象なし', msg:'この品目は追加品目ではありません'}); return; }
+  const cur = d.label || d.key;
+  const v = prompt('表示名を入力してください（品目キー「'+key+'」は変わりません）', cur);
+  if(v===null) return;
+  const nv = String(v).trim();
+  if(!nv) return;
+  d.label = nv;
+  saveUserItemDefs(defs);
+  renderItemDefList();
+  _showSaveToast('表示名を変更しました');
+}
+function deleteItemDef(key){
+  const defs = getUserItemDefs();
+  if(!defs.some(x=>x && x.key===key)){
+    showAlert({icon:'⚠️', title:'削除できません', msg:'既定品目は削除できません'}); return;
+  }
+  const u = itemDefUsage(key);
+  if(u.puCount>0 || u.custNames.length>0){
+    const parts = [];
+    if(u.puCount>0) parts.push('集荷日報 '+u.puCount+'件に数量が入っています');
+    if(u.custNames.length>0) parts.push('顧客 '+u.custNames.length+'社で使用中です（'+u.custNames.slice(0,5).join('・')+(u.custNames.length>5?' ほか':'')+'）');
+    showAlert({icon:'⚠️', title:'削除できません',
+      msg:parts.join('\n')+'\n\n先に日報の数量と顧客の単価設定を外してください。'});
+    return;
+  }
+  showDialog({icon:'🗑', title:'品目の削除', msg:'品目「'+key+'」を削除しますか？',
+    okText:'削除する', cancelText:'キャンセル'}).then(ok=>{
+    if(!ok) return;
+    saveUserItemDefs(defs.filter(x=>!(x && x.key===key)));
+    renderItemDefList();
+    _showSaveToast('品目を削除しました');
+  });
 }
 
 // 品目グループ設定（localStorage永続化）
@@ -10669,8 +10910,7 @@ function fmtUnitPrice(v){
 }
 
 // ─── 集荷単価取得ヘルパー（colPrices対応） ───
-// ★ 2026/09/12: ITEMS から自動生成（チャーターのみ例外で 'charter'）
-const IK_COL_MAP = (()=>{ const m={}; IK.forEach(k=>{ const ck=ITEMS[k].ck; m[k]= ck || (k==='チャーター'?'charter':null); }); return m; })();
+// ★ 2026/09/12: IK_COL_MAP は rebuildItemDerived() で作る（宣言は上部に集約）
 // ★ 2026/08/28: 単価が未登録の顧客に既定単価(60サイズ150円など)を当てていたため、
 //   車建て(日額)で個建て単価を持たない顧客にも数量×既定単価が請求されていた。
 //   契約していない単価を勝手に当てるのは誤請求に直結するので、未登録は0円とする。
@@ -23205,8 +23445,7 @@ function renderCoColPriceGrid(){
   });
 }
 
-const CO_COL_ITEMS = CK_LIST.slice();                                  // ITEMSから自動生成
-const CO_COL_LABELS = (()=>{ const m={}; CK_LIST.forEach(ck=>m[ck]=ckLabel(ck)); return m; })();
+// ★ 2026/09/12: CO_COL_ITEMS / CO_COL_LABELS は rebuildItemDerived() で作る（宣言は上部に集約）
 // _coCustPrices: [{custId, taxType, prices:{p60,p80,...}}]
 let _coCustPrices = [];
 let _coCustSelId = null; // 現在選択中のcustId（タブ）
@@ -31762,7 +32001,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
+    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
     return;
   }
   tsPendingAction = {type:'nav', section, navEl};
@@ -31832,7 +32071,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
