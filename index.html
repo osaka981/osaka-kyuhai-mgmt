@@ -1568,6 +1568,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expJetCSV()">照合CSV</button>
+          <!-- ★ 2026/09/12: 数量0の便をまとめて削除する -->
+          <button class="btn btn-sm" id="jc-del-zero"
+            style="background:transparent;border:1px solid var(--red2);color:var(--red2);"
+            onclick="jetDeleteZeroShifts()">0個の便を削除</button>
           <button class="btn b-gh btn-sm" onclick="expJetMonthlyCSV(this)">月次CSV（番号明細）</button>
           <button class="btn b-blu btn-sm" onclick="jetManualOpen()">手入力で便を追加</button>
         </div>
@@ -9950,6 +9954,57 @@ function renderJetCmp(){
     ['差異あり',diffN],['0個の便',_zeroN],['未締め',open]
   ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
 }
+/* ★ 2026/09/12: 数量0の便をまとめて削除する。
+   集荷に行ったが荷物が無かった記録、またはテストで作った便が残るため。
+   引受数の訂正で数量が入っている便は対象外（実績があるとみなす）。
+   計数アプリ側の番号明細も一緒に消す。 */
+async function jetDeleteZeroShifts(){
+  const mon=$('jc-mon')?.value||'';
+  const rowsAll=_jetRowsForMonth(mon);
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  const targets=rowsAll.filter(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    return (c3+c5)<=0;
+  });
+  if(!targets.length){ showAlert({icon:'ℹ️',title:'対象がありません',msg:'この月に0個の便はありません'}); return; }
+
+  const lines=targets.slice(0,12).map(({j})=>
+    '　'+(j.date||'')+'　'+(j.bin||'')+'　'+(j.driverName||'')).join('\n');
+  const ok=await showDialog({
+    icon:'🗑', title:'0個の便を削除',
+    msg:mon+' の数量0の便 '+targets.length+'件を削除します。\n\n'
+      + lines + (targets.length>12?('\n　ほか '+(targets.length-12)+'件'):'') + '\n\n'
+      + '計数アプリ側の記録も消えます。元に戻せません。\n'
+      + '引受数を訂正して数量が入っている便は対象外です。',
+    okText:'削除する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  const all=lsGet(LS_KEYS.JET,null)||{};
+  const adj=lsGet(LS_KEYS.JETADJ,{})||{};
+  let n=0;
+  const { ref, set } = window._fbImports || {};
+  for(const { j } of targets){
+    const f=_jetFind(j.key);
+    if(f){ _jetSetAt(f.all, f.path, null); Object.assign(all, f.all); n++; }
+    if(adj[j.key]) delete adj[j.key];
+    // 番号明細も消す（顧客別の階層と旧形式の両方）
+    if(fbDB && ref && set){
+      const cid=j.custId?String(j.custId):'';
+      try{ if(cid) await set(ref(fbDB,'nikki/jet_scan_nos/'+cid+'/'+j.date+'/'+j.key), null); }catch(e){}
+      try{ await set(ref(fbDB,'nikki/jet_scan_nos/'+j.date+'/'+j.key), null); }catch(e){}
+    }
+  }
+  await _jetSave(all);
+  try{
+    lsSet(LS_KEYS.JETADJ, adj);
+    if(typeof fbSet==='function') await fbSet('jet_adjust', adj);
+  }catch(e){ console.error('[jetDeleteZeroShifts] 訂正の削除に失敗', e); }
+
+  applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
+  _showSaveToast('0個の便 '+n+'件を削除しました');
+}
+
 async function saveJetAdj(key){
   const tr=document.querySelector(`#tb-jc tr[data-key="${key}"]`); if(!tr) return;
   const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
@@ -38980,6 +39035,117 @@ function _jetStaffOptions(sel){
     return `<option value="${esc(no)}" data-name="${esc(s.name||'')}"${String(sel)===no?' selected':''}>${esc(s.name||'')}　${esc(no)}</option>`;
   }).join('');
 }
+
+/* ══ ★ 2026/09/12: 手入力の便での会社・ドライバー選択 ══
+   委託会社にはドライバー登録が無い場合があるため、
+     会社を選ぶ → その会社の在籍ドライバーを選ぶ → 居なければ氏名を手打ち
+   という流れにする。集荷業務の登録がある人を先に並べ、検索もできるようにする。 */
+// 在籍中の従事員
+function _jetActiveStaff(){
+  const t=_jetToday();
+  return (D.staff||[]).filter(s=>s && (!s.endDate||s.endDate>=t) && s.status!=='終了');
+}
+// 会社の選択肢（自社 ＋ 在籍者がいる委託会社）
+function _jetCompanyOptions(sel){
+  const staff=_jetActiveStaff();
+  const names=[...new Set(staff.map(s=>String(s.companyName||'').trim()).filter(Boolean))].sort();
+  let h='<option value="">（会社を選択）</option>';
+  h+=`<option value="__self__"${String(sel)==='__self__'?' selected':''}>大阪急配（自社）</option>`;
+  names.forEach(n=>{
+    h+=`<option value="${esc(n)}"${String(sel)===n?' selected':''}>${esc(n)}</option>`;
+  });
+  h+=`<option value="__manual__"${String(sel)==='__manual__'?' selected':''}>上記以外（氏名を手入力）</option>`;
+  return h;
+}
+// その会社に属する在籍ドライバー。集荷業務の登録がある人を先に並べる。
+function _jetDriversOf(company){
+  const staff=_jetActiveStaff();
+  let list;
+  if(company==='__self__'){
+    list=staff.filter(s=>!String(s.companyName||'').trim());
+  } else {
+    list=staff.filter(s=>String(s.companyName||'').trim()===String(company));
+  }
+  const isCol=s=>{
+    // 自社は所属部署から導出、委託は workType で判定
+    if(String(s.companyName||'').trim()){
+      const wt=String(s.workType||'');
+      return wt==='collection' || wt==='both';
+    }
+    return (typeof _deriveOfficeTypeFromStaff==='function')
+      ? _deriveOfficeTypeFromStaff(s)==='collection' : false;
+  };
+  // 集荷の登録がある人 → それ以外。それぞれ氏名順。
+  const col=list.filter(isCol).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ja'));
+  const oth=list.filter(s=>!isCol(s)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ja'));
+  return { col, oth };
+}
+function _jetDriverOptions(company, sel){
+  if(!company || company==='__manual__') return '<option value="">（会社を先に選択）</option>';
+  const { col, oth } = _jetDriversOf(company);
+  const opt=s=>{
+    const no=String(s.empNo||s.driverNo||s.id||'');
+    return `<option value="${esc(no)}" data-name="${esc(s.name||'')}"${String(sel)===no?' selected':''}>${esc(s.name||'')}　${esc(no)}</option>`;
+  };
+  let h='<option value="">（選択）</option>';
+  if(col.length){
+    h+='<optgroup label="集荷業務の登録あり">'+col.map(opt).join('')+'</optgroup>';
+  }
+  if(oth.length){
+    h+='<optgroup label="その他">'+oth.map(opt).join('')+'</optgroup>';
+  }
+  if(!col.length && !oth.length) h+='<option value="">（登録ドライバーなし）</option>';
+  h+=`<option value="__manual__"${String(sel)==='__manual__'?' selected':''}>登録なし（氏名を手入力）</option>`;
+  return h;
+}
+// 会社を変えたらドライバー一覧を作り直す。手入力欄の出し入れもここで行う。
+function jetManualCoChange(which){
+  const co=$('jm-'+which+'-co')?.value||'';
+  const dsel=$('jm-'+which+'-drv');
+  if(dsel){
+    dsel.innerHTML=_jetDriverOptions(co, '');
+    dsel.style.display=(co==='__manual__')?'none':'';
+  }
+  jetManualDrvChange(which);
+}
+function jetManualDrvChange(which){
+  const co=$('jm-'+which+'-co')?.value||'';
+  const dv=$('jm-'+which+'-drv')?.value||'';
+  const box=$('jm-'+which+'-name');
+  const need=(co==='__manual__')||(dv==='__manual__');
+  if(box){
+    box.style.display=need?'':'none';
+    if(!need) box.value='';
+  }
+  const f=$('jm-'+which+'-find');
+  if(f) f.style.display=(co && co!=='__manual__')?'':'none';
+}
+// 氏名で絞り込む（選択肢を絞る）
+function jetManualFind(which){
+  const q=String($('jm-'+which+'-find')?.value||'').trim();
+  const co=$('jm-'+which+'-co')?.value||'';
+  const dsel=$('jm-'+which+'-drv');
+  if(!dsel) return;
+  const cur=dsel.value;
+  dsel.innerHTML=_jetDriverOptions(co, cur);
+  if(!q) return;
+  Array.from(dsel.querySelectorAll('option')).forEach(o=>{
+    if(!o.value || o.value==='__manual__') return;
+    const t=(o.textContent||'');
+    if(t.indexOf(q)<0) o.remove();
+  });
+}
+// 選択結果から {id, name} を取り出す
+function _jetPickedDriver(which){
+  const co=$('jm-'+which+'-co')?.value||'';
+  const dsel=$('jm-'+which+'-drv');
+  const dv=dsel?dsel.value:'';
+  if(co==='__manual__' || dv==='__manual__'){
+    return { id:'', name:String($('jm-'+which+'-name')?.value||'').trim(), company:(co==='__manual__'?'':co) };
+  }
+  if(!dv) return { id:'', name:'', company:co };
+  return { id:dv, name:(dsel.selectedOptions[0]?.dataset.name||''), company:co };
+}
 function jetManualOpen(edit){
   const d=edit||{};
   const cust=_jetCustomer();
@@ -38988,10 +39154,27 @@ function jetManualOpen(edit){
       <input type="date" id="jm-date" class="fi" value="${esc(d.date||_jetToday())}"></div>
     <div class="fg"><label>便名</label>
       <input type="text" id="jm-bin" class="fi" placeholder="第1便" value="${esc(d.bin||'')}"></div>
-    <div class="fg"><label>計数したドライバー</label>
-      <select id="jm-drv" class="fi">${_jetStaffOptions(d.driverId||'')}</select></div>
-    <div class="fg"><label>局へ運んだドライバー（空欄なら計数した人と同じ）</label>
-      <select id="jm-car" class="fi">${_jetStaffOptions(d.carrierId||'')}</select></div>
+    <!-- ★ 2026/09/12: 会社 → ドライバー の2段選択。登録が無ければ氏名を手入力。 -->
+    <div style="border:1px solid var(--brd);border-radius:6px;padding:8px;margin-bottom:8px;">
+      <div class="xs muted fw7 mb8">計数したドライバー</div>
+      <div class="fg"><label>会社</label>
+        <select id="jm-drv-co" class="fi" onchange="jetManualCoChange('drv')">${_jetCompanyOptions('')}</select></div>
+      <div class="fg"><label>氏名で絞り込む</label>
+        <input type="text" id="jm-drv-find" class="fi" placeholder="氏名の一部" oninput="jetManualFind('drv')" style="display:none;"></div>
+      <div class="fg"><label>ドライバー</label>
+        <select id="jm-drv-drv" class="fi" onchange="jetManualDrvChange('drv')"><option value="">（会社を先に選択）</option></select></div>
+      <input type="text" id="jm-drv-name" class="fi" placeholder="氏名を入力" style="display:none;">
+    </div>
+    <div style="border:1px solid var(--brd);border-radius:6px;padding:8px;margin-bottom:8px;">
+      <div class="xs muted fw7 mb8">局へ運んだドライバー（空欄なら計数した人と同じ）</div>
+      <div class="fg"><label>会社</label>
+        <select id="jm-car-co" class="fi" onchange="jetManualCoChange('car')">${_jetCompanyOptions('')}</select></div>
+      <div class="fg"><label>氏名で絞り込む</label>
+        <input type="text" id="jm-car-find" class="fi" placeholder="氏名の一部" oninput="jetManualFind('car')" style="display:none;"></div>
+      <div class="fg"><label>ドライバー</label>
+        <select id="jm-car-drv" class="fi" onchange="jetManualDrvChange('car')"><option value="">（会社を先に選択）</option></select></div>
+      <input type="text" id="jm-car-name" class="fi" placeholder="氏名を入力" style="display:none;">
+    </div>
     <div class="fla gap6">
       <div class="fg" style="flex:1"><label>通常（1〜3cm）</label>
         <input type="number" min="0" id="jm-c3" class="fi" value="${d.c3||0}"></div>
@@ -39003,6 +39186,25 @@ function jetManualOpen(edit){
     <div class="xs muted">顧客：${esc(cust?cust.name:'（未設定）')}　この便は番号の記録を持ちません。CSVの番号明細には出ません。</div>`;
   showDialog({icon:'✏️',title:(edit?'手入力の便を編集':'手入力で便を追加'),bodyHtml:body,
     okText:'保存する',cancelText:'キャンセル'}).then(ok=>{ if(ok) jetManualSave(edit?edit.key:null); });
+  // ★ 2026/09/12: 編集のときは既存のドライバーから会社を逆引きして選択を復元する
+  setTimeout(()=>{
+    const restore=(which, id, nm)=>{
+      if(!id && !nm) return;
+      const st=_jetActiveStaff().find(x=>String(x.empNo||x.driverNo||x.id)===String(id));
+      const co=st ? (String(st.companyName||'').trim() || '__self__') : '__manual__';
+      const cs=$('jm-'+which+'-co'); if(cs) cs.value=co;
+      jetManualCoChange(which);
+      if(st){
+        const ds=$('jm-'+which+'-drv'); if(ds) ds.value=String(id);
+      } else if(nm){
+        const ds=$('jm-'+which+'-drv'); if(ds) ds.value='__manual__';
+      }
+      jetManualDrvChange(which);
+      if(!st && nm){ const nb=$('jm-'+which+'-name'); if(nb) nb.value=nm; }
+    };
+    restore('drv', d.driverId||'', d.driverName||'');
+    restore('car', d.carrierId||'', d.carrierName||'');
+  }, 60);
 }
 async function jetManualSave(editKey){
   const date=$('jm-date')?.value||'';
@@ -39010,10 +39212,11 @@ async function jetManualSave(editKey){
   const c3=Math.max(0,parseInt($('jm-c3')?.value)||0);
   const c5=Math.max(0,parseInt($('jm-c5')?.value)||0);
   if(!c3&&!c5){ showAlert({msg:'個数を入力してください'}); return; }
-  const dsel=$('jm-drv'), csel=$('jm-car');
-  const drvId=dsel?.value||'', drvName=dsel?.selectedOptions[0]?.dataset.name||'';
-  const carId=csel?.value||'', carName=csel?.selectedOptions[0]?.dataset.name||'';
-  if(!drvName){ showAlert({msg:'計数したドライバーを選んでください'}); return; }
+  // ★ 2026/09/12: 会社→ドライバーの選択、または氏名の手入力から取り出す
+  const _d=_jetPickedDriver('drv'), _c=_jetPickedDriver('car');
+  const drvId=_d.id, drvName=_d.name;
+  const carId=_c.id, carName=_c.name;
+  if(!drvName){ showAlert({msg:'計数したドライバーを選ぶか、氏名を入力してください'}); return; }
   const all=lsGet(LS_KEYS.JET,null)||{};
   const key=editKey||('manual_'+Date.now().toString(36));
   // ★ 2026/09/12: 顧客ごとの階層に書く。顧客は計数照合で選んでいるものを使う。
