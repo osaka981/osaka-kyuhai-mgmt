@@ -1589,7 +1589,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card" id="jc-detailcard" style="display:none">
         <div class="ch"><div class="ct"><div class="cbar"></div><span id="jc-detail-title">便の明細</span></div>
           <button class="btn b-gh btn-sm" onclick="jetCloseDay()">日別一覧に戻る</button></div>
-          <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span></div>
+        <!-- ★ 2026/09/12: この注記の行末に余分な閉じタグがあり、.content が早く
+             閉じていた。そのため s-pu-sum 以降の全セクションが .content の外に出て、
+             flex:1 のコンテンツ領域に押し下げられ画面下部に表示されていた。 -->
+        <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span>
         <div class="tw"><table>
           <thead><tr>
             <th>便</th><th>計数ドライバー</th><th>運搬ドライバー</th><th>企業</th>
