@@ -30676,13 +30676,17 @@ function loadSystemInfoToForm(){
   renderSizeBtnsSys();
   // Firebase情報
   const fi=$('sys-firebase-info');
-  if(fi && typeof firebaseConfig !== 'undefined'){
+  // ★ 2026/09/12: 参照していた変数名 firebaseConfig は存在せず、実際の定義は
+  //   FB_CONFIG。そのため常に「見つかりません」と表示されていた（表示だけの不具合）。
+  if(fi && typeof FB_CONFIG !== 'undefined'){
+    const _conn = (typeof fbDB !== 'undefined' && fbDB) ? '接続中' : '未接続';
     fi.innerHTML=`
-      <div><strong>Project ID:</strong> ${firebaseConfig.projectId||'未設定'}</div>
-      <div><strong>Auth Domain:</strong> ${firebaseConfig.authDomain||'未設定'}</div>
-      <div><strong>Database URL:</strong> ${firebaseConfig.databaseURL||'未設定'}</div>
-      <div><strong>Storage Bucket:</strong> ${firebaseConfig.storageBucket||'未設定'}</div>
-      <div><strong>Region:</strong> asia-southeast1</div>`;
+      <div><strong>Project ID:</strong> ${FB_CONFIG.projectId||'未設定'}</div>
+      <div><strong>Auth Domain:</strong> ${FB_CONFIG.authDomain||'未設定'}</div>
+      <div><strong>Database URL:</strong> ${FB_CONFIG.databaseURL||'未設定'}</div>
+      <div><strong>Storage Bucket:</strong> ${FB_CONFIG.storageBucket||'未設定'}</div>
+      <div><strong>Region:</strong> asia-southeast1</div>
+      <div><strong>状態:</strong> ${_conn}</div>`;
   } else if(fi){
     fi.textContent='Firebase設定が見つかりません';
   }
