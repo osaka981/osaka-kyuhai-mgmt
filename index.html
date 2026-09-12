@@ -37729,12 +37729,29 @@ async function _safeSetYpLogs(next, reason){
 // ════════════════════════════════════════════════════════════
 
 // 復元対象。バックアップのキー名がそのまま Firebase / localStorage のキーになる。
+// ★ 2026/09/12: 実際に使っているノードのうち17件が抜けていて復元できなかった。
+//   ジェットの計数データ・引受数の訂正・品目定義・支払記録などが対象外だった。
+//   fbSet で書き込んでいるノードと購読しているノードを突き合わせて補完した。
+//   写真系(jet_photos / col_photos / col_photo_index)は容量が大きいため、
+//   この一括復元には含めない（写真は失っても業務データの再構成は可能）。
 const RESTORE_KEYS = [
-  'yp_logs','col_logs','att_logs','drivers','staff_full','customers','companies',
-  'offices','locations','regions','departments','col_routes','customer_notes',
-  'post_logs','cmp_state','gas_records','monthly_confirmations','notifications',
-  'schedule_logs','schedule_overrides','schedule_surveys','survey_responses',
-  'edit_logs','owner_pins','settings'
+  // 日報・実績
+  'yp_logs','col_logs','att_logs','post_logs','pickup','delivery',
+  // マスタ
+  'drivers','staff','staff_full','customers','companies','offices','locations',
+  'regions','departments','col_routes','customer_notes','charters',
+  // 品目定義（★ 第2〜4段階で追加）
+  'item_defs','item_groups',
+  // バーコード計数
+  'jet_scan','jet_scan_nos','jet_adjust','jet_settings',
+  // 精算・支払
+  'payments','salary_paid','gas_records','monthly_confirmations','cmp_state',
+  // シフト・調査
+  'schedule_logs','schedule_overrides','schedule_surveys','survey','survey_responses',
+  'busy_seasons',
+  // 設定・その他
+  'settings','system_info','work_round','notifications','edit_logs',
+  'owner_pins','sec_pin','adm_pin'
 ];
 
 function _restoreCount(v){ return Array.isArray(v) ? v.length : (v && typeof v==='object' ? Object.keys(v).length : 0); }
