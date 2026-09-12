@@ -4017,19 +4017,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <button type="button" onclick="setColTabTaxAll('in')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">全て税込</button>
       <span style="font-size:9px;color:var(--txt2);margin-left:4px;">個別変更も可能</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-      <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-st-cp60" data-tax="ex"><button onclick="setItemTax('st-cp60','in')" class="">税込</button><button onclick="setItemTax('st-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp60" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="150" oninput="onStCp60Change()" step="0.01"></div>
-      <div class="fg"><label class="c80" style="font-size:9px;">80サイズ（円）<span class="tax-tog" id="tt-st-cp80" data-tax="ex"><button onclick="setItemTax('st-cp80','in')" class="">税込</button><button onclick="setItemTax('st-cp80','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp80" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="180" step="0.01"></div>
-      <div class="fg"><label class="c100" style="font-size:9px;">100サイズ（円）<span class="tax-tog" id="tt-st-cp100" data-tax="ex"><button onclick="setItemTax('st-cp100','in')" class="">税込</button><button onclick="setItemTax('st-cp100','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp100" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="220" step="0.01"></div>
-      <div class="fg"><label class="c120" style="font-size:9px;">120サイズ（円）<span class="tax-tog" id="tt-st-cp120" data-tax="ex"><button onclick="setItemTax('st-cp120','in')" class="">税込</button><button onclick="setItemTax('st-cp120','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp120" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="260" step="0.01"></div>
-      <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-st-cp140" data-tax="ex"><button onclick="setItemTax('st-cp140','in')" class="">税込</button><button onclick="setItemTax('st-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp140" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="300" step="0.01"></div>
-      <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-st-cp160" data-tax="ex"><button onclick="setItemTax('st-cp160','in')" class="">税込</button><button onclick="setItemTax('st-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cp160" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="350" step="0.01"></div>
-      <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-st-cpk1" data-tax="ex"><button onclick="setItemTax('st-cpk1','in')" class="">税込</button><button onclick="setItemTax('st-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="80" oninput="onStCpk1Change()" step="0.01"></div>
-      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット5cm〜<span class="tax-tog" id="tt-st-cpk2" data-tax="ex"><button onclick="setItemTax('st-cpk2','in')" class="">税込</button><button onclick="setItemTax('st-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="100" step="0.01"></div>
-      <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-st-ccp" data-tax="ex"><button onclick="setItemTax('st-ccp','in')" class="">税込</button><button onclick="setItemTax('st-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-ccp" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="60" step="0.01"></div>
-      <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-st-cke" data-tax="ex"><button onclick="setItemTax('st-cke','in')" class="">税込</button><button onclick="setItemTax('st-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cke" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="120" step="0.01"></div>
-      <div class="fg"><label class="cte" style="font-size:9px;">定形外<span class="tax-tog" id="tt-st-cte" data-tax="ex"><button onclick="setItemTax('st-cte','in')" class="">税込</button><button onclick="setItemTax('st-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="st-cte" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="50" step="0.01"></div>
-    </div>
+    <!-- ★ 2026/09/12: 品目欄は ITEMS から自動生成（renderStColPriceGrid）。直書きに戻さないこと。 -->
+    <div id="st-col-price-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"></div>
     <!-- ルート（委託会社モーダルと同形式: B=日額連動 / C=都度チャーター） -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -4063,21 +4052,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <option value="in">税込</option>
             </select>
           </div>
-          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;">
-            <div class="fg"><label style="font-size:9px;">60</label><input type="number" id="st-col-cust-p60"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">80</label><input type="number" id="st-col-cust-p80"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">100</label><input type="number" id="st-col-cust-p100" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">120</label><input type="number" id="st-col-cust-p120" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">140</label><input type="number" id="st-col-cust-p140" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">160</label><input type="number" id="st-col-cust-p160" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;">
-            <div class="fg"><label style="font-size:9px;">PKT通常</label><input type="number" id="st-col-cust-pk1" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">PKT5cm+</label><input type="number" id="st-col-cust-pk2" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">CP</label><input type="number" id="st-col-cust-cp"  class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">ケース</label><input type="number" id="st-col-cust-ke" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-            <div class="fg"><label style="font-size:9px;">定形外</label><input type="number" id="st-col-cust-te" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>
-          </div>
+          <!-- ★ 2026/09/12: 品目欄は ITEMS から自動生成（renderStColCustGrid） -->
+          <div id="st-col-cust-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:6px;"></div>
           <div style="display:flex;justify-content:flex-end;gap:6px;">
             <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 10px;" onclick="clearStColCustForm()">クリア</button>
             <button type="button" class="btn b-blu btn-sm" style="font-size:10px;padding:3px 10px;" onclick="addStColCustEntry()">＋追加・更新</button>
@@ -7416,9 +7392,8 @@ function resetStaffModal(){
    'st-ps1','st-ps2','st-ps3','st-ps4'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   // ★集荷単価フィールド (前回編集の値が残らないようクリア)
-  ['st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160',
-   'st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'
-  ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // ★ 2026/09/12: ITEMS から導出
+  CK_LIST.map(ck=>'st-c'+ck).forEach(id=>{const e=$(id);if(e)e.value='';});
   // チャーター/違約金などの行ベースリセット
   ['st-charter-list','st-penalty-list','st-customitems-list'].forEach(id=>{
     const e=$(id);if(e)e.innerHTML='';
@@ -7426,9 +7401,9 @@ function resetStaffModal(){
   // 税込/税別トグル状態を既定(税込:in)にリセット
   // 過去の編集で「税別」になっていた項目が次の従業員にも引き継がれないようにする
   if(typeof setItemTax === 'function'){
-    ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
-     'st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160','st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'
-    ].forEach(id=>{ try{ setItemTax(id, 'in'); }catch(_){} });
+    ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4']
+    .concat(CK_LIST.map(ck=>'st-c'+ck))      // ★ 2026/09/12: ITEMS から導出
+    .forEach(id=>{ try{ setItemTax(id, 'in'); }catch(_){} });
   }
   // チェックボックス
   ['st-empno-manual','st-hosho-b-on','st-hosho-c-on','st-doc-payslip','st-doc-invproxy','st-stamp-request'].forEach(id=>{
@@ -10810,8 +10785,10 @@ function setDelTabTaxAll(type){
 }
 function setColTabTaxAll(type){
   // 集荷タブの全品目の税を一括切替
-  ['st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160',
-   'st-cpk1','st-cpk2','st-ccp','st-cke','st-cte'].forEach(id=>setItemTax(id,type));
+  // ★ 2026/09/12: ITEMS から導出（画面に無い欄は除外）
+  CK_LIST.map(ck=>'st-c'+ck)
+    .filter(id=>document.getElementById(id))
+    .forEach(id=>setItemTax(id,type));
 }
 function setAllStTax(type){
   setDelTabTaxAll(type);
@@ -11482,11 +11459,82 @@ function onStColCustModeChange(){
   if(perBox) perBox.style.display = (mode==='perCustomer') ? '' : 'none';
 }
 
+// ★ 2026/09/12: 従事員の集荷単価欄を ITEMS から生成する。
+//   支払は請求と対になるので、細分化品目はどこかの顧客で使う設定になっているものだけ出す。
+//   この従事員に既に単価が入っている品目は、設定が外れても消えないよう必ず出す。
+function _optionalItemsInUse(){
+  const on = new Set();
+  (D.customers||[]).forEach(cu=>{
+    (Array.isArray(cu.useItems) ? cu.useItems : []).forEach(k=>on.add(k));
+    const cp = cu.colPrices || cu.prices || {};
+    IK_OPTIONAL.forEach(k=>{
+      const ck = ITEMS[k].ck;
+      if(ck && Number(cp[ck])>0) on.add(k);
+    });
+  });
+  return IK_OPTIONAL.filter(k=>on.has(k));
+}
+function _stColItemKeys(){
+  const inUse = new Set(_optionalItemsInUse());
+  const editId = $('m-staff')?._editId;
+  const mine = editId ? (D.staff.find(x=>x.id===editId)?.fixedPrices?.col || {}) : {};
+  return IK_PRICED.filter(k=>{
+    if(!ITEMS[k].optional) return true;
+    if(inUse.has(k)) return true;
+    const ck = ITEMS[k].ck;
+    return !!(ck && Number(mine[ck])>0);
+  });
+}
+// 一律の集荷単価グリッド
+function renderStColPriceGrid(){
+  const wrap = document.getElementById('st-col-price-grid');
+  if(!wrap) return;
+  const cur={}, curTax={};
+  CK_LIST.forEach(ck=>{ const e=$('st-c'+ck); if(e){ cur[ck]=e.value; curTax[ck]=getItemTax('st-c'+ck); } });
+  const keys = _stColItemKeys();
+  wrap.innerHTML = keys.map(k=>{
+    const it = ITEMS[k], ck = it.ck, fid = 'st-c'+ck;
+    const lbl = it.group==='ゆうパック' ? (it.label+'（円）') : (it.longLabel||it.label);
+    // YP60→他サイズ、PKT通常→5cm〜 の自動反映は従来通り
+    const oi = ck==='p60' ? ' oninput="onStCp60Change()"'
+             : (ck==='pk1' ? ' oninput="onStCpk1Change()"' : '');
+    return `<div class="fg"><label class="${it.cls||''}" style="font-size:9px;">${lbl}`
+      + `<span class="tax-tog" id="tt-${fid}" data-tax="ex">`
+      + `<button onclick="setItemTax('${fid}','in')" class="">税込</button>`
+      + `<button onclick="setItemTax('${fid}','ex')" class="active-ex">税別</button></span></label>`
+      + `<input type="number" id="${fid}" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"${oi}></div>`;
+  }).join('');
+  keys.forEach(k=>{
+    const ck = ITEMS[k].ck;
+    const e = $('st-c'+ck);
+    if(!e) return;
+    if(cur[ck]!=null) e.value = cur[ck];
+    if(curTax[ck]) setItemTax('st-c'+ck, curTax[ck]);
+  });
+}
+// 顧客別の集荷単価グリッド
+function renderStColCustGrid(){
+  const wrap = document.getElementById('st-col-cust-grid');
+  if(!wrap) return;
+  const cur={};
+  CK_LIST.forEach(ck=>{ const e=$('st-col-cust-'+ck); if(e) cur[ck]=e.value; });
+  const keys = _stColItemKeys();
+  wrap.innerHTML = keys.map(k=>{
+    const it = ITEMS[k], ck = it.ck;
+    return `<div class="fg"><label style="font-size:9px;">${it.shortLabel||it.label}</label>`
+      + `<input type="number" id="st-col-cust-${ck}" class="fi" placeholder="0" step="0.01" style="font-size:10px;padding:3px 4px;"></div>`;
+  }).join('');
+  keys.forEach(k=>{
+    const ck = ITEMS[k].ck;
+    const e = $('st-col-cust-'+ck);
+    if(e && cur[ck]!=null) e.value = cur[ck];
+  });
+}
+// ★ 2026/09/12: 欄IDは 'st-col-cust-'+ck で統一。画面に出ている欄だけを対象にする。
 function _stColCustIdMap(){
-  return {p60:'st-col-cust-p60', p80:'st-col-cust-p80', p100:'st-col-cust-p100',
-          p120:'st-col-cust-p120', p140:'st-col-cust-p140', p160:'st-col-cust-p160',
-          pk1:'st-col-cust-pk1', pk2:'st-col-cust-pk2',
-          cp:'st-col-cust-cp', ke:'st-col-cust-ke', te:'st-col-cust-te'};
+  const m={};
+  CK_LIST.forEach(ck=>{ const id='st-col-cust-'+ck; if(document.getElementById(id)) m[ck]=id; });
+  return m;
 }
 
 function clearStColCustForm(){
@@ -14725,7 +14773,8 @@ function onStP60Change(){
   // 集荷タブの60サイズ
   const p60=$('st-cp60')?.value||'';
   if(!p60)return;
-  ['st-cp80','st-cp100','st-cp120','st-cp140','st-cp160'].forEach(id=>{
+  // ★ 2026/09/12: 60以外のゆうパック全サイズへ（ITEMSから導出）
+  IK_YP.filter(k=>ITEMS[k].ck!=='p60').map(k=>'st-c'+ITEMS[k].ck).forEach(id=>{
     const el=$(id);
     if(el&&(!el.value||el.value==='0'))el.value=p60;
   });
@@ -14734,7 +14783,8 @@ function onStP60Change(){
 function onStCp60Change(){
   const p60=$('st-cp60')?.value||'';
   if(!p60)return;
-  ['st-cp80','st-cp100','st-cp120','st-cp140','st-cp160'].forEach(id=>{
+  // ★ 2026/09/12: 60以外のゆうパック全サイズへ（ITEMSから導出）
+  IK_YP.filter(k=>ITEMS[k].ck!=='p60').map(k=>'st-c'+ITEMS[k].ck).forEach(id=>{
     const el=$(id);if(el)el.value=p60;
   });
 }
@@ -17991,9 +18041,9 @@ function saveStaff(continueAdd=false){
    'st-birth','st-start','st-end','st-note','st-tk',
    'st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
    'st-ptenso','st-pmodori','st-pshukka',
-   'st-cp60','st-cp80','st-cp100','st-cp120','st-cp140','st-cp160','st-cpk1','st-cpk2','st-ccp','st-cke','st-cte',
    'st-gas-card','st-gas-amt','st-yosha-amt','st-yosha-note','st-yokonori-unit','st-tokubetsu-unit','st-teate-other',
-  ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  ].concat(CK_LIST.map(ck=>'st-c'+ck))      // ★ 2026/09/12: 集荷単価欄は ITEMS から導出
+   .forEach(id=>{const e=$(id);if(e)e.value='';});
   restoreStOtherRows([]);
   if($('st-charter-list'))$('st-charter-list').innerHTML='';
   if($('st-penalty-list'))$('st-penalty-list').innerHTML='';
@@ -33495,6 +33545,9 @@ function openM(id){
   }
   if(['m-pu','m-cust','m-inv','m-staff'].includes(id))updOffSels();
   if(id==='m-staff'){
+    // ★ 2026/09/12: 集荷単価欄は動的生成なので、既定値を入れる前に作っておく
+    if(typeof renderStColPriceGrid==='function') renderStColPriceGrid();
+    if(typeof renderStColCustGrid==='function') renderStColCustGrid();
     // 既定値: 必ずselect optionに存在する値を入れる(無効値は空文字化される)
     if($('st-kbn'))$('st-kbn').value='個人事業主（歩合）';
     if($('st-ky'))$('st-ky').value='個数制（歩合）';
@@ -34216,22 +34269,14 @@ function _editStaffImpl(id){
       }
     }
     // 集荷タブ単価の復元
+    // ★ 2026/09/12: 欄を ITEMS から生成してから値を入れる（ITEMS由来のキーで導出）
+    if(typeof renderStColPriceGrid==='function') renderStColPriceGrid();
+    if(typeof renderStColCustGrid==='function') renderStColCustGrid();
     if(s.fixedPrices?.col){const c=s.fixedPrices.col;
-      if($('st-cp60'))$('st-cp60').value=c.p60||'';
-      if($('st-cp80'))$('st-cp80').value=c.p80||'';
-      if($('st-cp100'))$('st-cp100').value=c.p100||'';
-      if($('st-cp120'))$('st-cp120').value=c.p120||'';
-      if($('st-cp140'))$('st-cp140').value=c.p140||'';
-      if($('st-cp160'))$('st-cp160').value=c.p160||'';
-      if($('st-cpk1'))$('st-cpk1').value=c.pk1||'';
-      if($('st-cpk2'))$('st-cpk2').value=c.pk2||'';
-      if($('st-ccp'))$('st-ccp').value=c.cp||'';
-      if($('st-cke'))$('st-cke').value=c.ke||'';
-      if($('st-cte'))$('st-cte').value=c.te||'';
+      CK_LIST.forEach(ck=>{ const e=$('st-c'+ck); if(e) e.value = c[ck]||''; });
       // 税込/税別トグル復元(col)
       if(c._tax && typeof setItemTax==='function'){
-        const colMap = {p60:'st-cp60',p80:'st-cp80',p100:'st-cp100',p120:'st-cp120',p140:'st-cp140',p160:'st-cp160',pk1:'st-cpk1',pk2:'st-cpk2',cp:'st-ccp',ke:'st-cke',te:'st-cte'};
-        Object.keys(colMap).forEach(k=>{ if(c._tax[k]) setItemTax(colMap[k], c._tax[k]); });
+        CK_LIST.forEach(ck=>{ if(c._tax[ck] && $('st-c'+ck)) setItemTax('st-c'+ck, c._tax[ck]); });
       }
     }
     // チャーター行復元
