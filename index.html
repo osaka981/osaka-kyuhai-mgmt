@@ -1564,9 +1564,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6">
           <input type="month" id="jc-mon" class="fi" onchange="renderJetCmp()">
           <select id="jc-cust" class="fi" style="width:230px" onchange="saveJetCust()"></select>
-          <span class="xs muted">計数の実績はこの顧客の集荷として計上されます</span>
+          <!-- ★ 2026/09/12: ボタンが増えて横幅が足りなくなり、この注記が1文字ずつ
+               折り返されて縦に潰れていた。折り返さず、狭いときは隠す。 -->
+          <span class="xs muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;"
+            title="計数の実績はこの顧客の集荷として計上されます">計数の実績はこの顧客の集荷として計上されます</span>
         </div>
-        <div class="fla gap6">
+        <div class="fla gap6" style="flex-wrap:wrap;flex-shrink:0;">
           <button class="btn b-gh btn-sm" onclick="expJetCSV()">照合CSV</button>
           <!-- ★ 2026/09/12: 数量0の便をまとめて削除する -->
           <button class="btn btn-sm" id="jc-del-zero"
