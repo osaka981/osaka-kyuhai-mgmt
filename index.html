@@ -1544,15 +1544,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>集荷日報明細一覧</div><span id="pu-count" class="xs muted"></span></div>
         <div class="tw"><table id="tbl-pu">
-          <thead><tr>
-            <th>日付</th><th>従事員</th><th>営業所</th><th>顧客名</th><th>地域</th>
-            <th class="tr c60">60</th><th class="tr c80">80</th><th class="tr c100">100</th>
-            <th class="tr c120">120</th><th class="tr c140">140</th><th class="tr c160">160</th>
-            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT5cm</th>
-            <th class="tr ccp">CP</th><th class="tr cke">ケース</th>
-            <th class="tr cte">定形外</th><th class="tr cch">チャーター</th>
-            <th class="tr">合計</th><th class="tr">金額</th><th></th>
-          </tr></thead>
+          <!-- ★ 2026/09/12: 品目列は ITEMS から動的生成（renderPU）。直書きに戻さないこと。 -->
+          <thead><tr id="th-pu"></tr></thead>
           <tbody id="tb-pu"></tbody>
         </table></div>
       </div>
@@ -1641,16 +1634,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>顧客・単価契約一覧</div><span id="cust-count" class="xs muted"></span></div>
         <div class="tw"><table>
-          <thead><tr>
-            <th>番号</th><th>顧客名</th><th>地域</th>
-            <th class="tr c60">60</th><th class="tr c80">80</th><th class="tr c100">100</th>
-            <th class="tr c120">120</th><th class="tr c140">140</th><th class="tr c160">160</th>
-            <th class="tr cpk1">PKT通</th><th class="tr cpk2">PKT5cm</th>
-            <th class="tr ccp">CP</th><th class="tr cke">ケース</th>
-            <th class="tr cte">定形外</th>
-            <th>その他契約</th>
-              <th>状態</th><th></th>
-          </tr></thead>
+          <!-- ★ 2026/09/12: 品目列は ITEMS から動的生成（renderCustList）。直書きに戻さないこと。 -->
+          <thead><tr id="th-cust"></tr></thead>
           <tbody id="tb-cust"></tbody>
         </table></div>
       </div>
@@ -7843,6 +7828,17 @@ function custUseItems(cu, forceKeys){
 function custUseCks(cu, forceKeys){
   return custUseItems(cu, forceKeys).map(k=>ITEMS[k].ck).filter(Boolean);
 }
+// ★ 2026/09/12: 一覧テーブルの品目列。既定品目は常に出し、optional 品目は
+//   実際に数量／単価がある場合だけ列を作る（列が無駄に増えないようにする）。
+//   見出しと本文セルは必ずこの同じ配列から作ること（ずれの原因になるため）。
+function visibleItemKeys(hasData, pool){
+  return (pool||IK).filter(k=>!ITEMS[k].optional || (typeof hasData==='function' && hasData(k)));
+}
+const itemColLabel = k => ITEMS[k].shortLabel || ITEMS[k].label;
+function itemThs(keys){
+  return keys.map(k=>`<th class="tr ${ITEMS[k].cls||''}">${itemColLabel(k)}</th>`).join('');
+}
+
 // 一括税区分ボタンの対象（★ ITEMS から導出。画面に無い欄は除外）
 function otherTaxFields(){
   return IK_OTHER.map(k=>'cu-c'+ITEMS[k].ck).filter(id=>document.getElementById(id));
@@ -8311,7 +8307,19 @@ function renderCustTbl(){
   });
   const cnt=$('cust-count'); if(cnt) cnt.textContent=`${list.length}件`;
   const tbody=$('tb-cust'); if(!tbody) return;
-  if(!list.length){tbody.innerHTML='<tr><td colspan="17" style="text-align:center;color:var(--txt2);padding:20px;">顧客データなし</td></tr>';return;}
+  // ★ 2026/09/12: 単価列を ITEMS から生成。optional 品目は単価が入っている顧客が
+  //   いる場合だけ列を作る。見出しとセルは同じ配列から作る（列ずれ防止）。
+  const cuVisKeys=visibleItemKeys(
+    k=>list.some(cu=>Number(((cu.colPrices||cu.prices||{}))[ITEMS[k].ck])>0),
+    IK_PRICED
+  );
+  const thCust=$('th-cust');
+  if(thCust) thCust.innerHTML =
+    '<th>番号</th><th>顧客名</th><th>地域</th>'
+    + itemThs(cuVisKeys)
+    + '<th>その他契約</th><th>状態</th><th></th>';
+  const _cuColspan=3+cuVisKeys.length+3;
+  if(!list.length){tbody.innerHTML='<tr><td colspan="'+_cuColspan+'" style="text-align:center;color:var(--txt2);padding:20px;">顧客データなし</td></tr>';return;}
   const html=[];
   list.forEach(function(cu){
     const cp=cu.colPrices||cu.prices||{};
@@ -8320,17 +8328,11 @@ function renderCustTbl(){
     html.push('<td class="mono">'+esc(_normalizeCustNo(cu.custNo)||cu.custNo||'')+'</td>');
     html.push('<td>'+custLink(cu.name||'')+'</td>');
     html.push('<td>'+esc(cu.region||'')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p60?'¥'+cp.p60:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p80?'¥'+cp.p80:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p100?'¥'+cp.p100:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p120?'¥'+cp.p120:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p140?'¥'+cp.p140:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.p160?'¥'+cp.p160:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.pk1?'¥'+cp.pk1:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.pk2?'¥'+cp.pk2:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.cp?'¥'+cp.cp:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.ke?'¥'+cp.ke:'-')+'</td>');
-    html.push('<td class="tr mono">'+(cp.te?'¥'+cp.te:'-')+'</td>');
+    // ★ 2026/09/12: 単価セルを ITEMS から生成（見出しと同じ cuVisKeys を使う）
+    cuVisKeys.forEach(function(k){
+      const v=cp[ITEMS[k].ck];
+      html.push('<td class="tr mono">'+(v?'¥'+v:'-')+'</td>');
+    });
     // ★ 2026/07/27: 単価列(60〜定形外)に出ない契約を一覧で分かるようにする。
     //   カスタム品目・ルート日額は個建単価の列に現れないため、登録済みでも「-」だらけに見えていた。
     const _oi=(cu.otherItems||[]).filter(function(o){return o&&(o.name||'').trim();});
@@ -9426,11 +9428,19 @@ function renderPU() {
 
   $('pu-count').textContent = `${rows.length}件`;
 
+  // ★ 2026/09/12: 見出しと本文セルを同じ品目配列から作る（列ずれ防止）
+  const visKeys=visibleItemKeys(k=>itot[k]>0);
+  const thPu=$('th-pu');
+  if(thPu) thPu.innerHTML =
+    '<th>日付</th><th>従事員</th><th>営業所</th><th>顧客名</th><th>地域</th>'
+    + itemThs(visKeys)
+    + '<th class="tr">合計</th><th class="tr">金額</th><th></th>';
+
   let h='';
   rows.sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>{
     const cu=D.customers.find(c=>c.id===r.customerId);
     const tot=puTotal(r), amt=puAmt(r,cu);
-    const cells=IK.map(k=>{const q=iq(r,k);return `<td class="tr${q>0?' '+ITEMS[k].cls+' fw7':''}">${q>0?fmt(q):''}</td>`;}).join('');
+    const cells=visKeys.map(k=>{const q=iq(r,k);return `<td class="tr${q>0?' '+ITEMS[k].cls+' fw7':''}">${q>0?fmt(q):''}</td>`;}).join('');
     h+=`<tr>
       <td class="mono">${r.date}</td><td class="fw7">${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td>
       <td class="fw7">${custLink(r.customerName)}</td><td class="xs muted">${r.region}</td>
@@ -9440,7 +9450,7 @@ function renderPU() {
       <td>${r._fromJet?'<span class="xs muted">計数</span>':`<button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button>`}</td>
     </tr>`;
   });
-  $('tb-pu').innerHTML=h||`<tr><td colspan="20" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
+  $('tb-pu').innerHTML=h||`<tr><td colspan="${5+visKeys.length+3}" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
 }
 
 // ─── 品目別集計（4ビュー）───
