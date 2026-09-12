@@ -9555,7 +9555,7 @@ async function jetCustEdit(id){
    ログインしている必要がある。暗証番号はブラウザ側の照合なのでルールから見えない。
 
    仕組み:
-     ・顧客ごとに <slug>@jscan.osaka981.local というアドレスのアカウントを作る
+     ・顧客ごとに <slug>@scan.local というアドレスのアカウントを作る
        （実在のメールアドレスは不要。ログインにしか使わない）
      ・作成したUIDを nikki/_acl/cust/<uid> = <顧客ID> として記録する
      ・ルールはこの表を見て、その顧客の階層だけ読めるようにする
@@ -9563,7 +9563,7 @@ async function jetCustEdit(id){
    注意: 発行は開いているセッションとは別のインスタンスで行う。
    createUserWithEmailAndPassword はそのインスタンスのログイン状態を
    作成したユーザーに切り替えてしまうため、本体の認証を壊さないようにする。 */
-const JETCUST_MAIL_DOMAIN = 'jscan.osaka981.local';
+const JETCUST_MAIL_DOMAIN = 'scan.local';
 function jetCustEmail(c){ return String(c.slug||'') + '@' + JETCUST_MAIL_DOMAIN; }
 
 async function _secondaryAuth(){
