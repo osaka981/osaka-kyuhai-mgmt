@@ -9447,8 +9447,17 @@ function renderJetCustList(){
         ${c.active===false?'<div class="xs" style="color:var(--red2)">停止中</div>':''}</td>
       <td class="xs mono" style="word-break:break-all;max-width:320px;">${esc(url)}</td>
       <td class="xs">${c.pinHash?'発行済':'<span style="color:var(--red2)">未発行</span>'}</td>
+      <td class="xs">${(()=>{
+        const m={'1':'大阪急配','2':'株式会社UP','9':'その他'};
+        const a=Array.isArray(c.corps)&&c.corps.length?c.corps.map(x=>m[String(x)]||x):null;
+        return a?esc(a.join('・')):'<span class="muted">制限なし</span>';
+      })()}</td>
+      <td class="xs">${c.postName?esc(c.postName)+(c.postTel?'<div class="xs muted mono">'+esc(c.postTel)+'</div>':'')
+        :'<span class="muted">未設定</span>'}</td>
       <td style="white-space:nowrap;">
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
+          onclick="jetCustEdit('${esc(String(c.id))}')">設定</button>
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
           onclick="jetCustCopyUrl('${esc(String(c.id))}')">URLをコピー</button>
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
           onclick="jetCustReissuePin('${esc(String(c.id))}')">暗証番号を再発行</button>
@@ -9458,7 +9467,7 @@ function renderJetCustList(){
     </tr>`;
   }).join('');
   wrap.innerHTML = `<div class="tw"><table>
-    <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th></th></tr></thead>
+    <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th>計数する企業</th><th>差出先</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -9489,6 +9498,47 @@ async function jetCustAdd(){
     msg: cu.name + '\n\n配布URL:\n' + jetCustUrl(map[String(cu.id)])
        + '\n\n暗証番号: ' + pin
        + '\n\nこの番号はこの画面でしか表示されません。顧客へ伝えてから閉じてください。'});
+}
+
+// ★ 2026/09/12: 担当企業と差出先の設定。
+//   計数する企業を限定すると、その企業のドライバーにだけこの顧客名が見える。
+//   差出先（郵便局の大口窓口）は顧客ごとに異なるため顧客単位で持つ。
+async function jetCustEdit(id){
+  const map=_jetCusts(); const c=map[String(id)];
+  if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
+  const corps=Array.isArray(c.corps)?c.corps.map(String):[];
+  const ck=v=>corps.indexOf(v)>=0?' checked':'';
+  const ok=await showDialog({
+    icon:'⚙️', title:(c.name||'')+' の設定',
+    bodyHtml:`
+      <div class="xs muted fw7" style="margin-bottom:4px;">計数するドライバーの所属企業</div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;">
+          <input type="checkbox" id="jce-c1" value="1"${ck('1')}>大阪急配</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;">
+          <input type="checkbox" id="jce-c2" value="2"${ck('2')}>株式会社UP</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;">
+          <input type="checkbox" id="jce-c9" value="9"${ck('9')}>その他</label>
+      </div>
+      <div class="xs muted" style="margin-bottom:10px;">
+        どれも選ばなければ全員に表示されます。選ぶと、その企業のドライバーが
+        IDを入力したときだけ、この顧客名が計数アプリに出ます。
+      </div>
+      <div class="fg"><label>差出先の名称</label>
+        <input type="text" id="jce-pname" class="fi" value="${esc(c.postName||'')}" placeholder="大阪北郵便局 大口窓口"></div>
+      <div class="fg"><label>差出先の電話番号</label>
+        <input type="text" id="jce-ptel" class="fi" value="${esc(c.postTel||'')}" placeholder="06-0000-0000"></div>
+      <div class="xs muted">差出先は顧客側の画面からも変更できます。</div>`,
+    okText:'保存する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  const sel=['1','2','9'].filter(v=>document.getElementById('jce-c'+v)?.checked);
+  c.corps = sel;
+  c.postName = (document.getElementById('jce-pname')?.value||'').trim();
+  c.postTel  = (document.getElementById('jce-ptel')?.value||'').trim();
+  await _jetCustsSave(map);
+  renderJetCustList();
+  _showSaveToast('設定を保存しました');
 }
 
 async function jetCustReissuePin(id){
