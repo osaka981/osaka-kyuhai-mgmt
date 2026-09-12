@@ -1567,6 +1567,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-blu btn-sm" onclick="jetManualOpen()">手入力で便を追加</button>
         </div>
       </div>
+      <!-- ★ 2026/09/12: 計数顧客マスタ（多顧客対応の土台）。
+           顧客ごとに配布URLと暗証番号を発行する。計数アプリはこの一覧を読んで
+           開始画面の顧客選択を作り、顧客用の管理画面はURLの顧客に固定される。 -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>計数を行う顧客と配布URL</div>
+          <button class="btn b-grn btn-sm" onclick="jetCustAdd()">＋ 顧客を追加</button></div>
+        <div style="font-size:10px;color:var(--txt2);margin:0 0 10px;">
+          ここに登録した顧客が、計数アプリの開始画面に並びます。配布URLを顧客に渡すと、その顧客の実績だけを見る画面が開きます。<br>
+          暗証番号は発行時にこの画面で一度だけ表示されます。保存されるのはハッシュだけなので、後から番号を確認することはできません。忘れた場合は再発行してください。<br>
+          顧客側の画面でも暗証番号を変更できます。
+        </div>
+        <div id="jc-cust-list"></div>
+      </div>
+
       <div class="krow" id="jc-kpi"></div>
       <div class="card" style="margin-bottom:10px">
         <div class="ch"><div class="ct"><div class="cbar"></div>便に紐づかない回収資料</div>
@@ -6599,6 +6613,15 @@ function setupRealtimeSync() {
     applyFirebaseData();
     if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
   });
+  // ★ 2026/09/12: 計数顧客マスタ
+  onValue(ref(fbDB, 'nikki/jet_customers'), snap => {
+    if(window._fbWritingGuard && window._fbWritingGuard['jet_customers']) return;
+    try{
+      localStorage.setItem('nikki_jet_customers',
+        JSON.stringify(snap.exists() ? (snap.val()||{}) : {}));
+    }catch(e){}
+    if(typeof renderJetCustList==='function') renderJetCustList();
+  });
   onValue(ref(fbDB, 'nikki/jet_settings'), snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_settings']) return;
     lsSet(LS_KEYS.JETSET, snap.exists() ? snap.val() : {});
@@ -9335,6 +9358,170 @@ function saveJetCust(){
   if(fbDB && ref && set) set(ref(fbDB,'nikki/jet_settings/customerId'), v).then(done).catch(done);
   else done();
 }
+// ══ ★ 2026/09/12: 計数顧客マスタ（nikki/jet_customers） ══
+//   形: { <顧客ID>: { id, name, slug, pinHash, active, createdAt } }
+//   slug は配布URLに使う推測されにくい文字列。暗証番号はハッシュのみ保存する。
+//   ハッシュの塩は計数アプリ側と同じ値にすること（照合できなくなるため）。
+const JET_PIN_SALT = 'osq-jscan-pin-v1';
+const JETCUST_LS   = 'nikki_jet_customers';
+const JSCAN_BASE_URL = 'https://osaka981.github.io/j-scan/';
+
+function _jetCusts(){
+  try{
+    const v = JSON.parse(localStorage.getItem(JETCUST_LS) || '{}');
+    return (v && typeof v === 'object') ? v : {};
+  }catch(e){ return {}; }
+}
+async function _jetPinHash(pin){
+  const b = new TextEncoder().encode(JET_PIN_SALT + '|' + String(pin));
+  const d = await crypto.subtle.digest('SHA-256', b);
+  return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+// 推測されにくい配布用の文字列。紛らわしい文字(0/O/1/l)は除く。
+function _jetSlug(){
+  const cs = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const a = new Uint8Array(14);
+  crypto.getRandomValues(a);
+  return Array.from(a).map(n=>cs[n % cs.length]).join('');
+}
+function _jetPinNew(){
+  // 6桁。先頭0も許すが、同じ数字の繰り返しは引き直す。
+  for(let i=0;i<50;i++){
+    const a = new Uint8Array(6);
+    crypto.getRandomValues(a);
+    const p = Array.from(a).map(n=>String(n%10)).join('');
+    if(!/^(\d)\1{5}$/.test(p)) return p;
+  }
+  return '482row'.replace(/\D/g,'') || '135792';
+}
+async function _jetCustsSave(map){
+  try{ localStorage.setItem(JETCUST_LS, JSON.stringify(map)); }catch(e){}
+  try{
+    if(typeof fbSet==='function') await fbSet('jet_customers', map);
+  }catch(e){ console.error('[jet_customers] 保存失敗', e); }
+}
+function jetCustUrl(c){ return JSCAN_BASE_URL + '?c=' + encodeURIComponent(c.slug||''); }
+
+function renderJetCustList(){
+  const wrap = document.getElementById('jc-cust-list');
+  if(!wrap) return;
+  const map = _jetCusts();
+  const list = Object.values(map);
+  if(!list.length){
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--txt2);padding:6px 0;">'
+      + 'まだ登録がありません。「顧客を追加」から登録してください。</div>';
+    return;
+  }
+  const rows = list.map(c=>{
+    const cu = (D.customers||[]).find(x=>String(x.id)===String(c.id));
+    const nm = c.name || cu?.name || ('顧客ID '+c.id);
+    const url = jetCustUrl(c);
+    return `<tr>
+      <td class="fw7">${esc(nm)}
+        ${c.active===false?'<div class="xs" style="color:var(--red2)">停止中</div>':''}</td>
+      <td class="xs mono" style="word-break:break-all;max-width:320px;">${esc(url)}</td>
+      <td class="xs">${c.pinHash?'発行済':'<span style="color:var(--red2)">未発行</span>'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
+          onclick="jetCustCopyUrl('${esc(String(c.id))}')">URLをコピー</button>
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+          onclick="jetCustReissuePin('${esc(String(c.id))}')">暗証番号を再発行</button>
+        <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+          onclick="jetCustRemove('${esc(String(c.id))}')">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `<div class="tw"><table>
+    <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+async function jetCustAdd(){
+  const map = _jetCusts();
+  const cands = (D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false&&!map[String(c.id)]);
+  if(!cands.length){ showAlert({icon:'⚠️',title:'追加できません',msg:'追加できる顧客がありません'}); return; }
+  const opts = cands.map(c=>`<option value="${esc(String(c.id))}">${esc(c.name)}</option>`).join('');
+  const ok = await showDialog({
+    icon:'➕', title:'計数を行う顧客を追加',
+    bodyHtml:`<div class="fg"><label>顧客</label>
+      <select id="jc-add-cust" class="fi">${opts}</select></div>
+      <div class="xs muted">追加すると配布URLと暗証番号が発行されます。</div>`,
+    okText:'追加する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  const id = document.getElementById('jc-add-cust')?.value;
+  const cu = (D.customers||[]).find(x=>String(x.id)===String(id));
+  if(!cu) return;
+  const pin = _jetPinNew();
+  map[String(cu.id)] = {
+    id: String(cu.id), name: cu.name, slug: _jetSlug(),
+    pinHash: await _jetPinHash(pin), active: true, createdAt: Date.now()
+  };
+  await _jetCustsSave(map);
+  renderJetCustList();
+  await showAlert({icon:'🔑', title:'発行しました',
+    msg: cu.name + '\n\n配布URL:\n' + jetCustUrl(map[String(cu.id)])
+       + '\n\n暗証番号: ' + pin
+       + '\n\nこの番号はこの画面でしか表示されません。顧客へ伝えてから閉じてください。'});
+}
+
+async function jetCustReissuePin(id){
+  const map = _jetCusts();
+  const c = map[String(id)];
+  if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
+  const ok = await showDialog({icon:'🔑', title:'暗証番号の再発行',
+    msg:(c.name||'')+' の暗証番号を再発行しますか？\n\n今の番号は使えなくなります。顧客へ新しい番号を伝える必要があります。',
+    okText:'再発行する', cancelText:'キャンセル'});
+  if(!ok) return;
+  const pin = _jetPinNew();
+  c.pinHash = await _jetPinHash(pin);
+  c.pinUpdatedAt = Date.now();
+  await _jetCustsSave(map);
+  renderJetCustList();
+  await showAlert({icon:'🔑', title:'再発行しました',
+    msg:(c.name||'')+'\n\n新しい暗証番号: '+pin+'\n\nこの番号はこの画面でしか表示されません。'});
+}
+
+function jetCustCopyUrl(id){
+  const c = _jetCusts()[String(id)];
+  if(!c) return;
+  const url = jetCustUrl(c);
+  try{
+    navigator.clipboard.writeText(url);
+    _showSaveToast('配布URLをコピーしました');
+  }catch(e){ showAlert({title:'配布URL', msg:url}); }
+}
+
+async function jetCustRemove(id){
+  const map = _jetCusts();
+  const c = map[String(id)];
+  if(!c) return;
+  const ok = await showDialog({icon:'🗑', title:'計数顧客の削除',
+    msg:(c.name||'')+' を計数顧客から外しますか？\n\n配布したURLは使えなくなります。'
+      + '\n計数済みの実績データは残ります。',
+    okText:'削除する', cancelText:'キャンセル'});
+  if(!ok) return;
+  delete map[String(id)];
+  await _jetCustsSave(map);
+  renderJetCustList();
+  _showSaveToast('計数顧客から外しました');
+}
+
+// 既存の1社運用（jet_settings.customerId）を計数顧客マスタへ移す
+async function _jetCustMigrate(){
+  const map = _jetCusts();
+  if(Object.keys(map).length) return;            // すでに登録済みなら何もしない
+  const cu = _jetCustomer();
+  if(!cu) return;
+  map[String(cu.id)] = {
+    id: String(cu.id), name: cu.name, slug: _jetSlug(),
+    pinHash: null, active: true, createdAt: Date.now(),
+    _note: 'jet_settings から自動移行。暗証番号は未発行。'
+  };
+  await _jetCustsSave(map);
+  console.log('[jet_customers] 既存顧客を移行しました:', cu.name);
+}
+
 function _jetRowsForMonth(mon){
   const jetAll = lsGet(LS_KEYS.JET, null) || {};
   const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
@@ -9481,6 +9668,8 @@ function renderJetCmp(){
   const sel=$('jc-cust'); const cur=_jetCustomer();
   sel.innerHTML='<option value="">（顧客を選択）</option>'+(D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false)
     .map(c=>`<option value="${esc(String(c.id))}"${cur&&String(cur.id)===String(c.id)?' selected':''}>${esc(c.name)}</option>`).join('');
+  // ★ 2026/09/12: 計数顧客マスタ
+  _jetCustMigrate().then(()=>renderJetCustList());
   loadNoShiftPhotos(mon);
   // ★ 2026/09/07: 写真の有無を先に取得(枚数のみ。画像は開いたときに読む)
   loadJetPhotoCounts(mon).then(()=>{ try{ _jetRefreshPhotoBadges(); }catch(e){} });
@@ -37798,7 +37987,7 @@ const RESTORE_KEYS = [
   // 品目定義（★ 第2〜4段階で追加）
   'item_defs','item_groups',
   // バーコード計数
-  'jet_scan','jet_scan_nos','jet_adjust','jet_settings',
+  'jet_scan','jet_scan_nos','jet_adjust','jet_settings','jet_customers',
   // 精算・支払
   'payments','salary_paid','gas_records','monthly_confirmations','cmp_state',
   // シフト・調査
