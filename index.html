@@ -6486,8 +6486,17 @@ function applyFirebaseData() {
       const jset = lsGet(LS_KEYS.JETSET, {}) || {};
       let cust = jset.customerId ? (D.customers||[]).find(c=>String(c.id)===String(jset.customerId)) : null;
       if(!cust) cust = (D.customers||[]).find(c=>/ジェットグループ/.test(c.name||'')) || null;
-      Object.values(jetAll).forEach(byKey=>{
-        Object.values(byKey||{}).forEach(j=>{
+      // ★ 2026/09/12: 便が顧客を持つようになったので、それを優先する
+      const _custOf = j => {
+        if(j && j.custId){
+          const c = (D.customers||[]).find(x=>String(x.id)===String(j.custId));
+          if(c) return c;
+        }
+        return cust;
+      };
+      // ★ 2026/09/12: 顧客ごとの階層と旧形式の両方に対応（_jetWalk）
+      _jetWalk(jetAll, function(j){
+        {
           if(!j || !j.key || !j.closed) return;
           const a  = adj[j.key] || {};
           const has = v => v!==null && v!==undefined && v!=='';
@@ -6503,7 +6512,7 @@ function applyFirebaseData() {
             id: 'jet_'+j.key, date: j.date,
             office: st?.office || '',
             staff:  carrierName,
-            customerId: cust?.id || 0, customerName: cust?.name || '',
+            customerId: _custOf(j)?.id || 0, customerName: _custOf(j)?.name || '',
             region: '',
             items: { 'ゆうパケット_通常': c3, 'ゆうパケット_7cm以上': c5 },
             route: null, charter: null,
@@ -6513,7 +6522,7 @@ function applyFirebaseData() {
                   (j.registered===false?'（未登録ドライバー）':''),
             _fromJet: true, _jet: j, _jetAdj: a,
           });
-        });
+        }
       });
     }
     D.pickup = [...(D.pickup||[]).filter(r => !r._fromJet), ...jetRows];
@@ -9340,6 +9349,23 @@ function renderDel() {
 // ══════════════════════════════════════════
 // 計数照合（バーコード計数アプリ nikki/jet_scan）
 // ══════════════════════════════════════════
+// ★ 2026/09/12: 多顧客対応で計数データの階層が変わった。
+//   新: jet_scan/<顧客ID>/<日付>/<便キー>
+//   旧: jet_scan/<日付>/<便キー>          ← ジェット1社時代のデータ
+//   両方が混在しうるので、深さに依存せず便のレコードを拾う走査を使う。
+//   レコードは key を持つオブジェクトで見分ける。
+function _jetIsRec(v){
+  return !!(v && typeof v==='object' && !Array.isArray(v) && v.key!==undefined);
+}
+function _jetWalk(node, cb, path){
+  path = path || [];
+  if(!node || typeof node!=='object') return;
+  Object.keys(node).forEach(k=>{
+    const v = node[k];
+    if(_jetIsRec(v)) cb(v, path.concat(k));
+    else if(v && typeof v==='object') _jetWalk(v, cb, path.concat(k));
+  });
+}
 function _jetSettings(){ return lsGet(LS_KEYS.JETSET, {}) || {}; }
 function _jetCustomer(){
   const js=_jetSettings();
@@ -9526,11 +9552,12 @@ function _jetRowsForMonth(mon){
   const jetAll = lsGet(LS_KEYS.JET, null) || {};
   const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
   const rows=[];
-  Object.values(jetAll).forEach(byKey=>Object.values(byKey||{}).forEach(j=>{
+  // ★ 2026/09/12: 顧客ごとの階層と旧形式の両方に対応
+  _jetWalk(jetAll, (j)=>{
     if(!j||!j.key) return;
     if(mon && !(j.date||'').startsWith(mon)) return;
     rows.push({ j, a: adj[j.key]||{} });
-  }));
+  });
   rows.sort((p,q)=> (p.j.date+String(p.j.startedAt||0)).localeCompare(q.j.date+String(q.j.startedAt||0)));
   return rows;
 }
@@ -9792,15 +9819,28 @@ async function expJetMonthlyCSV(btn){
   if(btn){ btn.disabled=true; btn.textContent='取得中'; }
   try{
     const base=FB_CONFIG.databaseURL;
-    const r=await fetch(fbRest('/nikki/jet_scan.json?shallow=true'));
-    const dates=Object.keys((await r.json())||{}).filter(d=>d.startsWith(mon)).sort();
+    // ★ 2026/09/12: 顧客ごとの階層になったので、対象顧客の配下から日付を拾う。
+    //   旧形式（直下が日付）のデータも読めるようにしておく。
+    const _cu=_jetCustomer();
+    const _cid=_cu?String(_cu.id):'';
+    const _top=Object.keys((await (await fetch(fbRest('/nikki/jet_scan.json?shallow=true'))).json())||{});
+    const _isDate=k=>/^\d{4}-\d{2}-\d{2}$/.test(k);
+    let _prefix='';
+    let dates=[];
+    if(_cid && _top.indexOf(_cid)>=0){
+      _prefix=_cid+'/';
+      const r2=await fetch(fbRest('/nikki/jet_scan/'+encodeURIComponent(_cid)+'.json?shallow=true'));
+      dates=Object.keys((await r2.json())||{}).filter(d=>_isDate(d)&&d.startsWith(mon)).sort();
+    } else {
+      dates=_top.filter(d=>_isDate(d)&&d.startsWith(mon)).sort();   // 旧形式
+    }
     if(!dates.length){ alert('この月の計数データがありません'); return; }
     let out='\uFEFF日付,便,計数ドライバー,ID,運搬ドライバー,企業,サイズcm,お問い合わせ番号,読取時刻\n';
     let total=0;
     const hms=t=>{ if(!t) return ''; const d=new Date(t); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0'); };
     for(const date of dates){
       const [sr,nr]=await Promise.all([
-        fetch(fbRest('/nikki/jet_scan/'+date+'.json')),
+        fetch(fbRest('/nikki/jet_scan/'+_prefix+date+'.json')),
         fetch(fbRest('/nikki/jet_scan_nos/'+date+'.json'))
       ]);
       const sum=(await sr.json())||{}, nos=(await nr.json())||{};
@@ -38808,10 +38848,18 @@ async function jetManualSave(editKey){
   if(!drvName){ showAlert({msg:'計数したドライバーを選んでください'}); return; }
   const all=lsGet(LS_KEYS.JET,null)||{};
   const key=editKey||('manual_'+Date.now().toString(36));
-  if(editKey){ const f=_jetFind(editKey); if(f&&f.date!==date){ delete f.all[f.date][f.k]; Object.assign(all,f.all); } }
+  // ★ 2026/09/12: 顧客ごとの階層に書く。顧客は計数照合で選んでいるものを使う。
+  const _cu=_jetCustomer();
+  const _cid=_cu?String(_cu.id):'_legacy';
+  if(editKey){
+    const f=_jetFind(editKey);
+    if(f){ _jetSetAt(f.all, f.path, null); Object.assign(all, f.all); }
+  }
   const now=Date.now();
-  all[date]=all[date]||{};
-  all[date][key]={
+  if(!all[_cid] || typeof all[_cid]!=='object') all[_cid]={};
+  all[_cid][date]=all[_cid][date]||{};
+  all[_cid][date][key]={
+    custId:_cid, custName:_cu?.name||'',
     key:key, date:date, device:'mgmt',
     bin:($('jm-bin')?.value||'').trim()||'手入力',
     driverId:drvId, driverName:drvName, tel:'',
@@ -38828,18 +38876,30 @@ async function jetManualSave(editKey){
   _showSaveToast(editKey?'手入力の便を更新しました':'手入力で1便を追加しました');
 }
 
-// 計数データは {日付: {便キー: {...}}} の入れ子。該当の1件を探す。
+// ★ 2026/09/12: 計数データは顧客ごとの階層になった（旧形式も残る）。
+//   深さに依存せず探し、書き込み位置を path（キーの配列）で返す。
 function _jetFind(key){
   const all = lsGet(LS_KEYS.JET, null) || {};
-  for(const date of Object.keys(all)){
-    const byKey = all[date] || {};
-    for(const k of Object.keys(byKey)){
-      if(String(byKey[k] && byKey[k].key) === String(key) || String(k) === String(key)){
-        return {all, date, k, rec: byKey[k]};
-      }
+  let found = null;
+  _jetWalk(all, (rec, path)=>{
+    if(found) return;
+    const last = path[path.length-1];
+    if(String(rec.key)===String(key) || String(last)===String(key)){
+      found = { all, path, k:last, date:rec.date, rec };
     }
+  });
+  return found;
+}
+// path の位置に書き戻す（途中の階層が無ければ作る）
+function _jetSetAt(all, path, value){
+  let node = all;
+  for(let i=0;i<path.length-1;i++){
+    if(!node[path[i]] || typeof node[path[i]]!=='object') node[path[i]] = {};
+    node = node[path[i]];
   }
-  return null;
+  if(value === null) delete node[path[path.length-1]];
+  else node[path[path.length-1]] = value;
+  return all;
 }
 
 async function _jetSave(all){
