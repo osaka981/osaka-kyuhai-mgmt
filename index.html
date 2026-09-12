@@ -1582,7 +1582,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
            開始画面の顧客選択を作り、顧客用の管理画面はURLの顧客に固定される。 -->
       <div class="card mb12">
         <div class="ch"><div class="ct"><div class="cbar"></div>計数を行う顧客と配布URL</div>
-          <button class="btn b-grn btn-sm" onclick="jetCustAdd()">＋ 顧客を追加</button></div>
+          <div class="fla gap6">
+            <!-- ★ 2026/09/12: 多顧客化より前の計数データを顧客の配下へ移す -->
+            <button class="btn b-gh btn-sm" onclick="jetMigrateLegacy()">旧データを顧客配下へ移行</button>
+            <button class="btn b-grn btn-sm" onclick="jetCustAdd()">＋ 顧客を追加</button>
+          </div></div>
         <div style="font-size:10px;color:var(--txt2);margin:0 0 10px;">
           ここに登録した顧客が、計数アプリの開始画面に並びます。配布URLを顧客に渡すと、その顧客の実績だけを見る画面が開きます。<br>
           暗証番号は発行時にこの画面で一度だけ表示されます。保存されるのはハッシュだけなので、後から番号を確認することはできません。忘れた場合は再発行してください。<br>
@@ -9522,6 +9526,66 @@ async function jetCustAdd(){
 // ★ 2026/09/12: 担当企業と差出先の設定。
 //   計数する企業を限定すると、その企業のドライバーにだけこの顧客名が見える。
 //   差出先（郵便局の大口窓口）は顧客ごとに異なるため顧客単位で持つ。
+/* ★ 2026/09/12: 多顧客化より前の計数データは jet_scan/<日付>/<便キー> にある。
+   顧客アカウントはルールで顧客配下しか読めないため、このままでは顧客が
+   過去分を見られない。旧形式のデータを jet_scan/<顧客ID>/<日付>/<便キー> へ移す。
+   番号明細(jet_scan_nos)も同様に移す。
+   移行先の顧客は、計数照合で選んでいる顧客（＝旧データの計上先）とする。 */
+async function jetMigrateLegacy(){
+  const cu=_jetCustomer();
+  if(!cu){ showAlert({icon:'⚠️',title:'移行できません',msg:'計上先の顧客が未設定です。上の顧客の選択で指定してください。'}); return; }
+  const cid=String(cu.id);
+  const all=lsGet(LS_KEYS.JET,null)||{};
+  // 直下が日付になっているもの＝旧形式
+  const isDate=k=>/^\d{4}-\d{2}-\d{2}$/.test(k);
+  const legacyDates=Object.keys(all).filter(isDate);
+  if(!legacyDates.length){ showAlert({icon:'ℹ️',title:'対象がありません',msg:'旧形式のデータは残っていません。'}); return; }
+  let binN=0;
+  legacyDates.forEach(d=>{ binN+=Object.keys(all[d]||{}).length; });
+
+  const ok=await showDialog({icon:'📦', title:'旧データの移行',
+    msg:'旧形式の計数データを「'+(cu.name||'')+'」の配下へ移します。\n\n'
+      + '対象: '+legacyDates.length+'日分 / '+binN+'便\n'
+      + '期間: '+legacyDates.sort()[0]+' 〜 '+legacyDates[legacyDates.length-1]+'\n\n'
+      + '移行後は顧客用ページからも過去分が見られるようになります。\n'
+      + '番号明細も一緒に移します。',
+    okText:'移行する', cancelText:'キャンセル'});
+  if(!ok) return;
+
+  const { ref, get, set } = window._fbImports || {};
+  if(!fbDB || !ref || !set){ showAlert({msg:'オフラインのため移行できません'}); return; }
+
+  let moved=0, nosMoved=0, failed=0;
+  for(const d of legacyDates){
+    const byKey=all[d]||{};
+    for(const k of Object.keys(byKey)){
+      const rec=byKey[k];
+      if(!rec) continue;
+      rec.custId=cid; rec.custName=cu.name||'';
+      if(!all[cid] || typeof all[cid]!=='object') all[cid]={};
+      all[cid][d]=all[cid][d]||{};
+      all[cid][d][k]=rec;
+      // 番号明細を移す
+      try{
+        const snap=await get(ref(fbDB,'nikki/jet_scan_nos/'+d+'/'+k));
+        if(snap.exists()){
+          await set(ref(fbDB,'nikki/jet_scan_nos/'+cid+'/'+d+'/'+k), snap.val());
+          await set(ref(fbDB,'nikki/jet_scan_nos/'+d+'/'+k), null);
+          nosMoved++;
+        }
+      }catch(e){ failed++; console.error('[jetMigrateLegacy] 番号明細', d, k, e); }
+      moved++;
+    }
+    delete all[d];
+  }
+  await _jetSave(all);
+  applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
+  await showAlert({icon:'📦', title:'移行しました',
+    msg:'便 '+moved+'件を「'+(cu.name||'')+'」の配下へ移しました。\n'
+      + '番号明細 '+nosMoved+'件も移しました。'
+      + (failed?('\n\n'+failed+'件で番号明細の移動に失敗しました。通信を確認してもう一度実行してください。'):'')});
+}
+
 async function jetCustEdit(id){
   const map=_jetCusts(); const c=map[String(id)];
   if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
@@ -9624,11 +9688,22 @@ async function jetCustIssueAccount(id){
       }
       throw e;
     }
-    try{ await I.signOut(auth2); }catch(e){}
-
-    // 権限表に記録する（このノードは社内だけが書ける想定）
+    // ★ 2026/09/12: 権限表への書き込みが失敗すると、アカウントだけが残って
+    //   「すでに発行済み」なのにパスワード不明という状態になる。
+    //   書き込みに失敗したら、作ったアカウントを消して元の状態に戻す。
     const { ref, set } = I;
-    await set(ref(fbDB, 'nikki/_acl/cust/' + uid), String(c.id));
+    try{
+      await set(ref(fbDB, 'nikki/_acl/cust/' + uid), String(c.id));
+    }catch(eAcl){
+      try{ if(auth2.currentUser) await auth2.currentUser.delete(); }catch(eDel){}
+      try{ await I.signOut(auth2); }catch(e){}
+      showAlert({icon:'⚠️', title:'発行できませんでした',
+        msg:'権限表に登録できなかったため、作成したアカウントを取り消しました。\n\n'
+          + (eAcl && eAcl.message ? eAcl.message : '')
+          + '\n\nFirebaseのルールで nikki/_acl/cust への書き込みが許可されているか確認してください。'});
+      return;
+    }
+    try{ await I.signOut(auth2); }catch(e){}
 
     c.authUid = uid;
     c.authEmail = jetCustEmail(c);
