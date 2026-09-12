@@ -6507,6 +6507,11 @@ function applyFirebaseData() {
           const has = v => v!==null && v!==undefined && v!=='';
           const c3 = has(a.c3) ? Number(a.c3) : (j.c3||0);
           const c5 = has(a.c5) ? Number(a.c5) : (j.c5||0);
+          // ★ 2026/09/12: 0個の便は集荷日報に計上しない。
+          //   集荷に行ったが荷物が無かった記録で、件数も金額も生まないため、
+          //   明細一覧に0個の行が並ぶと実績の件数が水増しになる。
+          //   引受数の訂正で数量が入った便は計上する（c3/c5 は訂正後の値）。
+          if((c3 + c5) <= 0) return;
           // ★ 2026/09/07: 局へ運んだドライバーを支払対象とする（計数した人と異なる場合がある）
           // ★ 2026/09/12: 計数照合で運搬者を訂正できるようにした。訂正(jet_adjust)が
           //   あればそちらを優先する。計数アプリが書いたスキャンデータは書き換えない。
@@ -9934,8 +9939,15 @@ function renderJetCmp(){
   $('jc-daycard').style.display=showDetail?'none':'';
   $('jc-detailcard').style.display=showDetail?'':'none';
   if(showDetail) $('jc-detail-title').textContent=_jcDay+' の便の明細';
+  // ★ 2026/09/12: 0個の便は便数に数えない（集荷日報の計上からも除いている）。
+  //   見落とさないよう別枠で件数を出す。
+  const _zeroN = rowsAll.filter(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    return (c3+c5)<=0;
+  }).length;
   $('jc-kpi').innerHTML=[
-    ['便数',rowsAll.length],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],['差異あり',diffN],['未締め',open]
+    ['便数',rowsAll.length-_zeroN],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],
+    ['差異あり',diffN],['0個の便',_zeroN],['未締め',open]
   ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
 }
 async function saveJetAdj(key){
