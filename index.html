@@ -2526,12 +2526,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;">
           追加した品目は「顧客ごとに使うかを選ぶ品目」になります。顧客編集画面の集荷単価タブでチェックした顧客にだけ、単価欄と日報の数量欄が出ます。<br>
-          品目名は日報データのキーになるため、追加後は変更できません（表示名だけ変更できます）。
+          品目名は日報データのキーになるため、追加後は変更できません（表示名だけ変更できます）。<br>
+          単価はここでは持ちません。顧客への請求単価は顧客編集画面、委託会社への支払単価は委託会社編集画面で設定します。
         </div>
         <div id="item-def-list" style="margin-bottom:12px;"></div>
         <div style="border-top:1px solid var(--brd);padding-top:10px;">
           <div class="xs muted fw7 mb8">品目を追加</div>
-          <div style="display:grid;grid-template-columns:2fr 1.2fr 1fr 1fr auto;gap:6px;align-items:flex-end;">
+          <div style="display:grid;grid-template-columns:2fr 1.2fr 1fr auto;gap:6px;align-items:flex-end;">
             <div class="fg" style="margin:0;"><label style="font-size:10px;">品目名</label>
               <input type="text" id="idf-name" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="例：ゆうパック_200"></div>
             <div class="fg" style="margin:0;"><label style="font-size:10px;">区分</label>
@@ -2542,8 +2543,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <select id="idf-unit" class="fi" style="font-size:12px;padding:4px 6px;">
                 <option>個</option><option>件</option>
               </select></div>
-            <div class="fg" style="margin:0;"><label style="font-size:10px;">既定単価（円）</label>
-              <input type="number" id="idf-price" class="fi" style="font-size:12px;padding:4px 6px;" placeholder="0"></div>
             <button class="btn b-blu btn-sm" onclick="addItemDef()">＋ 追加</button>
           </div>
         </div>
@@ -6528,12 +6527,6 @@ function applyFirebaseData() {
   try{ normalizeReportDates(); }catch(e){ console.warn('日付正規化に失敗:', e); }
 }
 
-function buildDefaultPrices() {
-  const p = {};
-  Object.keys(ITEMS).forEach(k => p[k] = ITEMS[k].defPrice);
-  return p;
-}
-
 // リアルタイム購読（日報アプリが提出したらすぐ反映）
 function setupRealtimeSync() {
   if (!fbDB) return;
@@ -7800,32 +7793,32 @@ const _origSaveCust   = typeof saveCust   !== 'undefined' ? saveCust   : null;
 
 // ─────────────────────────────────────────────
 // 品目マスタ（日報アプリ UNIT_PRICE_MASTER と完全一致）
-// masterKey → { label, cls, defPrice, unit, group }
+// masterKey → { label, cls, unit, group }
 // ─────────────────────────────────────────────
 // ★ 2026/09/12: 品目の定義はここだけ。以下の派生表は必ずこの ITEMS から自動生成する。
 //   ck = 顧客単価(colPrices)のキー。短縮ラベル(shortLabel)は単価画面などの狭い欄で使う。
 //   品目を増やすときはこの表に1行足すだけでよい（派生表は触らない）。
 const BASE_ITEMS = {
-  'ゆうパック_60':        { label:'60サイズ',      cls:'c60',  defPrice:150,  unit:'個', group:'ゆうパック',   modalId:'p-y60',  cuId:'cu-y60',  ck:'p60',  shortLabel:'YP60',    longLabel:'ゆうパック60'      },
-  'ゆうパック_80':        { label:'80サイズ',      cls:'c80',  defPrice:180,  unit:'個', group:'ゆうパック',   modalId:'p-y80',  cuId:'cu-y80',  ck:'p80',  shortLabel:'YP80',    longLabel:'ゆうパック80'      },
-  'ゆうパック_100':       { label:'100サイズ',     cls:'c100', defPrice:220,  unit:'個', group:'ゆうパック',   modalId:'p-y100', cuId:'cu-y100', ck:'p100', shortLabel:'YP100',   longLabel:'ゆうパック100'     },
-  'ゆうパック_120':       { label:'120サイズ',     cls:'c120', defPrice:260,  unit:'個', group:'ゆうパック',   modalId:'p-y120', cuId:'cu-y120', ck:'p120', shortLabel:'YP120',   longLabel:'ゆうパック120'     },
-  'ゆうパック_140':       { label:'140サイズ',     cls:'c140', defPrice:300,  unit:'個', group:'ゆうパック',   modalId:'p-y140', cuId:'cu-y140', ck:'p140', shortLabel:'YP140',   longLabel:'ゆうパック140'     },
-  'ゆうパック_160':       { label:'160サイズ',     cls:'c160', defPrice:350,  unit:'個', group:'ゆうパック',   modalId:'p-y160', cuId:'cu-y160', ck:'p160', shortLabel:'YP160',   longLabel:'ゆうパック160'     },
-  'ゆうパック_170':       { label:'170サイズ',     cls:'c170', defPrice:400,  unit:'個', group:'ゆうパック',   modalId:'p-y170', cuId:'cu-y170', ck:'p170', shortLabel:'YP170',   longLabel:'ゆうパック170',    optional:true },
-  'ゆうパケット_通常':    { label:'PKT 通常',      cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk1',  cuId:'cu-pk1',  ck:'pk1',  shortLabel:'PKT通常', longLabel:'ゆうパケット(通常)' },
-  'ゆうパケット_7cm以上': { label:'PKT 5cm〜',    cls:'cpk2', defPrice:100,  unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2',  ck:'pk2',  shortLabel:'PKT5cm〜',longLabel:'ゆうパケット(5cm以上)' },
-  'ゆうパケット_1cm':     { label:'PKT 1cm',     cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk1c', cuId:'cu-pk1c', ck:'pk1c', shortLabel:'PKT1cm', longLabel:'ゆうパケット(1cm)', optional:true },
-  'ゆうパケット_2cm':     { label:'PKT 2cm',     cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk2c', cuId:'cu-pk2c', ck:'pk2c', shortLabel:'PKT2cm', longLabel:'ゆうパケット(2cm)', optional:true },
-  'ゆうパケット_3cm':     { label:'PKT 3cm',     cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk3c', cuId:'cu-pk3c', ck:'pk3c', shortLabel:'PKT3cm', longLabel:'ゆうパケット(3cm)', optional:true },
-  'ゆうパケット_4cm':     { label:'PKT 4cm',     cls:'cpk2', defPrice:100,   unit:'個', group:'ゆうパケット', modalId:'p-pk4c', cuId:'cu-pk4c', ck:'pk4c', shortLabel:'PKT4cm', longLabel:'ゆうパケット(4cm)', optional:true },
-  'ゆうパケット_5cm':     { label:'PKT 5cm',     cls:'cpk2', defPrice:100,   unit:'個', group:'ゆうパケット', modalId:'p-pk5c', cuId:'cu-pk5c', ck:'pk5c', shortLabel:'PKT5cm', longLabel:'ゆうパケット(5cm)', optional:true },
-  'ゆうパケット_6cm':     { label:'PKT 6cm',     cls:'cpk2', defPrice:100,   unit:'個', group:'ゆうパケット', modalId:'p-pk6c', cuId:'cu-pk6c', ck:'pk6c', shortLabel:'PKT6cm', longLabel:'ゆうパケット(6cm)', optional:true },
-  'ゆうパケット_7cm':     { label:'PKT 7cm',     cls:'cpk2', defPrice:100,   unit:'個', group:'ゆうパケット', modalId:'p-pk7c', cuId:'cu-pk7c', ck:'pk7c', shortLabel:'PKT7cm', longLabel:'ゆうパケット(7cm)', optional:true },
-  'クリックポスト':       { label:'クリックポスト', cls:'ccp',  defPrice:60,   unit:'個', group:'その他',       modalId:'p-cp',   cuId:'cu-cp',   ck:'cp',   shortLabel:'CP',      longLabel:'クリックポスト'     },
-  'ケース':               { label:'ケース',         cls:'cke',  defPrice:120,  unit:'個', group:'その他',       modalId:'p-ke',   cuId:'cu-ke',   ck:'ke',   shortLabel:'ケース',  longLabel:'ケース'             },
-  '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  defPrice:50,   unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te',   ck:'te',   shortLabel:'定形外',  longLabel:'定形外(ゆうメール)' },
-  'チャーター':           { label:'チャーター',     cls:'cch',  defPrice:5000, unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch',   ck:null,   shortLabel:'チャーター', longLabel:'チャーター'      },
+  'ゆうパック_60':        { label:'60サイズ',      cls:'c60',  unit:'個', group:'ゆうパック',   modalId:'p-y60',  cuId:'cu-y60',  ck:'p60',  shortLabel:'YP60',    longLabel:'ゆうパック60'      },
+  'ゆうパック_80':        { label:'80サイズ',      cls:'c80',  unit:'個', group:'ゆうパック',   modalId:'p-y80',  cuId:'cu-y80',  ck:'p80',  shortLabel:'YP80',    longLabel:'ゆうパック80'      },
+  'ゆうパック_100':       { label:'100サイズ',     cls:'c100', unit:'個', group:'ゆうパック',   modalId:'p-y100', cuId:'cu-y100', ck:'p100', shortLabel:'YP100',   longLabel:'ゆうパック100'     },
+  'ゆうパック_120':       { label:'120サイズ',     cls:'c120', unit:'個', group:'ゆうパック',   modalId:'p-y120', cuId:'cu-y120', ck:'p120', shortLabel:'YP120',   longLabel:'ゆうパック120'     },
+  'ゆうパック_140':       { label:'140サイズ',     cls:'c140', unit:'個', group:'ゆうパック',   modalId:'p-y140', cuId:'cu-y140', ck:'p140', shortLabel:'YP140',   longLabel:'ゆうパック140'     },
+  'ゆうパック_160':       { label:'160サイズ',     cls:'c160', unit:'個', group:'ゆうパック',   modalId:'p-y160', cuId:'cu-y160', ck:'p160', shortLabel:'YP160',   longLabel:'ゆうパック160'     },
+  'ゆうパック_170':       { label:'170サイズ',     cls:'c170', unit:'個', group:'ゆうパック',   modalId:'p-y170', cuId:'cu-y170', ck:'p170', shortLabel:'YP170',   longLabel:'ゆうパック170',    optional:true },
+  'ゆうパケット_通常':    { label:'PKT 通常',      cls:'cpk1', unit:'個', group:'ゆうパケット', modalId:'p-pk1',  cuId:'cu-pk1',  ck:'pk1',  shortLabel:'PKT通常', longLabel:'ゆうパケット(通常)' },
+  'ゆうパケット_7cm以上': { label:'PKT 5cm〜',    cls:'cpk2', unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2',  ck:'pk2',  shortLabel:'PKT5cm〜',longLabel:'ゆうパケット(5cm以上)' },
+  'ゆうパケット_1cm':     { label:'PKT 1cm',     cls:'cpk1', unit:'個', group:'ゆうパケット', modalId:'p-pk1c', cuId:'cu-pk1c', ck:'pk1c', shortLabel:'PKT1cm', longLabel:'ゆうパケット(1cm)', optional:true },
+  'ゆうパケット_2cm':     { label:'PKT 2cm',     cls:'cpk1', unit:'個', group:'ゆうパケット', modalId:'p-pk2c', cuId:'cu-pk2c', ck:'pk2c', shortLabel:'PKT2cm', longLabel:'ゆうパケット(2cm)', optional:true },
+  'ゆうパケット_3cm':     { label:'PKT 3cm',     cls:'cpk1', unit:'個', group:'ゆうパケット', modalId:'p-pk3c', cuId:'cu-pk3c', ck:'pk3c', shortLabel:'PKT3cm', longLabel:'ゆうパケット(3cm)', optional:true },
+  'ゆうパケット_4cm':     { label:'PKT 4cm',     cls:'cpk2', unit:'個', group:'ゆうパケット', modalId:'p-pk4c', cuId:'cu-pk4c', ck:'pk4c', shortLabel:'PKT4cm', longLabel:'ゆうパケット(4cm)', optional:true },
+  'ゆうパケット_5cm':     { label:'PKT 5cm',     cls:'cpk2', unit:'個', group:'ゆうパケット', modalId:'p-pk5c', cuId:'cu-pk5c', ck:'pk5c', shortLabel:'PKT5cm', longLabel:'ゆうパケット(5cm)', optional:true },
+  'ゆうパケット_6cm':     { label:'PKT 6cm',     cls:'cpk2', unit:'個', group:'ゆうパケット', modalId:'p-pk6c', cuId:'cu-pk6c', ck:'pk6c', shortLabel:'PKT6cm', longLabel:'ゆうパケット(6cm)', optional:true },
+  'ゆうパケット_7cm':     { label:'PKT 7cm',     cls:'cpk2', unit:'個', group:'ゆうパケット', modalId:'p-pk7c', cuId:'cu-pk7c', ck:'pk7c', shortLabel:'PKT7cm', longLabel:'ゆうパケット(7cm)', optional:true },
+  'クリックポスト':       { label:'クリックポスト', cls:'ccp',  unit:'個', group:'その他',       modalId:'p-cp',   cuId:'cu-cp',   ck:'cp',   shortLabel:'CP',      longLabel:'クリックポスト'     },
+  'ケース':               { label:'ケース',         cls:'cke',  unit:'個', group:'その他',       modalId:'p-ke',   cuId:'cu-ke',   ck:'ke',   shortLabel:'ケース',  longLabel:'ケース'             },
+  '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te',   ck:'te',   shortLabel:'定形外',  longLabel:'定形外(ゆうメール)' },
+  'チャーター':           { label:'チャーター',     cls:'cch',  unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch',   ck:null,   shortLabel:'チャーター', longLabel:'チャーター'      },
 };
 // ★ 2026/09/12(第4段階): 画面から追加した品目。BASE_ITEMS に重ねて ITEMS を作る。
 //   localStorage 'nikki_item_defs' と Firebase nikki/item_defs に保存し、端末間で共有する。
@@ -7908,7 +7901,7 @@ function otherTaxFields(){
 }
 
 // ══ ★ 2026/09/12(第4段階): 画面から追加する品目の定義 ══
-//   保存形: [{key, label, group, unit, defPrice, ck}]
+//   保存形: [{key, label, group, unit, ck}]
 //   key は日報データの品目キーそのものなので、作成後は変更しない（表示名だけ変えられる）。
 //   追加品目は必ず optional 扱い＝顧客ごとに使うかを選ぶ。全顧客の入力欄が
 //   際限なく増えるのを避けるため、既定品目には昇格させない。
@@ -7928,7 +7921,6 @@ function applyUserItemDefs(defs){
     USER_ITEMS[d.key] = {
       label:      label,
       cls:        'cusr',
-      defPrice:   Number(d.defPrice)||0,
       unit:       d.unit==='件' ? '件' : '個',
       group:      d.group || 'その他',
       modalId:    'p-'+d.ck,
@@ -8002,7 +7994,6 @@ function renderItemDefList(){
       <td class="fw7 ${it.cls||''}">${esc(it.label||'')}</td>
       <td class="xs muted">${esc(it.group||'')}</td>
       <td class="xs muted">${esc(it.unit||'')}</td>
-      <td class="tr mono xs">${it.defPrice?('¥'+it.defPrice):'-'}</td>
       <td class="xs">${it.optional?'顧客ごと':'全顧客'}</td>
       <td class="xs">${note}</td>
       <td style="white-space:nowrap;">${act}</td>
@@ -8011,7 +8002,7 @@ function renderItemDefList(){
   wrap.innerHTML = `<div class="tw"><table>
     <thead><tr>
       <th></th><th>品目キー</th><th>表示名</th><th>区分</th><th>単位</th>
-      <th class="tr">既定単価</th><th>表示範囲</th><th>使用状況</th><th></th>
+      <th>表示範囲</th><th>使用状況</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody></table></div>
     <div style="font-size:9px;color:var(--txt2);margin-top:5px;">
@@ -8029,7 +8020,6 @@ function addItemDef(){
   const name  = ($('idf-name')?.value||'').trim();
   const group = $('idf-group')?.value||'その他';
   const unit  = $('idf-unit')?.value||'個';
-  const price = parseInt($('idf-price')?.value)||0;
   if(!name){ showAlert({icon:'⚠️', title:'入力不足', msg:'品目名を入力してください'}); return; }
   // Firebase のキーに使えない文字と、データの取り違えを防ぐための検査
   if(/[.#$/\[\]]/.test(name)){
@@ -8041,10 +8031,9 @@ function addItemDef(){
   const defs = getUserItemDefs();
   const ck = _nextItemCk(defs);
   if(!ck){ showAlert({icon:'⚠️', title:'追加できません', msg:'追加品目の上限に達しました'}); return; }
-  defs.push({ key:name, label:name, group, unit, defPrice:price, ck });
+  defs.push({ key:name, label:name, group, unit, ck });
   saveUserItemDefs(defs);
   if($('idf-name')) $('idf-name').value='';
-  if($('idf-price')) $('idf-price').value='';
   renderItemDefList();
   _showSaveToast('品目「'+name+'」を追加しました');
 }
@@ -10914,7 +10903,8 @@ function fmtUnitPrice(v){
 // ★ 2026/08/28: 単価が未登録の顧客に既定単価(60サイズ150円など)を当てていたため、
 //   車建て(日額)で個建て単価を持たない顧客にも数量×既定単価が請求されていた。
 //   契約していない単価を勝手に当てるのは誤請求に直結するので、未登録は0円とする。
-//   既定単価は「新規登録時の初期値」としてのみ使う(buildDefaultPrices)。
+// ★ 2026/09/12: 上記の経緯から品目マスタの既定単価そのものを廃止した。
+//   単価は顧客ごと(colPrices)・委託会社ごと(prices.col)にのみ持たせる。
 function getCustPrice(cu, k){
   if(!cu) return 0;
   // 新形式 colPrices
