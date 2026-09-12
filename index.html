@@ -8937,8 +8937,13 @@ function _findMissingPriceDrivers(){
     const cp = st.fixedPrices?.col || {};
     const puSums = {};
     pu.forEach(r => IK.forEach(k => { puSums[k] = (puSums[k]||0) + (iq(r,k)||0); }));
+    // ★ 2026/09/12: fixedPrices.col は単価キー(ck: p60/pk1/cp...)で保存されているが、
+    //   ここは品目キー(masterKey: 'ゆうパック_60'...)で引いていたため常に未設定扱いだった。
+    //   IK_COL_MAP で ck に変換して引く。税区分も同じく ck で保存されている。
     Object.entries(puSums).forEach(([k, q]) => {
-      if(q > 0 && !(Number(cp[k]) > 0)){
+      const ck = IK_COL_MAP[k];
+      const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
+      if(q > 0 && !(up > 0)){
         missing.push(`${ITEMS[k]?.label||k}(${q}個)`);
       }
     });
@@ -13895,11 +13900,16 @@ function _calcHourlyPay(st, monStr){
   const pu = (D.pickup||[]).filter(r=>r.staff===st.name && (r.date||'').startsWith(monStr));
   const puSum = {};
   pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+    // ★ 2026/09/12: fixedPrices.col は単価キー(ck: p60/pk1/cp...)で保存されているが、
+    //   ここは品目キー(masterKey: 'ゆうパック_60'...)で引いていたため常に未設定扱いだった。
+    //   IK_COL_MAP で ck に変換して引く。税区分も同じく ck で保存されている。
   Object.entries(puSum).forEach(([k,q])=>{
-    if(q>0&&cp[k]){
-      const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
-      const camt = calcUnitTotal(cp[k], q, taxFlag);
-      breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:camt});
+    const ck = IK_COL_MAP[k];
+    const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
+    if(q>0&&up>0){
+      const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
+      const camt = calcUnitTotal(up, q, taxFlag);
+      breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:camt});
       colAmt += camt;
     }
   });
@@ -17788,10 +17798,26 @@ function saveStaff(continueAdd=false){
       del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')},
         // 集荷先別単価(2026/05/09 拠点マスタ連動・宅配事業内集荷)
         shukkaCompanies: shu.shukkaCompanies},
-      col:{p60:parseFloat($('st-cp60')?.value)||0,p80:parseFloat($('st-cp80')?.value)||0,p100:parseFloat($('st-cp100')?.value)||0,p120:parseFloat($('st-cp120')?.value)||0,p140:parseFloat($('st-cp140')?.value)||0,p160:parseFloat($('st-cp160')?.value)||0,pk1:parseFloat($('st-cpk1')?.value)||0,pk2:parseFloat($('st-cpk2')?.value)||0,cp:parseFloat($('st-ccp')?.value)||0,ke:parseFloat($('st-cke')?.value)||0,te:parseFloat($('st-cte')?.value)||0,_tax:{p60:getItemTax('st-cp60'),p80:getItemTax('st-cp80'),p100:getItemTax('st-cp100'),p120:getItemTax('st-cp120'),p140:getItemTax('st-cp140'),p160:getItemTax('st-cp160'),pk1:getItemTax('st-cpk1'),pk2:getItemTax('st-cpk2'),cp:getItemTax('st-ccp'),ke:getItemTax('st-cke'),te:getItemTax('st-cte')},
+      // ★ 2026/09/12: 欄IDは 'st-c'+ck で統一されている。CK_LIST から導出し、
+      //   画面に無い品目は既存値を引き継ぐ（追加品目の単価を消さない）。
+      col:(function(){
+        const _prev = ($('m-staff')?._editId
+          ? (D.staff.find(x=>x.id===$('m-staff')._editId)?.fixedPrices?.col || {})
+          : {});
+        const o = { ...(_prev||{}) };
+        o._tax = { ...((_prev&&_prev._tax)||{}) };
+        CK_LIST.forEach(ck=>{
+          const el = $('st-c'+ck);
+          if(!el) return;
+          o[ck] = parseFloat(el.value)||0;
+          o._tax[ck] = getItemTax('st-c'+ck);
+        });
         // 集荷顧客別単価(2026/05/09 集荷事業)
-        customerMode: (function(){const r=document.querySelector('input[name="st-col-cust-mode"]:checked');return r?r.value:'uniform';})(),
-        customerPrices: (typeof collectStColCustomerPrices==='function' ? collectStColCustomerPrices() : [])},
+        const _r = document.querySelector('input[name="st-col-cust-mode"]:checked');
+        o.customerMode = _r ? _r.value : 'uniform';
+        o.customerPrices = (typeof collectStColCustomerPrices==='function') ? collectStColCustomerPrices() : [];
+        return o;
+      })(),
       charter:charterRows,
       customItems:_collectStCustomItems(), // 顧客別カスタム品目支払単価(Step 2: 2026/05/02)
     };})(),
@@ -26653,12 +26679,17 @@ function _calcStaffPayment(name, monStr){
     const cp=st.fixedPrices?.col||{};
     const puSum={};
     pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+    // ★ 2026/09/12: fixedPrices.col は単価キー(ck: p60/pk1/cp...)で保存されているが、
+    //   ここは品目キー(masterKey: 'ゆうパック_60'...)で引いていたため常に未設定扱いだった。
+    //   IK_COL_MAP で ck に変換して引く。税区分も同じく ck で保存されている。
     Object.entries(puSum).forEach(([k,q])=>{
-      if(q>0&&cp[k]){
+      const ck = IK_COL_MAP[k];
+      const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
+      if(q>0&&up>0){
         // 契約書準拠の計算
-        const taxFlag = (cp._tax && cp._tax[k]) || 'ex';
-        const amt = calcUnitTotal(cp[k], q, taxFlag);
-        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(cp[k])}`, amount:amt});
+        const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
+        const amt = calcUnitTotal(up, q, taxFlag);
+        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:amt});
         total+=amt;
       }
     });
@@ -26842,7 +26873,14 @@ function _calcCustBilling(custName, monStr){
       //   getCustPrice が新旧どちらにも対応しているのでそれを使う。
       const price=(typeof getCustPrice==='function') ? getCustPrice(cu, k) : (cu.prices?.[k]||0);
       // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
-      const taxFlag = (cu.prices?._tax && cu.prices._tax[k]) || 'ex';
+      // ★ 2026/09/12: 税区分の読み取り先が誤っていた。保存は colPrices._tax[ck]
+      //   (ck=単価キー)なのに、旧形式 prices._tax[masterKey] を見ていたため
+      //   常に 'ex'(税別)にフォールバックし、税込設定が請求計算に効いていなかった。
+      const _cpx = cu.colPrices || cu.prices || {};
+      const _ck  = (typeof IK_COL_MAP!=='undefined') ? IK_COL_MAP[k] : null;
+      const taxFlag = (_ck && _cpx._tax && _cpx._tax[_ck])
+                   || (cu.prices?._tax && cu.prices._tax[k])
+                   || ((cu.priceType==='tax_included') ? 'in' : 'ex');
       const amt = (typeof calcUnitTotal === 'function') ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
       // ★ 2026/08/29: 単価が未設定(0円)の品目は請求書に載せない。
       //   車建て(日額)の顧客は数量を記録用に入力するだけで、金額は発生しない。
@@ -26876,15 +26914,24 @@ function _calcCustBilling(custName, monStr){
     //   件/個/日額 … 日報の入力実績ベース。入力が無い月は請求しない。
     //   月額       … 固定費。日報の入力に関係なく毎月 1×単価 を自動計上する。
     //                 ただし契約が終了・停止している顧客は計上しない。
+    //   日額       … 稼働日数(集荷実績のある日数)×単価。日報アプリでは日額の数量を
+    //                 入力させない仕様のため、数量ではなく稼働日数で計上する。
+    // ★ 2026/09/12: 同じ otherItems を後段でもう一度集計していたため、月額と
+    //   件・個の品目が二重計上されていた（金額が2倍）。後段の集計を削除し、
+    //   日額の稼働日数計上と税区分の既定値をこちらへ統合した。
     const isMonthly = (unitLabel === '月額');
+    const isDaily   = (unitLabel === '日額');
     const custActive = (cu.status !== '終了' && cu.status !== '停止' && cu.invoiceEnabled !== false);
+    const workDays = new Set(rows.map(function(r){return r.date;}).filter(Boolean)).size;
     if(isMonthly){
       if(!custActive || price <= 0) return;
+    } else if(isDaily){
+      if(workDays <= 0 || price <= 0) return;
     } else {
       if(qty <= 0) return;
     }
-    const useQty = isMonthly ? 1 : qty;
-    const taxFlag = o._tax || 'ex';
+    const useQty = isMonthly ? 1 : (isDaily ? workDays : qty);
+    const taxFlag = o._tax || ((cu.priceType==='tax_included') ? 'in' : 'ex');
     const amt = (typeof calcUnitTotal === 'function')
       ? calcUnitTotal(price, useQty, taxFlag)
       : Math.floor(useQty * price);
@@ -26976,35 +27023,8 @@ function _calcCustBilling(custName, monStr){
 
   // 税別小計に消費税10%を加算 → 税込小計と合算 → 1円未満切り捨て(契約書準拠)
   // 例: 税別15円×10001個=150015円(税別) → 165016.5円(税込) → 切り捨て165016円
-  // ★ 2026/08/29: カスタム品目(その他・立替・チャーター・日額)を計上する。
-  //   ここで扱っていなかったため、産直の「横持チャーター」が請求書・月報・
-  //   売上分析のいずれにも出ていなかった。
-  //   日額は「稼働日数×単価」。稼働日 = 集荷実績のある日(本日集荷なしは除く)。
-  (function(){
-    const oi = (cu.otherItems||[]).filter(o=>o && (o.name||'').trim());
-    if(!oi.length) return;
-    const workDays = new Set(rows.map(r=>r.date).filter(Boolean)).size;
-    oi.forEach(o=>{
-      const unit  = Number(o.amt)||0;
-      const uType = o.unit || '月額';
-      const oTax  = o._tax || ((cu.priceType==='tax_included') ? 'in' : 'ex');
-      let qty = 0;
-      if(uType === '月額'){
-        qty = rows.length > 0 ? 1 : 0;             // 実績のある月だけ1回
-      } else if(uType === '日額'){
-        qty = workDays;                            // 稼働日数
-      } else {
-        // 件・個: 日報アプリで入力された数量
-        rows.forEach(r=>{ qty += (r.items && (r.items['__custom__'+o.name]||0)) || 0; });
-      }
-      if(qty <= 0 || unit <= 0) return;
-      const amt = Math.floor(qty * unit);
-      breakdown.push({label:o.name, itemKey:'__custom__'+o.name, qty, unit, amount:amt, taxFlag:oTax});
-      total += amt;
-      if(oTax === 'in') subtotalIn += amt; else subtotalEx += amt;
-    });
-  })();
-
+  // ★ 2026/09/12: ここにあったカスタム品目の集計を削除した（上の Pattern D と
+  //   完全に重複しており、月額・件・個の品目が二重計上されていた）。
   const tax = Math.floor(subtotalEx * 0.1);  // 消費税(税別小計×10%)
   const taxIncOfEx = subtotalEx + tax;        // 税別品目の税込合計
 
