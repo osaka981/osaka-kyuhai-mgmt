@@ -1564,10 +1564,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6">
           <input type="month" id="jc-mon" class="fi" onchange="renderJetCmp()">
           <select id="jc-cust" class="fi" style="width:230px" onchange="saveJetCust()"></select>
-          <!-- ★ 2026/09/12: ボタンが増えて横幅が足りなくなり、この注記が1文字ずつ
-               折り返されて縦に潰れていた。折り返さず、狭いときは隠す。 -->
-          <span class="xs muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;"
-            title="計数の実績はこの顧客の集荷として計上されます">計数の実績はこの顧客の集荷として計上されます</span>
         </div>
         <div class="fla gap6" style="flex-wrap:wrap;flex-shrink:0;">
           <button class="btn b-gh btn-sm" onclick="expJetCSV()">照合CSV</button>
@@ -1579,6 +1575,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-blu btn-sm" onclick="jetManualOpen()">手入力で便を追加</button>
         </div>
       </div>
+      <!-- ★ 2026/09/12: 上段が横幅に収まらず注記が縦に潰れていたため、下段へ移した -->
+      <div class="xs muted" style="margin:-6px 0 10px;">計数の実績はこの顧客の集荷として計上されます</div>
       <!-- ★ 2026/09/12: 計数顧客マスタ（多顧客対応の土台）。
            顧客ごとに配布URLと暗証番号を発行する。計数アプリはこの一覧を読んで
            開始画面の顧客選択を作り、顧客用の管理画面はURLの顧客に固定される。 -->
