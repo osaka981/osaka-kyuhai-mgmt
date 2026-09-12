@@ -7300,12 +7300,13 @@ function getEmploymentIns(st, totalPay){
 }
 
 // 役員報酬 PIN認証
-function unlockExecPay(){
+// ★ 2026/09/12: LS_KEYS.TS_PIN という定義されていないキーを読んでいたため、
+//   lsGet が既定値を返し、PINを変更しても '000000' でしか解除できなかった。
+//   TS-PIN の照合関数(verifyTSPin)に統一した。
+async function unlockExecPay(){
   const pin=prompt('PIN（6桁）を入力してください');
   if(!pin) return;
-  // TS-PINで認証
-  const stored=lsGet(LS_KEYS.TS_PIN,'000000');
-  if(pin!==stored){ alert('PINが違います'); return; }
+  if(!(await verifyTSPin(pin))){ alert('PINが違います'); return; }
   const locked=$('st-exec-pay-locked');
   const unlocked=$('st-exec-pay-unlocked');
   if(locked) locked.style.display='none';
@@ -32062,15 +32063,51 @@ const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report
 // ══════════════════════════════════════════
 // トップシークレット認証システム
 // ══════════════════════════════════════════
-const TS_PIN_KEY = 'nikki_ts_pin';
+const TS_PIN_KEY = 'nikki_ts_pin';          // 旧: 平文保存（移行のため参照のみ）
+const TS_PIN_HASH_KEY = 'nikki_ts_pin_h';  // ★ 2026/09/12: SHA-256 ハッシュ
 const TS_SESSION_KEY = 'nikki_ts_session';
 const TS_SESSION_DURATION = 30 * 60 * 1000; // 30分
 
 let tsPendingAction = null; // 認証後に実行する処理
 let tsCode = '';
 
-// デフォルトTSピン（初回は1234**で設定、変更推奨）
-function getTSPin(){ return localStorage.getItem(TS_PIN_KEY) || '000000'; }
+// ★ 2026/09/12: PIN をハッシュで保持する。
+//   これまでは localStorage に平文で入れていたため、開発者ツールで
+//   localStorage.getItem('nikki_ts_pin') と打つだけで読めてしまっていた。
+//   ハッシュ化すれば、保存値からPINを逆算することはできない。
+//   なお総当たりは6桁なら不可能ではないので、PINは推測しにくい値にすること。
+const TS_PIN_SALT = 'osq-mgmt-ts-v1';   // 端末間で同じ値にする必要があるため固定
+async function _sha256Hex(str){
+  const buf = new TextEncoder().encode(str);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest))
+    .map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function _tsPinHash(pin){ return _sha256Hex(TS_PIN_SALT + '|' + String(pin)); }
+
+// 旧形式（平文）が残っていればハッシュに移して平文を消す
+async function _migrateTSPin(){
+  try{
+    const plain = localStorage.getItem(TS_PIN_KEY);
+    if(plain){
+      localStorage.setItem(TS_PIN_HASH_KEY, await _tsPinHash(plain));
+      localStorage.removeItem(TS_PIN_KEY);
+      console.log('[TS-PIN] 平文をハッシュへ移行しました');
+    }
+  }catch(e){ console.error('[TS-PIN] 移行失敗', e); }
+}
+
+// 入力されたPINが正しいかを判定する。
+//   ハッシュ未設定のときだけ、初期PIN '000000' を受け付ける。
+async function verifyTSPin(input){
+  await _migrateTSPin();
+  const stored = localStorage.getItem(TS_PIN_HASH_KEY);
+  if(!stored) return String(input) === '000000';
+  try{ return (await _tsPinHash(input)) === stored; }
+  catch(e){ console.error('[TS-PIN] 照合失敗', e); return false; }
+}
+// PIN が初期値のままかどうか（注意表示に使う）
+function isTSPinDefault(){ return !localStorage.getItem(TS_PIN_HASH_KEY); }
 
 // TSセッション確認
 function isTSAuthenticated(){
@@ -32118,8 +32155,10 @@ function tsKey(k){
   updateTSDots();
   if($('ts-err'))$('ts-err').textContent='';
   if(tsCode.length===6){
-    setTimeout(()=>{
-      if(tsCode===getTSPin()){
+    setTimeout(async ()=>{
+      // ★ 2026/09/12: ハッシュで照合する
+      const _ok = await verifyTSPin(tsCode);
+      if(_ok){
         // 認証成功
         localStorage.setItem(TS_SESSION_KEY, String(Date.now()));
         if($('ts-overlay'))$('ts-overlay').style.display='none';
@@ -32238,11 +32277,23 @@ function _executeSendPermToggle(){
 }
 
 // TSピン変更
-function changeTSPin(){
+async function changeTSPin(){
   const p1=$('ts-new-pin1')?.value, p2=$('ts-new-pin2')?.value;
   if(!p1||p1.length<6){alert('6桁のPINを入力してください');return;}
   if(p1!==p2){alert('PINが一致しません');return;}
-  localStorage.setItem(TS_PIN_KEY, p1);
+  // ★ 2026/09/12: 推測しやすいPINを弾く（総当たりへの耐性を上げるため）
+  if(/^(\d)\1{5}$/.test(p1)){alert('同じ数字の繰り返しは使えません');return;}
+  if(['012345','123456','234567','345678','456789','987654','654321','000000'].indexOf(p1)>=0){
+    alert('連続した数字や初期値は使えません');return;
+  }
+  // ★ 2026/09/12: ハッシュで保存する（平文は保存しない）
+  try{
+    localStorage.setItem(TS_PIN_HASH_KEY, await _tsPinHash(p1));
+    localStorage.removeItem(TS_PIN_KEY);   // 旧形式の平文が残っていれば消す
+  }catch(e){
+    console.error('[TS-PIN] 変更失敗', e);
+    alert('PINを保存できませんでした: '+e.message); return;
+  }
   $('ts-new-pin1').value='';$('ts-new-pin2').value='';
   alert('トップシークレットPINを変更しました');
 }
