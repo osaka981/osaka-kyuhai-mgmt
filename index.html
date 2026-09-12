@@ -726,8 +726,13 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInAnonymously, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue, getAuth, signInAnonymously, onIdTokenChanged };
+// ★ 2026/09/12: 顧客・社内アカウントの発行に使う関数を追加。
+//   発行は別インスタンス(secondary)で行い、いま開いているセッションを奪われないようにする。
+import { getAuth, signInAnonymously, onIdTokenChanged,
+         createUserWithEmailAndPassword, signInWithEmailAndPassword,
+         signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue, getAuth, signInAnonymously, onIdTokenChanged,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut };
 window._fbReady = true;
 document.dispatchEvent(new Event('fb-sdk-ready'));
 </script>
@@ -9446,7 +9451,9 @@ function renderJetCustList(){
       <td class="fw7">${esc(nm)}
         ${c.active===false?'<div class="xs" style="color:var(--red2)">停止中</div>':''}</td>
       <td class="xs mono" style="word-break:break-all;max-width:320px;">${esc(url)}</td>
-      <td class="xs">${c.pinHash?'発行済':'<span style="color:var(--red2)">未発行</span>'}</td>
+      <td class="xs">${c.pinHash?'発行済':'<span style="color:var(--red2)">未発行</span>'}
+        ${c.authUid?'<div class="xs" style="color:var(--tel2)">アカウント有</div>'
+                   :'<div class="xs muted">アカウント無</div>'}</td>
       <td class="xs">${(()=>{
         const m={'1':'大阪急配','2':'株式会社UP','9':'その他'};
         const a=Array.isArray(c.corps)&&c.corps.length?c.corps.map(x=>m[String(x)]||x):null;
@@ -9457,6 +9464,8 @@ function renderJetCustList(){
       <td style="white-space:nowrap;">
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
           onclick="jetCustEdit('${esc(String(c.id))}')">設定</button>
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+          onclick="jetCustIssueAccount('${esc(String(c.id))}')">${c.authUid?'アカウント再発行':'アカウント発行'}</button>
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
           onclick="jetCustCopyUrl('${esc(String(c.id))}')">URLをコピー</button>
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
@@ -9539,6 +9548,95 @@ async function jetCustEdit(id){
   await _jetCustsSave(map);
   renderJetCustList();
   _showSaveToast('設定を保存しました');
+}
+
+/* ══ ★ 2026/09/12: 顧客アカウントの発行 ══
+   Firebaseのルールで顧客ごとに読める範囲を絞るには、顧客が本物のアカウントで
+   ログインしている必要がある。暗証番号はブラウザ側の照合なのでルールから見えない。
+
+   仕組み:
+     ・顧客ごとに <slug>@jscan.osaka981.local というアドレスのアカウントを作る
+       （実在のメールアドレスは不要。ログインにしか使わない）
+     ・作成したUIDを nikki/_acl/cust/<uid> = <顧客ID> として記録する
+     ・ルールはこの表を見て、その顧客の階層だけ読めるようにする
+
+   注意: 発行は開いているセッションとは別のインスタンスで行う。
+   createUserWithEmailAndPassword はそのインスタンスのログイン状態を
+   作成したユーザーに切り替えてしまうため、本体の認証を壊さないようにする。 */
+const JETCUST_MAIL_DOMAIN = 'jscan.osaka981.local';
+function jetCustEmail(c){ return String(c.slug||'') + '@' + JETCUST_MAIL_DOMAIN; }
+
+async function _secondaryAuth(){
+  const I = window._fbImports || {};
+  if(!I.initializeApp || !I.getAuth) throw new Error('Firebase SDK が読み込まれていません');
+  if(!window._fbSecondary){
+    window._fbSecondary = I.initializeApp(FB_CONFIG, 'acl-' + Date.now());
+  }
+  return I.getAuth(window._fbSecondary);
+}
+
+async function jetCustIssueAccount(id){
+  const map = _jetCusts();
+  const c = map[String(id)];
+  if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
+  if(!c.slug){ showAlert({msg:'配布URLが未発行です'}); return; }
+
+  const pw = (()=>{
+    // 12桁。紛らわしい文字は除く。
+    const cs='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const a=new Uint8Array(12); crypto.getRandomValues(a);
+    return Array.from(a).map(n=>cs[n%cs.length]).join('');
+  })();
+
+  const ok = await showDialog({
+    icon:'🪪', title:'顧客アカウントの発行',
+    msg:(c.name||'')+' のログインアカウントを発行します。\n\n'
+      + 'ID: '+jetCustEmail(c)+'\n\n'
+      + '発行後、顧客用ページはこのアカウントでログインする方式になります。\n'
+      + 'パスワードはこの画面でしか表示されません。',
+    okText:'発行する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  const I = window._fbImports || {};
+  try{
+    const auth2 = await _secondaryAuth();
+    let uid = null;
+    try{
+      const cred = await I.createUserWithEmailAndPassword(auth2, jetCustEmail(c), pw);
+      uid = cred.user.uid;
+    }catch(e){
+      if(e && String(e.code)==='auth/email-already-in-use'){
+        showAlert({icon:'⚠️', title:'すでに発行済みです',
+          msg:'このアカウントは既に存在します。パスワードを変えたい場合は、\n'
+            + '顧客側の画面から変更するか、Firebaseコンソールで再設定してください。'});
+        return;
+      }
+      throw e;
+    }
+    try{ await I.signOut(auth2); }catch(e){}
+
+    // 権限表に記録する（このノードは社内だけが書ける想定）
+    const { ref, set } = I;
+    await set(ref(fbDB, 'nikki/_acl/cust/' + uid), String(c.id));
+
+    c.authUid = uid;
+    c.authEmail = jetCustEmail(c);
+    await _jetCustsSave(map);
+    renderJetCustList();
+
+    await showAlert({icon:'🪪', title:'発行しました',
+      msg:(c.name||'')+'\n\n'
+        + 'URL: '+jetCustUrl(c)+'\n'
+        + 'ID: '+jetCustEmail(c)+'\n'
+        + 'パスワード: '+pw+'\n\n'
+        + 'このパスワードはこの画面でしか表示されません。顧客へ伝えてから閉じてください。'});
+  }catch(e){
+    console.error('[jetCustIssueAccount]', e);
+    showAlert({icon:'⚠️', title:'発行できませんでした',
+      msg:(e && e.message) ? e.message
+        : 'Firebaseコンソールで「メール／パスワード」のログイン方法を有効にしてください。'});
+  }
 }
 
 async function jetCustReissuePin(id){
@@ -9891,9 +9989,17 @@ async function expJetMonthlyCSV(btn){
     for(const date of dates){
       const [sr,nr]=await Promise.all([
         fetch(fbRest('/nikki/jet_scan/'+_prefix+date+'.json')),
-        fetch(fbRest('/nikki/jet_scan_nos/'+date+'.json'))
+        // ★ 2026/09/12: 番号明細も顧客別の階層になった。無ければ旧形式を読む。
+        fetch(fbRest('/nikki/jet_scan_nos/'+_prefix+date+'.json'))
       ]);
-      const sum=(await sr.json())||{}, nos=(await nr.json())||{};
+      const sum=(await sr.json())||{};
+      let nos=(await nr.json())||{};
+      if(_prefix && !Object.keys(nos).length){
+        try{
+          const r3=await fetch(fbRest('/nikki/jet_scan_nos/'+date+'.json'));
+          nos=(await r3.json())||{};
+        }catch(e){}
+      }
       Object.values(sum).forEach(j=>{
         if(!j||!j.key) return;
         const arr=Array.isArray(j.scans)?j.scans.map(x=>({n:x.no,s:x.size,t:x.ts}))
