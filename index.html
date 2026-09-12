@@ -3265,8 +3265,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="xs muted fw7" style="letter-spacing:.4px;">■ 品目別 単価（円/個・件）</div>
     <div style="display:flex;gap:6px;align-items:center;">
       <span style="font-size:9px;color:var(--txt2);">一括:</span>
-      <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(['cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160','cu-cpk1','cu-cpk2'],'in')">YP/PKT 税込</button>
-      <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(['cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160','cu-cpk1','cu-cpk2'],'ex')">YP/PKT 税別</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(ypPktTaxFields(),'in')">YP/PKT 税込</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(ypPktTaxFields(),'ex')">YP/PKT 税別</button>
       <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(['cu-ccp','cu-cke','cu-cte'],'in')">その他 税込</button>
       <button type="button" class="btn b-gh btn-sm" style="font-size:9px;padding:2px 7px;" onclick="setGroupTax(['cu-ccp','cu-cke','cu-cte'],'ex')">その他 税別</button>
     </div>
@@ -3281,19 +3281,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 集荷単価タブ -->
   <div id="cu-ptab-content-col" style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-      <div class="fg"><label class="c60" style="font-size:9px;">60サイズ（円）<span class="tax-tog" id="tt-cu-cp60" data-tax="ex"><button onclick="setItemTax('cu-cp60','in')" class="">税込</button><button onclick="setItemTax('cu-cp60','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp60" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()" onblur="onCuYP60Change()"></div>
-      <div class="fg"><label class="c80" style="font-size:9px;">80サイズ（円）<span class="tax-tog" id="tt-cu-cp80" data-tax="ex"><button onclick="setItemTax('cu-cp80','in')" class="">税込</button><button onclick="setItemTax('cu-cp80','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp80" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="c100" style="font-size:9px;">100サイズ（円）<span class="tax-tog" id="tt-cu-cp100" data-tax="ex"><button onclick="setItemTax('cu-cp100','in')" class="">税込</button><button onclick="setItemTax('cu-cp100','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp100" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="c120" style="font-size:9px;">120サイズ（円）<span class="tax-tog" id="tt-cu-cp120" data-tax="ex"><button onclick="setItemTax('cu-cp120','in')" class="">税込</button><button onclick="setItemTax('cu-cp120','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp120" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="c140" style="font-size:9px;">140サイズ（円）<span class="tax-tog" id="tt-cu-cp140" data-tax="ex"><button onclick="setItemTax('cu-cp140','in')" class="">税込</button><button onclick="setItemTax('cu-cp140','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp140" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="c160" style="font-size:9px;">160サイズ（円）<span class="tax-tog" id="tt-cu-cp160" data-tax="ex"><button onclick="setItemTax('cu-cp160','in')" class="">税込</button><button onclick="setItemTax('cu-cp160','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cp160" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="cpk1" style="font-size:9px;">ゆうパケット通常<span class="tax-tog" id="tt-cu-cpk1" data-tax="ex"><button onclick="setItemTax('cu-cpk1','in')" class="">税込</button><button onclick="setItemTax('cu-cpk1','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cpk1" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()" onblur="onCuPk1Change()"></div>
-      <div class="fg"><label class="cpk2" style="font-size:9px;">ゆうパケット5cm〜<span class="tax-tog" id="tt-cu-cpk2" data-tax="ex"><button onclick="setItemTax('cu-cpk2','in')" class="">税込</button><button onclick="setItemTax('cu-cpk2','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cpk2" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="ccp" style="font-size:9px;">クリックポスト<span class="tax-tog" id="tt-cu-ccp" data-tax="ex"><button onclick="setItemTax('cu-ccp','in')" class="">税込</button><button onclick="setItemTax('cu-ccp','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-ccp" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="cke" style="font-size:9px;">ケース<span class="tax-tog" id="tt-cu-cke" data-tax="ex"><button onclick="setItemTax('cu-cke','in')" class="">税込</button><button onclick="setItemTax('cu-cke','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cke" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-      <div class="fg"><label class="cte" style="font-size:9px;">定形外(ゆうメール)<span class="tax-tog" id="tt-cu-cte" data-tax="ex"><button onclick="setItemTax('cu-cte','in')" class="">税込</button><button onclick="setItemTax('cu-cte','ex')" class="active-ex">税別</button></span></label><input type="number" id="cu-cte" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"></div>
-    </div>
+    <div id="cu-col-price-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"><!-- ★ 2026/09/12: 品目欄は ITEMS から自動生成（renderCuPriceGrid） --></div>
     <!-- ルート（委託会社モーダルと同形式: B=日額連動 / C=都度チャーター） -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -7800,21 +7788,37 @@ const _origSaveCust   = typeof saveCust   !== 'undefined' ? saveCust   : null;
 // 品目マスタ（日報アプリ UNIT_PRICE_MASTER と完全一致）
 // masterKey → { label, cls, defPrice, unit, group }
 // ─────────────────────────────────────────────
+// ★ 2026/09/12: 品目の定義はここだけ。以下の派生表は必ずこの ITEMS から自動生成する。
+//   ck = 顧客単価(colPrices)のキー。短縮ラベル(shortLabel)は単価画面などの狭い欄で使う。
+//   品目を増やすときはこの表に1行足すだけでよい（派生表は触らない）。
 const ITEMS = {
-  'ゆうパック_60':        { label:'60サイズ',      cls:'c60',  defPrice:150,  unit:'個', group:'ゆうパック',   modalId:'p-y60',  cuId:'cu-y60'  },
-  'ゆうパック_80':        { label:'80サイズ',      cls:'c80',  defPrice:180,  unit:'個', group:'ゆうパック',   modalId:'p-y80',  cuId:'cu-y80'  },
-  'ゆうパック_100':       { label:'100サイズ',     cls:'c100', defPrice:220,  unit:'個', group:'ゆうパック',   modalId:'p-y100', cuId:'cu-y100' },
-  'ゆうパック_120':       { label:'120サイズ',     cls:'c120', defPrice:260,  unit:'個', group:'ゆうパック',   modalId:'p-y120', cuId:'cu-y120' },
-  'ゆうパック_140':       { label:'140サイズ',     cls:'c140', defPrice:300,  unit:'個', group:'ゆうパック',   modalId:'p-y140', cuId:'cu-y140' },
-  'ゆうパック_160':       { label:'160サイズ',     cls:'c160', defPrice:350,  unit:'個', group:'ゆうパック',   modalId:'p-y160', cuId:'cu-y160' },
-  'ゆうパケット_通常':    { label:'PKT 通常',      cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk1',  cuId:'cu-pk1'  },
-  'ゆうパケット_7cm以上': { label:'PKT 5cm〜',    cls:'cpk2', defPrice:100,  unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2'  },
-  'クリックポスト':       { label:'クリックポスト', cls:'ccp',  defPrice:60,   unit:'個', group:'その他',       modalId:'p-cp',   cuId:'cu-cp'   },
-  'ケース':               { label:'ケース',         cls:'cke',  defPrice:120,  unit:'個', group:'その他',       modalId:'p-ke',   cuId:'cu-ke'   },
-  '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  defPrice:50,   unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te'   },
-  'チャーター':           { label:'チャーター',     cls:'cch',  defPrice:5000, unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch'   },
+  'ゆうパック_60':        { label:'60サイズ',      cls:'c60',  defPrice:150,  unit:'個', group:'ゆうパック',   modalId:'p-y60',  cuId:'cu-y60',  ck:'p60',  shortLabel:'YP60',    longLabel:'ゆうパック60'      },
+  'ゆうパック_80':        { label:'80サイズ',      cls:'c80',  defPrice:180,  unit:'個', group:'ゆうパック',   modalId:'p-y80',  cuId:'cu-y80',  ck:'p80',  shortLabel:'YP80',    longLabel:'ゆうパック80'      },
+  'ゆうパック_100':       { label:'100サイズ',     cls:'c100', defPrice:220,  unit:'個', group:'ゆうパック',   modalId:'p-y100', cuId:'cu-y100', ck:'p100', shortLabel:'YP100',   longLabel:'ゆうパック100'     },
+  'ゆうパック_120':       { label:'120サイズ',     cls:'c120', defPrice:260,  unit:'個', group:'ゆうパック',   modalId:'p-y120', cuId:'cu-y120', ck:'p120', shortLabel:'YP120',   longLabel:'ゆうパック120'     },
+  'ゆうパック_140':       { label:'140サイズ',     cls:'c140', defPrice:300,  unit:'個', group:'ゆうパック',   modalId:'p-y140', cuId:'cu-y140', ck:'p140', shortLabel:'YP140',   longLabel:'ゆうパック140'     },
+  'ゆうパック_160':       { label:'160サイズ',     cls:'c160', defPrice:350,  unit:'個', group:'ゆうパック',   modalId:'p-y160', cuId:'cu-y160', ck:'p160', shortLabel:'YP160',   longLabel:'ゆうパック160'     },
+  'ゆうパケット_通常':    { label:'PKT 通常',      cls:'cpk1', defPrice:80,   unit:'個', group:'ゆうパケット', modalId:'p-pk1',  cuId:'cu-pk1',  ck:'pk1',  shortLabel:'PKT通常', longLabel:'ゆうパケット(通常)' },
+  'ゆうパケット_7cm以上': { label:'PKT 5cm〜',    cls:'cpk2', defPrice:100,  unit:'個', group:'ゆうパケット', modalId:'p-pk2',  cuId:'cu-pk2',  ck:'pk2',  shortLabel:'PKT5cm〜',longLabel:'ゆうパケット(5cm以上)' },
+  'クリックポスト':       { label:'クリックポスト', cls:'ccp',  defPrice:60,   unit:'個', group:'その他',       modalId:'p-cp',   cuId:'cu-cp',   ck:'cp',   shortLabel:'CP',      longLabel:'クリックポスト'     },
+  'ケース':               { label:'ケース',         cls:'cke',  defPrice:120,  unit:'個', group:'その他',       modalId:'p-ke',   cuId:'cu-ke',   ck:'ke',   shortLabel:'ケース',  longLabel:'ケース'             },
+  '定形外(ゆうメール)':   { label:'定形外',         cls:'cte',  defPrice:50,   unit:'個', group:'その他',       modalId:'p-te',   cuId:'cu-te',   ck:'te',   shortLabel:'定形外',  longLabel:'定形外(ゆうメール)' },
+  'チャーター':           { label:'チャーター',     cls:'cch',  defPrice:5000, unit:'件', group:'チャーター',   modalId:'p-ch',   cuId:'cu-ch',   ck:null,   shortLabel:'チャーター', longLabel:'チャーター'      },
 };
 const IK = Object.keys(ITEMS); // masterKey の配列
+
+// ── ここから下はすべて ITEMS からの派生。直接書き換えないこと。 ──
+const IK_PRICED   = IK.filter(k=>ITEMS[k].ck);                        // 集荷単価を持つ品目
+const CK_LIST     = IK_PRICED.map(k=>ITEMS[k].ck);                    // ['p60',...]
+const CK_TO_ITEM  = (()=>{ const m={}; IK_PRICED.forEach(k=>m[ITEMS[k].ck]=k); return m; })();
+const IK_BY_GROUP = g => IK.filter(k=>ITEMS[k].group===g);
+const IK_YP       = IK_BY_GROUP('ゆうパック');
+const IK_PKT      = IK_BY_GROUP('ゆうパケット');
+const IK_OTHER    = IK_BY_GROUP('その他');
+const ckOf        = k => ITEMS[k] && ITEMS[k].ck;
+const itemOfCk    = ck => CK_TO_ITEM[ck];
+const ckLabel     = (ck,long) => { const k=CK_TO_ITEM[ck]; if(!k) return ck;
+                                   return long ? (ITEMS[k].longLabel||ITEMS[k].label) : (ITEMS[k].shortLabel||ITEMS[k].label); };
 
 // 品目グループ設定（localStorage永続化）
 // デフォルト：全サイズ個別表示
@@ -7849,9 +7853,8 @@ function renderItemGroupList(){
   const wrap = document.getElementById('item-group-list');
   if(!wrap) return;
   const groups = getItemGroups();
-  const sizes = ['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'];
-  const sizeLabels = {'ゆうパック_60':'60','ゆうパック_80':'80','ゆうパック_100':'100',
-    'ゆうパック_120':'120','ゆうパック_140':'140','ゆうパック_160':'160'};
+  const sizes = IK_YP.slice();                                      // ITEMSから自動生成
+  const sizeLabels = (()=>{ const m={}; IK_YP.forEach(k=>m[k]=k.replace('ゆうパック_','')); return m; })();
 
   if(!groups.length){
     wrap.innerHTML = '<div style="font-size:11px;color:var(--light);padding:8px;">グループ未設定（全サイズ個別表示）</div>';
@@ -7894,7 +7897,7 @@ function _igSize(gi, size, checked){
   saveItemGroupsData(groups);
 }
 function _igAll(gi, checked){
-  const sizes=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'];
+  const sizes=IK_YP.slice();
   const groups=getItemGroups();
   groups[gi].sizes = checked ? [...sizes] : [];
   saveItemGroupsData(groups);
@@ -9477,12 +9480,9 @@ function openCustDetail(custId){
   if(!cu){ alert('顧客データが見つかりません'); return; }
 
   const cp=cu.colPrices||cu.prices||{};
-  const priceMap={'p60':'ゆうパック 60サイズ','p80':'ゆうパック 80サイズ','p100':'ゆうパック 100サイズ',
-    'p120':'ゆうパック 120サイズ','p140':'ゆうパック 140サイズ','p160':'ゆうパック 160サイズ',
-    'pk1':'ゆうパケット 通常','pk2':'ゆうパケット 5cm〜','cp':'クリックポスト','ke':'ケース','te':'定形外(ゆうメール)'};
-  const pkMap={'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100','ゆうパック_120':'p120',
-    'ゆうパック_140':'p140','ゆうパック_160':'p160','ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
-    'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te'};
+  // ★ 2026/09/12: ITEMS から自動生成
+  const priceMap=(()=>{ const m={}; CK_LIST.forEach(ck=>m[ck]=ckLabel(ck,true)); return m; })();
+  const pkMap=(()=>{ const m={}; IK_PRICED.forEach(k=>m[k]=ITEMS[k].ck); return m; })();
 
   const puRows=D.pickup.filter(r=>r.customerId===custId||r.customerName===cu.name);
 
@@ -9608,9 +9608,9 @@ function openCustDetail(custId){
         <th style="${thRStyle}">金額</th>
       </tr></thead>
       <tbody>${dayRows.map((r,i)=>{
-        const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
-        const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
-        const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
+        const yp=IK_YP.reduce((s,k)=>s+iq(r,k),0);
+        const pk=IK_PKT.reduce((s,k)=>s+iq(r,k),0);
+        const oth=IK_OTHER.reduce((s,k)=>s+iq(r,k),0);
         const tot=yp+pk+oth;
         let amt=0; IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
         return `<tr style="background:${i%2?'var(--sur2)':'var(--sur)'};">
@@ -9674,9 +9674,9 @@ function openCustDetail(custId){
   const csvData=[
     ['日付','担当者','ゆうパック','パケット','その他','合計数','金額'],
     ...dayRows.map(r=>{
-      const yp=['ゆうパック_60','ゆうパック_80','ゆうパック_100','ゆうパック_120','ゆうパック_140','ゆうパック_160'].reduce((s,k)=>s+iq(r,k),0);
-      const pk=['ゆうパケット_通常','ゆうパケット_7cm以上'].reduce((s,k)=>s+iq(r,k),0);
-      const oth=['クリックポスト','ケース','定形外(ゆうメール)'].reduce((s,k)=>s+iq(r,k),0);
+      const yp=IK_YP.reduce((s,k)=>s+iq(r,k),0);
+      const pk=IK_PKT.reduce((s,k)=>s+iq(r,k),0);
+      const oth=IK_OTHER.reduce((s,k)=>s+iq(r,k),0);
       let amt=0; IK.forEach(k=>{amt+=iq(r,k)*(cp[pkMap[k]]||0);});
       return [r.date||'',r.staff||'',yp,pk,oth,yp+pk+oth,amt];
     })
@@ -10481,7 +10481,7 @@ function setCuTax(type){
 }
 function updCuTaxPreview(){
   const body = $('cu-tax-preview-body'); if(!body) return;
-  const labels = {'cu-cp60':'60','cu-cp80':'80','cu-cp100':'100','cu-cp120':'120','cu-cp140':'140','cu-cp160':'160','cu-cpk1':'PKT通常','cu-cpk2':'PKT5cm+','cu-ccp':'CP','cu-cke':'ケース','cu-cte':'定形外'};
+  const labels = (()=>{ const m={}; CK_LIST.forEach(ck=>m['cu-c'+ck]=ckLabel(ck)); return m; })();
   let h='';
   Object.entries(labels).forEach(([id,lbl])=>{
     const v=parseInt($(id)?.value)||0;
@@ -10606,12 +10606,8 @@ function fmtUnitPrice(v){
 }
 
 // ─── 集荷単価取得ヘルパー（colPrices対応） ───
-const IK_COL_MAP = {
-  'ゆうパック_60':'p60','ゆうパック_80':'p80','ゆうパック_100':'p100',
-  'ゆうパック_120':'p120','ゆうパック_140':'p140','ゆうパック_160':'p160',
-  'ゆうパケット_通常':'pk1','ゆうパケット_7cm以上':'pk2',
-  'クリックポスト':'cp','ケース':'ke','定形外(ゆうメール)':'te','チャーター':'charter'
-};
+// ★ 2026/09/12: ITEMS から自動生成（チャーターのみ例外で 'charter'）
+const IK_COL_MAP = (()=>{ const m={}; IK.forEach(k=>{ const ck=ITEMS[k].ck; m[k]= ck || (k==='チャーター'?'charter':null); }); return m; })();
 // ★ 2026/08/28: 単価が未登録の顧客に既定単価(60サイズ150円など)を当てていたため、
 //   車建て(日額)で個建て単価を持たない顧客にも数量×既定単価が請求されていた。
 //   契約していない単価を勝手に当てるのは誤請求に直結するので、未登録は0円とする。
@@ -11028,8 +11024,9 @@ function calcStaffDelColPayment(staffName, monStr){
 function onCuYP60Change(){
   const v=$('cu-cp60')?.value;
   if(!v)return;
-  ['cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160'].forEach(id=>{
-    const el=$(id);if(el&&!el.value)el.value=v;
+  // ★ 2026/09/12: 60以外のゆうパック全サイズへ（ITEMSから導出）
+  IK_YP.filter(k=>ITEMS[k].ck!=='p60').forEach(k=>{
+    const el=$('cu-c'+ITEMS[k].ck); if(el&&!el.value) el.value=v;
   });
 }
 // ─── ゆうパケット通常入力→5cm〜へ自動反映（顧客モーダル） ───
@@ -11626,8 +11623,7 @@ function _custRichness(c){
   if(c.status !== '終了') score += 100000;
   // 単価が入っている(集荷単価)
   const cp = c.colPrices || {};
-  const priceKeys = ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'];
-  priceKeys.forEach(k=>{ if(parseInt(cp[k])>0) score += 500; });
+  CK_LIST.forEach(k=>{ if(parseInt(cp[k])>0) score += 500; });
   if(Array.isArray(c.charter)) score += c.charter.filter(r=>parseInt(r&&r.amt)>0).length * 300;
   if(Array.isArray(c.otherItems)) score += c.otherItems.filter(r=>r&&(r.name||'').trim()).length * 300;
   // 各種フィールドが埋まっている
@@ -11648,7 +11644,7 @@ function _mergeMissingCustFields(winner, loser){
   // 集荷単価: winner側が0/未設定の品目だけloserから補完
   const wcp = winner.colPrices = winner.colPrices || {};
   const lcp = loser.colPrices || {};
-  ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'].forEach(k=>{
+  CK_LIST.forEach(k=>{
     if(!(parseInt(wcp[k])>0) && parseInt(lcp[k])>0) wcp[k] = lcp[k];
   });
   if(!wcp._tax && lcp._tax) wcp._tax = lcp._tax;
@@ -12003,23 +11999,14 @@ async function saveCust(){
   const tc=v=>taxConv(v,tt);
   // 集荷単価
   // 品目ごとに独立した税設定で変換
-  const colPrices={
-    p60:itemTaxConv('cu-cp60'), p80:itemTaxConv('cu-cp80'),
-    p100:itemTaxConv('cu-cp100'), p120:itemTaxConv('cu-cp120'),
-    p140:itemTaxConv('cu-cp140'), p160:itemTaxConv('cu-cp160'),
-    pk1:itemTaxConv('cu-cpk1'), pk2:itemTaxConv('cu-cpk2'),
-    cp:itemTaxConv('cu-ccp'), ke:itemTaxConv('cu-cke'),
-    te:itemTaxConv('cu-cte'),
-    // 税設定フラグを保存（復元用）
-    _tax:{
-      p60:getItemTax('cu-cp60'), p80:getItemTax('cu-cp80'),
-      p100:getItemTax('cu-cp100'), p120:getItemTax('cu-cp120'),
-      p140:getItemTax('cu-cp140'), p160:getItemTax('cu-cp160'),
-      pk1:getItemTax('cu-cpk1'), pk2:getItemTax('cu-cpk2'),
-      cp:getItemTax('cu-ccp'), ke:getItemTax('cu-cke'),
-      te:getItemTax('cu-cte'),
-    },
-  };
+  // ★ 2026/09/12: ITEMS から全品目をループ。欄が無い品目は保存対象外（既存値は下で保持）。
+  const colPrices={ _tax:{} };
+  CK_LIST.forEach(ck=>{
+    const fid='cu-c'+ck;
+    if(!$(fid)) return;
+    colPrices[ck]=itemTaxConv(fid);
+    colPrices._tax[ck]=getItemTax(fid);
+  });
   // チャーター
   const charterRows=[];
   document.querySelectorAll('#cu-charter-list > div').forEach(row=>{
@@ -13502,32 +13489,21 @@ function editCust(id){
   if($('cu-status-reason'))$('cu-status-reason').value=c.statusReason||'';
   onCuStatusChange();
   updateCuPayPreview();
-  // 集荷単価復元
+  // 集荷単価復元（★ 2026/09/12: 欄を ITEMS から生成してから値を入れる）
   const cp=c.colPrices||c.prices||{};
-  if($('cu-cp60'))$('cu-cp60').value=cp.p60||'';
-  if($('cu-cp80'))$('cu-cp80').value=cp.p80||'';
-  if($('cu-cp100'))$('cu-cp100').value=cp.p100||'';
-  if($('cu-cp120'))$('cu-cp120').value=cp.p120||'';
-  if($('cu-cp140'))$('cu-cp140').value=cp.p140||'';
-  if($('cu-cp160'))$('cu-cp160').value=cp.p160||'';
+  renderCuPriceGrid();
+  CK_LIST.forEach(ck=>{ const e=$('cu-c'+ck); if(e) e.value=cp[ck]||''; });
   // 税設定フラグ復元
   if(cp._tax){
     const tm=cp._tax;
-    [['cu-cp60','p60'],['cu-cp80','p80'],['cu-cp100','p100'],['cu-cp120','p120'],
-     ['cu-cp140','p140'],['cu-cp160','p160'],['cu-cpk1','pk1'],['cu-cpk2','pk2'],
-     ['cu-ccp','cp'],['cu-cke','ke'],['cu-cte','te']].forEach(([fid,key])=>{
+    CK_LIST.map(ck=>['cu-c'+ck, ck]).forEach(([fid,key])=>{
       if(tm[key]) setItemTax(fid, tm[key]);
     });
   } else {
     // デフォルト: YP/PKT=税込, その他=税別
     // 集荷は全て税別がデフォルト
-    ['cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160','cu-cpk1','cu-cpk2','cu-ccp','cu-cke','cu-cte'].forEach(f=>setItemTax(f,'ex'));
+    CK_LIST.forEach(ck=>setItemTax('cu-c'+ck,'ex'));
   }
-  if($('cu-cpk1'))$('cu-cpk1').value=cp.pk1||'';
-  if($('cu-cpk2'))$('cu-cpk2').value=cp.pk2||'';
-  if($('cu-ccp'))$('cu-ccp').value=cp.cp||'';
-  if($('cu-cke'))$('cu-cke').value=cp.ke||'';
-  if($('cu-cte'))$('cu-cte').value=cp.te||'';
   // チャーター復元
   const cl=$('cu-charter-list');if(cl){cl.innerHTML='';(c.charter||[]).forEach(r=>{cl.innerHTML+=cuCharterRowHtml(r.cnt,r.amt,r.note);});}
   // その他復元(行追加方式)
@@ -20865,34 +20841,10 @@ function _calcInvoiceAmount(row, cust){
   const defaultTax = (cust?.priceType === 'tax_included') ? 'in' : 'ex';
   
   // 単価マッピング(品目記号 → colPrices内のキー)
-  const priceMap = {
-    'p60': cp.p60 || 0,
-    'p80': cp.p80 || 0,
-    'p100': cp.p100 || 0,
-    'p120': cp.p120 || 0,
-    'p140': cp.p140 || 0,
-    'p160': cp.p160 || 0,
-    'pk1': cp.pk1 || 0,
-    'pk2': cp.pk2 || 0,
-    'cp': cp.cp || 0,
-    'ke': cp.ke || 0,
-    'te': cp.te || 0,
-  };
+  const priceMap = (()=>{ const m={}; CK_LIST.forEach(ck=>m[ck]=cp[ck]||0); return m; })();
   
   // 日報側のキー → 請求書側のキー対応
-  const itemKeyMap = {
-    'ゆうパック_60': 'p60',
-    'ゆうパック_80': 'p80',
-    'ゆうパック_100': 'p100',
-    'ゆうパック_120': 'p120',
-    'ゆうパック_140': 'p140',
-    'ゆうパック_160': 'p160',
-    'ゆうパケット_通常': 'pk1',
-    'ゆうパケット_7cm以上': 'pk2',
-    'クリックポスト': 'cp',
-    'ケース': 'ke',
-    '定形外(ゆうメール)': 'te',
-  };
+  const itemKeyMap = (()=>{ const m={}; IK_PRICED.forEach(k=>m[k]=ITEMS[k].ck); return m; })();
   
   // 集荷品目別の金額計算(税モード混在対応)
   let colAmount = 0;
@@ -21000,20 +20952,9 @@ function _calcInvoiceAmount(row, cust){
 
 /** 集荷品目ラベル */
 function _getColItemLabel(key){
-  const labels = {
-    'p60': 'ゆうパック60',
-    'p80': 'ゆうパック80',
-    'p100': 'ゆうパック100',
-    'p120': 'ゆうパック120',
-    'p140': 'ゆうパック140',
-    'p160': 'ゆうパック160',
-    'pk1': 'パケット1',
-    'pk2': 'パケット2',
-    'cp': 'クリックポスト',
-    'ke': 'ゆうメール',
-    'te': '定形',
-  };
-  return labels[key] || key;
+  const derived = ckLabel(key, true);
+  if(derived && derived !== key) return derived;
+  return key;   // ★ 2026/09/12: ラベルは ITEMS から取得（上の derived）。旧ハードコード表は削除。
 }
 
 /** 請求書HTML生成(プレビュー&出力共通) */
@@ -21258,21 +21199,8 @@ function openInvoiceLabelEditor(customerName, ymInput){
   if(!cust){ alert('顧客マスタが見つかりません'); return; }
   
   // 標準品目のキー一覧
-  const standardKeys = [
-    {key:'p60',  label:'ゆうパック60'},
-    {key:'p80',  label:'ゆうパック80'},
-    {key:'p100', label:'ゆうパック100'},
-    {key:'p120', label:'ゆうパック120'},
-    {key:'p140', label:'ゆうパック140'},
-    {key:'p160', label:'ゆうパック160'},
-    {key:'pk1',  label:'ゆうパケット(通常)'},
-    {key:'pk2',  label:'ゆうパケット(5cm以上)'},
-    {key:'cp',   label:'クリックポスト'},
-    {key:'ke',   label:'ケース'},
-    {key:'te',   label:'定形外(ゆうメール)'},
-    {key:'__delivery__', label:'配達'},
-    {key:'__shu__', label:'定時集荷'},
-  ];
+  const standardKeys = CK_LIST.map(ck=>({key:ck, label:ckLabel(ck,true)}))
+    .concat([{key:'__delivery__', label:'配達'},{key:'__shu__', label:'定時集荷'}]);
   const labels = cust.invoiceLabels || {};
   
   document.getElementById('m-invoice-label-editor')?.remove();
@@ -23101,10 +23029,30 @@ function restoreCoOtherRows(items){
 }
 
 
+// ★ 2026/09/12: 顧客モーダルの集荷単価欄を ITEMS から生成する。
+//   品目を増やしたら欄も自動で増える。IDの付け方は従来通り 'cu-c'+ck。
+function ypPktTaxFields(){
+  return IK_YP.concat(IK_PKT).map(k=>'cu-c'+ITEMS[k].ck);
+}
+function renderCuPriceGrid(){
+  const wrap=document.getElementById('cu-col-price-grid');
+  if(!wrap) return;
+  const useKeys=CK_LIST;                       // 将来は顧客ごとの使用品目で絞る
+  wrap.innerHTML=useKeys.map(ck=>{
+    const k=itemOfCk(ck), it=ITEMS[k]||{};
+    const fid='cu-c'+ck;
+    const extra = (ck==='p60') ? ' onblur="onCuYP60Change()"' : '';
+    return `<div class="fg"><label class="${it.cls||''}" style="font-size:9px;">${it.label||ck}（円）`
+      + `<span class="tax-tog" id="tt-${fid}" data-tax="ex">`
+      + `<button onclick="setItemTax('${fid}','in')" class="">税込</button>`
+      + `<button onclick="setItemTax('${fid}','ex')" class="active-ex">税別</button></span></label>`
+      + `<input type="number" id="${fid}" class="fi" style="font-size:11px;padding:4px 6px;" oninput="updCuTaxPreview()"${extra}></div>`;
+  }).join('');
+}
+
 // ─── 集荷 顧客別単価（セレクト＋タブ方式） ───
-const CO_COL_ITEMS = ['p60','p80','p100','p120','p140','p160','pk1','pk2','cp','ke','te'];
-const CO_COL_LABELS = {p60:'YP60',p80:'YP80',p100:'YP100',p120:'YP120',p140:'YP140',p160:'YP160',
-  pk1:'PKT通常',pk2:'PKT5cm〜',cp:'CP',ke:'ケース',te:'定形外'};
+const CO_COL_ITEMS = CK_LIST.slice();                                  // ITEMSから自動生成
+const CO_COL_LABELS = (()=>{ const m={}; CK_LIST.forEach(ck=>m[ck]=ckLabel(ck)); return m; })();
 // _coCustPrices: [{custId, taxType, prices:{p60,p80,...}}]
 let _coCustPrices = [];
 let _coCustSelId = null; // 現在選択中のcustId（タブ）
@@ -24497,17 +24445,7 @@ function renderSalary(){
     if(useColPrice){
       puRows.forEach(r=>{
         const items=r.items||{};
-        colAmt+=(cp.p60||0)*(items['ゆうパック_60']||0);
-        colAmt+=(cp.p80||0)*(items['ゆうパック_80']||0);
-        colAmt+=(cp.p100||0)*(items['ゆうパック_100']||0);
-        colAmt+=(cp.p120||0)*(items['ゆうパック_120']||0);
-        colAmt+=(cp.p140||0)*(items['ゆうパック_140']||0);
-        colAmt+=(cp.p160||0)*(items['ゆうパック_160']||0);
-        colAmt+=(cp.pk1||0)*(items['ゆうパケット_通常']||0);
-        colAmt+=(cp.pk2||0)*(items['ゆうパケット_7cm以上']||0);
-        colAmt+=(cp.cp||0)*(items['クリックポスト']||0);
-        colAmt+=(cp.ke||0)*(items['ケース']||0);
-        colAmt+=(cp.te||0)*(items['定形外(ゆうメール)']||0);
+        IK_PRICED.forEach(k=>{ colAmt+=(cp[ITEMS[k].ck]||0)*(items[k]||0); });
       });
     }
     // ── エリア日額（集荷チャーター kind=area の稼働日×日額） ──
@@ -33088,9 +33026,8 @@ function setupEnterNav(){
   attachEnterNav('m-del',   DD_ORDER,  ()=>confirmAndSave('del'));
   attachEnterNav('m-pu',    PU_ORDER,  ()=>confirmAndSave('pu'));
   attachEnterNav('m-staff', null,      ()=>saveStaff(false));
-  attachEnterNav('m-cust',  ['cu-no','cu-name','cu-reg','cu-start',
-    'cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160',
-    'cu-cpk1','cu-cpk2','cu-ccp','cu-cke','cu-cte'], ()=>saveCust());
+  attachEnterNav('m-cust',  ['cu-no','cu-name','cu-reg','cu-start']
+    .concat(CK_LIST.map(ck=>'cu-c'+ck)), ()=>saveCust());
   attachEnterNav('m-office',['of-code','of-name','of-addr','of-tel','of-fax','of-head',
     'of-p60','of-p80','of-p100','of-p120','of-p140','of-p160',
     'of-pkanryo','of-ptenso','of-pnight','of-pogata','of-pshukka',
@@ -33186,7 +33123,9 @@ function openM(id){
   if($('cu-visit-to'))$('cu-visit-to').value='';
   if($('cu-visit-note'))$('cu-visit-note').value='';
       if($('cu-start'))$('cu-start').value='';
-      ['cu-cp60','cu-cp80','cu-cp100','cu-cp120','cu-cp140','cu-cp160','cu-cpk1','cu-cpk2','cu-ccp','cu-cke','cu-cte'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
+      if(typeof renderCuPriceGrid==='function') renderCuPriceGrid();   // ★ 新規追加時も欄を生成
+      CK_LIST.forEach(ck=>{const e=$('cu-c'+ck);if(e)e.value='';});
+      CK_LIST.forEach(ck=>setItemTax('cu-c'+ck,'ex'));
       if($('cu-charter-list'))$('cu-charter-list').innerHTML='';
       // その他リスト(行追加方式)をリセット + 空行1つ
       const ol2 = $('cu-other-list');
