@@ -5919,8 +5919,18 @@ async function fbSet(key, value) {
         delete window._fbWritingGuard[key];
       }
     }, 2000);
+    return true;
   }
-  catch(e) { console.warn('fb write error:', e); delete window._fbWritingGuard[key]; }
+  // ★ 2026/09/13: 失敗を握り潰さず呼び出し側に返す。
+  //   これまで false も例外も返していなかったため、書き込みが拒否されても
+  //   処理は成功として進み、画面上は成功したように見えていた。
+  //   （計数データの顧客配下への移行が、実際には書き込めていなかった原因）
+  catch(e) {
+    console.warn('fb write error:', key, e);
+    delete window._fbWritingGuard[key];
+    window._fbLastWriteError = (e && e.message) ? e.message : String(e);
+    return false;
+  }
 }
 
 // Firebaseから全データをロードしてDに反映
@@ -6630,6 +6640,10 @@ function setupRealtimeSync() {
   });
   // ★ 2026/09/01: バーコード計数(j-scan) 便別実績。col_logs とは別ノード。読むだけで書かない。
   onValue(ref(fbDB, 'nikki/jet_scan'), snap => {
+    // ★ 2026/09/13: 自分の書き込み直後は受け取らない。
+    //   これが無いと、書き込みが拒否されたときに古い内容が戻ってきて
+    //   端末側の変更が打ち消され、原因が分からなくなっていた。
+    if(window._fbWritingGuard && window._fbWritingGuard['jet_scan']) return;
     lsSet(LS_KEYS.JET, snap.exists() ? snap.val() : {});
     applyFirebaseData();
     if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
@@ -9578,11 +9592,32 @@ async function jetMigrateLegacy(){
     }
     delete all[d];
   }
-  await _jetSave(all);
+  // ★ 2026/09/13: 共有への書き込み結果を確認する。
+  //   以前はここで失敗しても成功と表示し、購読が古い内容を戻していたため
+  //   「移行した」のにデータが変わらないという状態になっていた。
+  const okSave = await _jetSave(all);
+  if(!okSave){
+    await showAlert({icon:'⚠️', title:'移行できませんでした',
+      msg:'共有データへの書き込みが拒否されました。端末側の変更も元に戻します。\n\n'
+        + (window._fbLastWriteError || '')
+        + '\n\nFirebaseのルールで nikki/jet_scan への書き込みが'
+        + '許可されているか確認してください。'});
+    // 端末側を共有の内容に戻す（中途半端な状態を残さない）
+    try{
+      const { ref, get } = window._fbImports || {};
+      if(fbDB && ref && get){
+        const snap = await get(ref(fbDB,'nikki/jet_scan'));
+        lsSet(LS_KEYS.JET, snap.exists() ? snap.val() : {});
+      }
+    }catch(e){}
+    applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
+    return;
+  }
   applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
   await showAlert({icon:'📦', title:'移行しました',
     msg:'便 '+moved+'件を「'+(cu.name||'')+'」の配下へ移しました。\n'
-      + '番号明細 '+nosMoved+'件も移しました。'
+      + '番号明細 '+nosMoved+'件も移しました。\n\n'
+      + '共有データへの書き込みも完了しています。'
       + (failed?('\n\n'+failed+'件で番号明細の移動に失敗しました。通信を確認してもう一度実行してください。'):'')});
 }
 
@@ -39349,10 +39384,15 @@ function _jetSetAt(all, path, value){
   return all;
 }
 
+// ★ 2026/09/13: Firebaseへの書き込み結果を返す（true/false）。
+//   端末には常に保存するが、共有への反映に失敗したかどうかを呼び出し側が判断できる。
 async function _jetSave(all){
   lsSet(LS_KEYS.JET, all);
-  try{ if(typeof fbSet==='function') await fbSet('jet_scan', all); }
-  catch(e){ console.error('[_jetSave]', e); }
+  try{
+    if(typeof fbSet!=='function') return false;
+    return await fbSet('jet_scan', all);
+  }
+  catch(e){ console.error('[_jetSave]', e); return false; }
 }
 
 // 締め状態の切り替え(未締め ⇄ 締め済)
