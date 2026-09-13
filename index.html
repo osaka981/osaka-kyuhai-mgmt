@@ -12861,6 +12861,16 @@ async function saveCust(){
   // 顧客番号を3桁形式に正規化
   let custNo=$('cu-no')?.value.trim()||genCustNo();
   custNo = _normalizeCustNo(custNo);
+  // ★ 2026/09/13: 登録済みの顧客番号は保存時も元の値を維持する。
+  //   顧客番号は請求・集荷日報・バーコード計数の紐づけキーで、
+  //   特に計数データは階層に埋め込まれているため、変更すると過去分が参照できなくなる。
+  if(editId){
+    const _prevNo=_normalizeCustNo(((D.customers||[]).find(c=>c.id===editId)||{}).custNo||'');
+    if(_prevNo && _prevNo!==custNo){
+      console.warn('[saveCust] 顧客番号の変更を無視しました:', custNo, '→', _prevNo);
+      custNo=_prevNo;
+    }
+  }
   if(!custNo){
     alert('顧客番号が不正です(1〜999の範囲で入力してください)');
     return;
