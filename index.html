@@ -5003,6 +5003,12 @@ function _buildFbDriverEntry(s){
   const _pinInitialized = s.pinInitialized || (_prev && _prev.pinInitialized) || false;
   const _pinInitAt      = s.pinInitializedAt || (_prev && _prev.pinInitializedAt) || null;
   const _pinFixed       = s.pinIsPersonalFixed || (_prev && _prev.pinIsPersonalFixed) || false;
+  // ★ 2026/09/14: 退職判定（経営管理の在籍状態と、委託会社側の active:false のどちらも見る）
+  const _today = (new Date()).toISOString().slice(0,10);
+  const _retired = !!(s.endDate && s.endDate < _today)
+                || s.status === '終了'
+                || s.active === false
+                || (s.active === undefined && _prev && _prev.active === false);
   const _initHash       = s.initialPinHash || (_prev && _prev.initialPinHash) || null;
   const _initAt         = s.initialPinIssuedAt || (_prev && _prev.initialPinIssuedAt) || null;
   return {
@@ -5044,7 +5050,22 @@ function _buildFbDriverEntry(s){
     // ★ 2026/09/10: 計数アプリの「局へ運ぶ人」選択で使う。集荷の登録がある人だけを一覧に出す。
     workType: s.workType || '',            // 委託ドライバー：delivery / collection / both
     companyId: s.companyId || null,
-    retired:  !!(s.endDate && s.endDate < (new Date()).toISOString().slice(0,10)),
+    /* ★ 2026/09/14: 退職の扱いを1か所にまとめた。
+       これまでの問題:
+       ・委託会社が日報アプリで退職(active:false)にしても、経営管理で従業員を
+         1件保存すると drivers が作り直され、active が消えて復活していた。
+       ・経営管理で在籍状態を変えても retired しか出しておらず、日報アプリの
+         所属ドライバー一覧(active で判定)からは消えなかった。
+       退職の合図は「経営管理の在籍終了日・終了」と「委託会社側の active:false」の
+       両方。どちらか一方でも立っていれば退職として扱い、active と retired の
+       両方に出す。_prev は現在の nikki/drivers の値なので、委託会社が立てた
+       active:false をここで拾える。
+       なお、退職者を書き出しから外してはいけない。外すと
+       _mergeKeepUnknownDrivers が「経営管理に居ないドライバー」とみなして
+       元の内容を復活させてしまう。必ず active:false を付けて出す。 */
+    companyCode: s.companyCode || (_prev && _prev.companyCode) || '',
+    retired:  _retired,
+    active:   !_retired,
   };
 }
 
@@ -10069,6 +10090,31 @@ async function aclToggleActive(uid){
   }
   map[String(uid)]=r; _aclSaveLocal(map); renderAclList();
   _showSaveToast(now?'停止しました':'停止を解除しました');
+}
+
+/* ★ 2026/09/14: 退職した人の個人アカウントを止める。
+   退職扱いにしてもログインが生きたままだと、辞めた人が自社のデータを
+   見られる状態が残るため。会社アカウントは対象外（人に紐づかないため）。 */
+async function _aclSyncRetired(){
+  const map=_aclUsers();
+  const uids=Object.keys(map);
+  if(!uids.length) return;
+  const today=(new Date()).toISOString().slice(0,10);
+  const isRetired = st => !!(st && ((st.endDate && st.endDate < today) || st.status==='終了' || st.active===false));
+  const { ref, set } = window._fbImports || {};
+  for(const uid of uids){
+    const r=map[uid];
+    if(!r || r.kind!=='person' || r.active===false) continue;
+    const st=(D.staff||[]).find(x=>x && (String(x.uid||x.id)===String(r.staffUid) || String(x.id)===String(r.staffUid)));
+    if(!st || !isRetired(st)) continue;
+    r.active=false;
+    r.deactivatedReason='退職';
+    try{ if(ref && set) await set(ref(fbDB,'nikki/_acl/user/'+uid+'/active'), false); }catch(e){}
+    map[uid]=r;
+    console.log('[acl] 退職に伴いアカウントを停止:', r.staffName||uid);
+  }
+  _aclSaveLocal(map);
+  try{ renderAclList(); }catch(e){}
 }
 
 function renderAclList(){
@@ -19071,6 +19117,7 @@ function saveStaff(continueAdd=false){
      内部ID(id)は編集しても引き継がれるので、社員番号を変えても動かない。
      保存のたびに少しずつ全員ぶんが揃う。 */
   try{ D.staff.forEach(x=>{ if(x && !x.uid && x.id!=null) x.uid=String(x.id); }); }catch(e){}
+  try{ _aclSyncRetired(); }catch(e){ console.warn('[acl] 退職との連動に失敗', e); }
 
   // === Firebase保存 ===
   // ① nikki/drivers (日報アプリ用、簡略版・全社員分)
