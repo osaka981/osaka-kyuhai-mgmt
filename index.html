@@ -830,6 +830,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="locations" onclick="nav(this)"><span class="ni-ico">📍</span>拠点管理</div>
       <div class="ni" data-s="billing" onclick="nav(this)"><span class="ni-ico">💰</span>売上・支払明細</div>
       <div class="ni" data-s="import" onclick="nav(this)"><span class="ni-ico">📂</span>CSVインポート</div>
+      <div class="ni" data-s="acl" onclick="nav(this)"><span class="ni-ico">🪪</span>ログインアカウント</div>
       <div class="ni" data-s="ts-inv" onclick="requireTS('ts-inv',this)"><span class="ni-ico">📄</span>郵便局請求書</div>
       <div class="ni" data-s="ts-prices" onclick="requireTS('ts-prices',this)"><span class="ni-ico">📋</span>郵便局単価</div>
       <div class="ni" data-s="ts-settings" onclick="requireTS('ts-settings',this)"><span class="ni-ico">⚙️</span>システム設定</div>
@@ -1645,6 +1646,30 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </tr></thead>
           <tbody id="tb-jc"></tbody>
         </table></div>
+      </div>
+    </div>
+
+    <!-- ★ 2026/09/14: アプリのログインアカウント。
+         委託会社ごとの「会社アカウント」と、希望者だけの「個人アカウント」を
+         同じ仕組みで発行する。Firebaseのルールは会社ID(companyId)だけを見るので、
+         1台を共用するか個人の携帯で使うかを、会社ごと・人ごとに後から変えられる。 -->
+    <div id="s-acl" class="sec">
+      <div class="flbc mb12">
+        <h2 style="margin:0;font-size:16px;font-weight:700;">🪪 ログインアカウント</h2>
+        <div class="fla gap6">
+          <button class="btn b-grn btn-sm" onclick="aclIssueCompany()">＋ 会社アカウントを発行</button>
+          <button class="btn b-blu btn-sm" onclick="aclIssuePerson()">＋ 個人アカウントを発行</button>
+        </div>
+      </div>
+      <div class="xs muted" style="margin:-6px 0 10px;">
+        会社アカウントは、そのタブレットや端末を誰が使っても同じ会社のデータだけが見える形です。個人はアプリ内で切り替えるので、オフラインでも交代できます。<br>
+        個人アカウントは、その人だけが名乗れる形です。個人の携帯で使う場合に向きますが、初回のログインだけは電波のある場所で行ってください。<br>
+        パスワードは発行時にこの画面で一度だけ表示されます。保存していないので、忘れた場合は作り直しになります。
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="cbar"></div>発行済みのアカウント</div>
+          <span class="xs muted">この一覧は nikki/_acl/user に保存されます</span></div>
+        <div id="acl-list"></div>
       </div>
     </div>
 
@@ -6730,6 +6755,11 @@ function setupRealtimeSync() {
     }catch(e){}
     if(typeof renderJetCustList==='function') renderJetCustList();
   }, '計数顧客マスタ');
+  // ★ 2026/09/14: ログインアカウントの権限表
+  subscribeNode('nikki/_acl/user', snap => {
+    try{ localStorage.setItem(ACL_LS, JSON.stringify(snap.exists() ? (snap.val()||{}) : {})); }catch(e){}
+    if(typeof renderAclList==='function') renderAclList();
+  }, 'ログインアカウント');
   subscribeNode('nikki/jet_settings', snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_settings']) return;
     lsSet(LS_KEYS.JETSET, snap.exists() ? snap.val() : {});
@@ -7726,6 +7756,7 @@ const _TOP_TABS = {
     { s:'archive',     label:'アーカイブ' },
     { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
     { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
+    { s:'acl',         label:'ログインアカウント', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -7806,6 +7837,7 @@ function navByS(s) {
   if (s==='pu-report')   _call('renderPUReport');
   if (s==='pu-sum')      _call('renderSum');
   if (s==='pu-cust')     {} /* onValue自動更新 */
+  if (s==='acl')         { _call('renderAclList'); }
   if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='pu-count')    _call('renderJetCmp');
   if (s==='staff')       _call('renderStaff');
@@ -9861,6 +9893,189 @@ async function _secondaryAuth(){
     window._fbSecondary = I.initializeApp(FB_CONFIG, 'acl-' + Date.now());
   }
   return I.getAuth(window._fbSecondary);
+}
+
+/* ══ ★ 2026/09/14: アプリのログインアカウント（nikki/_acl/user） ══
+   形: { <uid>: { uid, kind:'company'|'person', companyId, companyName,
+                  staffUid, staffName, email, createdAt, active } }
+   ルールはこの companyId だけを見る。会社アカウントか個人アカウントかを
+   区別しないので、運用の形を後から変えてもデータ移行が要らない。 */
+const ACL_LS = 'nikki_acl_user';
+const ACL_MAIL_DOMAIN = 'work.local';   // 顧客用(@scan.local)とは分ける
+
+function _aclUsers(){
+  try{
+    const v = JSON.parse(localStorage.getItem(ACL_LS) || '{}');
+    return (v && typeof v === 'object') ? v : {};
+  }catch(e){ return {}; }
+}
+function _aclSaveLocal(map){
+  try{ localStorage.setItem(ACL_LS, JSON.stringify(map)); }catch(e){}
+}
+function _aclPw(){
+  const cs='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const a=new Uint8Array(12); crypto.getRandomValues(a);
+  return Array.from(a).map(x=>cs[x%cs.length]).join('');
+}
+function _aclSlug(){
+  const cs='abcdefghjkmnpqrstuvwxyz23456789';
+  const a=new Uint8Array(12); crypto.getRandomValues(a);
+  return Array.from(a).map(x=>cs[x%cs.length]).join('');
+}
+function _aclCompanies(){
+  return (D.companies||[]).filter(c=>c && c.status!=='終了' && c.active!==false);
+}
+
+/* アカウントを1件つくる。
+   Firebase Auth の作成と権限表への登録がそろって初めて成功とする。
+   途中で失敗したら、作りかけのアカウントを消して元に戻す。 */
+async function _aclCreate(rec, label){
+  const I = window._fbImports || {};
+  if(!I.createUserWithEmailAndPassword){
+    showAlert({icon:'⚠️', title:'発行できません', msg:'Firebase SDK のログイン機能が読み込まれていません'});
+    return null;
+  }
+  const pw = _aclPw();
+  const email = _aclSlug() + '@' + ACL_MAIL_DOMAIN;
+  let uid = null, auth2 = null;
+  try{
+    auth2 = await _secondaryAuth();
+    const cred = await I.createUserWithEmailAndPassword(auth2, email, pw);
+    uid = cred.user.uid;
+  }catch(e){
+    showAlert({icon:'⚠️', title:'発行できませんでした',
+      msg:'ログインアカウントを作成できませんでした。\n\n'+(e && e.message ? e.message : '')
+        +'\n\nFirebaseの認証で「メール／パスワード」が有効になっているか確認してください。'});
+    return null;
+  }
+  const full = Object.assign({}, rec, { uid, email, createdAt: Date.now(), active: true });
+  try{
+    const { ref, set } = I;
+    await set(ref(fbDB, 'nikki/_acl/user/' + uid), full);
+  }catch(eAcl){
+    // 権限表に載らないアカウントは、あっても使えないうえ消せなくなる
+    try{ if(auth2 && auth2.currentUser) await auth2.currentUser.delete(); }catch(e){}
+    try{ await I.signOut(auth2); }catch(e){}
+    showAlert({icon:'⚠️', title:'発行できませんでした',
+      msg:'権限表に登録できなかったため、作成したアカウントを取り消しました。\n\n'
+        +(eAcl && eAcl.message ? eAcl.message : '')
+        +'\n\nFirebaseのルールで nikki/_acl/user への書き込みが許可されているか確認してください。'});
+    return null;
+  }
+  try{ await I.signOut(auth2); }catch(e){}
+
+  const map = _aclUsers(); map[uid] = full; _aclSaveLocal(map);
+  renderAclList();
+  await showAlert({icon:'🔑', title:'発行しました',
+    msg: label + '\n\nID: ' + email + '\nパスワード: ' + pw
+      + '\n\nこの画面でしか表示されません。控えてから閉じてください。'});
+  return full;
+}
+
+async function aclIssueCompany(){
+  const cands = _aclCompanies();
+  if(!cands.length){ showAlert({icon:'⚠️', title:'発行できません', msg:'稼働中の委託会社がありません'}); return; }
+  const opts = cands.map(c=>`<option value="${esc(String(c.id))}">${esc(c.name||'')}</option>`).join('');
+  const ok = await showDialog({
+    icon:'🏭', title:'会社アカウントの発行',
+    bodyHtml:`<div class="fg"><label>委託会社</label>
+      <select id="acl-add-co" class="fi">${opts}</select></div>
+      <div class="xs muted">その会社の端末で使います。誰が使っても、この会社のデータだけが見えます。<br>
+      個人はアプリ内で切り替えるので、オフラインでも交代できます。</div>`,
+    okText:'発行する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  const id = document.getElementById('acl-add-co')?.value;
+  const co = cands.find(c=>String(c.id)===String(id));
+  if(!co) return;
+  await _aclCreate({ kind:'company', companyId:String(co.id), companyName:co.name||'' }, co.name||'');
+}
+
+async function aclIssuePerson(){
+  const cands = (D.staff||[]).filter(s=>s && s.status!=='終了' && (s.name||'').trim());
+  if(!cands.length){ showAlert({icon:'⚠️', title:'発行できません', msg:'対象の従事員がいません'}); return; }
+  const opts = cands.map(s=>{
+    const co=(D.companies||[]).find(c=>String(c.id)===String(s.companyId));
+    return `<option value="${esc(String(s.id))}">${esc(s.name)}${co?'（'+esc(co.name||'')+'）':''}</option>`;
+  }).join('');
+  const ok = await showDialog({
+    icon:'👤', title:'個人アカウントの発行',
+    bodyHtml:`<div class="fg"><label>従事員</label>
+      <select id="acl-add-st" class="fi">${opts}</select></div>
+      <div class="xs muted">その人の携帯で使います。初回のログインだけ電波のある場所で行ってください。<br>
+      一度ログインすれば、以後はオフラインでも起動できます。</div>`,
+    okText:'発行する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  const id = document.getElementById('acl-add-st')?.value;
+  const st = cands.find(x=>String(x.id)===String(id));
+  if(!st) return;
+  const co = (D.companies||[]).find(c=>String(c.id)===String(st.companyId));
+  await _aclCreate({
+    kind:'person',
+    companyId: st.companyId ? String(st.companyId) : '',
+    companyName: co ? (co.name||'') : '自社',
+    staffUid: String(st.uid || st.id || ''),
+    staffName: st.name || ''
+  }, (st.name||'') + (co ? '（'+(co.name||'')+'）' : ''));
+}
+
+/* 停止と削除。
+   Firebase Auth のアカウント自体は、本人としてログインしていないと消せない。
+   権限表から外せばどのデータも読めなくなるので、運用上はこれで足りる。 */
+async function aclToggleActive(uid){
+  const map=_aclUsers(); const r=map[String(uid)];
+  if(!r){ showAlert({msg:'対象が見つかりません'}); return; }
+  const now = r.active!==false;
+  const ok = await showDialog({
+    icon: now?'🚫':'✅', title: now?'このアカウントを停止':'停止を解除',
+    msg: (r.companyName||'')+(r.staffName?' / '+r.staffName:'')+'\n\n'
+      + (now ? '停止すると、このアカウントからはどのデータも読めなくなります。'
+             : '解除すると、再びこの会社のデータを読めるようになります。'),
+    okText: now?'停止する':'解除する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  r.active = !now;
+  try{
+    const { ref, set } = window._fbImports || {};
+    await set(ref(fbDB, 'nikki/_acl/user/'+uid+'/active'), r.active);
+  }catch(e){
+    showAlert({icon:'⚠️', title:'保存できませんでした', msg:(e&&e.message)||''});
+    return;
+  }
+  map[String(uid)]=r; _aclSaveLocal(map); renderAclList();
+  _showSaveToast(now?'停止しました':'停止を解除しました');
+}
+
+function renderAclList(){
+  const wrap=document.getElementById('acl-list');
+  if(!wrap) return;
+  const list=Object.values(_aclUsers()).sort((a,b)=>
+    String(a.companyName||'').localeCompare(String(b.companyName||''),'ja') ||
+    String(a.kind||'').localeCompare(String(b.kind||'')));
+  if(!list.length){
+    wrap.innerHTML='<div style="font-size:11px;color:var(--txt2);padding:8px 0;">'
+      +'まだ発行していません。上のボタンから発行してください。</div>';
+    return;
+  }
+  const rows=list.map(r=>`<tr>
+    <td class="fw7">${esc(r.companyName||'（会社未設定）')}</td>
+    <td class="xs">${r.kind==='person'
+      ? '<span style="color:var(--blu2);font-weight:700">個人</span> '+esc(r.staffName||'')
+      : '<span style="color:var(--tel2);font-weight:700">会社</span> <span class="muted">端末で共用</span>'}</td>
+    <td class="xs mono" style="word-break:break-all;">${esc(r.email||'')}</td>
+    <td class="xs">${r.active===false
+      ? '<span style="color:var(--red2);font-weight:700">停止中</span>'
+      : '<span style="color:var(--tel2)">有効</span>'}</td>
+    <td class="xs muted mono">${r.createdAt?new Date(r.createdAt).toLocaleDateString('ja-JP'):''}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
+        onclick="aclToggleActive('${esc(String(r.uid))}')">${r.active===false?'停止を解除':'停止する'}</button>
+    </td>
+  </tr>`).join('');
+  wrap.innerHTML=`<div class="tw"><table>
+    <thead><tr><th>会社</th><th>種類</th><th>ID</th><th>状態</th><th>発行日</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
 }
 
 async function jetCustIssueAccount(id){
