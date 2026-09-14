@@ -6075,14 +6075,22 @@ function _mergeOwnerCompanyDrivers(){
       D.staff.push({
         id: d.id || d.driverNo || ('co_'+Date.now()),
         empNo: d.id || d.driverNo || '',
+        /* ★ 2026/09/14: 日報アプリが発行した「変わらない鍵」をそのまま引き継ぐ。
+           あとでこちらが社員番号を付け替えても、過去の日報・計数がこの人から
+           外れないようにするため。 */
+        uid: String(d.uid || d.id || d.driverNo || ''),
+        empNoHistory: Array.isArray(d.empNoHistory) ? d.empNoHistory.map(String) : [],
         name: d.name || '(名前なし)',
         kubun: '委託会社所属',
         kyuyo: '',               // 給与形態なし(直接支払いなし)
         office: d.office || '',
+        workType: d.workType || '',
         companyId: d.companyId || '',
         companyName: coName,
-        tel: '',
+        // ★ 2026/09/14: 登録時に入力された電話番号を捨てていた（空で固定していた）
+        tel: d.tel || '',
         _fromOwnerDrivers: true, // オーナー登録由来のマーク
+        _ownerCreatedAt: d.createdAt || '',   // ★ 通知を7日で閉じるための登録日時
         _needsReview: true,      // ★ 内勤未確認(通知対象)。確認すると解除
       });
       _ownerDriverImported = true; // 今回新規取り込みが発生した
@@ -9154,7 +9162,17 @@ function _renderUnregisteredDriversAlert(){
   // ★ 2026/06/29: 自動取り込みされた委託ドライバーの通知(内勤未確認分)
   //   日報の委託会社オーナーが登録したドライバーを自動で従業員一覧に取り込んだ際、
   //   内勤が把握できるよう通知する。「確認」で _needsReview を外し通知から消す。
-  const reviewList = (D.staff||[]).filter(s=>s._needsReview && s.kubun && String(s.kubun).includes('委託会社'));
+  /* ★ 2026/09/14: 登録から7日たった分は自動で通知から外す。
+     内勤が「確認しました」を押せばその場で消える。押し忘れても残り続けない。
+     登録日時が分からない古い取り込みは、従来どおり確認するまで残す。 */
+  const _REVIEW_DAYS = 7;
+  const _reviewFresh = s => {
+    const t = Date.parse(s._ownerCreatedAt || '');
+    if(!t) return true;
+    return (Date.now() - t) < _REVIEW_DAYS * 86400000;
+  };
+  const reviewList = (D.staff||[]).filter(s=>
+    s._needsReview && s.kubun && String(s.kubun).includes('委託会社') && _reviewFresh(s));
   if(reviewList.length > 0){
     html += `
       <div class="card mb12" style="background:#eff6ff;border:1px solid rgba(37,99,235,.3);">
@@ -9163,13 +9181,19 @@ function _renderUnregisteredDriversAlert(){
             <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:4px;">🆕 委託会社から新しいドライバーが登録されました (${reviewList.length}名)</div>
             <div style="font-size:11px;color:var(--txt2);margin-bottom:8px;">日報アプリの委託会社オーナーが登録したドライバーを従業員一覧に自動で取り込みました。内容を確認してください。集荷数(委託会社への支払い数量)に反映されます。</div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;">
-              ${reviewList.map(s=>`
-                <span style="background:#fff;border:1px solid rgba(37,99,235,.35);border-radius:4px;padding:3px 8px;font-size:11px;">
+              ${reviewList.map(s=>{
+                // ★ 2026/09/14: 委託会社名・氏名・電話番号・採番した番号・登録日を出す
+                const _d = Date.parse(s._ownerCreatedAt||'');
+                const _ds = _d ? new Date(_d).toLocaleDateString('ja-JP') : '';
+                return `
+                <span style="background:#fff;border:1px solid rgba(37,99,235,.35);border-radius:4px;padding:4px 8px;font-size:11px;display:inline-block;">
+                  ${s.companyName?`<span style="color:#1d4ed8;font-weight:700;">${esc(s.companyName)}</span><br>`:''}
                   <span style="font-family:monospace;color:#1d4ed8;font-weight:700;">${esc(s.empNo||s.id||'')}</span>
-                  <span style="color:var(--txt);"> ${esc(s.name||'')}</span>
-                  ${s.companyName?`<span style="color:var(--txt3);"> / ${esc(s.companyName)}</span>`:''}
-                </span>
-              `).join('')}
+                  <span style="color:var(--txt);font-weight:700;"> ${esc(s.name||'')}</span>
+                  ${s.tel?`<br><span style="font-family:monospace;color:var(--txt2);">${esc(s.tel)}</span>`:'<br><span style="color:var(--red2);">電話番号なし</span>'}
+                  ${_ds?`<span style="color:var(--txt3);"> / 登録 ${esc(_ds)}</span>`:''}
+                </span>`;
+              }).join('')}
             </div>
           </div>
           <button class="btn btn-sm b-blu" onclick="_confirmImportedDrivers()" style="white-space:nowrap;">確認しました</button>
