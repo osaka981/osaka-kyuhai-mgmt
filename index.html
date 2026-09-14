@@ -6572,6 +6572,32 @@ function applyFirebaseData() {
   try{ normalizeReportDates(); }catch(e){ console.warn('日付正規化に失敗:', e); }
 }
 
+/* ★ 2026/09/14: onValue は読み取りが拒否されると、その購読ごと止まる。
+   Firebase は自動で張り直さないうえ、これまでエラーの受け口を渡していなかったため、
+   受信が止まっても画面には何も出ず「計数の反映が遅い／来ない」ように見えていた。
+   （9/13にルールを絞ってから起きやすい。認証が整う前に張ると即座に拒否される。）
+   エラーを拾って、間隔を空けながら張り直す。 */
+const _subState = {};
+function subscribeNode(path, cb, label){
+  const { ref, onValue } = window._fbImports || {};
+  if(!fbDB || !ref || !onValue) return;
+  const st = _subState[path] || (_subState[path] = { tries:0, off:null });
+  try{ if(st.off) st.off(); }catch(e){}
+  st.off = onValue(ref(fbDB, path), snap=>{
+    st.tries = 0;
+    try{ cb(snap); }catch(e){ console.error('['+path+'] 反映に失敗', e); }
+  }, err=>{
+    st.tries++;
+    console.warn('['+path+'] 受信が止まりました('+st.tries+'回目)', err && err.message);
+    if(st.tries<=6){
+      const wait = Math.min(30000, 2000*Math.pow(2, st.tries-1));
+      setTimeout(()=>subscribeNode(path, cb, label), wait);
+    }else{
+      try{ _showSaveToast((label||path)+'の受信が止まっています。画面を再読み込みしてください'); }catch(e){}
+    }
+  });
+}
+
 // リアルタイム購読（日報アプリが提出したらすぐ反映）
 function setupRealtimeSync() {
   if (!fbDB) return;
@@ -6650,7 +6676,7 @@ function setupRealtimeSync() {
     if(typeof renderCompanyPage === 'function' && document.getElementById('s-company')) renderCompanyPage();
   });
   // ★ 2026/09/01: バーコード計数(j-scan) 便別実績。col_logs とは別ノード。読むだけで書かない。
-  onValue(ref(fbDB, 'nikki/jet_scan'), snap => {
+  subscribeNode('nikki/jet_scan', snap => {
     // ★ 2026/09/13: 自分の書き込み直後は受け取らない。
     //   これが無いと、書き込みが拒否されたときに古い内容が戻ってきて
     //   端末側の変更が打ち消され、原因が分からなくなっていた。
@@ -6659,22 +6685,22 @@ function setupRealtimeSync() {
     applyFirebaseData();
     if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
     renderDash(); renderPU(); renderSum();
-  });
-  onValue(ref(fbDB, 'nikki/jet_adjust'), snap => {
+  }, '計数データ');
+  subscribeNode('nikki/jet_adjust', snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_adjust']) return;
     lsSet(LS_KEYS.JETADJ, snap.exists() ? snap.val() : {});
     applyFirebaseData();
     if(document.getElementById('s-pu-count')?.classList.contains('on')) renderJetCmp();
-  });
+  }, '引受数の訂正');
   // ★ 2026/09/12: 計数顧客マスタ
-  onValue(ref(fbDB, 'nikki/jet_customers'), snap => {
+  subscribeNode('nikki/jet_customers', snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_customers']) return;
     try{
       localStorage.setItem('nikki_jet_customers',
         JSON.stringify(snap.exists() ? (snap.val()||{}) : {}));
     }catch(e){}
     if(typeof renderJetCustList==='function') renderJetCustList();
-  });
+  }, '計数顧客マスタ');
   onValue(ref(fbDB, 'nikki/jet_settings'), snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_settings']) return;
     lsSet(LS_KEYS.JETSET, snap.exists() ? snap.val() : {});
