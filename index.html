@@ -1570,6 +1570,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn btn-sm" id="jc-del-zero"
             style="background:transparent;border:1px solid var(--red2);color:var(--red2);"
             onclick="jetDeleteZeroShifts()">0個の便を削除</button>
+          <!-- ★ 2026/09/14: 締め忘れた便は集荷実績に計上されないため、ここから締める -->
+          <button class="btn btn-sm" id="jc-close-all"
+            style="background:transparent;border:1px solid var(--amb2);color:var(--amb2);"
+            onclick="jetCloseShifts()">未締めをまとめて締める</button>
           <button class="btn b-gh btn-sm" onclick="expJetMonthlyCSV(this)">月次CSV（番号明細）</button>
           <button class="btn b-blu btn-sm" onclick="jetManualOpen()">手入力で便を追加</button>
         </div>
@@ -1619,7 +1623,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <thead><tr>
             <th>日付</th><th class="tr">便数</th>
             <th class="tr">計数 通常</th><th class="tr">計数 5cm</th><th class="tr">計数 計</th>
-            <th class="tr">計上 計</th><th class="tr">差異</th><th>状態</th><th>写真</th><th></th>
+            <th class="tr">計上 計</th><th class="tr">差異</th><th>状態</th><th>写真</th><th>未締め</th><th></th>
           </tr></thead>
           <tbody id="tb-jcday"></tbody>
         </table></div>
@@ -10177,9 +10181,13 @@ function renderJetCmp(){
       <td class="tr mono fw7" style="color:${v.diff?'var(--red)':'var(--txt2)'}">${v.diff>0?'+':''}${v.diff||'0'}</td>
       <td class="xs fw7" style="color:${stCol}">${st}</td>
       <td class="xs">${v.ph?v.ph+'枚':'<span class="muted">—</span>'}</td>
+      <td class="xs">${v.open
+        ? `<button class="btn btn-sm" style="background:transparent;border:1px solid var(--amb2);color:var(--amb2);font-size:10px;padding:2px 7px;"
+             onclick="event.stopPropagation();jetCloseShifts('${esc(v.date)}')">締める ${v.open}</button>`
+        : '<span class="muted">—</span>'}</td>
       <td class="xs" style="color:var(--blu)">明細 ›</td>
     </tr>`;
-  }).join(''):`<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
+  }).join(''):`<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--txt2)">この月の計数データがありません</td></tr>`;
 
   // 表示の切替
   const showDetail=!!_jcDay;
@@ -10196,6 +10204,12 @@ function renderJetCmp(){
     ['便数',rowsAll.length-_zeroN],['計数 合計',scan3+scan5],['計上 合計',fix3+fix5],
     ['差異あり',diffN],['0個の便',_zeroN],['未締め',open]
   ].map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv mono">${fmt(v)}</div></div>`).join('');
+  // ★ 2026/09/14: 未締めが無いときはボタンを出さない
+  const _ca=$('jc-close-all');
+  if(_ca){
+    _ca.style.display = open ? '' : 'none';
+    _ca.textContent = '未締め '+open+'便をまとめて締める';
+  }
 }
 /* ★ 2026/09/12: 数量0の便をまとめて削除する。
    集荷に行ったが荷物が無かった記録、またはテストで作った便が残るため。
@@ -39552,12 +39566,71 @@ async function jetToggleClosed(key){
   });
   if(!ok) return;
   f.rec.closed = !cur;
-  f.rec.closedAt = !cur ? new Date().toISOString() : null;
+  // ★ 2026/09/14: 計数アプリは closedAt をミリ秒で書くので合わせる（表示側が両対応でないため）
+  f.rec.closedAt = !cur ? Date.now() : null;
   f.rec.closedBy = !cur ? '経営管理' : null;
-  f.all[f.date][f.k] = f.rec;
+  /* ★ 2026/09/14: これまで f.all[f.date][f.k] に書き戻していた。
+     顧客ごとの階層(jet_scan/<顧客ID>/<日付>/<便キー>)に移行済みの今これをやると、
+     旧形式の位置に複製が作られ、本体は未締めのまま残っていた。
+     _jetFind が返すパスへ書き戻す。 */
+  _jetSetAt(f.all, f.path, f.rec);
   await _jetSave(f.all);
   applyFirebaseData(); renderJetCmp();
   _showSaveToast(cur ? '締めを解除しました' : '締め済にしました');
+}
+
+/* ★ 2026/09/14: 未締めの便をまとめて締める。
+   計数アプリは日付が変わると前日の記録をアーカイブへ落とすため、
+   締め忘れた便はアプリ側から締められない。締めるまで集荷実績に計上されないので、
+   経営管理から締められるようにする。
+   date を渡すとその日だけ、渡さないと表示中の月（＋顧客タブ）ぶんすべて。 */
+async function jetCloseShifts(date){
+  const mon=$('jc-mon')?.value||'';
+  const rows=_jetRowsForMonth(mon).filter(({j})=>
+    j && !j.closed && (!date || String(j.date)===String(date)));
+  if(!rows.length){
+    showAlert({icon:'ℹ️',title:'対象がありません',
+      msg:(date?String(date)+' に':'この表示に')+'未締めの便はありません'});
+    return;
+  }
+  const has=v=>v!==null&&v!==undefined&&v!=='';
+  const zeroN=rows.filter(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    return (c3+c5)<=0;
+  }).length;
+  const lines=rows.slice(0,12).map(({j,a})=>{
+    const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
+    return '　'+(j.date||'')+'　'+(j.bin||'')+'　'+(j.driverName||'')+'　'+(c3+c5)+'個';
+  }).join('\n');
+  const ok=await showDialog({
+    icon:'🔒',
+    title:(date?String(date)+' の未締めを締める':'未締めをまとめて締める'),
+    msg:'次の '+rows.length+'便 を締め済にします。\n\n'+lines
+      +(rows.length>12?'\n　ほか '+(rows.length-12)+'便':'')
+      +'\n\n締めると集荷実績に計上されます。'
+      +(zeroN?'\n※ うち '+zeroN+'便 は0個のため、締めても計上されません。':''),
+    okText:'締める', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  // 1回の読み込み・1回の保存でまとめて処理する（1件ずつだと途中の変更が消える）
+  const all=lsGet(LS_KEYS.JET, null)||{};
+  const want=new Set(rows.map(({j})=>String(j.key)));
+  const hits=[];
+  _jetWalk(all,(rec,path)=>{ if(want.has(String(rec.key)) && !rec.closed) hits.push({rec,path}); });
+  const now=Date.now();
+  hits.forEach(({rec,path})=>{
+    rec.closed=true; rec.closedAt=now; rec.closedBy='経営管理';
+    _jetSetAt(all, path, rec);
+  });
+  const saved=await _jetSave(all);
+  applyFirebaseData(); renderJetCmp(); renderPU(); renderSum();
+  if(saved===false){
+    showAlert({icon:'⚠️',title:'共有への保存に失敗',
+      msg:'端末には反映しましたが、共有データへの書き込みが拒否されました。\n\n'
+        +(window._fbLastWriteError||'')});
+    return;
+  }
+  _showSaveToast(hits.length+'便を締め済にしました');
 }
 
 // 行の削除(計数データそのものを消す)
@@ -39572,8 +39645,14 @@ async function jetDeleteRow(key){
     okText:'削除する', cancelText:'キャンセル'
   });
   if(!ok) return;
-  delete f.all[f.date][f.k];
-  if(!Object.keys(f.all[f.date]||{}).length) delete f.all[f.date];
+  // ★ 2026/09/14: 締めと同じ理由で、パスを使って消す（旧形式固定だと実体が残る）
+  _jetSetAt(f.all, f.path, null);
+  const _dnode = f.path.length>1 ? f.path.slice(0,-1) : null;
+  if(_dnode){
+    let node=f.all, ok=true;
+    for(const k of _dnode){ if(!node[k]){ ok=false; break; } node=node[k]; }
+    if(ok && node && !Object.keys(node).length) _jetSetAt(f.all, _dnode, null);
+  }
   await _jetSave(f.all);
   applyFirebaseData(); renderJetCmp();
   _showSaveToast('1件削除しました');
