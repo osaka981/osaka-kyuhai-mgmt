@@ -1563,7 +1563,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <input type="month" id="jc-mon" class="fi" onchange="renderJetCmp()">
-          <select id="jc-cust" class="fi" style="width:230px" onchange="saveJetCust()"></select>
         </div>
         <div class="fla gap6" style="flex-wrap:wrap;flex-shrink:0;">
           <button class="btn b-gh btn-sm" onclick="expJetCSV()">照合CSV</button>
@@ -1576,7 +1575,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
       <!-- ★ 2026/09/12: 上段が横幅に収まらず注記が縦に潰れていたため、下段へ移した -->
-      <div class="xs muted" style="margin:-6px 0 10px;">計数の実績はこの顧客の集荷として計上されます</div>
+      <!-- ★ 2026/09/14: 顧客の切り替えをセレクトからサブタブへ。
+           並ぶのは「計数を行う顧客と配布URL」に登録した顧客だけ（全顧客は出さない）。
+           8件以上になったら、それまでタブに出していた顧客も含めて検索で選ぶ形に自動で切り替わる。 -->
+      <style>
+        .jctab{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;margin:0 6px 6px 0;
+          border:1px solid var(--brd2);border-radius:14px;background:transparent;color:var(--txt2);
+          font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;line-height:1.4;}
+        .jctab:hover{border-color:var(--blu2);color:var(--txt);}
+        .jctab.on{background:var(--blu2);border-color:var(--blu2);color:#fff;}
+        .jctab .n{font-size:11px;font-weight:500;opacity:.75;}
+      </style>
+      <div id="jc-cust-tabs" style="margin:-2px 0 6px;"></div>
+      <div class="xs muted" style="margin:0 0 10px;" id="jc-cust-note">計数の実績はこの顧客の集荷として計上されます</div>
       <!-- ★ 2026/09/12: 計数顧客マスタ（多顧客対応の土台）。
            顧客ごとに配布URLと暗証番号を発行する。計数アプリはこの一覧を読んで
            開始画面の顧客選択を作り、顧客用の管理画面はURLの顧客に固定される。 -->
@@ -9406,10 +9417,12 @@ function _jetCustomer(){
   if(!c) c = (D.customers||[]).find(x=>/ジェットグループ/.test(x.name||'')) || null;
   return c;
 }
-function saveJetCust(){
+function saveJetCust(v){
   // ★ 2026/09/03: 全体を置き換えると計数アプリ側の発信先(postName/postTel)が消えるため、
   //   customerId だけを部分更新する。
-  const v=$('jc-cust')?.value||'';
+  // ★ 2026/09/14: サブタブから顧客IDを直接渡せるようにした（セレクトは廃止）
+  if(v===undefined || v===null) v = $('jc-cust')?.value || '';
+  v = String(v);
   const js=_jetSettings(); js.customerId = v;
   lsSet(LS_KEYS.JETSET, js);
   const { ref, set } = window._fbImports || {};
@@ -9461,7 +9474,94 @@ async function _jetCustsSave(map){
 }
 function jetCustUrl(c){ return JSCAN_BASE_URL + '?c=' + encodeURIComponent(c.slug||''); }
 
+// ══ ★ 2026/09/14: 計数照合の顧客サブタブ ══
+//   表示の絞り込みと、計上先の切り替えを兼ねる。
+//   候補は計数顧客マスタ(_jetCusts)に登録され、停止中でないものだけ。
+let _jcCust  = '';        // ''=全件 / 顧客ID / '_none'=顧客未割当（旧形式の残り）
+let _jcCustQ = '';        // 検索方式のときの検索語
+const JC_TAB_MAX = 7;     // これを超えたら検索方式へ切り替える
+
+function _jcCustsActive(){
+  return Object.values(_jetCusts())
+    .filter(c=>c && c.active!==false)
+    .map(c=>{
+      const cu=(D.customers||[]).find(x=>String(x.id)===String(c.id));
+      return { id:String(c.id), name:(c.name || cu?.name || ('顧客ID '+c.id)) };
+    })
+    .sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+}
+function _jcCounts(mon){
+  const m={_all:0};
+  _jetRowsForMonth(mon, true).forEach(r=>{
+    m._all++;
+    const k=r.cust||'_none';
+    m[k]=(m[k]||0)+1;
+  });
+  return m;
+}
+function jetCustTab(id){
+  _jcCust  = String(id||'');
+  _jcCustQ = '';
+  _jcDay   = null;                      // 明細を開いていたら日別一覧へ戻す
+  // 顧客を選んだときは計上先もその顧客に合わせる（saveJetCust が再描画する）
+  if(_jcCust && _jcCust!=='_none') saveJetCust(_jcCust);
+  else renderJetCmp();
+}
+function jetCustTabSearch(v){ _jcCustQ=String(v||''); renderJetCustTabs(true); }
+
+function renderJetCustTabs(keepFocus){
+  const wrap=document.getElementById('jc-cust-tabs'); if(!wrap) return;
+  const mon =$('jc-mon')?.value||'';
+  const list=_jcCustsActive();
+  const cnt =_jcCounts(mon);
+  // 計数顧客から外れた顧客が選ばれたままなら全件へ戻す
+  if(_jcCust && _jcCust!=='_none' && !list.some(c=>c.id===_jcCust)) _jcCust='';
+
+  const btn=(id,label,num)=>'<button class="jctab'+(_jcCust===id?' on':'')+'" '
+    +'onclick="jetCustTab(\''+esc(id)+'\')">'+esc(label)
+    +(num===undefined?'':'<span class="n">'+num+'</span>')+'</button>';
+
+  let h='';
+  if(list.length<=JC_TAB_MAX){
+    h+=btn('','全件',cnt._all);
+    list.forEach(c=>{ h+=btn(c.id,c.name,cnt[c.id]||0); });
+  }else{
+    // ★ 8件以上。以前タブに出していた顧客も含めて、この検索から選ぶ。
+    const q=_jcCustQ.trim();
+    const hit=(q?list.filter(c=>c.name.indexOf(q)>=0):list).filter(c=>c.id!==_jcCust);
+    h+=btn('','全件',cnt._all);
+    const sel=list.find(c=>c.id===_jcCust);
+    if(sel) h+=btn(sel.id,sel.name,cnt[sel.id]||0);
+    h+='<input id="jc-cust-q" class="fi" placeholder="顧客を検索（'+list.length+'件）" '
+      +'style="width:210px;height:30px;font-size:13px;margin:0 6px 6px 0;vertical-align:middle;" '
+      +'value="'+esc(q)+'" oninput="jetCustTabSearch(this.value)">';
+    h+='<div style="margin-top:2px">'
+      +(hit.length ? hit.slice(0,12).map(c=>btn(c.id,c.name,cnt[c.id]||0)).join('')
+                   : '<span class="xs muted">該当する顧客がありません</span>')
+      +(hit.length>12 ? '<span class="xs muted">ほか'+(hit.length-12)+'件。絞り込んでください</span>' : '')
+      +'</div>';
+  }
+  // 顧客の配下に入っていない旧データが残っているときだけ出す
+  if(cnt._none) h+=btn('_none','顧客未割当',cnt._none);
+  wrap.innerHTML=h;
+  if(keepFocus){
+    const el=document.getElementById('jc-cust-q');
+    if(el){ el.focus(); try{ el.setSelectionRange(el.value.length,el.value.length); }catch(e){} }
+  }
+  const note=document.getElementById('jc-cust-note');
+  if(note){
+    const cu=_jetCustomer();
+    const reg=cu && list.some(c=>c.id===String(cu.id));
+    note.innerHTML = cu
+      ? '計上先：<b>'+esc(cu.name)+'</b>　この顧客の集荷として計上されます'
+        +(reg?'':'<span style="color:var(--red2)">（計数顧客に未登録）</span>')
+        +(_jcCust===''?'<span class="muted">　表示は全件</span>':'')
+      : '<span style="color:var(--red2)">計上先の顧客が未設定です。顧客のタブを選んでください</span>';
+  }
+}
+
 function renderJetCustList(){
+  try{ renderJetCustTabs(); }catch(e){}   // ★ 2026/09/14: 追加・削除をサブタブへ反映
   const wrap = document.getElementById('jc-cust-list');
   if(!wrap) return;
   const map = _jetCusts();
@@ -9816,17 +9916,25 @@ async function _jetCustMigrate(){
   console.log('[jet_customers] 既存顧客を移行しました:', cu.name);
 }
 
-function _jetRowsForMonth(mon){
+function _jetRowsForMonth(mon, noCustFilter){
   const jetAll = lsGet(LS_KEYS.JET, null) || {};
   const adj = lsGet(LS_KEYS.JETADJ, {}) || {};
   const rows=[];
+  const _isDate=k=>/^\d{4}-\d{2}-\d{2}$/.test(String(k||''));
   // ★ 2026/09/12: 顧客ごとの階層と旧形式の両方に対応
-  _jetWalk(jetAll, (j)=>{
+  // ★ 2026/09/14: どの顧客の配下から拾ったかを path から取り、サブタブの絞り込みに使う。
+  //   旧形式（直下が日付）は顧客が分からないので cust は空にする。
+  _jetWalk(jetAll, (j, path)=>{
     if(!j||!j.key) return;
     if(mon && !(j.date||'').startsWith(mon)) return;
-    rows.push({ j, a: adj[j.key]||{} });
+    const p0=path && path[0];
+    const cust=(p0 && !_isDate(p0)) ? String(p0) : '';
+    rows.push({ j, a: adj[j.key]||{}, cust });
   });
   rows.sort((p,q)=> (p.j.date+String(p.j.startedAt||0)).localeCompare(q.j.date+String(q.j.startedAt||0)));
+  if(!noCustFilter && typeof _jcCust!=='undefined' && _jcCust){
+    return rows.filter(r=> _jcCust==='_none' ? !r.cust : r.cust===_jcCust);
+  }
   return rows;
 }
 // Firebase REST 呼び出しに認証トークンを付ける
@@ -9959,12 +10067,10 @@ function renderJetCmp(){
   const monEl=$('jc-mon'); if(!monEl) return;
   if(!monEl.value){ const d=new Date(); monEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
   const mon=monEl.value;
-  // 顧客セレクト
-  const sel=$('jc-cust'); const cur=_jetCustomer();
-  sel.innerHTML='<option value="">（顧客を選択）</option>'+(D.customers||[]).filter(c=>c.status!=='終了'&&c.active!==false)
-    .map(c=>`<option value="${esc(String(c.id))}"${cur&&String(cur.id)===String(c.id)?' selected':''}>${esc(c.name)}</option>`).join('');
+  // ★ 2026/09/14: 顧客の切り替えはサブタブ（計数顧客マスタに登録した顧客のみ）
+  renderJetCustTabs();
   // ★ 2026/09/12: 計数顧客マスタ
-  _jetCustMigrate().then(()=>renderJetCustList());
+  _jetCustMigrate().then(()=>{ renderJetCustList(); renderJetCustTabs(); });
   loadNoShiftPhotos(mon);
   // ★ 2026/09/07: 写真の有無を先に取得(枚数のみ。画像は開いたときに読む)
   loadJetPhotoCounts(mon).then(()=>{ try{ _jetRefreshPhotoBadges(); }catch(e){} });
