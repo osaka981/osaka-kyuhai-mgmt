@@ -1113,50 +1113,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </table></div>
         </div>
       </div>
-
     </div>
-        <div id="dup-result" style="padding:8px 0;"></div>
-
-      <!-- 宅配日報 重複一覧 -->
-      <div class="card mb12" id="dup-del-card" style="display:none;">
-        <div class="ch">
-          <div class="ct"><div class="cbar"></div>📋 宅配日報の重複</div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn b-grn btn-sm" onclick="autoFixDuplicates('del')">✅ 自動整理（各グループ1件残す）</button>
-          </div>
-        </div>
-        <div class="tw"><table id="tbl-dup-del">
-          <thead><tr>
-            <th style="width:30px"><input type="checkbox" id="dup-del-all" onchange="toggleAllDup('del',this.checked)"></th>
-            <th>日付</th><th>従事員</th><th>持出</th><th>完了</th><th>転送</th><th>状態</th><th></th>
-          </tr></thead>
-          <tbody id="tb-dup-del"></tbody>
-        </table></div>
-        <div style="padding:10px;display:flex;gap:8px;align-items:center;">
-          <button class="btn b-red btn-sm" onclick="deleteCheckedDup('del')">🗑 チェックした行を削除</button>
-          <span id="dup-del-count" class="xs muted"></span>
-        </div>
-      </div>
-
-      <!-- 集荷日報 重複一覧 -->
-      <div class="card" id="dup-pu-card" style="display:none;">
-        <div class="ch">
-          <div class="ct"><div class="cbar"></div>📦 集荷日報の重複</div>
-          <button class="btn b-grn btn-sm" onclick="autoFixDuplicates('pu')">✅ 自動整理</button>
-        </div>
-        <div class="tw"><table id="tbl-dup-pu">
-          <thead><tr>
-            <th style="width:30px"><input type="checkbox" id="dup-pu-all" onchange="toggleAllDup('pu',this.checked)"></th>
-            <th>日付</th><th>従事員</th><th>顧客</th><th>総個数</th><th>状態</th><th></th>
-          </tr></thead>
-          <tbody id="tb-dup-pu"></tbody>
-        </table></div>
-        <div style="padding:10px;display:flex;gap:8px;align-items:center;">
-          <button class="btn b-red btn-sm" onclick="deleteCheckedDup('pu')">🗑 チェックした行を削除</button>
-          <span id="dup-pu-count" class="xs muted"></span>
-        </div>
-      </div>
-
 
     <!-- 売上・支払明細 -->
     <div id="s-billing" class="sec">
@@ -2346,6 +2303,64 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <strong>完全削除は慎重に行ってください</strong>（削除すると過去の日報・請求書・集計データが参照できなくなります）。
         </div>
       </div>
+      <!-- ★ 2026/09/15: 日報の重複整理。
+           これまでこのカード群は </div> のずれでどのセクションにも属しておらず、
+           画面の表示・非表示は .sec 単位で切り替えているため、一度表示状態に
+           なると全部のタブに出続けていた。あわせて起動ボタンが無く、
+           消す手段も無かったので、ここに置いてボタンを付ける。 -->
+      <div class="card mb12">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>🧹 日報の重複整理</div>
+          <div class="fla gap6">
+            <button class="btn b-gh btn-sm" onclick="scanDuplicates()">重複を調べる</button>
+            <button class="btn b-gh btn-sm" onclick="closeDupCards()">閉じる</button>
+          </div>
+        </div>
+        <div class="xs muted" style="padding:0 2px 6px;">
+          同じ日・同じ従事員・同じ顧客の日報が複数ある場合に一覧します。各グループで1件だけ残します。
+        </div>
+        <div id="dup-result" style="padding:8px 0;"></div>
+
+      <!-- 宅配日報 重複一覧 -->
+      <div class="card mb12" id="dup-del-card" style="display:none;">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>📋 宅配日報の重複</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn b-grn btn-sm" onclick="autoFixDuplicates('del')">✅ 自動整理（各グループ1件残す）</button>
+          </div>
+        </div>
+        <div class="tw"><table id="tbl-dup-del">
+          <thead><tr>
+            <th style="width:30px"><input type="checkbox" id="dup-del-all" onchange="toggleAllDup('del',this.checked)"></th>
+            <th>日付</th><th>従事員</th><th>持出</th><th>完了</th><th>転送</th><th>状態</th><th></th>
+          </tr></thead>
+          <tbody id="tb-dup-del"></tbody>
+        </table></div>
+        <div style="padding:10px;display:flex;gap:8px;align-items:center;">
+          <button class="btn b-red btn-sm" onclick="deleteCheckedDup('del')">🗑 チェックした行を削除</button>
+          <span id="dup-del-count" class="xs muted"></span>
+        </div>
+      </div>
+
+      <!-- 集荷日報 重複一覧 -->
+      <div class="card mb12" id="dup-pu-card" style="display:none;">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>📦 集荷日報の重複</div>
+          <button class="btn b-grn btn-sm" onclick="autoFixDuplicates('pu')">✅ 自動整理</button>
+        </div>
+        <div class="tw"><table id="tbl-dup-pu">
+          <thead><tr>
+            <th style="width:30px"><input type="checkbox" id="dup-pu-all" onchange="toggleAllDup('pu',this.checked)"></th>
+            <th>日付</th><th>従事員</th><th>顧客</th><th>総個数</th><th>状態</th><th></th>
+          </tr></thead>
+          <tbody id="tb-dup-pu"></tbody>
+        </table></div>
+        <div style="padding:10px;display:flex;gap:8px;align-items:center;">
+          <button class="btn b-red btn-sm" onclick="deleteCheckedDup('pu')">🗑 チェックした行を削除</button>
+          <span id="dup-pu-count" class="xs muted"></span>
+        </div>
+      </div>
+
       <div style="display:flex;gap:2px;margin-bottom:12px;background:var(--bg2);padding:0;border-radius:6px;">
         <button type="button" class="arc-tab on" data-arc="cust" onclick="switchArcTab('cust')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:#5c6bc0;color:#fff;cursor:pointer;font-weight:700;">顧客</button>
         <button type="button" class="arc-tab" data-arc="staff" onclick="switchArcTab('staff')" style="flex:1;padding:10px;text-align:center;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;font-weight:700;">従業員</button>
@@ -16955,6 +16970,14 @@ function dedupDelivery(){
 // ══════════════════════════════════════════
 // データ管理・重複削除
 // ══════════════════════════════════════════
+
+/* ★ 2026/09/15: 重複カードを閉じる。表示したまま他のタブへ移れないよう、
+   画面を切り替えるときにも呼ぶ。 */
+function closeDupCards(){
+  const r=$('dup-result'); if(r) r.innerHTML='';
+  const a=$('dup-del-card'); if(a) a.style.display='none';
+  const b=$('dup-pu-card');  if(b) b.style.display='none';
+}
 
 function scanDuplicates(){
   // ── Step1: IDレベルの重複を先に排除 ──
