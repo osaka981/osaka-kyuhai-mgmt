@@ -17016,7 +17016,12 @@ function scanDuplicates(){
 
   const puByKey = {};
   D.pickup.forEach(r => {
-    const key = `${r.date||''}__${r.staff||''}__${r.customerId||''}`;
+    /* ★ 2026/09/15: 計数アプリから来た便別のレコード(_fromJet)は、
+       同じ日・同じ人・同じ顧客でも「第1便・第2便…」と正しく分かれている。
+       便を含めずに束ねていたため、分けて入力しているだけで毎回
+       「重複27件」と警告が出ていた。便番号までをキーにする。 */
+    const _bin = (r._fromJet && r._jet) ? String(r._jet.binNo || r._jet.bin || r._jet.key || '') : '';
+    const key = `${r.date||''}__${r.staff||''}__${r.customerId||''}__${_bin}`;
     if(!puByKey[key]) puByKey[key] = [];
     puByKey[key].push(r);
   });
@@ -17053,8 +17058,12 @@ function scanDuplicates(){
         return sb-sa;
       });
       const keepId = sorted[0].id; // スコア最大のIDだけ残す
+      // ★ 2026/09/15: 中身が同じものだけを「削除候補」、違うものは「別便?」にする
+      const sigTop = _dupSig(sorted[0],'del');
       sorted.forEach((r,i) => {
-        const isDup = r.id !== keepId;
+        const same = _dupSig(r,'del') === sigTop;
+        const isDup = r.id !== keepId && same;
+        const isOther = r.id !== keepId && !same;
         rows += `<tr style="${isDup?'background:rgba(220,50,50,.08)':''}">
           <td style="text-align:center">
             ${isDup
@@ -17068,8 +17077,10 @@ function scanDuplicates(){
           <td class="tr mono">${fmt(r.tenso||0)}</td>
           <td>${isDup
             ? '<span class="bdg bb">削除候補</span>'
-            : '<span class="bdg bg">保持</span>'}</td>
-          <td>${isDup
+            : (isOther
+                ? '<span class="bdg" style="background:rgba(230,126,34,.15);color:var(--amb2);">別便? 要確認</span>'
+                : '<span class="bdg bg">保持</span>')}</td>
+          <td>${(isDup||isOther)
             ? `<button class="btn b-red btn-sm" onclick="deleteSingle('del',${r.id})">🗑</button>`
             : ''}</td>
         </tr>`;
@@ -17101,21 +17112,30 @@ function scanDuplicates(){
         return sb-sa;
       });
       const keepId = sorted[0].id;
+      // ★ 2026/09/15: 中身が同じものだけ「削除候補」。数量が違うものは別便の可能性
+      const sigTop = _dupSig(sorted[0],'pu');
       sorted.forEach((r,i) => {
-        const isDup = r.id !== keepId;
+        const same = _dupSig(r,'pu') === sigTop;
+        const isDup = r.id !== keepId && same;
+        const isOther = r.id !== keepId && !same;
         const total = Object.values(r.items||{}).reduce((s,v)=>s+v,0);
-        rows += `<tr style="${isDup?'background:rgba(220,50,50,.08)':''}">
+        rows += `<tr style="${isDup?'background:rgba(220,50,50,.08)':(isOther?'background:rgba(230,126,34,.07)':'')}">
           <td style="text-align:center">
             ${isDup
               ? `<input type="checkbox" class="dup-pu-cb" data-id="${r.id}" checked>`
-              : '<span style="color:var(--grn);font-size:10px;font-weight:700;">✅残す</span>'}
+              : (isOther ? '<span style="color:var(--amb2);font-size:10px;font-weight:700;">要確認</span>'
+                         : '<span style="color:var(--grn);font-size:10px;font-weight:700;">✅残す</span>')}
           </td>
           <td class="mono xs">${r.date||''}</td>
           <td>${staffLink(r.staff||'(未設定)')}</td>
           <td>${custLink(r.customerName||'')}</td>
           <td class="tr mono fw7">${fmt(total)}</td>
-          <td>${isDup?'<span class="bdg bb">削除候補</span>':'<span class="bdg bg">保持</span>'}</td>
-          <td>${isDup?`<button class="btn b-red btn-sm" onclick="deleteSingle('pu',${r.id})">🗑</button>`:''}</td>
+          <td>${isDup
+            ? '<span class="bdg bb">削除候補</span>'
+            : (isOther
+                ? '<span class="bdg" style="background:rgba(230,126,34,.15);color:var(--amb2);">別便? 要確認</span>'
+                : '<span class="bdg bg">保持</span>')}</td>
+          <td>${(isDup||isOther)?`<button class="btn b-red btn-sm" onclick="deleteSingle('pu',${r.id})">🗑</button>`:''}</td>
         </tr>`;
       });
       rows += `<tr><td colspan="7" style="height:3px;background:var(--bg3)"></td></tr>`;
@@ -17188,7 +17208,21 @@ function deleteCheckedDup(type){
   });
 }
 
-// 自動整理（各グループで最大値を1件残す）
+/* ★ 2026/09/15: 同じ日・同じ人・同じ顧客でも、中身が違えば別の便かもしれない。
+   二度押しによる複製は「中身まで完全に同じ」ものだけなので、
+   自動整理はそれに限る。数量が違うものを1件に潰すと実績が消える。
+   （例: 9/3 ジェットグループの 300/222/100/50 は別便で、
+     従来の自動整理では最大の300だけが残り372個が失われていた） */
+function _dupSig(r, type){
+  if(type==='del'){
+    return [r.office||'', r.mochidashi||0, r.kanryo||0, r.tenso||0, r.shukka||0].join('|');
+  }
+  const it = r.items || {};
+  const keys = Object.keys(it).sort();
+  return [r.office||'', r.customerId||'', keys.map(k=>k+':'+it[k]).join(',')].join('|');
+}
+
+// 自動整理（中身が完全に同じものだけを1件にまとめる）
 function autoFixDuplicates(type){
   // IDレベルの重複を先に除去
   if(type==='del'){
@@ -17204,35 +17238,49 @@ function autoFixDuplicates(type){
   data.forEach(r => {
     const key = type==='del'
       ? `${r.date||''}__${r.staff||''}`
-      : `${r.date||''}__${r.staff||''}__${r.customerId||''}`;
+      : (()=>{ // ★ 2026/09/15: 便別レコードは便番号まで含める（上と同じ理由）
+          const b=(r._fromJet&&r._jet)?String(r._jet.binNo||r._jet.bin||r._jet.key||''):'';
+          return `${r.date||''}__${r.staff||''}__${r.customerId||''}__${b}`;
+        })();
     if(!byKey[key]) byKey[key] = [];
     byKey[key].push(r);
   });
   const dups = Object.values(byKey).filter(v=>v.length>1);
   if(!dups.length){ showAlert({icon:'✅', title:'重複なし', msg:'重複データはありません'}); return; }
-  const total = dups.reduce((s,v)=>s+v.length-1,0);
+
+  /* ★ 2026/09/15: グループを中身で細分し、「完全に同じものが2件以上」だけを対象にする。
+     中身が違う組み合わせは触らず、件数だけ知らせて手作業に回す。 */
+  const exact = [];          // 完全一致で消せるぶん（[残す, 消す...]）
+  let needCheck = 0;         // 中身が違うため手で見るべきグループ数
+  Object.values(byKey).forEach(group => {
+    if(group.length < 2) return;
+    const bySig = {};
+    group.forEach(r => { const k=_dupSig(r,type); (bySig[k]=bySig[k]||[]).push(r); });
+    const sigs = Object.keys(bySig);
+    if(sigs.length > 1) needCheck++;                 // 別便が混ざっている
+    sigs.forEach(k => { if(bySig[k].length > 1) exact.push(bySig[k]); });
+  });
+  const total = exact.reduce((s,v)=>s+v.length-1,0);
+  if(!total){
+    showAlert({icon:'⚠️', title:'自動整理できる重複はありません',
+      msg:'中身まで完全に同じ日報はありませんでした。\n\n'
+        + needCheck + 'グループは同じ日・同じ従事員ですが数量が違います。\n'
+        + '別の便を分けて入力したものの可能性があるため、自動では消しません。\n'
+        + '一覧で中身を確認して、不要なものだけ個別に削除してください。'});
+    return;
+  }
   showDialog({
     icon:'⚠️', title:'自動整理の確認',
-    msg:`${dups.length}グループ・${total}件の重複を削除します。\n各グループで数値が最大のものを1件残します。`,
+    msg:`中身まで完全に同じ日報 ${total}件を削除します（各組で1件残します）。\n`
+      + `二度押しなどによる複製だけが対象です。\n\n`
+      + (needCheck ? `※ 別に ${needCheck}グループ は数量が違うため対象外です。\n別便の可能性があるので、一覧で確認してください。` : ''),
     okText:`${total}件削除する`, cancelText:'キャンセル'
   }).then(ok => {
     if(!ok) return;
-    // 各グループで最大スコアのIDを保持
+    // 完全一致の各組で1件だけ残す
     const keepIds = new Set();
-    Object.values(byKey).forEach(group => {
-      const best = group.reduce((a,b) => {
-        const sa = type==='del'
-          ? (a.mochidashi||0)+(a.kanryo||0)+(a.tenso||0)+(a.shukka||0)
-          : Object.values(a.items||{}).reduce((s,v)=>s+v,0);
-        const sb = type==='del'
-          ? (b.mochidashi||0)+(b.kanryo||0)+(b.tenso||0)+(b.shukka||0)
-          : Object.values(b.items||{}).reduce((s,v)=>s+v,0);
-        return sa>=sb?a:b;
-      });
-      keepIds.add(best.id);
-    });
-    // 重複グループに含まれるIDのうちkeepIds以外を削除
-    const allDupIds = new Set(dups.flatMap(g=>g.map(r=>r.id)));
+    exact.forEach(group => { keepIds.add(group[0].id); });
+    const allDupIds = new Set(exact.flatMap(g=>g.map(r=>r.id)));
     if(type==='del'){
       D.delivery = D.delivery.filter(r => !allDupIds.has(r.id) || keepIds.has(r.id));
       const ypLogs = (lsGet(LS_KEYS.YP,[])||[]).filter(r=>!allDupIds.has(String(r.id))||keepIds.has(Number(r.id)));
