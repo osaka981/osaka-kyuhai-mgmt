@@ -1616,6 +1616,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6">
           <button class="btn b-grn btn-sm" onclick="aclIssueCompany()">＋ 会社アカウントを発行</button>
           <button class="btn b-blu btn-sm" onclick="aclIssuePerson()">＋ 個人アカウントを発行</button>
+          <!-- ★ 2026/09/15: 第2段階の準備。既存データに会社IDを付ける -->
+          <button class="btn b-gh btn-sm" onclick="aclBackfillCompanyId()">既存データに会社IDを付ける</button>
         </div>
       </div>
       <div class="xs muted" style="margin:-6px 0 10px;">
@@ -4969,6 +4971,30 @@ function _deriveOfficeTypeFromStaff(s){
 /* ★ 2026/09/14: 社員番号から従事員を引く。過去の番号(empNoHistory)も見る。
    計数や日報の過去レコードは書き込み当時の番号を持っているため、
    番号を変えたあとも同じ人へ寄せられるようにする。 */
+/* ★ 2026/09/16: 便名は計数アプリが端末ごと（ドライバーごと）に採番するため、
+   同じ日に「第1便」が何人分も並ぶ。顧客の画面と提出用CSVでは、締めた時刻の
+   順に第1便・第2便…と振り直して見せている。
+   ここでも同じ番号を出さないと、顧客から「第2便の件で」と言われたときに
+   内勤が照合できない。顧客に見える番号と、端末の便名の両方を出す。
+   並びの決め方は計数アプリと同一（締め時刻 → 開始時刻 → キーの文字列）。 */
+function _jetBinOrder(rows){
+  const m=new Map();
+  const byCust={};
+  (rows||[]).forEach(r=>{
+    const j=r&&r.j; if(!j||!j.closed||!j.closedAt) return;
+    const k=(j.date||'')+'__'+(r.cust||j.custId||'');
+    (byCust[k]=byCust[k]||[]).push(j);
+  });
+  Object.values(byCust).forEach(list=>{
+    list.sort((a,b)=>
+      ((a.closedAt||0)-(b.closedAt||0)) ||
+      ((a.startedAt||0)-(b.startedAt||0)) ||
+      String(a.key||'').localeCompare(String(b.key||'')));
+    list.forEach((j,i)=>m.set(String(j.key), i+1));
+  });
+  return m;
+}
+
 function findStaffByEmpNo(id){
   const t = String(id||'').trim();
   if(!t) return null;
@@ -10140,6 +10166,122 @@ async function _aclSyncRetired(){
   try{ renderAclList(); }catch(e){}
 }
 
+/* ★ 2026/09/15: 既存のレコードに会社ID(companyId)を付ける。
+   第2段階のルールは companyId だけを見て委託会社の範囲を絞るので、
+   これが空のままだと、ルールを入れた瞬間に委託会社から過去のデータが
+   すべて見えなくなる。従事員台帳から引いて埋める。
+   ・すでに入っている値は書き換えない
+   ・引けなかったものは空のまま残す（自社の可能性もあるため）
+   ・従事員が見つからないものは件数だけ知らせる */
+async function aclBackfillCompanyId(){
+  const staffOf = id => (typeof findStaffByEmpNo==='function') ? findStaffByEmpNo(id) : null;
+  const pick = rec => {
+    // レコードの形式が3種類あるので、順に従事員を探す
+    const cands = [
+      rec && rec.driver && (rec.driver.id || rec.driver.empNo),
+      rec && rec.staff,
+      rec && rec.driverId,
+      rec && rec._jet && rec._jet.driverId
+    ].filter(Boolean);
+    for(const c of cands){
+      const st = staffOf(c);
+      if(st) return st;
+    }
+    // 氏名でも引く（手入力ぶんは社員番号を持たないことがある）
+    const nm = String((rec&&rec.staff) || (rec&&rec.driver&&rec.driver.name) || '').replace(/\s+/g,'');
+    if(nm) return (D.staff||[]).find(x=>x && String(x.name||'').replace(/\s+/g,'')===nm) || null;
+    return null;
+  };
+
+  const yp  = lsGet(LS_KEYS.YP, [])  || [];
+  const col = lsGet(LS_KEYS.COL, []) || [];
+  const pu  = D.pickup || [];
+  let filled=0, already=0, unknown=0, own=0;
+
+  const scan = list => list.forEach(r=>{
+    if(!r) return;
+    if(r.companyId){ already++; return; }
+    const st = pick(r);
+    if(!st){ unknown++; return; }
+    const cid = String(st.companyId||'');
+    if(!cid){ own++; return; }        // 自社は空のままで正しい
+    r.companyId = cid; filled++;
+  });
+  scan(yp); scan(col); scan(pu);
+
+  const total = yp.length + col.length + pu.length;
+  if(!filled){
+    showAlert({icon:'ℹ️', title:'付ける対象がありません',
+      msg:'全 '+total+'件\n\n'
+        +'すでに付いている: '+already+'件\n'
+        +'自社のため空のまま: '+own+'件\n'
+        +'従事員を特定できない: '+unknown+'件'});
+    return;
+  }
+  const ok = await showDialog({
+    icon:'🏷', title:'既存データに会社IDを付ける',
+    msg:'全 '+total+'件のうち '+filled+'件 に委託会社IDを付けます。\n\n'
+      +'すでに付いている: '+already+'件（変更しません）\n'
+      +'自社のため空のまま: '+own+'件\n'
+      +'従事員を特定できない: '+unknown+'件（空のまま残ります）\n\n'
+      +'数量や日付には一切触れません。',
+    okText:filled+'件に付ける', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  try{
+    lsSet(LS_KEYS.YP, yp); lsSet(LS_KEYS.COL, col);
+    if(typeof fbSet==='function'){
+      await fbSet('yp_logs', yp);
+      await fbSet('col_logs', col);
+      await fbSet('pickup', pu);
+    }
+  }catch(e){
+    showAlert({icon:'⚠️', title:'保存に失敗しました', msg:(e&&e.message)||''});
+    return;
+  }
+  applyFirebaseData(); renderAll();
+  _showSaveToast(filled+'件に会社IDを付けました');
+  if(unknown) showAlert({icon:'⚠️', title:'特定できなかったものがあります',
+    msg: unknown+'件は従事員を特定できず、会社IDが空のままです。\n\n'
+      +'第2段階のルールを入れると、この分は委託会社から見えなくなります。\n'
+      +'自社のデータであれば問題ありません。'});
+}
+
+/* ★ 2026/09/16: 発行済みアカウントを一覧から削除する。
+   注意: Firebase Auth のユーザー本体は、本人としてログインしていないと
+   クライアントからは削除できない（管理者権限での削除は Admin SDK が要る）。
+   ここで消すのは権限表(nikki/_acl/user)の行。
+   権限表から消えたアカウントはどのデータも読めなくなるので、
+   運用上はこれで無効化として足りる。認証ユーザー本体を完全に消したい場合は、
+   Firebaseコンソールの Authentication → ユーザー から、表示されるUIDで削除する。 */
+async function aclDelete(uid){
+  const map=_aclUsers(); const r=map[String(uid)];
+  if(!r){ showAlert({msg:'対象が見つかりません'}); return; }
+  const ok = await showDialog({
+    icon:'🗑', title:'このアカウントを削除',
+    msg:(r.companyName||'')+(r.staffName?' / '+r.staffName:'')+'\n'+(r.email||'')+'\n\n'
+      +'一覧から消し、このアカウントからはどのデータも読めなくなります。\n\n'
+      +'※ ログインの仕組み自体（Firebaseの認証ユーザー）は残ります。\n'
+      +'　 完全に消す場合は、Firebaseコンソールの Authentication から\n'
+      +'　 UID: '+uid+'\n'
+      +'　 を削除してください。',
+    okText:'削除する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  try{
+    const { ref, set } = window._fbImports || {};
+    if(ref && set) await set(ref(fbDB, 'nikki/_acl/user/'+uid), null);
+  }catch(e){
+    showAlert({icon:'⚠️', title:'削除できませんでした', msg:(e&&e.message)||''});
+    return;
+  }
+  delete map[String(uid)];
+  _aclSaveLocal(map);
+  renderAclList();
+  _showSaveToast('削除しました');
+}
+
 function renderAclList(){
   const wrap=document.getElementById('acl-list');
   if(!wrap) return;
@@ -10156,7 +10298,9 @@ function renderAclList(){
     <td class="xs">${r.kind==='person'
       ? '<span style="color:var(--blu2);font-weight:700">個人</span> '+esc(r.staffName||'')
       : '<span style="color:var(--tel2);font-weight:700">会社</span> <span class="muted">端末で共用</span>'}</td>
-    <td class="xs mono" style="word-break:break-all;">${esc(r.email||'')}</td>
+    <td class="xs mono" style="word-break:break-all;">${esc(r.email||'')}
+      <!-- ★ 2026/09/16: Firebaseコンソールで消すときに要るので出しておく -->
+      <div class="xs muted mono" style="font-size:9px;opacity:.7;">${esc(String(r.uid||''))}</div></td>
     <td class="xs">${r.active===false
       ? '<span style="color:var(--red2);font-weight:700">停止中</span>'
       : '<span style="color:var(--tel2)">有効</span>'}</td>
@@ -10164,6 +10308,8 @@ function renderAclList(){
     <td style="white-space:nowrap;">
       <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
         onclick="aclToggleActive('${esc(String(r.uid))}')">${r.active===false?'停止を解除':'停止する'}</button>
+      <button class="btn b-red btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+        onclick="aclDelete('${esc(String(r.uid))}')">削除</button>
     </td>
   </tr>`).join('');
   wrap.innerHTML=`<div class="tw"><table>
@@ -10466,6 +10612,8 @@ function renderJetCmp(){
   let scan3=0,scan5=0,fix3=0,fix5=0,open=0,diffN=0;
   const has=v=>v!==null&&v!==undefined&&v!=='';
   let h='';
+  // ★ 2026/09/16: 顧客に見える通し番号（締め時刻順）
+  const _binOrd=_jetBinOrder(rows);
   rows.forEach(({j,a})=>{
     const c3=has(a.c3)?+a.c3:(j.c3||0), c5=has(a.c5)?+a.c5:(j.c5||0);
     const diff=(c3+c5)-((j.c3||0)+(j.c5||0));
@@ -10474,7 +10622,14 @@ function renderJetCmp(){
     const stCol=st==='照合済'?'var(--tel2)':st==='協議中'?'var(--red)':st==='差異あり'?'var(--amb2)':'var(--txt2)';
     const drv=esc(j.driverName||'')+(j.driverId?`<div class="xs mono muted">${esc(j.driverId)}</div>`:'')+(j.registered===false?'<div class="xs" style="color:var(--red)">未登録</div>':'');
     h+=`<tr data-key="${esc(j.key)}">
-      <td>${esc(j.bin||'')}
+      <td>${(()=>{
+          // 上段＝顧客に見える番号、下段＝端末の便名（ドライバーとの確認用）
+          const no=_binOrd.get(String(j.key));
+          return no
+            ? `<span class="fw7">第${no}便</span>`
+              + `<div class="xs muted">端末 ${esc(j.bin||'')}</div>`
+            : esc(j.bin||'') + '<div class="xs muted">未締め</div>';
+        })()}
         ${j.manual?`<div class="xs" style="color:var(--blu)">手入力</div>
           <button class="btn b-gh btn-sm" style="font-size:9.5px;padding:1px 6px;margin-top:2px;"
             onclick='jetManualOpen(${JSON.stringify({key:j.key,date:j.date,bin:j.bin,driverId:j.driverId,carrierId:j.carrierId,c3:j.c3,c5:j.c5,manualNote:j.manualNote||""}).replace(/'/g,"&#39;")})'>編集</button>`:''}
@@ -11518,7 +11673,9 @@ async function saveDel(){
   //   一切拾われない。従業員マスタの社員番号を必ず入れる。
   const _st = (D.staff||[]).find(x=>x && x.name===rec.staff);
   const _drvId = String(_st?.empNo || _st?.id || '');
-  ypLogs.push({id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()});
+  // ★ 2026/09/15: ルールが会社ごとに絞るために会社IDを持たせる（自社は空）
+  const _coId = String((findStaffByEmpNo(_drvId)||{}).companyId||'');
+  ypLogs.push({id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()});
   fbSet('yp_logs',ypLogs);
   if($('dd-charter-rows'))$('dd-charter-rows').innerHTML='';
   if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
