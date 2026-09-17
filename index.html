@@ -831,6 +831,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="billing" onclick="nav(this)"><span class="ni-ico">💰</span>売上・支払明細</div>
       <div class="ni" data-s="import" onclick="nav(this)"><span class="ni-ico">📂</span>CSVインポート</div>
       <div class="ni" data-s="acl" onclick="nav(this)"><span class="ni-ico">🪪</span>ログインアカウント</div>
+      <div class="ni" data-s="uidmatch" onclick="nav(this)"><span class="ni-ico">🔗</span>フリート突き合わせ</div>
       <div class="ni" data-s="ts-inv" onclick="requireTS('ts-inv',this)"><span class="ni-ico">📄</span>郵便局請求書</div>
       <div class="ni" data-s="ts-prices" onclick="requireTS('ts-prices',this)"><span class="ni-ico">📋</span>郵便局単価</div>
       <div class="ni" data-s="ts-settings" onclick="requireTS('ts-settings',this)"><span class="ni-ico">⚙️</span>システム設定</div>
@@ -1610,6 +1611,29 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
          委託会社ごとの「会社アカウント」と、希望者だけの「個人アカウント」を
          同じ仕組みで発行する。Firebaseのルールは会社ID(companyId)だけを見るので、
          1台を共用するか個人の携帯で使うかを、会社ごと・人ごとに後から変えられる。 -->
+    <!-- ★ 2026/09/17: フリートと従事員台帳の突き合わせ。
+         フリートのドライバーに uid（社員番号が変わっても動かない鍵）を付け、
+         同じ値を台帳にも入れる。これまで氏名で繋いでいたため、同姓同名や
+         表記ゆれで崩れる余地があった。
+         電話番号だけの一致は自動で選ばない（代表番号を共有していて、
+         別人が同じ番号に紐づいている例が実際にあったため）。 -->
+    <div id="s-uidmatch" class="sec">
+      <div class="flbc mb12">
+        <h2 style="margin:0;font-size:16px;font-weight:700;">🔗 フリートと台帳の突き合わせ</h2>
+        <div class="fla gap6">
+          <button class="btn b-gh btn-sm" onclick="umReload(this)">フリートから再取得</button>
+          <button class="btn b-grn btn-sm" onclick="umApplyAll()">確定したものを保存</button>
+        </div>
+      </div>
+      <div class="xs muted" style="margin:-6px 0 10px;">
+        フリートに登録されているドライバーと、従事員台帳の同一人物を結びます。<br>
+        結ぶと両方に同じ uid が入り、以後は氏名ではなく uid で突き合わせます。社員番号を変えても崩れません。<br>
+        <b>電話番号だけが一致するものは自動で選びません。</b>代表番号を共有していて別人が同じ番号に紐づいている場合があります。
+      </div>
+      <div id="um-summary" class="mb12"></div>
+      <div class="card"><div id="um-list"></div></div>
+    </div>
+
     <div id="s-acl" class="sec">
       <div class="flbc mb12">
         <h2 style="margin:0;font-size:16px;font-weight:700;">🪪 ログインアカウント</h2>
@@ -7830,6 +7854,7 @@ const _TOP_TABS = {
     { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
     { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
     { s:'acl',         label:'ログインアカウント', badge:'new' },
+    { s:'uidmatch',    label:'フリート突き合わせ', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -7911,6 +7936,7 @@ function navByS(s) {
   if (s==='pu-sum')      _call('renderSum');
   if (s==='pu-cust')     {} /* onValue自動更新 */
   if (s==='acl')         { _call('renderAclList'); }
+  if (s==='uidmatch')    { _call('renderUidMatch'); }
   if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='pu-count')    _call('renderJetCmp');
   if (s==='staff')       _call('renderStaff');
@@ -10387,6 +10413,198 @@ async function cleanupTestData(){
   }
   applyFirebaseData(); renderAll();
   _showSaveToast(total+'件を削除しました');
+}
+
+/* ══ ★ 2026/09/17: フリート突き合わせ ══ */
+const UM_LS='mgmt_uid_match_draft';
+let _umRows=[];          // 画面に出している行
+let _umPick={};          // フリートのキー → 選んだ台帳の id（'' は未選択、'__new' は新規登録）
+
+function _umArr(v){
+  if(Array.isArray(v)) return v;
+  if(typeof v==='string'){ try{ const x=JSON.parse(v); return Array.isArray(x)?x:[]; }catch(e){ return []; } }
+  if(v && typeof v==='object') return Object.values(v);
+  return [];
+}
+function _umNm(v){ return String(v||'').replace(/\s+/g,''); }
+function _umTel(v){ return String(v||'').replace(/[^\d]/g,''); }
+function _umKey(f){ return (f._regCode||'own')+'::'+String(f.id); }
+
+// フリート側を平らに並べる（自社＋委託会社）
+function _umFleet(){
+  const out=[];
+  try{
+    _umArr(JSON.parse(localStorage.getItem('fleet_drivers')||'[]'))
+      .forEach(d=>{ if(d) out.push(Object.assign({},d,{_src:'自社',_regCode:''})); });
+  }catch(e){}
+  try{
+    _umArr(JSON.parse(localStorage.getItem('fleet_companies')||'[]')).forEach(c=>{
+      _umArr(c&&c.drivers).forEach(d=>{
+        if(d) out.push(Object.assign({},d,{_src:(c.name||'委託'),_regCode:String(c.regCode||'')}));
+      });
+    });
+  }catch(e){}
+  return out;
+}
+// 台帳の候補を、根拠付きで挙げる
+function _umCandidates(f){
+  const list=(D.staff||[]).filter(s=>s&&(s.name||'').trim());
+  const hits=[];
+  list.forEach(s=>{
+    const why=[];
+    if(_umNm(s.name) && _umNm(s.name)===_umNm(f.name)) why.push('氏名');
+    if(_umTel(s.tel) && _umTel(s.tel)===_umTel(f.tel)) why.push('電話');
+    if(s.birth && f.birth && String(s.birth)===String(f.birth)) why.push('生年月日');
+    if(why.length) hits.push({s, why});
+  });
+  // 根拠が多い順、氏名一致を優先
+  hits.sort((a,b)=>
+    (b.why.length-a.why.length) ||
+    ((b.why.indexOf('氏名')>=0?1:0)-(a.why.indexOf('氏名')>=0?1:0)));
+  return hits;
+}
+async function umReload(btn){
+  if(btn){ btn.disabled=true; btn.textContent='取得中'; }
+  try{ await fetchFleetFromGAS({force:true}); }catch(e){}
+  if(btn){ btn.disabled=false; btn.textContent='フリートから再取得'; }
+  renderUidMatch();
+}
+function umPick(key,val){ _umPick[key]=String(val||''); renderUidMatch(true); }
+
+function renderUidMatch(keepScroll){
+  const wrap=document.getElementById('um-list');
+  const sum=document.getElementById('um-summary');
+  if(!wrap) return;
+  const y=keepScroll?window.scrollY:null;
+
+  const fleet=_umFleet();
+  _umRows=fleet.map(f=>{
+    const key=_umKey(f);
+    const cands=_umCandidates(f);
+    // 既定の選択：uidが既にあればそれ、なければ氏名一致がちょうど1件のときだけ
+    let def='';
+    if(f.uid){
+      const byUid=(D.staff||[]).find(s=>String(s.uid||'')===String(f.uid));
+      if(byUid) def=String(byUid.id);
+    }
+    if(!def){
+      const nameHits=cands.filter(c=>c.why.indexOf('氏名')>=0);
+      if(nameHits.length===1) def=String(nameHits[0].s.id);
+    }
+    if(_umPick[key]===undefined) _umPick[key]=def;
+    return {f,key,cands};
+  });
+
+  const done=_umRows.filter(r=>_umPick[r.key] && _umPick[r.key]!=='__new').length;
+  const linked=_umRows.filter(r=>r.f.uid).length;
+  const none=_umRows.filter(r=>!r.cands.length).length;
+  if(sum) sum.innerHTML=
+    '<div class="krow">'
+    +[['フリート',_umRows.length],['結び済み',linked],['選択中',done],['候補なし',none]]
+      .map(([l,v])=>`<div class="kpi"><div class="kl">${l}</div><div class="kv">${v}</div></div>`).join('')
+    +'</div>';
+
+  const rows=_umRows.map(({f,key,cands})=>{
+    const sel=_umPick[key]||'';
+    const opts='<option value="">（選ばない）</option>'
+      + cands.map(c=>`<option value="${esc(String(c.s.id))}"${sel===String(c.s.id)?' selected':''}>`
+          +esc(c.s.name||'')+'／'+esc(String(c.s.empNo||'番号なし'))
+          +'　['+c.why.join('・')+']</option>').join('')
+      + `<option value="__new"${sel==='__new'?' selected':''}>＋ 台帳に新規登録が必要</option>`;
+    // 電話だけの一致は注意を出す
+    const telOnly = cands.length && cands.every(c=>c.why.length===1 && c.why[0]==='電話');
+    return `<tr>
+      <td class="xs">${esc(f._src||'')}</td>
+      <td class="fw7">${esc(f.name||'(氏名なし)')}
+        ${f.status?`<span class="xs muted">／${esc(f.status)}</span>`:''}
+        ${f.uid?'<div class="xs" style="color:var(--tel2)">結び済み</div>':''}</td>
+      <td class="xs mono">${esc(f.tel||'')}</td>
+      <td class="xs mono">${esc(f.birth||'')}</td>
+      <td>
+        <select class="fi" style="font-size:11px;padding:3px 6px;min-width:230px"
+                onchange="umPick('${esc(key)}',this.value)">${opts}</select>
+        ${telOnly?'<div class="xs" style="color:var(--amb2)">電話番号だけの一致です。別人の可能性があります</div>':''}
+        ${!cands.length?'<div class="xs muted">台帳に候補がありません</div>':''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML=`<div class="tw"><table>
+    <thead><tr><th>所属</th><th>フリートの氏名</th><th>電話</th><th>生年月日</th><th>台帳の候補</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+  if(y!==null) window.scrollTo(0,y);
+}
+
+/* 確定したものを保存する。
+   台帳に uid が無ければ内部IDから作り、同じ値をフリートへ送る。 */
+async function umApplyAll(){
+  const targets=_umRows.filter(r=>{
+    const v=_umPick[r.key];
+    return v && v!=='__new';
+  });
+  if(!targets.length){ showAlert({icon:'ℹ️',title:'対象がありません',msg:'結ぶ相手を選んでください'}); return; }
+
+  const items=[], pairs=[];
+  targets.forEach(({f,key})=>{
+    const st=(D.staff||[]).find(s=>String(s.id)===String(_umPick[key]));
+    if(!st) return;
+    const uid=String(st.uid||st.id||'');
+    if(!uid) return;
+    if(String(f.uid||'')===uid) return;          // すでに同じなら送らない
+    items.push({ id:f.id, uid:uid, companyRegCode:f._regCode||'' });
+    pairs.push({ fleet:f.name, staff:st.name, empNo:st.empNo||'', uid, st });
+  });
+  if(!items.length){ showAlert({icon:'✅',title:'変更はありません',msg:'選んだ相手はすべて結び済みです'}); return; }
+
+  const lines=pairs.slice(0,15).map(p=>'　'+p.fleet+'　→　'+p.staff+'／'+(p.empNo||'番号なし')).join('\n');
+  const ok=await showDialog({
+    icon:'🔗', title:'突き合わせを保存',
+    msg:items.length+'件 を結びます。\n\n'+lines+(pairs.length>15?'\n　ほか '+(pairs.length-15)+'件':'')
+      +'\n\nフリートと従事員台帳の両方に同じ uid が入ります。\n'
+      +'数量や日付、その他の項目には触れません。',
+    okText:items.length+'件を保存', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+
+  // ① 台帳側（uid が空なら内部IDで埋める）
+  try{
+    pairs.forEach(p=>{ if(p.st && !p.st.uid) p.st.uid=String(p.st.id); });
+  }catch(e){}
+
+  // ② フリート側へ送る
+  let res=null;
+  try{
+    const r=await fetch(FLEET_GAS_URL,{ method:'POST',
+      body: JSON.stringify({ action:'setDriverUids', items: items }) });
+    res=await r.json();
+  }catch(e){
+    showAlert({icon:'⚠️',title:'フリートへ保存できませんでした',
+      msg:'通信に失敗しました。台帳側も保存していません。\n\n'+((e&&e.message)||'')});
+    return;
+  }
+  if(!res || res.ok!==true){
+    showAlert({icon:'⚠️',title:'フリートへ保存できませんでした',
+      msg:(res&&res.error)||'原因が分かりません。台帳側も保存していません。'});
+    return;
+  }
+
+  // ③ フリートが通ってから台帳を保存する（片方だけ書かれるのを避ける）
+  try{
+    // 台帳は localStorage と Firebase の両方に保存する（他の保存処理と同じ形）
+    try{ lsSet(LS_KEYS.STAFF, D.staff); }catch(e){}
+    if(typeof fbSet==='function') await fbSet('staff_full', D.staff);
+  }catch(e){
+    showAlert({icon:'⚠️',title:'台帳の保存に失敗',msg:(e&&e.message)||''});
+    return;
+  }
+  try{ await fetchFleetFromGAS({force:true}); }catch(e){}
+  renderUidMatch();
+  const skipped=(res.skipped||[]).length;
+  _showSaveToast((res.updated||0)+'件を結びました'+(skipped?'（'+skipped+'件は対象が見つからず）':''));
+  if(skipped){
+    showAlert({icon:'⚠️',title:'一部が反映できませんでした',
+      msg:(res.skipped||[]).slice(0,10).map(x=>'　'+x.id+'：'+x.why).join('\n')});
+  }
 }
 
 function renderAclList(){
