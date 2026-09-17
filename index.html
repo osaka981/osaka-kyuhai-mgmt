@@ -1618,6 +1618,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-blu btn-sm" onclick="aclIssuePerson()">＋ 個人アカウントを発行</button>
           <!-- ★ 2026/09/15: 第2段階の準備。既存データに会社IDを付ける -->
           <button class="btn b-gh btn-sm" onclick="aclBackfillCompanyId()">既存データに会社IDを付ける</button>
+          <!-- ★ 2026/09/16: 2〜5月に投入されたテスト日報の整理 -->
+          <button class="btn b-gh btn-sm" style="border-color:var(--amb2);color:var(--amb2);"
+            onclick="cleanupTestData()">テストデータを整理</button>
         </div>
       </div>
       <div class="xs muted" style="margin:-6px 0 10px;">
@@ -10280,6 +10283,99 @@ async function aclDelete(uid){
   _aclSaveLocal(map);
   renderAclList();
   _showSaveToast('削除しました');
+}
+
+/* ══ ★ 2026/09/16: テストデータの整理 ══
+   2026年2月〜5月に投入されたテスト用の日報が残っていて、
+   コンソールに「顧客同定」の警告が毎回大量に出ていた。
+   集計や請求には乗っていないが（顧客名で照合し直すため顧客なしに落ちる）、
+   本当のエラーが埋もれるので消す。
+   対象の決め方は、下の3条件のいずれかに当てはまるものだけ。
+   顧客マスタ（株式会社産直・ヘソプロダクション等）は削除しない。
+   実行前に一覧を出し、消す直前に控えを localStorage へ保存する。 */
+const _TESTDATA = {
+  // ① 実在しない氏名・役職名で入力されたもの（在籍しない＝台帳に無い）
+  names: ['鈴木 一郎','高橋 三郎','田中 二郎','山田 太郎','佐藤 花子',
+          '専務取締役','常務取締役','川村 知弘'],
+  // ② 顧客名にテストと入っているもの
+  custRe: /テスト/,
+  // ③ 実績のあるドライバーだが、中身がテスト用だった特定のレコード
+  //    （氏名で消すと本物の実績まで消えるため、日付＋顧客で限定する）
+  spot: [
+    { staff:'川村 宝',  date:'2026-08-28', cust:'株式会社産直' },
+    { staff:'三上 円崇', date:'2026-08-29', cust:'株式会社ヘソプロダクション' },
+  ],
+  // 安全弁：この日より後のデータは、氏名条件では消さない（本番運用の開始前後）
+  nameCutoff: '2026-06-01',
+};
+function _tdNm(v){ return String(v==null?'':v).replace(/\s+/g,''); }
+function _tdStaffOf(r){ return (r && (r.staff || (r.driver && r.driver.name))) || ''; }
+function _tdIsTarget(r){
+  if(!r) return false;
+  const st=_tdNm(_tdStaffOf(r)), cu=String(r.customerName||''), d=String(r.date||'');
+  // ③ 個別指定（日付と顧客まで一致したものだけ）
+  if(_TESTDATA.spot.some(x=>_tdNm(x.staff)===st && x.date===d && x.cust===cu)) return true;
+  // ② 顧客名にテスト
+  if(cu && _TESTDATA.custRe.test(cu)) return true;
+  // ① 実在しない氏名。ただし本番開始前のものに限る
+  if(_TESTDATA.names.some(x=>_tdNm(x)===st) && d && d < _TESTDATA.nameCutoff) return true;
+  return false;
+}
+async function cleanupTestData(){
+  const Y = lsGet(LS_KEYS.YP, [])  || [];
+  const C = lsGet(LS_KEYS.COL, []) || [];
+  const P = D.pickup || [];
+  const hitY=Y.filter(_tdIsTarget), hitC=C.filter(_tdIsTarget), hitP=P.filter(_tdIsTarget);
+  const total=hitY.length+hitC.length+hitP.length;
+  if(!total){
+    showAlert({icon:'✅', title:'対象がありません', msg:'テストデータは残っていません'});
+    return;
+  }
+  // 誰の何件かを並べて見せる
+  const cnt={};
+  [...hitY,...hitC,...hitP].forEach(r=>{
+    const k=(_tdStaffOf(r)||'(氏名なし)')+(r.customerName?'／'+r.customerName:'');
+    cnt[k]=(cnt[k]||0)+1;
+  });
+  const lines=Object.entries(cnt).sort((a,b)=>b[1]-a[1])
+    .map(([k,v])=>'　'+k+'　'+v+'件').join('\n');
+  const ds=[...hitY,...hitC,...hitP].map(r=>r.date).filter(Boolean).sort();
+  const ok=await showDialog({
+    icon:'🧹', title:'テストデータを削除',
+    msg:'次の '+total+'件 を削除します。\n'
+      +'期間 '+(ds[0]||'')+' 〜 '+(ds[ds.length-1]||'')+'\n\n'+lines
+      +'\n\n宅配日報 '+hitY.length+'件 / 集荷日報 '+hitC.length+'件 / 集荷実績 '+hitP.length+'件\n\n'
+      +'顧客マスタ（株式会社産直・ヘソプロダクション等）は削除しません。\n'
+      +'削除前の控えを端末に保存します。',
+    okText:total+'件を削除する', cancelText:'キャンセル'
+  });
+  if(!ok) return;
+  // 控えを残す（万一のときに戻せるように）
+  try{
+    localStorage.setItem('mgmt_testdata_backup_'+Date.now(),
+      JSON.stringify({ at:new Date().toISOString(), yp:hitY, col:hitC, pickup:hitP }));
+  }catch(e){ console.warn('[整理] 控えを保存できませんでした', e); }
+
+  const ky=new Set(hitY.map(r=>String(r.id)));
+  const kc=new Set(hitC.map(r=>String(r.id)));
+  const kp=new Set(hitP.map(r=>String(r.id)));
+  const newY=Y.filter(r=>!ky.has(String(r.id)));
+  const newC=C.filter(r=>!kc.has(String(r.id)));
+  const newP=P.filter(r=>!kp.has(String(r.id)));
+  try{
+    lsSet(LS_KEYS.YP, newY); lsSet(LS_KEYS.COL, newC);
+    D.pickup = newP;
+    if(typeof fbSet==='function'){
+      await fbSet('yp_logs', newY);
+      await fbSet('col_logs', newC);
+      await fbSet('pickup', newP);
+    }
+  }catch(e){
+    showAlert({icon:'⚠️', title:'削除に失敗しました', msg:(e&&e.message)||''});
+    return;
+  }
+  applyFirebaseData(); renderAll();
+  _showSaveToast(total+'件を削除しました');
 }
 
 function renderAclList(){
