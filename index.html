@@ -10305,6 +10305,15 @@ const _TESTDATA = {
     { staff:'川村 宝',  date:'2026-08-28', cust:'株式会社産直' },
     { staff:'三上 円崇', date:'2026-08-29', cust:'株式会社ヘソプロダクション' },
   ],
+  /* ★ 2026/09/16: IDでの指定。
+     col_logs 側のレコードは顧客名も品目も空（実データは pickup 側にある）ため、
+     日付＋顧客での指定では一致せず、pickup だけ消えて col_logs に残っていた。
+     対になっている相手を確実に消すためにIDで指定する。
+     8/7 のジェット(1786099758247)は実際に運んだ数量なので対象に入れない。 */
+  ids: [
+    '1787896913318',   // 川村 宝 8/28 株式会社産直
+    '1787987714663',   // 三上 円崇 8/29 株式会社ヘソプロダクション
+  ],
   // 安全弁：この日より後のデータは、氏名条件では消さない（本番運用の開始前後）
   nameCutoff: '2026-06-01',
 };
@@ -10313,6 +10322,8 @@ function _tdStaffOf(r){ return (r && (r.staff || (r.driver && r.driver.name))) |
 function _tdIsTarget(r){
   if(!r) return false;
   const st=_tdNm(_tdStaffOf(r)), cu=String(r.customerName||''), d=String(r.date||'');
+  // ④ ID指定（col_logs と pickup の対になっている両方を確実に消す）
+  if(_TESTDATA.ids.indexOf(String(r.id))>=0) return true;
   // ③ 個別指定（日付と顧客まで一致したものだけ）
   if(_TESTDATA.spot.some(x=>_tdNm(x.staff)===st && x.date===d && x.cust===cu)) return true;
   // ② 顧客名にテスト
@@ -10334,7 +10345,7 @@ async function cleanupTestData(){
   // 誰の何件かを並べて見せる
   const cnt={};
   [...hitY,...hitC,...hitP].forEach(r=>{
-    const k=(_tdStaffOf(r)||'(氏名なし)')+(r.customerName?'／'+r.customerName:'');
+    const k=(_tdStaffOf(r)||'(氏名なし)')+(r.customerName?'／'+r.customerName:'')+'　'+(r.date||'');
     cnt[k]=(cnt[k]||0)+1;
   });
   const lines=Object.entries(cnt).sort((a,b)=>b[1]-a[1])
