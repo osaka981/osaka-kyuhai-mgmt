@@ -5183,6 +5183,23 @@ const FB_CONFIG = {
 // フリート管理GAS URL（メール送信用）
 const FLEET_GAS_URL = 'https://script.google.com/macros/s/AKfycbw6img2X6uLInjioPFUVyfTTVIUiAtiEWpu5Y3_axE0BOrroOKSFMRQL_9quxeuuD0/exec';
 
+/* ★ 2026/09/18: フリートの委託会社の drivers を配列にそろえる。
+   フリートアプリが直接書いていたときは配列だったが、GASから取ると
+   スプレッドシートの drivers 列がJSON文字列のまま返る。
+   文字列に .forEach を呼ぶと例外になり、囲みの try-catch が丸ごと
+   空配列を返していた。その結果「フリート未登録ドライバー」が
+   委託会社ぶんだけでなく自社ぶんまで一人も出なくなっていた。 */
+function fleetDriverList(v){
+  if(Array.isArray(v)) return v;
+  if(typeof v==='string'){
+    const t=v.trim();
+    if(!t || t==='[]') return [];
+    try{ const x=JSON.parse(t); return Array.isArray(x)?x:[]; }catch(e){ return []; }
+  }
+  if(v && typeof v==='object') return Object.values(v);
+  return [];
+}
+
 // LS キー（日報アプリと共通）
 const LS_KEYS = {
   YP:       'nikki_yp_logs',
@@ -10420,12 +10437,8 @@ const UM_LS='mgmt_uid_match_draft';
 let _umRows=[];          // 画面に出している行
 let _umPick={};          // フリートのキー → 選んだ台帳の id（'' は未選択、'__new' は新規登録）
 
-function _umArr(v){
-  if(Array.isArray(v)) return v;
-  if(typeof v==='string'){ try{ const x=JSON.parse(v); return Array.isArray(x)?x:[]; }catch(e){ return []; } }
-  if(v && typeof v==='object') return Object.values(v);
-  return [];
-}
+// ★ 2026/09/18: 判定を1か所にまとめた（fleetDriverList と同じ扱い）
+function _umArr(v){ return fleetDriverList(v); }
 function _umNm(v){ return String(v||'').replace(/\s+/g,''); }
 function _umTel(v){ return String(v||'').replace(/[^\d]/g,''); }
 function _umKey(f){ return (f._regCode||'own')+'::'+String(f.id); }
@@ -14150,7 +14163,7 @@ function renderStaffDocsFromFleet(){
     if(!matchedDriver){
       const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
       fleetCompanies.forEach(c=>{
-        (c.drivers||[]).forEach(d=>{
+        fleetDriverList(c&&c.drivers).forEach(d=>{
           if(!matchedDriver){
             const nm = (d.name||'').replace(/\s+/g,'');
             if(nm === staffName.replace(/\s+/g,'')){
@@ -14247,7 +14260,7 @@ function previewFleetDoc(idx){
     if(!md){
       const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
       fleetCompanies.forEach(c=>{
-        (c.drivers||[]).forEach(d=>{
+        fleetDriverList(c&&c.drivers).forEach(d=>{
           if(!md && (d.name||'').replace(/\s+/g,'') === normalized){
             md = d; fleetFiles = d.attachedFiles || [];
           }
@@ -14326,7 +14339,11 @@ async function fetchFleetFromGAS(opts){
     if(Array.isArray(d.companies)) localStorage.setItem('fleet_companies', JSON.stringify(d.companies));
     if(Array.isArray(d.vehicles))  localStorage.setItem('fleet_vehicles',  JSON.stringify(d.vehicles));
     _fleetFetchAt = Date.now();
-    console.log('[fleet] GASから取得: ドライバー' + ((d.drivers||[]).length) + '名 / 委託会社' + ((d.companies||[]).length) + '社');
+    // ★ 2026/09/18: 委託会社のドライバー数も数えて、取れているか分かるようにする
+    let _coDrv=0;
+    try{ (d.companies||[]).forEach(c=>{ _coDrv += fleetDriverList(c&&c.drivers).length; }); }catch(e){}
+    console.log('[fleet] GASから取得: ドライバー' + ((d.drivers||[]).length) + '名 / 委託会社'
+      + ((d.companies||[]).length) + '社（所属ドライバー' + _coDrv + '名）');
     try{ renderUnregisteredFleetCard(); }catch(e){}
     try{ renderDash(); }catch(e){}
     return true;
@@ -14368,7 +14385,7 @@ function getUnregisteredFleetDrivers(){
     });
     // 委託会社ドライバー
     fleetCompanies.forEach(c=>{
-      (c.drivers||[]).forEach(d=>{
+      fleetDriverList(c&&c.drivers).forEach(d=>{
         if(d.status && d.status!=='在籍') return;
         if(knownByUid(d)) return;                     // ★ uid で確定済み
         const norm = (d.name||'').replace(/\s+/g,'');
@@ -31336,7 +31353,7 @@ function _findFleetDriverByName(staffName){
     // 委託会社ドライバーも検索
     const fleetCompanies = JSON.parse(localStorage.getItem('fleet_companies')||'[]');
     for(const c of fleetCompanies){
-      for(const d of (c.drivers||[])){
+      for(const d of fleetDriverList(c&&c.drivers)){
         if((d.name||'').replace(/\s+/g,'')===normalized){
           d._companyName = c.name;
           return d;
