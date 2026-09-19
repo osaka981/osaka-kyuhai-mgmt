@@ -9902,21 +9902,32 @@ function renderJetCustList(){
           : '<span style="color:var(--amb2)">未登録</span>'}</td>
       <td class="xs">${c.postName?esc(c.postName)+(c.postTel?'<div class="xs muted mono">'+esc(c.postTel)+'</div>':'')
         :'<span class="muted">未設定</span>'}</td>
-      <td style="white-space:nowrap;">
+      <!-- ★ 2026/09/19: ボタンが5つあり、1行に並べると右端の「削除」が切れていた。
+           折り返すようにして、どの画面幅でも全部押せるようにする。 -->
+      <td style="white-space:normal;">
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
           onclick="jetCustEdit('${esc(String(c.id))}')">設定</button>
-        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
           onclick="jetCustIssueAccount('${esc(String(c.id))}')">${c.authUid?'アカウント再発行':'アカウント発行'}</button>
-        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
           onclick="jetCustCopyUrl('${esc(String(c.id))}')">URLをコピー</button>
-        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
           onclick="jetCustReissuePin('${esc(String(c.id))}')">暗証番号を再発行</button>
-        <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+        <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
           onclick="jetCustRemove('${esc(String(c.id))}')">削除</button>
+        </div>
       </td>
     </tr>`;
   }).join('');
-  wrap.innerHTML = `<div class="tw"><table>
+  /* ★ 2026/09/19: 列が増えて横に収まらず、顧客名が1文字ずつ縦に折れ、
+     右端の「削除」も切れていた。各列に最低幅を与え、はみ出すぶんは
+     横にスクロールさせる（tw が overflow-x:auto になっている）。 */
+  wrap.innerHTML = `<div class="tw"><table style="min-width:1080px;table-layout:fixed">
+    <colgroup>
+      <col style="width:150px"><col style="width:180px"><col style="width:80px">
+      <col style="width:140px"><col style="width:170px"><col style="width:140px"><col style="width:220px">
+    </colgroup>
     <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th>計数する企業</th><th>連絡先メール</th><th>差出先</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
