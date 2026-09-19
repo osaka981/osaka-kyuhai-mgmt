@@ -1563,8 +1563,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div></div>
         <div style="font-size:10px;color:var(--txt2);margin:0 0 10px;">
           ここに登録した顧客が、計数アプリの開始画面に並びます。配布URLを顧客に渡すと、その顧客の実績だけを見る画面が開きます。<br>
-          <b style="color:var(--amb2)">顧客へ渡すのは「アカウント発行」のIDとパスワードです。</b>暗証番号は使いません（2026/09/19に顧客側の入口を廃止しました）。<br>
-          暗証番号は社内で開くときにのみ使います。発行時にこの画面で一度だけ表示され、後から確認することはできません。<br>
+          <b style="color:var(--amb2)">顧客へ渡すのは「暗証番号」です。</b>配布URLと暗証番号の2つをお伝えください。<br>
+          暗証番号は12桁の英数字です。発行時にこの画面で一度だけ表示され、後から確認することはできません。忘れた場合は「暗証番号を再発行」で作り直せます。<br>
+          <span style="color:var(--mut)">※「アカウント発行」は、パスワードを忘れられるとこちらから作り直せないため、通常は使いません。</span><br>
           顧客側の画面でも暗証番号を変更できます。
         </div>
         <div id="jc-cust-list"></div>
@@ -9896,6 +9897,9 @@ function renderJetCustList(){
         const a=Array.isArray(c.corps)&&c.corps.length?c.corps.map(x=>m[String(x)]||x):null;
         return a?esc(a.join('・')):'<span class="muted">制限なし</span>';
       })()}</td>
+      <td class="xs">${c.contactEmail
+          ? '<span class="mono" style="word-break:break-all">'+esc(c.contactEmail)+'</span>'
+          : '<span style="color:var(--amb2)">未登録</span>'}</td>
       <td class="xs">${c.postName?esc(c.postName)+(c.postTel?'<div class="xs muted mono">'+esc(c.postTel)+'</div>':'')
         :'<span class="muted">未設定</span>'}</td>
       <td style="white-space:nowrap;">
@@ -9913,7 +9917,7 @@ function renderJetCustList(){
     </tr>`;
   }).join('');
   wrap.innerHTML = `<div class="tw"><table>
-    <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th>計数する企業</th><th>差出先</th><th></th></tr></thead>
+    <thead><tr><th>顧客</th><th>配布URL</th><th>暗証番号</th><th>計数する企業</th><th>連絡先メール</th><th>差出先</th><th></th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
@@ -10051,6 +10055,27 @@ async function jetCustEdit(id){
         どれも選ばなければ全員に表示されます。選ぶと、その企業のドライバーが
         IDを入力したときだけ、この顧客名が計数アプリに出ます。
       </div>
+      <!-- ★ 2026/09/19: 暗証番号を忘れたときの送り先。
+           顧客が「パスワードを忘れた」を押すと、ここへ新しい暗証番号が届く。
+           担当者が代わっても使えるアドレス（共有のもの）を登録してもらう。
+           変更があったら顧客から連絡してもらい、ここで直す。 -->
+      <div class="fg"><label>連絡先メールアドレス</label>
+        <input type="email" id="jce-email" class="fi" value="${esc(c.contactEmail||'')}" placeholder="info@example.co.jp">
+        <div class="xs muted" style="margin-top:3px">
+          暗証番号を忘れたとき、このアドレスへ新しい暗証番号を送ります。<br>
+          担当者が代わっても届くアドレスをご登録ください。未登録の場合、顧客側から再設定できません。
+          ${(()=>{
+            /* ★ 2026/09/19: 顧客・契約管理に登録されているアドレスを引けるようにする。
+               請求書の送り先と同じでよい顧客が多いため、二重に入力する手間を省く。
+               ただし経理と実務で宛先が違う顧客もあるので、既定では入れず、
+               押したときだけ写す。 */
+            const cu=(D.customers||[]).find(x=>x && String(x.name||'').replace(/\s+/g,'')===String(c.name||'').replace(/\s+/g,''));
+            if(!cu || !cu.email) return '';
+            return '<div style="margin-top:5px">顧客・契約管理の登録: <span class="mono">'+esc(cu.email)+'</span>'
+              +' <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:1px 7px"'
+              +' onclick="document.getElementById(\'jce-email\').value=\''+esc(cu.email)+'\'">これを使う</button></div>';
+          })()}
+        </div></div>
       <div class="fg"><label>差出先の名称</label>
         <input type="text" id="jce-pname" class="fi" value="${esc(c.postName||'')}" placeholder="大阪北郵便局 大口窓口"></div>
       <div class="fg"><label>差出先の電話番号</label>
@@ -10061,6 +10086,8 @@ async function jetCustEdit(id){
   if(!ok) return;
   const sel=['1','2','9'].filter(v=>document.getElementById('jce-c'+v)?.checked);
   c.corps = sel;
+  // ★ 2026/09/19: 暗証番号の再設定を送る先
+  c.contactEmail = (document.getElementById('jce-email')?.value||'').trim();
   c.postName = (document.getElementById('jce-pname')?.value||'').trim();
   c.postTel  = (document.getElementById('jce-ptel')?.value||'').trim();
   await _jetCustsSave(map);
@@ -10793,7 +10820,7 @@ async function jetCustReissuePin(id){
   const c = map[String(id)];
   if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
   const ok = await showDialog({icon:'🔑', title:'暗証番号の再発行',
-    msg:(c.name||'')+' の暗証番号を再発行しますか？\n\n今のものは使えなくなります。\n\n※ 顧客用の入口は「アカウント」に一本化したため、暗証番号は社内で開くときにのみ使います。',
+    msg:(c.name||'')+' の暗証番号を再発行しますか？\n\n今のものは使えなくなります。顧客へ新しい暗証番号をお伝えください。',
     okText:'再発行する', cancelText:'キャンセル'});
   if(!ok) return;
   const pin = _jetPinNew();
