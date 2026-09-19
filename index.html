@@ -1563,7 +1563,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div></div>
         <div style="font-size:10px;color:var(--txt2);margin:0 0 10px;">
           ここに登録した顧客が、計数アプリの開始画面に並びます。配布URLを顧客に渡すと、その顧客の実績だけを見る画面が開きます。<br>
-          暗証番号は発行時にこの画面で一度だけ表示されます。保存されるのはハッシュだけなので、後から番号を確認することはできません。忘れた場合は再発行してください。<br>
+          <b style="color:var(--amb2)">顧客へ渡すのは「アカウント発行」のIDとパスワードです。</b>暗証番号は使いません（2026/09/19に顧客側の入口を廃止しました）。<br>
+          暗証番号は社内で開くときにのみ使います。発行時にこの画面で一度だけ表示され、後から確認することはできません。<br>
           顧客側の画面でも暗証番号を変更できます。
         </div>
         <div id="jc-cust-list"></div>
@@ -5189,6 +5190,55 @@ const FLEET_GAS_URL = 'https://script.google.com/macros/s/AKfycbw6img2X6uLInjioP
    文字列に .forEach を呼ぶと例外になり、囲みの try-catch が丸ごと
    空配列を返していた。その結果「フリート未登録ドライバー」が
    委託会社ぶんだけでなく自社ぶんまで一人も出なくなっていた。 */
+/* ★ 2026/09/18: GASから受け取ったフリートのデータを、使う前に形を直す。
+   フリートはスプレッドシートを保存先にしているため、表に収まらない
+   入れ子の項目（配列・オブジェクト）はJSON文字列にして1セルへ詰めている。
+   フリートアプリが直接書いたときは配列、GAS経由では文字列、と
+   場所によって形が変わるため、読む側が配列だと思って扱うと崩れる。
+   実際に drivers で「.forEach is not a function」、attachedFiles で
+   文字列の長さを件数として表示する（552件）という不具合が出た。
+   使う場所ごとに直すと漏れるので、受け取った直後に1回で直す。 */
+const FLEET_JSON_FIELDS = {
+  drivers:   ['offices','license','otherDocs','other','sub','leave','attachedFiles','archivedFiles'],
+  vehicles:  ['offices','shaken','jibai','nin','attachedFiles','archivedFiles'],
+  companies: ['drivers','vehicles'],
+  settings:  ['value'],
+};
+function _fleetParse(v){
+  if(typeof v!=='string') return v;          // すでに配列やオブジェクトならそのまま
+  const t=v.trim();
+  if(!t || (t[0]!=='[' && t[0]!=='{')) return v;   // ただの文字列は触らない
+  try{ return JSON.parse(t); }catch(e){ return v; } // 壊れていたら元のまま返す
+}
+function normalizeFleetData(d){
+  if(!d || typeof d!=='object') return d;
+  Object.keys(FLEET_JSON_FIELDS).forEach(node=>{
+    const rows=d[node];
+    if(!Array.isArray(rows)) return;
+    const fields=FLEET_JSON_FIELDS[node];
+    rows.forEach(row=>{
+      if(!row || typeof row!=='object') return;
+      fields.forEach(f=>{ if(f in row) row[f]=_fleetParse(row[f]); });
+    });
+  });
+  // 委託会社の中のドライバー・車両も、同じ項目が入れ子で入っている
+  if(Array.isArray(d.companies)){
+    d.companies.forEach(c=>{
+      if(!c || typeof c!=='object') return;
+      ['drivers','vehicles'].forEach(key=>{
+        const list=c[key];
+        if(!Array.isArray(list)) return;
+        const fields=FLEET_JSON_FIELDS[key]||[];
+        list.forEach(row=>{
+          if(!row || typeof row!=='object') return;
+          fields.forEach(f=>{ if(f in row) row[f]=_fleetParse(row[f]); });
+        });
+      });
+    });
+  }
+  return d;
+}
+
 function fleetDriverList(v){
   if(Array.isArray(v)) return v;
   if(typeof v==='string'){
@@ -9708,14 +9758,22 @@ function _jetSlug(){
   return Array.from(a).map(n=>cs[n % cs.length]).join('');
 }
 function _jetPinNew(){
-  // 6桁。先頭0も許すが、同じ数字の繰り返しは引き直す。
+  /* ★ 2026/09/19: 6桁の数字から、12桁の英数字に変えた。
+     6桁だと総当たりで100万通りしかなく、顧客用の入口としては弱い。
+     アカウントのパスワードと同じ作り方に揃える。
+     紛らわしい文字（0とO、1とlとI）は除く。
+     大文字・小文字・数字がそれぞれ1つ以上入るまで引き直す。 */
+  const cs='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   for(let i=0;i<50;i++){
-    const a = new Uint8Array(6);
+    const a = new Uint8Array(12);
     crypto.getRandomValues(a);
-    const p = Array.from(a).map(n=>String(n%10)).join('');
-    if(!/^(\d)\1{5}$/.test(p)) return p;
+    const p = Array.from(a).map(n=>cs[n%cs.length]).join('');
+    if(/[a-z]/.test(p) && /[A-Z]/.test(p) && /[2-9]/.test(p)) return p;
   }
-  return '482row'.replace(/\D/g,'') || '135792';
+  // 万一そろわなければ、そのまま返す（引き直しは上限まで）
+  const a = new Uint8Array(12);
+  crypto.getRandomValues(a);
+  return Array.from(a).map(n=>cs[n%cs.length]).join('');
 }
 async function _jetCustsSave(map){
   try{ localStorage.setItem(JETCUST_LS, JSON.stringify(map)); }catch(e){}
@@ -10735,7 +10793,7 @@ async function jetCustReissuePin(id){
   const c = map[String(id)];
   if(!c){ showAlert({msg:'対象が見つかりません'}); return; }
   const ok = await showDialog({icon:'🔑', title:'暗証番号の再発行',
-    msg:(c.name||'')+' の暗証番号を再発行しますか？\n\n今の番号は使えなくなります。顧客へ新しい番号を伝える必要があります。',
+    msg:(c.name||'')+' の暗証番号を再発行しますか？\n\n今のものは使えなくなります。\n\n※ 顧客用の入口は「アカウント」に一本化したため、暗証番号は社内で開くときにのみ使います。',
     okText:'再発行する', cancelText:'キャンセル'});
   if(!ok) return;
   const pin = _jetPinNew();
@@ -10744,7 +10802,7 @@ async function jetCustReissuePin(id){
   await _jetCustsSave(map);
   renderJetCustList();
   await showAlert({icon:'🔑', title:'再発行しました',
-    msg:(c.name||'')+'\n\n新しい暗証番号: '+pin+'\n\nこの番号はこの画面でしか表示されません。'});
+    msg:(c.name||'')+'\n\n新しい暗証番号:\n'+pin+'\n\nこの画面でしか表示されません。控えてから閉じてください。'});
 }
 
 function jetCustCopyUrl(id){
@@ -14333,7 +14391,7 @@ async function fetchFleetFromGAS(opts){
   try{
     const res = await fetch(FLEET_GAS_URL + '?action=getAll', { method:'GET' });
     const json = await res.json();
-    const d = (json && (json.data || json)) || {};
+    const d = normalizeFleetData((json && (json.data || json)) || {});
     if(!d || (!Array.isArray(d.drivers) && !Array.isArray(d.companies))) throw new Error('形式が違います');
     if(Array.isArray(d.drivers))   localStorage.setItem('fleet_drivers',   JSON.stringify(d.drivers));
     if(Array.isArray(d.companies)) localStorage.setItem('fleet_companies', JSON.stringify(d.companies));
