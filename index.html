@@ -31466,8 +31466,18 @@ function _findFleetDriverByName(staffName){
 // 会社名の正規化: 空白・括弧内容・株式会社/（株）などを除去
 function _normalizeCompanyName(name){
   if(!name) return '';
+  /* ★ 2026/09/20: 全角と半角の違いを吸収する。
+     フリートには「T－トラスト合同会社」（全角ハイフン）、
+     経営管理には「T-トラスト合同会社」（半角ハイフン）で登録されていて、
+     同じ会社なのに照合できず、何度登録しても「委託会社が未登録です」と
+     出続けていた。英数字・記号・空白を半角へそろえてから比べる。 */
   return String(name)
-    .replace(/\s+/g,'')
+    // 全角の英数字を半角へ（Ａ→A、１→1）
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    // 各種のハイフン・ダッシュを半角ハイフンへ
+    .replace(/[－‐‑‒–—―ー]/g, '-')
+    // 全角スペースを含めて空白を除く
+    .replace(/[\s\u3000]+/g,'')
     .replace(/\(.*?\)/g,'')
     .replace(/（.*?）/g,'')
     .replace(/株式会社|有限会社|合同会社|合資会社|合名会社/g,'')
