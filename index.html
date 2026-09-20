@@ -35441,12 +35441,21 @@ function openM(id){
   $(id)?.classList.add('on');
   // ★ 2026/06/20: モーダルを開くたびスクロール位置を先頭に戻す。
   //   前の人で下までスクロールした位置が残り「最下部から表示」になる問題を防ぐ。
-  setTimeout(()=>{
+  /* ★ 2026/09/20: class や id を頼りに戻していたが、実際にスクロールしていたのは
+     どちらも付いていない div だった。そのため従業員台帳を開くと前回の位置
+     （真ん中あたり）から始まっていた。名前で探さず、中でスクロールしている
+     要素をすべて先頭に戻す。 */
+  const _toTop=()=>{
     const modal=$(id);
     if(!modal) return;
     modal.scrollTop=0;
-    modal.querySelectorAll('.modal-body,.m-body,.modal-content,.mc,.scroll,[data-scroll]').forEach(el=>{ el.scrollTop=0; });
-  }, 30);
+    modal.querySelectorAll('*').forEach(el=>{
+      if(el.scrollTop) el.scrollTop=0;
+    });
+  };
+  _toTop();
+  setTimeout(_toTop, 30);
+  setTimeout(_toTop, 120);   // 中身を描いたあとにもう一度
   // Enter移動リスナーを設定（初回のみ）
   setupEnterNav();
   if(id==='m-del'){
