@@ -14686,10 +14686,14 @@ function _openDriverModalFromFleet(md){
       const co = _findCompanyByName(md._companyName);
       if(co){
         // 既存会社から選択ドロップダウンに値をセット
-        const selEl = $('st-company-select');
+        /* ★ 2026/09/20: 参照していたIDと関数名が違っていた。
+           正しくは st-company-sel / onCompanySelChange。
+           そのため会社を選んでも反映されず、保存しても companyId が
+           空のままだった（T-トラストが紐づかない原因）。 */
+        const selEl = $('st-company-sel');
         if(selEl){
           selEl.value = co.id;
-          if(typeof onStCompanySelectChange === 'function') onStCompanySelectChange();
+          if(typeof onCompanySelChange === 'function') onCompanySelChange();
         }
         // 明示フィールドにもセット
         if($('st-company-name'))$('st-company-name').value = co.name;
@@ -19881,7 +19885,17 @@ function saveStaff(continueAdd=false){
       window._pendingFleetDriver = null;
     }
   }catch(e){ console.warn('[fleet] 項目の引き継ぎに失敗', e); }
-  try{ D.staff.forEach(x=>{ if(x && !x.uid && x.id!=null) x.uid=String(x.id); }); }catch(e){}
+  /* ★ 2026/09/20: uid が空のときレコードIDを入れていたが、
+     フリートの uid は Firebase の認証ID（英数字の文字列）なので別物。
+     時刻由来の数値が uid として入ると突き合わせができなくなる。
+     フリートから引き継いだ本物の uid だけを残す。 */
+  try{
+    D.staff.forEach(x=>{
+      if(!x) return;
+      // 数値だけの uid は、過去にレコードIDを入れてしまったもの
+      if(x.uid && /^\d+$/.test(String(x.uid))) delete x.uid;
+    });
+  }catch(e){}
   try{ _aclSyncRetired(); }catch(e){ console.warn('[acl] 退職との連動に失敗', e); }
 
   // === Firebase保存 ===
