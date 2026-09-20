@@ -1947,7 +1947,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <label style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--txt);cursor:pointer;border:1px solid var(--brd);border-radius:6px;padding:5px 10px;"><input type="checkbox" id="staff-hide-company" onchange="renderStaff(document.getElementById('staff-search')._flt||'')" style="margin:0;">委託ドライバーを除く</label>
           <button class="btn b-gh btn-sm" onclick="fltStaff('')">全員</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('社員')">社員</button>
-          <button class="btn b-gh btn-sm" onclick="fltStaff('会社委託')">委託</button>
+          <button class="btn b-gh btn-sm" onclick="fltStaff('委託会社所属')">委託</button>
           <button class="btn b-gh btn-sm" onclick="fltStaff('個人事業主')">個人</button>
         </div>
         <div class="fla gap6">
@@ -9673,7 +9673,7 @@ function renderDel() {
     const vok=r.mochidashi>0&&sm===r.mochidashi;
     const vc=vok?'<span style="color:var(--grn2)">✓ OK</span>':`<span style="color:var(--red2)" title="完了+転送+持戻+翌日=${sm}≠${r.mochidashi}">✗ NG</span>`;
     const sb=r.status==='照合済'?'<span class="bdg bg">照合済</span>':r.status==='差異あり'?'<span class="bdg br">差異あり</span>':'<span class="bdg bz">未照合</span>';
-    const kb=r.kubun==='社員'?'<span class="bdg bb">社員</span>':r.kubun==='会社委託'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
+    const kb=r.kubun==='社員'?'<span class="bdg bb">社員</span>':(r.kubun==='会社委託'||r.kubun==='委託会社所属')?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
     // 金額計算
     const amt=(()=>{if(!r.unit)return 0;const u=r.unit;const s=u.s||[];return r.kanryo*(u.kanryo||0)+r.tenso*(u.tenso||0)+r.yakan*(u.yakan||0)+(r.ogata||0)*(u.ogata||0)+(r.shukka||0)*(u.shukka||0)+([r.sonota||[]].flat()).reduce((a,v,i)=>a+v*(s[i]||0),0);})();
     h+=`<tr>
@@ -14814,7 +14814,8 @@ function _ivBulkGetData(){
     // 会社配下の従業員を合算して請求額を出す想定。簡易版では会社所属1人の金額をサンプル表示
     let totalAmount = 0;
     (D.staff||[]).forEach(s=>{
-      if(s.kubun==='会社委託' && s.companyName===c.name){
+      // ★ 2026/09/20: 区分は「委託会社所属」で保存される。'会社委託' は旧表記。
+      if((s.kubun==='会社委託'||s.kubun==='委託会社所属') && s.companyName===c.name){
         const pay = _calcStaffPayment(s.name, month);
         totalAmount += _calcInvoiceAmountFor(s, pay);
       }
@@ -19546,7 +19547,12 @@ function saveStaff(continueAdd=false){
 
   // 委託会社情報の処理
   let companyId=0, companyName='';
-  if(kbn==='会社委託'){
+  /* ★ 2026/09/20: 区分の値が食い違っていた。
+     画面の選択肢は「委託会社所属」だが、ここでは '会社委託' だけを見ていたため
+     分岐に入らず、選んだ委託会社が丸ごと捨てられていた。
+     （T-トラストを選んでも companyId が空のままだった原因）
+     両方の表記を受け付ける。 */
+  if(kbn==='会社委託' || kbn==='委託会社所属'){
     companyName=$('st-company-name')?.value.trim()||'';
     if(companyName){
       // 既存会社か新規か確認
@@ -19912,7 +19918,7 @@ function saveStaff(continueAdd=false){
   console.log('[saveStaff] Firebase書き込み完了 D.staff.length=', D.staff.length);
 
   // フォームリセット
-  const keepCompany=kbn==='会社委託'&&continueAdd;
+  const keepCompany=(kbn==='会社委託'||kbn==='委託会社所属')&&continueAdd;
   ['st-name','st-kana','st-tel','st-tel2','st-addr','st-license','st-license-exp',
    'st-birth','st-start','st-end','st-note','st-tk',
    'st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
