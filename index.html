@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.7</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4987,7 +4987,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.6';
+const APP_VER = '2026-09-22.7';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -15873,8 +15873,10 @@ function _effBizMode(st, biz, cond){
 // 業務ごとの勤務時間（分）。打刻に biz が無いものは、時間単価の業務が1つならその業務に寄せる
 function _bizWorkMin(st, monStr, biz, modes){
   const ATT = lsGet(LS_KEYS.ATT,[])||[];
+  // ★ 2026-09-22.7: 業務の無い打刻は、担当業務で絞った時間単価の業務が1つならそこへ寄せる
+  const _hb = (typeof _hourlyBizOf==='function') ? _hourlyBizOf(st, monStr) : [];
   const hourlyBiz = ['del','col'].filter(b=>modes[b].type==='時間単価');
-  const fallbackBiz = hourlyBiz.length===1 ? hourlyBiz[0] : 'del';
+  const fallbackBiz = _hb.length===1 ? _hb[0] : (hourlyBiz.length===1 ? hourlyBiz[0] : 'del');
   const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : null;
   return ATT.filter(a=>
     (a.driverName===st.name
@@ -40615,11 +40617,31 @@ function _attIsMine(a, st){
     || (st.empNo && String(a.driverId)===String(st.empNo))
     || String(a.driverId)===String(st.id));
 }
+// ★ 2026-09-22.7: その人が担当している業務（所属部署で判定）。
+//   所属部署が無い古いデータは、集荷専属（officeType=collection）またはメイン郵便局なし→集荷、それ以外→宅配
+function _staffBizOf(st){
+  const types = (st.deptIds||[]).map(id=>{
+    const d=(typeof getDepartmentById==='function') ? getDepartmentById(id) : null;
+    return d?.type||'';
+  });
+  const out = ['del','col'].filter(b=>types.includes(b));
+  if(out.length) return out;
+  if(st.officeType==='collection' || !st.office) return ['col'];
+  return ['del'];
+}
 // 時間単価の業務（del/col）。無ければ空配列
+//   ★ 2026-09-22.7: 担当している業務に絞る。
+//   ・宅配の担当が無い人 → 集荷だけ
+//   ・宅配・集荷の両方を担当 → 時間単価の業務すべて（両方なら日ごとに選択）
+//   ・両方担当でも時間単価が片方だけ → その業務だけ
+//   絞った結果が空になる場合（所属部署の設定漏れなど）は、給与形態の設定どおりにする
 function _hourlyBizOf(st, monStr){
   const cond = (typeof getActivePayCondition==='function')
     ? (getActivePayCondition(st, String(monStr||'').replace('-','/'))||{}) : {};
-  return ['del','col'].filter(b=>_effBizMode(st,b,cond).type==='時間単価');
+  const hourly = ['del','col'].filter(b=>_effBizMode(st,b,cond).type==='時間単価');
+  const mine = _staffBizOf(st);
+  const both = hourly.filter(b=>mine.includes(b));
+  return both.length ? both : hourly;
 }
 // "900" "9" "0900" "9:00" "9：00" → "09:00"。不正なら null、空なら ''
 function _wtNormHM(v){
