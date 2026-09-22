@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3859,6 +3859,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <label style="font-size:11px;">給与形態
           <span style="font-size:9px;color:var(--tel2);margin-left:6px;">← 区分と連動</span>
         </label>
+        <div id="st-ky-bizpay-note" style="display:none;font-size:10px;font-weight:700;color:var(--amb2);margin-top:3px;"></div>
         <select id="st-ky" class="fi" onchange="onKyuChange()" style="margin-top:3px;">
           <optgroup label="── 雇用契約 ──">
             <option value="月給">月給（社員・役員）</option>
@@ -4078,7 +4079,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <input type="number" id="st-pm-del-rate" class="fi" style="width:110px;font-size:11px;padding:4px 6px;" placeholder="0" step="1">
         <span id="st-pm-del-unit" style="font-size:10.5px;color:var(--txt2);">円</span>
       </span>
-      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">現在は保存のみです。給与計算への反映は次の更新で行います。</div>
+      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">設定すると、宅配の給与はここで計算します。未設定なら基本情報の給与形態で計算します。</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
       <span style="font-size:9px;color:var(--txt2);font-weight:700;">宅配単価 一括:</span>
@@ -4146,7 +4147,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <input type="number" id="st-pm-col-rate" class="fi" style="width:110px;font-size:11px;padding:4px 6px;" placeholder="0" step="1">
         <span id="st-pm-col-unit" style="font-size:10.5px;color:var(--txt2);">円</span>
       </span>
-      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">現在は保存のみです。給与計算への反映は次の更新で行います。</div>
+      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">設定すると、集荷の給与はここで計算します。未設定なら基本情報の給与形態で計算します。時間単価にした場合、品目単価は計算に使いません。</div>
     </div>
     <!-- 適用方式の選択 (集荷事業) -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
@@ -4970,7 +4971,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.4';
+const APP_VER = '2026-09-22.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12512,7 +12513,15 @@ function setStTabTax(tab, type){
 //   この版では保存のみ。給与計算はまだ st.kyuyo を使う。
 // ══════════════════════════════════════════════════
 const PAYMODE_UNIT = {'時間単価':'円/時','日額':'円/日','定額':'円/便'};
+function _updStKyBizNote(){
+  const el=$('st-ky-bizpay-note'); if(!el) return;
+  const d=$('st-pm-del-type')?.value||'', c=$('st-pm-col-type')?.value||'';
+  if(d && c){ el.textContent='宅配・集荷タブの設定で計算します（この欄は使いません）'; el.style.display=''; }
+  else if(d||c){ el.textContent=(d?'宅配':'集荷')+'はタブの設定で計算します。'+(d?'集荷':'宅配')+'はこの欄で計算します'; el.style.display=''; }
+  else { el.textContent=''; el.style.display='none'; }
+}
 function onStPayModeChange(biz){
+  _updStKyBizNote();
   const t = $('st-pm-'+biz+'-type')?.value || '';
   const wrap = $('st-pm-'+biz+'-rate-wrap');
   if(wrap) wrap.style.display = PAYMODE_UNIT[t] ? 'inline-flex' : 'none';
@@ -15821,6 +15830,145 @@ function _calcHourlyPay(st, monStr, cond){
   return { amount: baseAmt+colAmt, workMin, hLabel, colAmt, breakdown, noAtt };
 }
 
+
+// ══════════════════════════════════════════════════
+// ★ 2026-09-22.5: 業務別の給与計算
+//   st.payMode = { del:{type,rate,hoshoB?,hoshoC?}, col:{...} }
+//   どちらかの業務に形態が設定されていれば、この計算を使う。
+//   未設定の業務は基本情報の給与形態（給与履歴を含む）から読み替える。
+// ══════════════════════════════════════════════════
+const BIZ_LABEL = {del:'宅配', col:'集荷'};
+function _hasBizPayMode(st){
+  const pm = st && st.payMode;
+  return !!(pm && ((pm.del && pm.del.type) || (pm.col && pm.col.type)));
+}
+// 業務ごとの実効設定（未設定なら基本情報の給与形態から読み替え）
+function _effBizMode(st, biz, cond){
+  const o = (st.payMode && st.payMode[biz]) || {};
+  if(o.type) return {type:o.type, rate:Number(o.rate)||0, fromBase:false, src:o};
+  const kyu = (cond && cond.kyuyo) || st.kyuyo;
+  const tk  = (cond && cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (st.tanka||0);
+  if(kyu==='個数制（歩合）') return {type:'歩合', rate:0, fromBase:true, src:{}};
+  if(kyu==='時間単価' || kyu==='時間給') return {type:'時間単価', rate:tk, fromBase:true, src:{}};
+  if(kyu==='日額') return {type:'日額', rate:tk, fromBase:true, src:{}};
+  return {type:'', rate:0, fromBase:true, src:{}};
+}
+// 業務ごとの勤務時間（分）。打刻に biz が無いものは、時間単価の業務が1つならその業務に寄せる
+function _bizWorkMin(st, monStr, biz, modes){
+  const ATT = lsGet(LS_KEYS.ATT,[])||[];
+  const hourlyBiz = ['del','col'].filter(b=>modes[b].type==='時間単価');
+  const fallbackBiz = hourlyBiz.length===1 ? hourlyBiz[0] : 'del';
+  const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : null;
+  return ATT.filter(a=>
+    (a.driverName===st.name
+      || (st.empNo && String(a.driverId)===String(st.empNo))
+      || String(a.driverId)===String(st.id))
+    && String(a.date||'').replace(/\//g,'-').startsWith(monStr)
+    && ((a.biz==='del'||a.biz==='col') ? a.biz : fallbackBiz)===biz
+  ).reduce((sum,a)=>{
+    const span = a.workMin||0;
+    const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+    const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
+    return sum + rnd;
+  },0);
+}
+// 歩合の明細（宅配）: 宅配単価×件数 ＋ 宅配事業内集荷
+function _bizCommissionDel(st, name, monStr, del){
+  const out=[]; const dp=_getEffectiveDelPrices(st);
+  const sum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
+  del.forEach(r=>Object.keys(sum).forEach(k=>{ sum[k]+=r[k]||0; }));
+  let dc={breakdown:[]};
+  try{ dc = calcStaffDelColPayment(name, monStr) || {breakdown:[]}; }catch(e){}
+  const hasNew = (dc.breakdown||[]).length>0;
+  [{key:'kanryo',label:'完了',price:dp.kanryo},{key:'tenso',label:'転送',price:dp.tenso},
+   {key:'yakan',label:'夜間',price:dp.night},{key:'ogata',label:'大型',price:dp.ogata},
+   ...(hasNew?[]:[{key:'shukka',label:'集荷',price:dp.shukka}]),
+   {key:'s1',label:'その他1',price:dp.s1},{key:'s2',label:'その他2',price:dp.s2},
+   {key:'s3',label:'その他3',price:dp.s3},{key:'s4',label:'その他4',price:dp.s4}
+  ].forEach(({key,label,price})=>{
+    if(sum[key]>0 && price){
+      const taxFlag=(dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
+      out.push({label:`${label} ${sum[key]}件×¥${fmtUnitPrice(price)}`, amount:calcUnitTotal(price, sum[key], taxFlag)});
+    }
+  });
+  const byLabel={};
+  (dc.breakdown||[]).forEach(b=>{
+    const lbl=b.label||'集荷'; const k=`${lbl}__${b.unitPrice}`;
+    if(!byLabel[k]) byLabel[k]={label:lbl,count:0,unitPrice:b.unitPrice,amount:0,isDefault:b.isDefault};
+    byLabel[k].count+=b.count; byLabel[k].amount+=b.amount;
+  });
+  Object.values(byLabel).sort((a,b)=>(a.isDefault&&!b.isDefault)?-1:(!a.isDefault&&b.isDefault)?1:String(a.label).localeCompare(String(b.label),'ja'))
+    .forEach(g=>{ if(g.amount>0) out.push({label:`${g.label} ${g.count}個×¥${g.unitPrice}`, amount:g.amount}); });
+  return out;
+}
+// 歩合の明細（集荷）: 集荷品目単価×個数
+function _bizCommissionCol(st, pu){
+  const out=[]; const cp=st.fixedPrices?.col||{}; const puSum={};
+  pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+  Object.entries(puSum).forEach(([k,q])=>{
+    const ck=IK_COL_MAP[k];
+    const up=(ck && ck!=='charter') ? Number(cp[ck])||0 : 0;
+    if(q>0 && up>0){
+      const taxFlag=(cp._tax && cp._tax[ck]) || 'ex';
+      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:calcUnitTotal(up, q, taxFlag)});
+    }
+  });
+  return out;
+}
+// 業務別の基本支給（手当・控除は含まない）
+function _calcBizPay(st, monStr, del, pu, cond){
+  monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
+  const _nd = v => String(v||'').replace(/\//g,'-');
+  if(!del) del=(D.delivery||[]).filter(r=>r.staff===st.name&&_nd(r.date).startsWith(monStr));
+  if(!pu)  pu =(D.pickup||[]).filter(r=>r.staff===st.name&&_nd(r.date).startsWith(monStr));
+  if(!cond) cond=(typeof getActivePayCondition==='function') ? (getActivePayCondition(st, monStr.replace('-','/'))||{}) : {};
+  const modes={del:_effBizMode(st,'del',cond), col:_effBizMode(st,'col',cond)};
+  const rows={del, col:pu};
+  const breakdown=[]; let total=0; let noAtt=false;
+  const kyu = cond.kyuyo || st.kyuyo;
+  if(kyu==='月給' || kyu==='保証'){
+    const tk=(cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (st.tanka||0);
+    if(tk>0){ breakdown.push({label:`基本給（${kyu}）`, amount:tk}); total+=tk; }
+  }
+  ['del','col'].forEach(biz=>{
+    const m=modes[biz]; const R=rows[biz]; const L=BIZ_LABEL[biz];
+    if(!m.type) return;
+    const days=new Set(R.map(r=>_nd(r.date))).size;
+    let lines=[];
+    if(m.type==='歩合'){
+      lines = biz==='del' ? _bizCommissionDel(st, st.name, monStr, R) : _bizCommissionCol(st, R);
+    } else if(m.type==='時間単価'){
+      const wm=_bizWorkMin(st, monStr, biz, modes);
+      if(wm>0){
+        const h=Math.floor(wm/60), mm=wm%60;
+        lines.push({label:`時間単価 ${h}時間${mm?mm+'分':''}（休憩控除・丸め後）×¥${fmtUnitPrice(m.rate)}`, amount:Math.round(m.rate*wm/60)});
+      } else if(R.length>0){
+        // 日報の実績があるのに打刻が無い業務だけ警告（その業務をしていない月は警告しない）
+        noAtt=true;
+        lines.push({label:'時間単価 打刻なし（勤務時間を入力してください）', amount:0, warn:true});
+      }
+    } else if(m.type==='日額'){
+      if(days>0) lines.push({label:`日額 ${days}日×¥${fmtUnitPrice(m.rate)}`, amount:m.rate*days});
+    } else if(m.type==='定額'){
+      if(R.length>0) lines.push({label:`定額 ${R.length}便×¥${fmtUnitPrice(m.rate)}`, amount:m.rate*R.length});
+    }
+    let sub=lines.reduce((a,b)=>a+b.amount,0);
+    // 保証・手当（業務単位）。宅配は業務別の設定が無ければ従来の人単位の設定を引き継ぐ
+    const hB = m.src.hoshoB || (biz==='del' ? st.hoshoB : null);
+    const hC = m.src.hoshoC || (biz==='del' ? st.hoshoC : null);
+    if(hB?.on && hB.amt && days>=hB.days){
+      const g=hB.amt*days;
+      if(g>sub){ lines=[{label:`日額保証 ${days}日×¥${hB.amt}`, amount:g}]; sub=g; }
+    }
+    if(hC?.on && hC.amt && days>=hC.days){
+      const c=hC.amt*days; lines.push({label:`日額手当 ${days}日×¥${hC.amt}`, amount:c}); sub+=c;
+    }
+    lines.forEach(b=>breakdown.push({...b, label:`${L}：${b.label}`, biz}));
+    total+=sub;
+  });
+  return {total, breakdown, noAtt, modes};
+}
+
 // ─── 従事員 ───
 function renderStaff(flt){
   const searchEl=$('staff-search');
@@ -15863,7 +16011,10 @@ function renderStaff(flt){
     const isKeisu2=s.kyuyo==='個数制（歩合）';
     const dp2=s.fixedPrices?.del||{};
     let est=0;
-    if(isKeisu2){
+    if(typeof _hasBizPayMode==='function' && _hasBizPayMode(s)){
+      // ★ 2026-09-22.5: 業務別の給与形態
+      est = _calcBizPay(s, _curYM).total;
+    } else if(isKeisu2){
       _myDel.forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
@@ -28538,7 +28689,12 @@ function _calcStaffPayment(name, monStr){
   let noAtt = false;
 
   // ── 基本給・委託料 ──
-  if(kyuyo==='月給'){
+  if(_hasBizPayMode(st)){
+    // ★ 2026-09-22.5: 業務別の給与形態が設定されている人は業務ごとに計算して合算
+    const bp=_calcBizPay(st, monStr, del, pu, cond);
+    total=bp.total; noAtt=bp.noAtt;
+    bp.breakdown.forEach(b=>breakdown.push(b));
+  } else if(kyuyo==='月給'){
     total=tanka;
     breakdown.push({label:'基本給（月給）', amount:total});
   } else if(kyuyo==='個数制（歩合）'){
