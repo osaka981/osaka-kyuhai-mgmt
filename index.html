@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4970,7 +4970,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.1';
+const APP_VER = '2026-09-22.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7758,6 +7758,9 @@ function resetStaffModal(){
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   // ★ 2026-09-22.1: 業務別の給与形態をクリア
   if(typeof _restoreStPayMode==='function') _restoreStPayMode(null);
+  // ★ 2026-09-22.2: updOffSels が選択を保持するようになったので、ここで明示的に「なし」に戻す
+  //   （新規登録で前の人の郵便局が残らないように）
+  if($('st-off')) $('st-off').value='';
   // ★宅配単価フィールド (前回編集の値が残らないようクリア)
   ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka',
    'st-ps1','st-ps2','st-ps3','st-ps4'
@@ -9167,6 +9170,11 @@ function updOffSels() {
 
   ids.forEach(id => {
     const el = $(id); if (!el) return;
+    // ★ 2026-09-22.2: 選択中の値を退避して、作り直した後に戻す。
+    //   Firebase の受信（自分の保存のこだまを含む）のたびにここが呼ばれ、
+    //   開いている従業員台帳のメイン郵便局が「なし」に戻っていた。
+    //   そのまま保存すると営業所が消えるため、必ず値を保持する。
+    const _prevVal = el.value;
     const isFilter = id === 'cmp-off';
     const isStaffMain = id === 'st-off';
     el.innerHTML = isFilter ? '<option value="">全営業所</option>' :
@@ -9184,6 +9192,7 @@ function updOffSels() {
     [...names].sort().forEach(name=>{
       el.innerHTML += `<option value="${name}">${name}</option>`;
     });
+    if(_prevVal && [...el.options].some(o=>o.value===_prevVal)) el.value = _prevVal;
   });
   // 集荷モーダルの顧客セレクト
   const pc = $('pu-cust');
