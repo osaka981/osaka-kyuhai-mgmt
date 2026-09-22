@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.6</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1826,6 +1826,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div id="ig-summary" style="font-size:11px;color:var(--gray2);"></div>
       </div>
       <div id="ig-content"></div>
+    </div>
+
+    <!-- ══ 勤務時間 (2026-09-22.6) ══ -->
+    <div id="s-worktime" class="sec">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:16px;font-weight:700;">勤務時間（時間単価）</h2>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="month" id="wt-mon" class="fi" style="width:auto;font-size:12px;padding:5px 8px;" onchange="renderWorkTime()">
+            <button type="button" class="btn b-gh btn-sm" onclick="_wtPrevNext(-1)">前の人</button>
+            <select id="wt-staff" class="fi" style="width:auto;min-width:160px;font-size:12px;padding:5px 8px;" onchange="_wtOnStaffChange()"></select>
+            <button type="button" class="btn b-gh btn-sm" onclick="_wtPrevNext(1)">次の人</button>
+          </div>
+        </div>
+        <div id="wt-root"></div>
+      </div>
     </div>
 
     <!-- ══ 燃料代管理 (2026/05/10) ══ -->
@@ -4971,7 +4987,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.5';
+const APP_VER = '2026-09-22.6';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7944,6 +7960,7 @@ const _TOP_TABS = {
     { s:'staff',       label:'従業員管理' },
     { s:'company',     label:'委託会社管理' },
     { s:'salary',      label:'給与計算' },
+    { s:'worktime',    label:'勤務時間' },
     { s:'pay-history', label:'給与履歴' },
     { s:'contract',    label:'契約書' },
     { s:'invoice-bulk',label:'請求書', badge:'new' },
@@ -8052,6 +8069,7 @@ function navByS(s) {
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
+  if (s==='worktime')    _call('renderWorkTime');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
   if (s==='payment-mgmt') _call('renderPaymentMgmt');
@@ -15792,8 +15810,7 @@ function _calcHourlyPay(st, monStr, cond){
   );
   const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : null;
   const workMin = myAtt.reduce((sum,a)=>{
-    const span = a.workMin||0;
-    const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+    const net  = _attNetMin(a, st);   // ★ 2026-09-22.6: 手入力・修正を反映、旧手入力の休憩二重控除を防止
     const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
     return sum + rnd;
   },0);
@@ -15866,8 +15883,7 @@ function _bizWorkMin(st, monStr, biz, modes){
     && String(a.date||'').replace(/\//g,'-').startsWith(monStr)
     && ((a.biz==='del'||a.biz==='col') ? a.biz : fallbackBiz)===biz
   ).reduce((sum,a)=>{
-    const span = a.workMin||0;
-    const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+    const net  = _attNetMin(a, st);   // ★ 2026-09-22.6
     const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
     return sum + rnd;
   },0);
@@ -27679,13 +27695,13 @@ function renderStaffDaily(el, name){
   //   出退勤(att_logs)を日付ごとに集計して表示。件数日報が無くても勤務が分かる。
   //   勤怠ログは driverId に empNo が入る。同じ日の複数打刻は合算する。
   const _staffObj = (D.staff||[]).find(s=>s.name===name);
-  const _kyuyo = _staffObj?.kyuyo || '';
-  const _isTimeBased = (_kyuyo==='時間単価' || _kyuyo==='時間給');
+  // ★ 2026-09-22.6: 業務別の時間単価も対象にする
+  const _isTimeBased = !!_staffObj && _hourlyBizOf(_staffObj, mon).length>0;
   let attHasRows = false;
   if(_isTimeBased && _staffObj){
     const ATT=lsGet(LS_KEYS.ATT,[])||[];
-    const empNo=String(_staffObj.empNo||'');
-    const myAtt=ATT.filter(a=> String(a.driverId)===empNo && (a.date||'').startsWith(mon));
+    const myAtt=ATT.filter(a=> _attIsMine(a,_staffObj) && String(a.date||'').replace(/\//g,'-').startsWith(mon));
+    const _rst2=(typeof getRoundSettings==='function')?getRoundSettings():null;
     if(myAtt.length){
       attHasRows = true;
       // 日付ごとに集計
@@ -27693,9 +27709,10 @@ function renderStaffDaily(el, name){
       myAtt.forEach(a=>{
         const d=a.date||'';
         if(!byDate[d]) byDate[d]={ins:[],outs:[],workMin:0};
-        if(a.clockIn) byDate[d].ins.push(a.clockIn);
-        if(a.clockOut||a.adjustedOut) byDate[d].outs.push(a.adjustedOut||a.clockOut);
-        byDate[d].workMin += (a.workMin||0);
+        if(_attIn(a)) byDate[d].ins.push(_attIn(a));
+        if(_attOut(a)) byDate[d].outs.push(_attOut(a));
+        const _n=_attNetMin(a,_staffObj);
+        byDate[d].workMin += (typeof roundWorkMin==='function') ? roundWorkMin(_n,_rst2) : _n;
       });
       const fmtT=(iso)=>{ if(!iso) return '-'; const t=new Date(iso); return isNaN(t)?'-':`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`; };
       const fmtWM=(m)=>{ if(!m) return '0分'; const h=Math.floor(m/60), mm=m%60; return (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分')); };
@@ -27703,7 +27720,7 @@ function renderStaffDaily(el, name){
       let totalMin=0;
       html+=`<div class="ct mb8"><div class="cbar"></div>勤怠（${dates.length}日）</div>`;
       html+=`<div class="tw"><table><thead><tr>
-        <th>日付</th><th class="tr">出勤</th><th class="tr">退勤</th><th class="tr">稼働時間</th>
+        <th>日付</th><th class="tr">出勤</th><th class="tr">退勤</th><th class="tr">計上時間（休憩控除・丸め後）</th>
       </tr></thead><tbody>`;
       dates.forEach(d=>{
         const r=byDate[d];
@@ -35127,6 +35144,7 @@ function nav(el){
   if(s==='pu-inv')       renderPUInv();
   if(s==='pu-sum')       renderSum();
   if(s==='salary')       renderSalary();
+  if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
   if(s==='staff')        renderStaff();
@@ -40450,7 +40468,11 @@ function _ddStaff(){
   return (D.staff||[]).find(s=>s.name===nm) || null;
 }
 function _isHourly(st){
-  return !!st && (st.kyuyo === '時間単価' || st.kyuyo === '時間給');
+  // ★ 2026-09-22.6: 宅配が時間単価の人（業務別の設定も見る）
+  if(!st) return false;
+  const mon=($('dd-date')?.value||new Date().toISOString()).slice(0,7);
+  return (typeof _hourlyBizOf==='function') ? _hourlyBizOf(st, mon).includes('del')
+    : (st.kyuyo === '時間単価' || st.kyuyo === '時間給');
 }
 
 // 勤務時間欄の表示/非表示を切り替え、既存の勤怠があれば読み込む
@@ -40466,9 +40488,10 @@ function _ddWorkSync(){
   const att  = _findAtt(st, date);
   const srcEl = $('dd-work-src');
   if(att){
-    if($('dd-work-in'))  $('dd-work-in').value  = _hhmm(att.clockIn);
-    if($('dd-work-out')) $('dd-work-out').value = _hhmm(att.adjustedOut || att.clockOut);
-    if(srcEl) srcEl.textContent = att.source==='manual' ? '経営管理で入力済み' : '日報アプリの打刻';
+    if($('dd-work-in'))  $('dd-work-in').value  = _hhmm(_attIn(att));
+    if($('dd-work-out')) $('dd-work-out').value = _hhmm(_attOut(att));
+    if(srcEl) srcEl.textContent = att.source==='manual' ? '経営管理で入力済み'
+      : (att.manualSpan!=null ? '経営管理で修正済み（元の打刻は保持）' : '日報アプリの打刻');
   }else{
     if($('dd-work-in'))  $('dd-work-in').value  = '';
     if($('dd-work-out')) $('dd-work-out').value = '';
@@ -40525,53 +40548,322 @@ function _ddWorkClear(){
 }
 
 // 保存: att_logs に書く(打刻と同じ場所)
+// ★ 2026-09-22.6: 勤務時間画面と同じ仕組みに統一。元の打刻は消さず、修正として追加する。
+//   保存する時間は休憩を引く前の拘束時間（manualSpan）。業務は宅配。
 async function _ddWorkSave(){
   const st = _ddStaff();
   if(!_isHourly(st)) return;
   const date = $('dd-date')?.value || '';
-  const i = $('dd-work-in')?.value || '', o = $('dd-work-out')?.value || '';
-  if(!date) return;
-
+  const i = _wtNormHM($('dd-work-in')?.value || ''), o = _wtNormHM($('dd-work-out')?.value || '');
+  if(!date || i===null || o===null) return;
   const logs = lsGet(LS_KEYS.ATT, []) || [];
-  const idx = logs.findIndex(a => a && a.date===date &&
-    (String(a.driverId)===String(st.id) || String(a.driverId)===String(st.empNo) || a.driverName===st.name));
-
+  const idx = logs.findIndex(a => a && String(a.date).replace(/\//g,'-')===date && _attIsMine(a, st));
+  const cur = idx>=0 ? logs[idx] : null;
+  const now = new Date().toISOString();
   if(!i || !o){
     // 空にした場合、経営管理で入れた分だけ取り消す(打刻は消さない)
-    if(idx>=0 && logs[idx].source==='manual'){
-      logs.splice(idx,1);
-      lsSet(LS_KEYS.ATT, logs);
-      try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }catch(e){}
-    }
-    return;
+    if(cur && cur.source==='manual'){ logs.splice(idx,1); }
+    else if(cur && cur.manualSpan!=null){ delete cur.manualIn; delete cur.manualOut; delete cur.manualSpan; delete cur.editedAt; delete cur.editedBy; }
+    else return;
+  } else if(cur && cur.source!=='manual'){
+    if(_hhmm(_attIn(cur))===i && _hhmm(_attOut(cur))===o) return;   // 変更なし
+    cur.manualIn=_wtIso(date,i); cur.manualOut=_wtIso(date,o,i); cur.manualSpan=_spanMin(i,o);
+    cur.biz='del'; cur.editedAt=now; cur.editedBy='mgmt';
+  } else {
+    const rec = {
+      ...(cur||{}),
+      id: cur?.id || Date.now(),
+      date, driverId:String(st.empNo || st.id || ''), driverName:st.name,
+      kyuyo: st.kyuyo || '', source:'manual', spanStored:true, biz:'del',
+      manualIn:_wtIso(date,i), manualOut:_wtIso(date,o,i), manualSpan:_spanMin(i,o),
+      editedAt:now, editedBy:'mgmt',
+    };
+    delete rec.workMin; delete rec.clockIn; delete rec.clockOut;
+    if(cur) logs[idx]=rec; else logs.push(rec);
   }
-
-  const span = _spanMin(i,o);
-  const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
-  const mk = hm => { const [h,m]=hm.split(':').map(Number);
-    const d=new Date(date+'T00:00:00'); d.setHours(h,m,0,0); return d.toISOString(); };
-  const outIso = (()=>{ const [h,m]=o.split(':').map(Number);
-    const d=new Date(date+'T00:00:00'); d.setHours(h,m,0,0);
-    if(_spanMin(i,o)>0 && (h*60+m) < (Number(i.split(':')[0])*60+Number(i.split(':')[1]))) d.setDate(d.getDate()+1);
-    return d.toISOString(); })();
-
-  const rec = {
-    ...(idx>=0 ? logs[idx] : {}),
-    id: (idx>=0 ? logs[idx].id : Date.now()),
-    date,
-    driverId: String(st.empNo || st.id || ''),
-    driverName: st.name,
-    kyuyo: st.kyuyo || '',
-    clockIn: mk(i),
-    clockOut: outIso,
-    workMin: net,                 // 休憩控除後(丸めは給与計算側で行う)
-    source: 'manual',             // 経営管理で入力した印
-    updatedAt: new Date().toISOString(),
-  };
-  if(idx>=0) logs[idx] = rec; else logs.push(rec);
   lsSet(LS_KEYS.ATT, logs);
   try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
   catch(e){ console.error('[_ddWorkSave]', e); }
+}
+
+
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-09-22.6: 勤務時間（時間単価の人の月間入力・修正）
+//   保存先は att_logs（日報アプリの打刻と同じ場所）。元の打刻は消さない。
+//   修正は同じ記録に manualIn / manualOut / manualSpan / biz を追加する。
+//   打刻が無い日は source:'manual' の記録を新しく作る。
+//   manualSpan は休憩を引く前の拘束時間（分）。休憩控除と丸めは給与計算側で行う。
+// ════════════════════════════════════════════════════════════
+
+// 打刻1件の「休憩控除後・丸め前」の分数（給与計算の共通入口）
+function _attNetMin(a, st){
+  if(!a) return 0;
+  if(a.manualSpan!=null){
+    const sp = Math.max(0, Number(a.manualSpan)||0);
+    return (typeof applyBreak==='function') ? applyBreak(sp, st) : sp;
+  }
+  // 旧＋局日報の手入力は休憩控除後の時間で保存されている → 二度引かない
+  if(a.source==='manual' && !a.spanStored) return Math.max(0, Number(a.workMin)||0);
+  const span = Math.max(0, Number(a.workMin)||0);
+  return (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+}
+function _attIn(a){ return a ? (a.manualSpan!=null ? a.manualIn : a.clockIn) : null; }
+function _attOut(a){ return a ? (a.manualSpan!=null ? a.manualOut : (a.adjustedOut || a.clockOut)) : null; }
+function _attIsMine(a, st){
+  return !!a && (a.driverName===st.name
+    || (st.empNo && String(a.driverId)===String(st.empNo))
+    || String(a.driverId)===String(st.id));
+}
+// 時間単価の業務（del/col）。無ければ空配列
+function _hourlyBizOf(st, monStr){
+  const cond = (typeof getActivePayCondition==='function')
+    ? (getActivePayCondition(st, String(monStr||'').replace('-','/'))||{}) : {};
+  return ['del','col'].filter(b=>_effBizMode(st,b,cond).type==='時間単価');
+}
+// "900" "9" "0900" "9:00" "9：00" → "09:00"。不正なら null、空なら ''
+function _wtNormHM(v){
+  let t = String(v||'').trim().replace(/：/g,':').replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  if(!t) return '';
+  let h, m;
+  if(t.includes(':')){ [h,m] = t.split(':'); }
+  else if(/^\d{1,2}$/.test(t)){ h=t; m='0'; }
+  else if(/^\d{3,4}$/.test(t)){ h=t.slice(0,-2); m=t.slice(-2); }
+  else return null;
+  h=Number(h); m=Number(m);
+  if(!Number.isInteger(h)||!Number.isInteger(m)||h<0||h>29||m<0||m>59) return null;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+function _wtIso(date, hm, baseHM){
+  const [h,m]=hm.split(':').map(Number);
+  const d=new Date(date+'T00:00:00'); d.setHours(h,m,0,0);
+  if(baseHM){ const [bh,bm]=baseHM.split(':').map(Number); if(h*60+m < bh*60+bm) d.setDate(d.getDate()+1); }
+  return d.toISOString();
+}
+function _wtFmtMin(m){ m=Math.max(0,Math.round(m||0)); return `${Math.floor(m/60)}時間${String(m%60).padStart(2,'0')}分`; }
+
+let _wtState = { mon:'', staffId:null };
+
+function _wtTargets(mon){
+  return (D.staff||[]).filter(s=>s.status!=='終了' && !(s.kubun && String(s.kubun).includes('委託会社')))
+    .filter(s=>_hourlyBizOf(s, mon).length>0)
+    .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+}
+
+function renderWorkTime(){
+  const root=$('wt-root'); if(!root) return;
+  const monEl=$('wt-mon');
+  if(monEl && !monEl.value) monEl.value=new Date().toISOString().slice(0,7);
+  const mon=_ymNorm(monEl?.value||new Date().toISOString().slice(0,7));
+  _wtState.mon=mon;
+  const targets=_wtTargets(mon);
+  const sel=$('wt-staff');
+  if(sel){
+    const cur=_wtState.staffId!=null ? String(_wtState.staffId) : (sel.value||'');
+    sel.innerHTML = targets.length
+      ? targets.map(s=>`<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}</option>`).join('')
+      : '<option value="">対象者がいません</option>';
+    if(cur && targets.some(s=>String(s.id)===cur)) sel.value=cur;
+    _wtState.staffId = sel.value || null;
+  }
+  const st=targets.find(s=>String(s.id)===String(_wtState.staffId));
+  if(!st){
+    root.innerHTML='<div class="al al-e"><span>宅配・集荷のどちらかが時間単価の人がいません。従業員台帳の宅配単価・集荷単価タブ、または基本情報の給与形態で時間単価を設定してください。</span></div>';
+    return;
+  }
+  const hourly=_hourlyBizOf(st, mon);
+  const canPick = hourly.length>1;
+  const logs=lsGet(LS_KEYS.ATT,[])||[];
+  const mine=logs.filter(a=>_attIsMine(a,st) && String(a.date||'').replace(/\//g,'-').startsWith(mon));
+  const [yy,mm]=mon.split('-').map(Number);
+  const last=new Date(yy,mm,0).getDate();
+  const W='日月火水木金土';
+  const _rst=(typeof getRoundSettings==='function')?getRoundSettings():null;
+  let rowsHtml='';
+  for(let d=1; d<=last; d++){
+    const date=`${mon}-${String(d).padStart(2,'0')}`;
+    const recs=mine.filter(a=>String(a.date).replace(/\//g,'-')===date);
+    const prim=recs.find(a=>!a.mergedInto) || recs[0] || null;
+    const punch=recs.filter(a=>a.clockIn);
+    const pIn = punch.length ? punch.map(a=>a.clockIn).sort()[0] : null;
+    const pOut= punch.length ? punch.map(a=>a.adjustedOut||a.clockOut).filter(Boolean).sort().slice(-1)[0] : null;
+    const punchTxt = punch.length ? `${_hhmm(pIn)||'--:--'}〜${_hhmm(pOut)||'--:--'}` : 'なし';
+    const edited = !!(prim && prim.manualSpan!=null && prim.source!=='manual');
+    const manualOnly = !!(prim && prim.source==='manual');
+    const voided = edited && Number(prim.manualSpan)===0 && !prim.manualIn;
+    const vIn  = voided ? '' : _hhmm(prim ? _attIn(prim) : null);
+    const vOut = voided ? '' : _hhmm(prim ? _attOut(prim) : null);
+    const biz = (prim && (prim.biz==='del'||prim.biz==='col')) ? prim.biz : hourly[0];
+    const net = recs.reduce((s,a)=>s+((typeof roundWorkMin==='function')?roundWorkMin(_attNetMin(a,st),_rst):_attNetMin(a,st)),0);
+    const dow=new Date(date+'T00:00:00').getDay();
+    const dcol = dow===0?'color:#d33;':dow===6?'color:#2c62c4;':'';
+    const state = voided?'勤務なし（打刻を取消）':edited?'修正済み':manualOnly?'手入力':punch.length?'打刻':'';
+    const bg = voided?'background:rgba(0,0,0,.04);':edited||manualOnly?'background:rgba(245,166,35,.12);':'';
+    rowsHtml+=`<tr data-date="${date}" data-pin="${_hhmm(pIn)}" data-pout="${_hhmm(pOut)}" data-has-punch="${punch.length?1:0}" style="${bg}">
+      <td class="mono" style="${dcol}white-space:nowrap;">${d}日(${W[dow]})</td>
+      <td>${canPick
+        ? `<select class="fi wt-biz" style="font-size:11px;padding:3px 4px;width:auto;"><option value="del"${biz==='del'?' selected':''}>宅配</option><option value="col"${biz==='col'?' selected':''}>集荷</option></select>`
+        : `<span class="xs">${BIZ_LABEL[biz]}</span><input type="hidden" class="wt-biz" value="${biz}">`}</td>
+      <td class="mono xs" style="color:var(--txt2);white-space:nowrap;">${punchTxt}</td>
+      <td><input type="text" class="fi wt-in"  value="${vIn}"  placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
+      <td><input type="text" class="fi wt-out" value="${vOut}" placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
+      <td class="tr mono wt-calc" style="white-space:nowrap;">${net>0?_wtFmtMin(net):''}</td>
+      <td class="xs wt-state" style="white-space:nowrap;color:var(--amb2);">${state}${edited&&!voided?'':''}</td>
+      <td style="white-space:nowrap;">${(edited)?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_wtRevert('${date}')">打刻に戻す</button>`:''}</td>
+    </tr>`;
+  }
+  const bizNote = canPick ? '宅配・集荷の両方が時間単価のため、日ごとに業務を選べます。'
+    : `時間単価の業務：${BIZ_LABEL[hourly[0]]}（${BIZ_LABEL[hourly[0]]}の時給で計算します）`;
+  root.innerHTML=`
+    <div class="xs muted" style="margin-bottom:6px;">${bizNote} 時刻は「900」「9:00」のどちらでも入力できます。Enterで右へ、行末で次の日へ進みます。
+      計上時間は休憩控除と丸めを反映した時間です。空欄の日は勤務なしとして扱います。</div>
+    <div class="tw"><table id="wt-table"><thead><tr>
+      <th>日付</th><th>業務</th><th>打刻（日報アプリ）</th><th>開始</th><th>終了</th><th class="tr">計上時間</th><th>状態</th><th></th>
+    </tr></thead><tbody>${rowsHtml}</tbody>
+    <tfoot><tr style="background:var(--bg3);font-weight:700;"><td colspan="5" style="text-align:right;">月合計</td><td class="tr mono" id="wt-total"></td><td colspan="2"></td></tr></tfoot></table></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+      <span id="wt-msg" class="xs" style="align-self:center;color:var(--red2);"></span>
+      <button type="button" class="btn b-grn" onclick="_wtSave()">この月の勤務時間を保存</button>
+    </div>`;
+  document.querySelectorAll('#wt-table tbody tr').forEach(tr=>_wtCalcRow(tr));
+  _wtTotal();
+}
+
+function _wtCalcRow(tr){
+  const st=(D.staff||[]).find(s=>String(s.id)===String(_wtState.staffId));
+  const i=_wtNormHM(tr.querySelector('.wt-in').value), o=_wtNormHM(tr.querySelector('.wt-out').value);
+  const cell=tr.querySelector('.wt-calc');
+  tr.dataset.min='0';
+  if(i===null||o===null){ cell.innerHTML='<span style="color:var(--red2);">時刻が不正</span>'; return; }
+  if(!i && !o){ cell.textContent=''; return; }
+  if(!i || !o){ cell.innerHTML='<span style="color:var(--red2);">開始・終了の両方が必要</span>'; return; }
+  const span=_spanMin(i,o);
+  const net=(typeof applyBreak==='function')?applyBreak(span,st):span;
+  const rnd=(typeof roundWorkMin==='function')?roundWorkMin(net):net;
+  tr.dataset.min=String(rnd);
+  cell.textContent=_wtFmtMin(rnd);
+}
+function _wtTotal(){
+  let t=0; document.querySelectorAll('#wt-table tbody tr').forEach(tr=>t+=Number(tr.dataset.min)||0);
+  const el=$('wt-total'); if(el) el.textContent=_wtFmtMin(t);
+}
+function _wtOnBlur(inp){
+  const v=_wtNormHM(inp.value);
+  if(v!==null) inp.value=v;
+  const tr=inp.closest('tr'); _wtCalcRow(tr); _wtTotal();
+}
+function _wtKey(e, inp){
+  if(e.key!=='Enter' && e.key!=='ArrowDown' && e.key!=='ArrowUp') return;
+  e.preventDefault();
+  const all=[...document.querySelectorAll('#wt-table .wt-in, #wt-table .wt-out')];
+  const idx=all.indexOf(inp);
+  let next=null;
+  if(e.key==='Enter') next = e.shiftKey ? all[idx-1] : all[idx+1];
+  else if(e.key==='ArrowDown') next=all[idx+2];
+  else next=all[idx-2];
+  _wtOnBlur(inp);
+  if(next){ next.focus(); next.select && next.select(); }
+}
+function _wtPrevNext(dir){
+  const sel=$('wt-staff'); if(!sel||!sel.options.length) return;
+  const i=Math.max(0,Math.min(sel.options.length-1, sel.selectedIndex+dir));
+  sel.selectedIndex=i; _wtState.staffId=sel.value; renderWorkTime();
+}
+function _wtOnStaffChange(){ _wtState.staffId=$('wt-staff')?.value||null; renderWorkTime(); }
+
+async function _wtRevert(date){
+  const st=(D.staff||[]).find(s=>String(s.id)===String(_wtState.staffId)); if(!st) return;
+  if(!confirm(`${st.name} の ${date} を日報アプリの打刻どおりに戻しますか？`)) return;
+  const logs=lsGet(LS_KEYS.ATT,[])||[];
+  logs.forEach(a=>{
+    if(_attIsMine(a,st) && String(a.date).replace(/\//g,'-')===date && a.source!=='manual'){
+      delete a.manualIn; delete a.manualOut; delete a.manualSpan; delete a.mergedInto;
+      delete a.editedAt; delete a.editedBy;
+    }
+  });
+  lsSet(LS_KEYS.ATT, logs);
+  try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }catch(e){ console.error('[_wtRevert]', e); }
+  renderWorkTime(); if(typeof renderSalary==='function') renderSalary();
+}
+
+async function _wtSave(){
+  const st=(D.staff||[]).find(s=>String(s.id)===String(_wtState.staffId)); if(!st) return;
+  const msg=$('wt-msg'); if(msg) msg.textContent='';
+  const trs=[...document.querySelectorAll('#wt-table tbody tr')];
+  // 入力チェック
+  const bad=trs.filter(tr=>{
+    const i=_wtNormHM(tr.querySelector('.wt-in').value), o=_wtNormHM(tr.querySelector('.wt-out').value);
+    return i===null || o===null || (!!i !== !!o);
+  });
+  if(bad.length){
+    if(msg) msg.textContent=`入力に不備があります（${bad.map(tr=>Number(tr.dataset.date.slice(-2))+'日').join('、')}）`;
+    bad[0].querySelector('.wt-in').focus(); return;
+  }
+  const logs=lsGet(LS_KEYS.ATT,[])||[];
+  const now=new Date().toISOString();
+  let changed=0;
+  trs.forEach(tr=>{
+    const date=tr.dataset.date;
+    const i=_wtNormHM(tr.querySelector('.wt-in').value), o=_wtNormHM(tr.querySelector('.wt-out').value);
+    const biz=tr.querySelector('.wt-biz')?.value||'del';
+    const idxs=logs.map((a,k)=>(_attIsMine(a,st)&&String(a.date).replace(/\//g,'-')===date)?k:-1).filter(k=>k>=0);
+    const punchIdx=idxs.filter(k=>logs[k].source!=='manual');
+    const manIdx=idxs.filter(k=>logs[k].source==='manual');
+    const pin=tr.dataset.pin||'', pout=tr.dataset.pout||'';
+    if(punchIdx.length){
+      const pk=punchIdx[0]; const p=logs[pk];
+      const curIn=_hhmm(_attIn(p)), curOut=_hhmm(_attOut(p));
+      const curVoid = p.manualSpan!=null && Number(p.manualSpan)===0 && !p.manualIn;
+      const curBiz = p.biz||'';
+      if(!i && !o){
+        // 打刻がある日を空欄にした → 勤務なし（打刻は残す）
+        if(!curVoid){
+          p.manualIn=null; p.manualOut=null; p.manualSpan=0; p.biz=biz; p.editedAt=now; p.editedBy='mgmt';
+          punchIdx.slice(1).forEach(k=>{ logs[k].manualSpan=0; logs[k].mergedInto=p.id||date; });
+          changed++;
+        }
+      } else if(i===pin && o===pout && p.manualSpan==null && !curVoid){
+        // 打刻どおり。業務だけ変わった場合は業務のみ記録
+        if(curBiz!==biz){ p.biz=biz; p.editedAt=now; changed++; }
+      } else if(i!==curIn || o!==curOut || curBiz!==biz || curVoid){
+        p.manualIn=_wtIso(date,i); p.manualOut=_wtIso(date,o,i); p.manualSpan=_spanMin(i,o);
+        p.biz=biz; p.editedAt=now; p.editedBy='mgmt';
+        // 同じ日の他の打刻は、この1件にまとめたので計上しない（記録は残す）
+        punchIdx.slice(1).forEach(k=>{ logs[k].manualSpan=0; logs[k].mergedInto=p.id||date; });
+        changed++;
+      }
+      // 打刻がある日に残っていた手入力の記録は二重計上になるので削除
+      if(manIdx.length){ manIdx.sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); changed++; }
+    } else {
+      const m = manIdx.length ? logs[manIdx[0]] : null;
+      if(!i && !o){
+        if(manIdx.length){ manIdx.sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); changed++; }
+      } else {
+        const same = m && m.manualSpan!=null && _hhmm(m.manualIn)===i && _hhmm(m.manualOut)===o && m.biz===biz;
+        if(!same){
+          const rec={
+            ...(m||{}),
+            id: m?.id || (Date.now()*1000 + Math.floor(Math.random()*1000)),
+            date, driverId:String(st.empNo||st.id||''), driverName:st.name,
+            source:'manual', spanStored:true, biz,
+            manualIn:_wtIso(date,i), manualOut:_wtIso(date,o,i), manualSpan:_spanMin(i,o),
+            editedAt:now, editedBy:'mgmt',
+          };
+          delete rec.workMin; delete rec.clockIn; delete rec.clockOut;
+          if(m){ logs[manIdx[0]]=rec; manIdx.slice(1).sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); }
+          else logs.push(rec);
+          changed++;
+        }
+      }
+    }
+  });
+  if(!changed){ if(msg){ msg.style.color='var(--txt2)'; msg.textContent='変更はありません'; } return; }
+  lsSet(LS_KEYS.ATT, logs);
+  try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
+  catch(e){ console.error('[_wtSave]', e); alert('保存に失敗しました。通信状態を確認してもう一度保存してください。'); return; }
+  renderWorkTime();
+  if(typeof renderSalary==='function') renderSalary();
+  if(typeof _showSaveToast==='function') _showSaveToast(`${st.name} の勤務時間を保存しました`);
 }
 
 
