@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4970,7 +4970,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.3';
+const APP_VER = '2026-09-22.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -26863,186 +26863,22 @@ function renderSalary(){
     const delRows=D.delivery.filter(r=>r.staff===s.name&&(!salMonStr||r.date.startsWith(salMonStr)));
     const puRows=D.pickup.filter(r=>r.staff===s.name&&(!salMonStr||r.date.startsWith(salMonStr)));
 
-    // 表示月に有効な給与条件を取得
+    // 表示月に有効な給与条件を取得（ラベル表示用）
     const cond=getActivePayCondition(s, salMonStr.replace('-','/'));
-    const isKeisu=cond.kyuyo==='個数制（歩合）';
-
-    let base=0, delAmt=0, colAmt=0, yoshaAmt=0, breakdown='';
-    const dp=s.fixedPrices?.del||{};
-    const cp=s.fixedPrices?.col||{};
-
-    // ── 宅配単価による実績計算（チェックON or 個数制） ──
-    const useDelPrice = cond.addDel || isKeisu;
-    const useColPrice = cond.addCol || isKeisu;
-
-    if(useDelPrice){
-      delRows.forEach(r=>{
-        delAmt+=(dp.kanryo||0)*r.kanryo;
-        delAmt+=(dp.tenso||0)*r.tenso;
-        delAmt+=(dp.night||0)*(r.yakan||0);
-        delAmt+=(dp.ogata||0)*(r.ogata||0);
-        delAmt+=(dp.shukka||0)*(r.shukka||0);
-        delAmt+=(dp.s1||0)*(r.s1||0);
-        delAmt+=(dp.s2||0)*(r.s2||0);
-        delAmt+=(dp.s3||0)*(r.s3||0);
-        delAmt+=(dp.s4||0)*(r.s4||0);
-      });
-    }
-    if(useColPrice){
-      puRows.forEach(r=>{
-        const items=r.items||{};
-        IK_PRICED.forEach(k=>{ colAmt+=(cp[ITEMS[k].ck]||0)*(items[k]||0); });
-      });
-    }
-    // ── エリア日額（集荷チャーター kind=area の稼働日×日額） ──
-    // 従業員台帳のareaPricesを使うか、チャーターの記録金額をそのまま使う
-    let areaAmt=0;
-    const areaDays=new Set();
-    puRows.forEach(r=>{
-      (r.charters||[]).filter(c=>c.kind==='area').forEach(c=>{
-        if(c.date) areaDays.add(c.date);
-        areaAmt+=c.amt||0;
-      });
-    });
-    if(areaAmt>0) colAmt+=areaAmt;
-
-    // ── 庸車両計算 ──
-    const yt=cond.yoshaType||s.offset?.yoshaType||'なし';
-    const ya=cond.yoshaAmt||s.offset?.yoshaAmt||0;
-    if(yt==='日額'&&ya>0){
-      // 宅配日報の稼働日数（ユニーク日付数）
-      const workDays=new Set(delRows.map(r=>r.date)).size;
-      yoshaAmt=ya*workDays;
-    } else if(yt==='月額'){
-      yoshaAmt=ya;
-    }
-
-    // ── 基本給 ──
-    const tk=cond.tanka||0;
-    const kyuyo=cond.kyuyo||s.kyuyo||'個数制（歩合）';
-
-    // 勤怠ログから稼働時間を取得（時間単価・時間給のみ）
-    const ATT_LOGS=lsGet(LS_KEYS.ATT,[])||[];
-    const attRows=ATT_LOGS.filter(a=>{
-      if(!a.driverId||!a.date) return false;
-      // staffのIDまたは名前で紐付け
-      const matchId=a.driverId===s.id;
-      const matchName=a.driverName===s.name;
-      return (matchId||matchName) && a.date.startsWith(salMonStr);
-    });
-    // ★ 2026/08/29: 休憩控除と丸めを日ごとに適用してから合計する。
-    //   月合計に対して丸めると、日々の端数が相殺されて実態とずれる。
-    //   workMin は拘束時間(打刻差)なので、ここで休憩を引く。
-    const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : {unit:15,mode:'ceil'};
-    const totalWorkMin=attRows.reduce((sum,a)=>{
-      const span = a.workMin||0;
-      const net  = (typeof applyBreak==='function') ? applyBreak(span, s) : span;
-      const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
-      return sum + rnd;
-    },0);
-    const totalWorkH=totalWorkMin/60; // 小数時間
-
-    // 時間単価：稼働時間（att_logs）× 時間単価
-    let jikanAmt=0;
-    if(kyuyo==='時間単価'&&tk>0&&totalWorkH>0){
-      jikanAmt=Math.round(tk*totalWorkH);
-    }
-    // 時間給（パート）：稼働時間（att_logs）× 時間給
-    let jikankyuAmt=0;
-    if(kyuyo==='時間給'&&tk>0&&totalWorkH>0){
-      jikankyuAmt=Math.round(tk*totalWorkH);
-    }
-    // 日額：稼働日数（日報入力日） × 日額単価（従来通り）
-    let nichigakuAmt=0;
-    if(kyuyo==='日額'&&tk>0){
-      const workDays=new Set(delRows.map(r=>r.date)).size||new Set(puRows.map(r=>r.date)).size;
-      nichigakuAmt=tk*workDays;
-    }
-
-    if(isKeisu){
-      base=delAmt+colAmt;
-    } else if(kyuyo==='時間単価'){
-      // att_logsに稼働時間があれば優先、なければ従来計算（完了件数×単価）
-      if(totalWorkH>0){
-        base=jikanAmt+(colAmt); // 集荷単価があれば加算
-      } else {
-        const totalKanryo=delRows.reduce((s,r)=>s+(r.kanryo||0)+(r.tenso||0),0);
-        base=tk*totalKanryo+(colAmt);
-      }
-    } else if(kyuyo==='時間給'){
-      base=jikankyuAmt>0?jikankyuAmt:tk; // att_logsなければ基本給そのまま
-    } else if(kyuyo==='日額'){
-      base=nichigakuAmt+(colAmt);
-    } else if(kyuyo==='保証'){
-      base=Math.max(tk, delAmt+colAmt||tk);
-    } else {
-      base=tk+(delAmt+colAmt);
-    }
-    base+=yoshaAmt;
-
-    // ── 内訳テキスト ──
-    const parts=[];
-    if(kyuyo==='時間単価'&&totalWorkH>0){
-      parts.push(`時間単価 ¥${fmt(tk)}×${(totalWorkH).toFixed(2)}h=¥${fmt(jikanAmt)}`);
-    } else if(kyuyo==='時間給'&&totalWorkH>0){
-      parts.push(`時間給 ¥${fmt(tk)}×${(totalWorkH).toFixed(2)}h=¥${fmt(jikankyuAmt)}`);
-    } else if(kyuyo==='日額'&&nichigakuAmt>0){
-      const wd=new Set(delRows.map(r=>r.date)).size||new Set(puRows.map(r=>r.date)).size;
-      parts.push(`日額 ¥${fmt(tk)}×${wd}日=¥${fmt(nichigakuAmt)}`);
-    } else if(tk&&!isKeisu){
-      parts.push(`基本 ¥${fmt(tk)}`);
-    }
-    if(useDelPrice&&delAmt)parts.push(`宅配 ¥${fmt(delAmt)}`);
-    if(useColPrice&&(colAmt-areaAmt)>0)parts.push(`集荷 ¥${fmt(colAmt-areaAmt)}`);
-    if(areaAmt>0)parts.push(`エリア ¥${fmt(areaAmt)}`);
-    if(yoshaAmt){
-      const wdays=yt==='日額'?`${new Set(delRows.map(r=>r.date)).size}日×¥${fmt(ya)}`:`月額`;
-      parts.push(`庸車 ¥${fmt(yoshaAmt)}(${wdays})`);
-    }
-    // ── 修理・損害代天引き（従業員台帳 repairRows の該当月） ──
-    const repairDeduct=(s.repairRows||[])
-      .filter(r=>{
-        if(!r.month||!r.total) return false;
-        const startYM=r.month.slice(0,7); // "2024-04"
-        const times=r.times||1;
-        const paid=r.paid||0;
-        const remaining=times-paid;
-        if(remaining<=0) return false; // 完済
-        // 天引き開始月からremaing月分が対象
-        const startDate=new Date(startYM+'-01');
-        const salDate=new Date((salMonStr.replace('/','-'))+'-01');
-        const diffMonths=Math.round((salDate-startDate)/(1000*60*60*24*30.44));
-        return diffMonths>=0 && diffMonths<remaining;
-      })
-      .reduce((sum,r)=>sum+Math.ceil((r.total||0)/(r.times||1)),0);
-    // ★ 2026/08/12: 違約金(ドライバー請求)の当月分を控除
-    const penaltyDeduct=_penaltyDueTotal(s, salMonStr);
-    if(!parts.length)parts.push('単価未設定');
-    if(repairDeduct>0)parts.push(`<span style='color:var(--pur2)'>🔧修理 -¥${fmt(repairDeduct)}</span>`);
-    if(penaltyDeduct>0)parts.push(`<span style='color:var(--red2)'>⚠違約金 -¥${fmt(penaltyDeduct)}</span>`);
-    // 有効条件のラベル
     const condLabel=cond.note?`<span style="color:var(--amb2);font-size:8.5px;">[${cond.note}]</span>`:'';
-    breakdown=`<span style="font-size:9px;color:var(--txt2);">${parts.join(' ＋ ')} ${condLabel}</span>`;
 
-    // ★ 2026-09-22.3: 支払額は明細と同じ計算（_calcStaffPayment）に1本化。
-    //   上の旧計算は比較表示のためだけに残す（確認が済んだら削除する）。
-    const legacyPay=Math.max(0,base-repairDeduct-penaltyDeduct);
+    // ★ 2026-09-22.4: 支払額は明細と同じ計算（_calcStaffPayment）のみ。旧計算と比較表示は削除
     const _eng=_calcStaffPayment(s.name, salMonStr);
     const pay=_eng.total;
     const noAtt=!!_eng.noAtt;
+    let breakdown='';
     {
       const _plus =(_eng.breakdown||[]).filter(b=>b.amount>0).reduce((a,b)=>a+b.amount,0);
       const _minus=(_eng.breakdown||[]).filter(b=>b.amount<0).reduce((a,b)=>a-b.amount,0);
-      const _p=[];
-      _p.push(`支給 ¥${fmt(_plus)}`);
+      const _p=[`支給 ¥${fmt(_plus)}`];
       if(_minus>0) _p.push(`控除 -¥${fmt(_minus)}`);
-      let _html=`<span style="font-size:9px;color:var(--txt2);">${_p.join(' ／ ')} ${condLabel}</span>`;
-      if(noAtt) _html+=`<div style="font-size:10px;font-weight:700;color:var(--red2);">打刻なし（勤務時間を入力してください）</div>`;
-      if(legacyPay!==pay){
-        const d=pay-legacyPay;
-        _html+=`<div style="font-size:9px;color:var(--amb2);">旧計算 ¥${fmt(legacyPay)}（差 ${d>0?'+':'-'}¥${fmt(Math.abs(d))}）</div>`;
-      }
-      breakdown=_html;
+      breakdown=`<span style="font-size:9px;color:var(--txt2);">${_p.join(' ／ ')} ${condLabel}</span>`;
+      if(noAtt) breakdown+=`<div style="font-size:10px;font-weight:700;color:var(--red2);">打刻なし（勤務時間を入力してください）</div>`;
     }
     tot+=pay;
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
