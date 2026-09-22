@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4970,7 +4970,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.2';
+const APP_VER = '2026-09-22.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -15767,20 +15767,38 @@ function _sortByOfficeOrder(arr){
 //   従業員一覧の概算(est)と明細・書類タブ(_calcStaffPayment)の両方から呼ぶ。
 //   勤怠(att_logs)の月間稼働時間 × 単価。集荷品目単価があれば加算。
 //   戻り値: {amount, workMin, hLabel, colAmt, breakdown:[{label,amount}]}
-function _calcHourlyPay(st, monStr){
+function _calcHourlyPay(st, monStr, cond){
+  // ★ 2026-09-22.3: 月次精算の一覧と計算を1本化。
+  //   ・打刻の照合を 氏名／社員番号／従業員ID のいずれかに拡張（一覧側は ID で照合していた）
+  //   ・休憩控除と丸めを日ごとに適用してから合計（一覧側と同じ。明細側は未適用だった）
+  //   ・給与履歴（期間ごとの条件）の時給を使う
+  //   ・打刻が無い月は 0円＋ noAtt フラグ（一覧側の「完了件数×時給」の代替計算は廃止）
+  monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
   const ATT = lsGet(LS_KEYS.ATT,[])||[];
   const myAtt = ATT.filter(a=>
-    (a.driverName===st.name || String(a.driverId)===String(st.empNo))
-    && (a.date||'').startsWith(monStr)
+    (a.driverName===st.name
+      || (st.empNo && String(a.driverId)===String(st.empNo))
+      || String(a.driverId)===String(st.id))
+    && String(a.date||'').replace(/\//g,'-').startsWith(monStr)
   );
-  const workMin = myAtt.reduce((sum,a)=>sum+(a.workMin||0),0);
+  const _rst = (typeof getRoundSettings==='function') ? getRoundSettings() : null;
+  const workMin = myAtt.reduce((sum,a)=>{
+    const span = a.workMin||0;
+    const net  = (typeof applyBreak==='function') ? applyBreak(span, st) : span;
+    const rnd  = (typeof roundWorkMin==='function') ? roundWorkMin(net, _rst) : net;
+    return sum + rnd;
+  },0);
   const totalH = workMin/60;
-  const tk = st.tanka||0;
+  const _kyu = (cond && cond.kyuyo) || st.kyuyo;
+  const tk = (cond && cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (st.tanka||0);
   const baseAmt = (tk>0 && totalH>0) ? Math.round(tk*totalH) : 0;
+  const noAtt = workMin<=0;
   const h = Math.floor(workMin/60), mm = workMin%60;
   const hLabel = (h?`${h}時間`:'')+(mm?`${mm}分`:(h?'':'0分'));
-  const unitLabel = st.kyuyo==='時間単価' ? '時間単価' : '時間給';
-  const breakdown = [{label:`${unitLabel} ${hLabel}×¥${fmtUnitPrice(tk)}`, amount:baseAmt}];
+  const unitLabel = _kyu==='時間単価' ? '時間単価' : '時間給';
+  const breakdown = noAtt
+    ? [{label:`${unitLabel} 打刻なし（勤務時間を入力してください）`, amount:0, warn:true}]
+    : [{label:`${unitLabel} ${hLabel}（休憩控除・丸め後）×¥${fmtUnitPrice(tk)}`, amount:baseAmt}];
   // 集荷品目単価(時間単価で集荷もする人)
   let colAmt = 0;
   const cp = st.fixedPrices?.col||{};
@@ -15800,7 +15818,7 @@ function _calcHourlyPay(st, monStr){
       colAmt += camt;
     }
   });
-  return { amount: baseAmt+colAmt, workMin, hLabel, colAmt, breakdown };
+  return { amount: baseAmt+colAmt, workMin, hLabel, colAmt, breakdown, noAtt };
 }
 
 // ─── 従事員 ───
@@ -26748,7 +26766,7 @@ function _isSalaryPaid(staffId, ym){
 }
 
 /** 支払済/未払を切り替える */
-async function _toggleSalaryPaid(staffId, ym, amount){
+async function _toggleSalaryPaid(staffId, ym, amount, noAtt){
   const key = String(ym).replace(/\//g,'-').slice(0,7);
   const st = (D.staff||[]).find(x=>String(x.id)===String(staffId));
   D.salaryPaid = D.salaryPaid || {};
@@ -26758,6 +26776,8 @@ async function _toggleSalaryPaid(staffId, ym, amount){
     if(!confirm(`${st?.name||''} の ${key} を「未払」に戻しますか?`)) return;
     delete D.salaryPaid[key][String(staffId)];
   } else {
+    // ★ 2026-09-22.3: 時間単価で打刻が無い月は先に確認する
+    if(noAtt && !confirm(`${st?.name||''} は ${key} の勤務時間が0です。\nこのまま0円で記録しますか?`)) return;
     if(!confirm(`${st?.name||''} の ${key} を「支払済」にしますか?\n\n支払額 ¥${fmt(amount||0)}`)) return;
     D.salaryPaid[key][String(staffId)] = {
       amount: amount||0, at: new Date().toISOString(), by: 'mgmt',
@@ -27004,7 +27024,26 @@ function renderSalary(){
     const condLabel=cond.note?`<span style="color:var(--amb2);font-size:8.5px;">[${cond.note}]</span>`:'';
     breakdown=`<span style="font-size:9px;color:var(--txt2);">${parts.join(' ＋ ')} ${condLabel}</span>`;
 
-    const pay=Math.max(0,base-repairDeduct-penaltyDeduct);
+    // ★ 2026-09-22.3: 支払額は明細と同じ計算（_calcStaffPayment）に1本化。
+    //   上の旧計算は比較表示のためだけに残す（確認が済んだら削除する）。
+    const legacyPay=Math.max(0,base-repairDeduct-penaltyDeduct);
+    const _eng=_calcStaffPayment(s.name, salMonStr);
+    const pay=_eng.total;
+    const noAtt=!!_eng.noAtt;
+    {
+      const _plus =(_eng.breakdown||[]).filter(b=>b.amount>0).reduce((a,b)=>a+b.amount,0);
+      const _minus=(_eng.breakdown||[]).filter(b=>b.amount<0).reduce((a,b)=>a-b.amount,0);
+      const _p=[];
+      _p.push(`支給 ¥${fmt(_plus)}`);
+      if(_minus>0) _p.push(`控除 -¥${fmt(_minus)}`);
+      let _html=`<span style="font-size:9px;color:var(--txt2);">${_p.join(' ／ ')} ${condLabel}</span>`;
+      if(noAtt) _html+=`<div style="font-size:10px;font-weight:700;color:var(--red2);">打刻なし（勤務時間を入力してください）</div>`;
+      if(legacyPay!==pay){
+        const d=pay-legacyPay;
+        _html+=`<div style="font-size:9px;color:var(--amb2);">旧計算 ¥${fmt(legacyPay)}（差 ${d>0?'+':'-'}¥${fmt(Math.abs(d))}）</div>`;
+      }
+      breakdown=_html;
+    }
     tot+=pay;
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
     const isPaid=_isSalaryPaid(s.id, salMonStr);
@@ -27029,7 +27068,7 @@ function renderSalary(){
       <td style="white-space:nowrap;">
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_openStaffPaySlip('${esc(s.name)}','${salMonStr}')">明細</button>
         <button class="btn ${isPaid?'b-gh':'b-grn'} btn-sm" style="font-size:10px;padding:2px 8px;margin-left:3px;"
-          onclick="_toggleSalaryPaid(${s.id},'${salMonStr}',${pay})">${isPaid?'取消':'支払'}</button>
+          onclick="_toggleSalaryPaid(${s.id},'${salMonStr}',${pay},${noAtt})">${isPaid?'取消':'支払'}</button>
       </td></tr>`;
   });
   $('tb-sal').innerHTML=h||'<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--txt2)">データがありません</td></tr>';
@@ -28655,12 +28694,18 @@ function _calcStaffPayment(name, monStr){
   let total=0;
   const off=st.offset||{};
   const workDays=new Set(del.map(r=>r.date)).size;
+  // ★ 2026-09-22.3: 給与履歴（期間ごとの条件）を明細でも使う（一覧側と統一）
+  const cond = (typeof getActivePayCondition==='function')
+    ? (getActivePayCondition(st, monStr.replace('-','/')) || {}) : {};
+  const kyuyo = cond.kyuyo || st.kyuyo;
+  const tanka = (cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (st.tanka||0);
+  let noAtt = false;
 
   // ── 基本給・委託料 ──
-  if(st.kyuyo==='月給'){
-    total=st.tanka||0;
+  if(kyuyo==='月給'){
+    total=tanka;
     breakdown.push({label:'基本給（月給）', amount:total});
-  } else if(st.kyuyo==='個数制（歩合）'){
+  } else if(kyuyo==='個数制（歩合）'){
     const dp = _getEffectiveDelPrices(st);
     const delSum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
     del.forEach(r=>{
@@ -28754,14 +28799,32 @@ function _calcStaffPayment(name, monStr){
       breakdown.push({label:`日額手当 ${workDays}日×¥${st.hoshoC.amt}`, amount:cAmt});
       total+=cAmt;
     }
-  } else if(st.kyuyo==='時間単価' || st.kyuyo==='時間給'){
+  } else if(kyuyo==='時間単価' || kyuyo==='時間給'){
     // ★ 2026/06/25: 共通ヘルパー _calcHourlyPay を使用(従業員一覧の概算と同一計算)
-    const hp = _calcHourlyPay(st, monStr);
+    const hp = _calcHourlyPay(st, monStr, cond);
     total = hp.amount;
+    noAtt = !!hp.noAtt;
     hp.breakdown.forEach(b=>breakdown.push(b));
+  } else if(kyuyo==='日額'){
+    // ★ 2026-09-22.3: 日額は「稼働日数×日額」。従来は日額を月に1回だけ計上していた
+    const days = workDays || new Set(pu.map(r=>r.date)).size;
+    total = tanka*days;
+    breakdown.push({label:`日額 ${days}日×¥${fmtUnitPrice(tanka)}`, amount:total});
   } else {
-    total=st.tanka||0;
-    breakdown.push({label:st.kyuyo||'基本給', amount:total});
+    total=tanka;
+    breakdown.push({label:kyuyo||'基本給', amount:total});
+  }
+
+  // ★ 2026-09-22.3: エリア日額（集荷チャーター kind=area の記録金額）を明細にも計上（一覧側と統一）
+  {
+    let areaAmt=0; const areaDays=new Set();
+    pu.forEach(r=>(r.charters||[]).filter(c=>c.kind==='area').forEach(c=>{
+      if(c.date) areaDays.add(c.date); areaAmt+=c.amt||0;
+    }));
+    if(areaAmt>0){
+      breakdown.push({label:`エリア日額 ${areaDays.size||''}${areaDays.size?'日':''}`, amount:areaAmt});
+      total+=areaAmt;
+    }
   }
 
   // ── 手当（加算） ──
@@ -28845,10 +28908,31 @@ function _calcStaffPayment(name, monStr){
     total -= due;
   });
 
-  if(off.yoshaAmt>0){
-    const yoshaTotal=off.yoshaType==='月額'?off.yoshaAmt:off.yoshaAmt*workDays;
-    const yoshaLabel=off.yoshaType==='月額'?'庸車両（月額）':`庸車両 ${workDays}日×¥${off.yoshaAmt}`;
-    breakdown.push({label:yoshaLabel, amount:-yoshaTotal}); total-=yoshaTotal;
+  // ★ 2026-09-22.3: 庸車は控除で確定。種別が「なし」のときは金額が残っていても控除しない。
+  //   給与履歴に庸車条件があればそちらを使う（一覧側と統一）
+  {
+    const yt = cond.yoshaType || off.yoshaType || 'なし';
+    const ya = Number(cond.yoshaAmt || off.yoshaAmt) || 0;
+    if(ya>0 && (yt==='日額' || yt==='月額')){
+      const yoshaTotal = yt==='月額' ? ya : ya*workDays;
+      const yoshaLabel = yt==='月額' ? '庸車両（月額）' : `庸車両 ${workDays}日×¥${ya}`;
+      breakdown.push({label:yoshaLabel, amount:-yoshaTotal}); total-=yoshaTotal;
+    }
+  }
+  // ★ 2026-09-22.3: 修理・損害代の天引き（従業員台帳 repairRows の該当月）を明細にも計上（一覧側と統一）
+  {
+    const repairDeduct=(st.repairRows||[]).filter(r=>{
+      if(!r.month||!r.total) return false;
+      const startYM=String(r.month).replace(/\//g,'-').slice(0,7);
+      const remaining=(r.times||1)-(r.paid||0);
+      if(remaining<=0) return false;
+      const diffMonths=Math.round((new Date(monStr+'-01')-new Date(startYM+'-01'))/(1000*60*60*24*30.44));
+      return diffMonths>=0 && diffMonths<remaining;
+    }).reduce((sum,r)=>sum+Math.ceil((r.total||0)/(r.times||1)),0);
+    if(repairDeduct>0){
+      breakdown.push({label:'修理・損害代 天引き', amount:-repairDeduct});
+      total-=repairDeduct;
+    }
   }
   // ── 前払い控除 ──
   // ★ 2026/08/11: 分割払いに対応。
@@ -28868,7 +28952,7 @@ function _calcStaffPayment(name, monStr){
     total -= due;
   });
 
-  return {total:Math.max(total,0), breakdown, staff:st};
+  return {total:Math.max(total,0), breakdown, staff:st, noAtt, kyuyo};
 }
 
 function _calcCustBilling(custName, monStr){
