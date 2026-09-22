@@ -845,6 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4063,6 +4064,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div><!-- end stpanel-info -->
   <div id="stpanel-info-end-marker" style="display:none;"></div>
   <div id="ptab-content-del" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- ★ 2026-09-22.1: 業務別の給与形態（保存のみ・計算は次の更新で切替） -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
+      <span style="font-size:11px;font-weight:700;">宅配の給与形態</span>
+      <select id="st-pm-del-type" class="fi" style="width:auto;font-size:11px;padding:4px 6px;" onchange="onStPayModeChange('del')">
+        <option value="">未設定（基本情報の給与形態で計算）</option>
+        <option value="歩合">歩合（下の単価×件数）</option>
+        <option value="時間単価">時間単価</option>
+        <option value="日額">日額</option>
+        <option value="定額">定額（1便あたり）</option>
+      </select>
+      <span id="st-pm-del-rate-wrap" style="display:none;align-items:center;gap:4px;">
+        <input type="number" id="st-pm-del-rate" class="fi" style="width:110px;font-size:11px;padding:4px 6px;" placeholder="0" step="1">
+        <span id="st-pm-del-unit" style="font-size:10.5px;color:var(--txt2);">円</span>
+      </span>
+      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">現在は保存のみです。給与計算への反映は次の更新で行います。</div>
+    </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
       <span style="font-size:9px;color:var(--txt2);font-weight:700;">宅配単価 一括:</span>
       <button type="button" onclick="setDelTabTaxAll('ex')" style="padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">全て税別</button>
@@ -4115,6 +4132,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 集荷単価 -->
   <div id="ptab-content-col" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- ★ 2026-09-22.1: 業務別の給与形態（保存のみ・計算は次の更新で切替） -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
+      <span style="font-size:11px;font-weight:700;">集荷の給与形態</span>
+      <select id="st-pm-col-type" class="fi" style="width:auto;font-size:11px;padding:4px 6px;" onchange="onStPayModeChange('col')">
+        <option value="">未設定（基本情報の給与形態で計算）</option>
+        <option value="歩合">歩合（下の単価×件数）</option>
+        <option value="時間単価">時間単価</option>
+        <option value="日額">日額</option>
+        <option value="定額">定額（1便あたり）</option>
+      </select>
+      <span id="st-pm-col-rate-wrap" style="display:none;align-items:center;gap:4px;">
+        <input type="number" id="st-pm-col-rate" class="fi" style="width:110px;font-size:11px;padding:4px 6px;" placeholder="0" step="1">
+        <span id="st-pm-col-unit" style="font-size:10.5px;color:var(--txt2);">円</span>
+      </span>
+      <div style="flex-basis:100%;font-size:9px;color:var(--txt2);">現在は保存のみです。給与計算への反映は次の更新で行います。</div>
+    </div>
     <!-- 適用方式の選択 (集荷事業) -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
       <span style="font-size:11px;font-weight:700;">📦 集荷単価 適用方式:</span>
@@ -4936,6 +4969,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <script>
 'use strict';
+// ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
+const APP_VER = '2026-09-22.1';
+console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
 function esc(s){
@@ -7720,6 +7756,8 @@ function resetStaffModal(){
    'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
    'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  // ★ 2026-09-22.1: 業務別の給与形態をクリア
+  if(typeof _restoreStPayMode==='function') _restoreStPayMode(null);
   // ★宅配単価フィールド (前回編集の値が残らないようクリア)
   ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka',
    'st-ps1','st-ps2','st-ps3','st-ps4'
@@ -12457,6 +12495,39 @@ function setStTabTax(tab, type){
   if(exBtn){ exBtn.style.background=type==='ex'?'var(--red)':'transparent'; exBtn.style.color=type==='ex'?'#fff':'var(--txt2)'; exBtn.style.borderColor=type==='ex'?'var(--red)':'var(--brd2)'; }
   if(inBtn){ inBtn.style.background=type==='in'?'var(--grn)':'transparent'; inBtn.style.color=type==='in'?'#fff':'var(--txt2)'; inBtn.style.borderColor=type==='in'?'var(--grn)':'var(--brd2)'; }
 }
+// ══════════════════════════════════════════════════
+// ★ 2026-09-22.1: 業務別の給与形態（payMode）
+//   st.payMode = { del:{type,rate}, col:{type,rate} }
+//   type: '' (未設定=従来の st.kyuyo で計算) / 歩合 / 時間単価 / 日額 / 定額
+//   rate: 時間単価=円/時、日額=円/日、定額=円/便（集荷日報1件=1便）
+//   この版では保存のみ。給与計算はまだ st.kyuyo を使う。
+// ══════════════════════════════════════════════════
+const PAYMODE_UNIT = {'時間単価':'円/時','日額':'円/日','定額':'円/便'};
+function onStPayModeChange(biz){
+  const t = $('st-pm-'+biz+'-type')?.value || '';
+  const wrap = $('st-pm-'+biz+'-rate-wrap');
+  if(wrap) wrap.style.display = PAYMODE_UNIT[t] ? 'inline-flex' : 'none';
+  const u = $('st-pm-'+biz+'-unit');
+  if(u) u.textContent = PAYMODE_UNIT[t] || '円';
+}
+function _collectStPayMode(){
+  const one = biz => {
+    const type = $('st-pm-'+biz+'-type')?.value || '';
+    const rate = PAYMODE_UNIT[type] ? (parseFloat($('st-pm-'+biz+'-rate')?.value)||0) : 0;
+    return {type, rate};
+  };
+  return {del:one('del'), col:one('col')};
+}
+function _restoreStPayMode(s){
+  const pm = (s && s.payMode) || {};
+  ['del','col'].forEach(biz=>{
+    const o = pm[biz] || {};
+    const sel = $('st-pm-'+biz+'-type'); if(sel) sel.value = o.type || '';
+    const r = $('st-pm-'+biz+'-rate');  if(r) r.value = o.rate || '';
+    onStPayModeChange(biz);
+  });
+}
+
 function setDelTabTaxAll(type){
   // 宅配タブの全品目の税を一括切替
   ['st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka',
@@ -19675,6 +19746,7 @@ function saveStaff(continueAdd=false){
     companyPrices,
     kyuyo:$('st-ky')?.value,
     tanka:parseInt($('st-tk')?.value)||0,
+    payMode:_collectStPayMode(),   // ★ 2026-09-22.1: 業務別の給与形態
     addDelPrice:false,  // 廃止（単価は宅配・集荷タブで管理）
     addColPrice:false,
     payHistory:collectPayHistory(),
@@ -19843,6 +19915,11 @@ function saveStaff(continueAdd=false){
       newDrv.bankInfo = { ...(D.staff[idx].bankInfo||{}), ...(newDrv.bankInfo||{}) };
       newDrv.hoshoB = { ...(D.staff[idx].hoshoB||{}), ...(newDrv.hoshoB||{}) };
       newDrv.hoshoC = { ...(D.staff[idx].hoshoC||{}), ...(newDrv.hoshoC||{}) };
+      // ★ 2026-09-22.1: payMode は業務ごとに深いマージ（次版で保証などを足しても消えないように）
+      { const _op = D.staff[idx].payMode || {}, _np = newDrv.payMode || {};
+        newDrv.payMode = { ..._op,
+          del:{ ...(_op.del||{}), ...(_np.del||{}) },
+          col:{ ...(_op.col||{}), ...(_np.col||{}) } }; }
 
       D.staff[idx] = {...D.staff[idx], ...newDrv};
       console.log('[saveStaff] 編集マージ完了 idx=', idx);
@@ -36201,6 +36278,8 @@ function _editStaffImpl(id){
   restoreAreaPrices(s.areaPrices||[]);
   if($('st-tk'))$('st-tk').value=s.tanka||'';
   if($('st-note'))$('st-note').value=s.note||'';
+  // ★ 2026-09-22.1: 業務別の給与形態を復元
+  if(typeof _restoreStPayMode==='function') _restoreStPayMode(s);
   // 固定単価
   if(s.fixedPrices){
     // ユーザーが入力した値をそのまま保存・表示する方針(税モードフラグは保存するが値変換しない)
