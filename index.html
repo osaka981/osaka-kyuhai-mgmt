@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.20</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.21</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2982,9 +2982,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         営業所
         <span class="xs muted" style="font-size:9px;">番号・名前で検索</span>
       </label>
-      <!-- ★ 2026-09-22.20: 担当の郵便局（台帳でチェックしている郵便局）から選び直せるリスト -->
-      <select id="dd-off-sel" class="fi" style="display:none;margin-bottom:4px;font-size:12px;padding:5px 8px;" onchange="onDdOffSelChange()"></select>
-      <div style="position:relative;">
+      <!-- ★ 2026-09-22.21: 担当の郵便局から選ぶリスト。検索欄は「その他」を選んだときだけ出す -->
+      <select id="dd-off-sel" class="fi" style="display:none;font-size:12px;padding:6px 8px;" onchange="onDdOffSelChange()"></select>
+      <div id="dd-off-combo" style="position:relative;">
         <input type="text" id="dd-off-input" class="fi" placeholder="1・１・大阪北..."
           oninput="filterDdOff(this)" onfocus="filterDdOff(this)" onblur="hideDdDropdown('dd-off-dd',200)"
           onkeydown="_comboKey(event,'dd-off-dd',()=>onDdOffKey(event))"
@@ -5056,7 +5056,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.20';
+const APP_VER = '2026-09-22.21';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12325,9 +12325,10 @@ async function saveDel(){
   };
   // 編集モードの場合は既存レコードを上書き、新規の場合は追加
   if(editingId){
-    const idx = D.delivery.findIndex(x=>x.id===editingId);
-    if(idx>=0){ rec.id=editingId; D.delivery[idx]=rec; }
-    else D.delivery.push(rec);
+    // ★ 2026-09-22.21: idの型（数値／文字列）が違うと編集が新規になり、日報が二重になっていた
+    const idx = D.delivery.findIndex(x=>String(x.id)===String(editingId));
+    if(idx>=0){ rec.id=D.delivery[idx].id; D.delivery[idx]=rec; }
+    else { rec.id=editingId; D.delivery.push(rec); }
     // 編集IDをクリア
     const mDel=document.getElementById('m-del');if(mDel)mDel._editId=null;
     window._delEditMode=false;
@@ -12342,7 +12343,11 @@ async function saveDel(){
   const _drvId = String(_st?.empNo || _st?.id || '');
   // ★ 2026/09/15: ルールが会社ごとに絞るために会社IDを持たせる（自社は空）
   const _coId = String((findStaffByEmpNo(_drvId)||{}).companyId||'');
-  ypLogs.push({id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()});
+  // ★ 2026-09-22.21: 編集のときは yp_logs も置き換える（同じidが増えると取込で二重になる）
+  const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()};
+  const _ypIdx = ypLogs.findIndex(x=>x && String(x.id)===String(rec.id));
+  if(_ypIdx>=0) ypLogs[_ypIdx]=_ypEntry; else ypLogs.push(_ypEntry);
+  lsSet(LS_KEYS.YP, ypLogs);
   fbSet('yp_logs',ypLogs);
   if($('dd-charter-rows'))$('dd-charter-rows').innerHTML='';
   if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
@@ -34840,21 +34845,34 @@ function filterDdStaff(input){
 // ★ 2026-09-22.20: 従事員の担当郵便局（メイン＋担当）をリストに出す。
 //   宅配の扱いがある拠点だけ。選び直すと営業所コンボにも反映する。
 function _ddFillOffList(staffName){
-  const sel=$('dd-off-sel'); if(!sel) return;
+  const sel=$('dd-off-sel'), combo=$('dd-off-combo'); if(!sel) return;
   const st=(D.staff||[]).find(x=>x && x.name===staffName);
   const offs = st ? _getStaffDelOffices(st).map(o=>o.office) : [];
   const cur = $('dd-off')?.value || '';
   if(cur && !offs.includes(cur)) offs.unshift(cur);
-  if(!offs.length){ sel.style.display='none'; sel.innerHTML=''; return; }
+  if(!offs.length){
+    sel.style.display='none'; sel.innerHTML='';
+    if(combo) combo.style.display='';
+    return;
+  }
   sel.innerHTML = offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
-    + '<option value="__other__">その他（下の欄で検索）</option>';
+    + '<option value="__other__">その他（検索して選ぶ）</option>';
   sel.value = cur && offs.includes(cur) ? cur : offs[0];
   sel.style.display='';
+  if(combo) combo.style.display='none';
   if(!cur) onDdOffSelChange();
 }
 function onDdOffSelChange(){
   const v=$('dd-off-sel')?.value||'';
-  if(!v || v==='__other__'){ const el=$('dd-off-input'); if(el){ el.focus(); } return; }
+  const combo=$('dd-off-combo');
+  if(v==='__other__'){
+    if(combo) combo.style.display='';
+    const el=$('dd-off-input'); if(el){ el.value=''; el.focus(); }
+    if($('dd-off')) $('dd-off').value='';
+    return;
+  }
+  if(combo) combo.style.display='none';
+  if(!v) return;
   if($('dd-off')) $('dd-off').value=v;
   const offData=(D.offices||[]).find(o=>o.name===v);
   if($('dd-off-input')) $('dd-off-input').value = (offData && typeof dispCode==='function')
