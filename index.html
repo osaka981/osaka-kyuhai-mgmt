@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.8</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.9</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -861,7 +861,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <span class="tb-dt" id="today-s-top" style="font-size:13px;color:rgba(255,255,255,.65);font-family:'DM Mono',monospace;letter-spacing:.5px;"></span>
     <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
     <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋局日報</button>
-    <button onclick="openM('m-pu')" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
+    <button onclick="openPuBulk()" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
     <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);">🌙</button>
     <button class="tn-ts-btn" id="ts-top-btn" onclick="requireTS('ts-inv',null)">TS</button>
   </div>
@@ -1499,7 +1499,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expPUCSV()">📥 CSV出力</button>
           <button class="btn b-gh btn-sm" onclick="openCustNameFixer()" title="日報の顧客名を顧客マスタの正式名称に揃えます">顧客名の表記ゆれを修正</button>
-          <button class="btn b-grn btn-sm" onclick="openM('m-pu')">＋ 集荷日報入力</button>
+          <button class="btn b-grn btn-sm" onclick="openPuBulk()">＋ 集荷日報入力</button>
         </div>
       </div>
       <!-- 品目別KPI帯 -->
@@ -3162,6 +3162,44 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 </div>
 
 <!-- 集荷日報入力 -->
+
+<!-- ══ 集荷日報 まとめ入力 (2026-09-22.9) ══ -->
+<div id="m-pu-bulk" class="mbg" data-no-bgclose>
+<div class="modal modal-w" style="max-width:1200px;">
+  <div class="mhd"><div class="mtt">📦 集荷日報 まとめ入力</div><button class="mx" onclick="closeM('m-pu-bulk')">×</button></div>
+  <div class="f3 mb8">
+    <div class="fg"><label>日付</label>
+      <div style="display:flex;gap:4px;align-items:center;">
+        <button type="button" class="btn b-gh btn-sm" onclick="_pubShiftDate(-1)">◀前日</button>
+        <input type="date" min="1900-01-01" max="2099-12-31" id="pub-date" class="fi date-fi" onchange="renderPuBulk()">
+        <button type="button" class="btn b-gh btn-sm" onclick="_pubShiftDate(1)">翌日▶</button>
+      </div>
+    </div>
+    <div class="fg"><label>営業所</label>
+      <select id="pub-off" class="fi" onchange="renderPuBulk()"></select>
+    </div>
+    <div class="fg"><label>従事員</label>
+      <select id="pub-staff" class="fi" onchange="renderPuBulk()"></select>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+    <select id="pub-route" class="fi" style="width:auto;font-size:12px;padding:5px 8px;"></select>
+    <button type="button" class="btn b-gh btn-sm" onclick="_pubAddRoute()">＋ルートの顧客を追加</button>
+    <div style="position:relative;flex:1;min-width:220px;">
+      <input type="text" id="pub-cust-input" class="fi" placeholder="顧客を追加（番号・名前で検索）"
+        oninput="_pubFilterCust(this)" onfocus="_pubFilterCust(this)" onblur="hideDdDropdown('pub-cust-dd',200)" autocomplete="off">
+      <div id="pub-cust-dd" class="combo-dd" style="display:none;"></div>
+    </div>
+  </div>
+  <div id="pub-body"></div>
+  <div class="mft" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin-top:10px;">
+    <button type="button" class="btn b-gh" onclick="_pubOpenSingle()">チャーター・違約金・燃料費を入力</button>
+    <button type="button" class="btn b-gh" onclick="closeM('m-pu-bulk')">キャンセル</button>
+    <button type="button" class="btn b-grn" onclick="_pubSave()">この日の集荷日報を保存</button>
+  </div>
+</div>
+</div>
+
 <div id="m-pu" class="mbg" data-no-bgclose>
 <div class="modal modal-w">
   <div class="mhd"><div class="mtt">📦 集荷日報入力</div><button class="mx" onclick="closeM('m-pu')">×</button></div>
@@ -4987,7 +5025,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.8';
+const APP_VER = '2026-09-22.9';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12423,6 +12461,274 @@ function updPUPrev(){
     ${cu?`<span style="color:var(--tel2)">集荷 金額概算：<strong class="mono">¥${fmt(amt)}</strong></span>`:''}
   </div>
   <div style="font-size:9.5px;color:var(--txt3);margin-top:3px;">※ 上の品目別数量の合計です。燃料費・違約金・チャーターは含みません</div>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-09-22.9: 集荷日報 まとめ入力（日付・営業所・従事員を決めて複数顧客を一度に）
+//   保存は従来どおり顧客ごとに1件ずつ（請求・支払の計算はそのまま）。
+// ════════════════════════════════════════════════════════════
+let _pubState = { custIds: [], loadedKey: '' };
+
+function openPuBulk(opt){
+  const o = opt || {};
+  _pubState = { custIds: [], loadedKey: '' };
+  openM('m-pu-bulk');
+  const today = new Date().toISOString().slice(0,10);
+  if($('pub-date')) $('pub-date').value = o.date || today;
+  // 営業所
+  const offSel = $('pub-off');
+  if(offSel){
+    const names = (D.locations||[]).filter(l=>l.active!==false).map(l=>l.name);
+    (D.offices||[]).forEach(x=>{ if(x.name && !names.includes(x.name)) names.push(x.name); });
+    offSel.innerHTML = '<option value="">（未設定）</option>' + [...new Set(names)].sort()
+      .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if(o.office) offSel.value = o.office;
+  }
+  // 従事員
+  const stSel = $('pub-staff');
+  if(stSel){
+    const list = (D.staff||[]).filter(s=>s.status!=='終了')
+      .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+    stSel.innerHTML = '<option value="">（選択）</option>' +
+      list.map(s=>`<option value="${esc(s.name)}">${esc(s.empNo||'')} ${esc(s.name)}</option>`).join('');
+    if(o.staff) stSel.value = o.staff;
+  }
+  renderPuBulk();
+}
+function _pubShiftDate(d){
+  const el=$('pub-date'); if(!el||!el.value) return;
+  const dt=new Date(el.value+'T00:00:00'); dt.setDate(dt.getDate()+d);
+  el.value=dt.toISOString().slice(0,10);
+  _pubState.custIds=[]; _pubState.loadedKey='';
+  renderPuBulk();
+}
+// その日・その人のすでにある集荷日報
+function _pubExisting(){
+  const date=_normDate($('pub-date')?.value||''), staff=$('pub-staff')?.value||'';
+  if(!date||!staff) return [];
+  return (D.pickup||[]).filter(r=>_normDate(r.date)===date && r.staff===staff);
+}
+function _pubRoutesOf(staffName){
+  const st=(D.staff||[]).find(s=>s.name===staffName);
+  const out=[];
+  (st?.colRoutes||[]).forEach(r=>out.push({id:'s'+r.id, name:r.name||'ルート', customers:r.customers||[]}));
+  if(st?.companyId){
+    const co=(D.companies||[]).find(c=>String(c.id)===String(st.companyId));
+    (co?.colRoutes||[]).forEach(r=>out.push({id:'c'+r.id, name:(co.name||'')+'：'+(r.name||'ルート'), customers:r.customers||[]}));
+  }
+  return out;
+}
+function _pubAddCust(custId){
+  const id=Number(custId)||0; if(!id) return;
+  if(!_pubState.custIds.includes(id)) _pubState.custIds.push(id);
+  renderPuBulk(true);
+}
+function _pubRemoveCust(custId){
+  const id=Number(custId)||0;
+  _pubCollect();
+  _pubState.custIds=_pubState.custIds.filter(x=>x!==id);
+  delete _pubState.vals[id];
+  renderPuBulk(true);
+}
+function _pubAddRoute(){
+  const rid=$('pub-route')?.value||''; if(!rid) return;
+  const r=_pubRoutesOf($('pub-staff')?.value||'').find(x=>String(x.id)===String(rid));
+  if(!r) return;
+  _pubCollect();
+  (r.customers||[]).forEach(cid=>{ const id=Number(cid)||0; if(id && !_pubState.custIds.includes(id)) _pubState.custIds.push(id); });
+  renderPuBulk(true);
+}
+function _pubFilterCust(input){
+  const q=(input?.value||'').trim();
+  const items=(D.customers||[]).map(cu=>{
+    const no=cu.custNo||'';
+    const match=!q||matchQuery(no,q)||matchQuery(cu.name,q)||matchQuery(cu.kana||'',q)||matchQuery(cu.region||'',q);
+    return match?{no,label:cu.name,sub:cu.region||'',onSelect:`_pubPickCust(${cu.id})`}:null;
+  }).filter(Boolean).slice(0,30);
+  _showDd('pub-cust-dd',items);
+}
+function _pubPickCust(id){
+  if($('pub-cust-input')) $('pub-cust-input').value='';
+  hideDdDropdown('pub-cust-dd');
+  _pubCollect();
+  _pubAddCust(id);
+}
+// 画面の入力値を _pubState.vals に退避（並びを作り直しても消えないように）
+function _pubCollect(){
+  if(!_pubState.vals) _pubState.vals={};
+  document.querySelectorAll('#pub-table tbody tr[data-cust]').forEach(tr=>{
+    const cid=Number(tr.dataset.cust)||0; if(!cid) return;
+    const v={items:{}, note:tr.querySelector('.pub-note')?.value||''};
+    tr.querySelectorAll('input[data-k]').forEach(inp=>{
+      const q=parseInt(inp.value)||0; if(q>0) v.items[inp.dataset.k]=q;
+    });
+    _pubState.vals[cid]=v;
+  });
+}
+function renderPuBulk(keepVals){
+  const body=$('pub-body'); if(!body) return;
+  if(keepVals) _pubCollect(); else _pubState.vals={};
+  const date=_normDate($('pub-date')?.value||''), staff=$('pub-staff')?.value||'';
+  // ルート候補
+  const rsel=$('pub-route');
+  if(rsel){
+    const rs=_pubRoutesOf(staff);
+    rsel.innerHTML = rs.length ? rs.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}（${(r.customers||[]).length}社）</option>`).join('')
+      : '<option value="">ルートなし</option>';
+  }
+  if(!date || !staff){
+    body.innerHTML='<div class="al al-w"><span>日付と従事員を選んでください。</span></div>';
+    return;
+  }
+  // すでにある日報を最初に並べる
+  const exist=_pubExisting();
+  const key=date+'__'+staff;
+  if(_pubState.loadedKey!==key){
+    _pubState.loadedKey=key;
+    _pubState.custIds=[];
+    _pubState.vals={};
+    exist.forEach(r=>{
+      const cid=Number(r.customerId)||0; if(!cid) return;
+      if(!_pubState.custIds.includes(cid)) _pubState.custIds.push(cid);
+      if(!r._fromJet) _pubState.vals[cid]={items:{...(r.items||{})}, note:r.note||''};
+    });
+  }
+  const custs=_pubState.custIds.map(id=>(D.customers||[]).find(c=>Number(c.id)===Number(id))).filter(Boolean);
+  if(!custs.length){
+    body.innerHTML='<div class="al al-w"><span>顧客がまだありません。上の「ルートの顧客を追加」または検索欄から顧客を追加してください。</span></div>';
+    return;
+  }
+  // 列 = 並んでいる顧客が使う品目の集合
+  const useMap={};
+  custs.forEach(cu=>{ useMap[cu.id]=new Set(custUseItems(cu, Object.keys(_pubState.vals[cu.id]?.items||{}))); });
+  // チャーターは金額の入力が要るので、この表には出さない（下のボタンから個別入力）
+  const cols=IK.filter(k=>ITEMS[k].ck!=='charter' && k!=='チャーター' && custs.some(cu=>useMap[cu.id].has(k)));
+  let rows='';
+  custs.forEach(cu=>{
+    const ex=exist.find(r=>Number(r.customerId)===Number(cu.id));
+    const isJet=!!ex?._fromJet;
+    const v=_pubState.vals[cu.id]||{items:{},note:''};
+    rows+=`<tr data-cust="${cu.id}"${isJet?' style="background:rgba(0,0,0,.04);"':''}>
+      <td style="white-space:nowrap;">${cu.custNo?`<span class="mono xs muted">${esc(cu.custNo)}</span> `:''}${esc(cu.name)}
+        ${isJet?'<span class="bdg" style="margin-left:4px;">計数</span>':ex?'<span class="bdg bg" style="margin-left:4px;">登録済</span>':''}</td>
+      ${cols.map(k=>{
+        const use=useMap[cu.id].has(k);
+        if(!use) return '<td class="tr muted" style="text-align:center;">-</td>';
+        if(isJet) return `<td class="tr mono">${(ex.items||{})[k]||''}</td>`;
+        return `<td><input type="number" min="0" class="fi" data-k="${k}" value="${v.items[k]||''}" placeholder="0"
+          style="width:64px;font-size:12px;padding:3px 5px;text-align:right;" onkeydown="_pubKey(event,this)" oninput="_pubTotal()"></td>`;
+      }).join('')}
+      <td>${isJet?'':`<input type="text" class="fi pub-note" value="${esc(v.note||'')}" placeholder="備考" style="width:120px;font-size:11px;padding:3px 5px;">`}</td>
+      <td>${isJet?'':`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_pubRemoveCust(${cu.id})">×</button>`}</td>
+    </tr>`;
+  });
+  body.innerHTML=`
+    <div class="xs muted" style="margin-bottom:6px;">「-」の欄は、その顧客が使わない品目です。Enterで右へ、行末で次の顧客へ進みます。
+      計数アプリから来た便は編集できません。空欄のままの顧客は保存しません。</div>
+    <div class="tw"><table id="pub-table"><thead><tr>
+      <th>顧客</th>${cols.map(k=>`<th class="tr">${itemColLabel(k)}</th>`).join('')}<th>備考</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tr" style="margin-top:6px;font-size:12px;">合計 <span id="pub-total" class="mono" style="font-weight:700;"></span> 個</div>`;
+  _pubTotal();
+}
+function _pubTotal(){
+  let t=0; document.querySelectorAll('#pub-table input[data-k]').forEach(i=>t+=parseInt(i.value)||0);
+  const el=$('pub-total'); if(el) el.textContent=String(t);
+}
+function _pubKey(e, inp){
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  const all=[...document.querySelectorAll('#pub-table input[data-k]')];
+  const i=all.indexOf(inp);
+  const next = e.shiftKey ? all[i-1] : all[i+1];
+  if(next){ next.focus(); next.select&&next.select(); }
+}
+function _pubOpenSingle(){
+  const date=$('pub-date')?.value||'', off=$('pub-off')?.value||'', staff=$('pub-staff')?.value||'';
+  closeM('m-pu-bulk');
+  openM('m-pu');
+  setTimeout(()=>{
+    if($('pu-date')) $('pu-date').value=date;
+    if($('pu-off')) $('pu-off').value=off;
+    const offData=(D.offices||[]).find(o=>o.name===off);
+    if($('pu-off-input')) $('pu-off-input').value = offData&&typeof dispCode==='function' ? `${dispCode(offData.officeCode)} ${off}` : off;
+    if($('pu-staff')) $('pu-staff').value=staff;
+    const st=(D.staff||[]).find(s=>s.name===staff);
+    if($('pu-staff-input')) $('pu-staff-input').value = st ? `${st.empNo||''} ${staff}` : staff;
+  }, 60);
+}
+async function _pubSave(){
+  _pubCollect();
+  const date=_normDate($('pub-date')?.value||''), off=$('pub-off')?.value||'', staff=$('pub-staff')?.value||'';
+  if(!date || !staff){ showAlert({icon:'⚠️', title:'未入力', msg:'日付と従事員を選んでください'}); return; }
+  const exist=_pubExisting();
+  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  const empty=[], saved=[];
+  const st=(D.staff||[]).find(x=>x && x.name===staff);
+  const driver={ id:String(st?.empNo || st?.id || ''), name:staff, office:off };
+  for(const cid of _pubState.custIds){
+    const cu=(D.customers||[]).find(c=>Number(c.id)===Number(cid)); if(!cu) continue;
+    const ex=exist.find(r=>Number(r.customerId)===Number(cid));
+    if(ex && ex._fromJet) continue;                     // 計数の便は触らない
+    const v=_pubState.vals[cid]||{items:{},note:''};
+    const items={}; Object.entries(v.items||{}).forEach(([k,q])=>{ if(q>0) items[k]=q; });
+    if(!Object.keys(items).length){ if(ex) empty.push({rec:ex, name:cu.name}); continue; }
+    const rec={
+      ...(ex||{}),
+      id: ex ? ex.id : (Date.now()*1000 + Math.floor(Math.random()*1000)),
+      date, office:off, staff,
+      customerId:cu.id, customerName:cu.name, region:(ex?.region)||cu.region||'',
+      items, note:v.note||'',
+    };
+    let extraRows=[];
+    if(ex && ex._logId!=null){
+      // アプリの複数顧客の提出から分けた1件 → その顧客の分だけ切り出す
+      const li=colLogs.findIndex(l=>String(l.id)===String(ex._logId));
+      if(li>=0){
+        const g=_splitColRowsByCustomer(colLogs[li].rows||[]).find(g=>g.key===ex._custKey);
+        if(g) extraRows=g.rows.filter(row=>['route','route_rest','チャーター'].includes(row.masterKey));
+      }
+      _colLogsRemovePickup(colLogs, ex);
+      rec.id=Date.now()*1000 + Math.floor(Math.random()*1000);
+      delete rec._logId; delete rec._custKey;
+    }
+    const idx=D.pickup.findIndex(r=>String(r.id)===String(ex?.id));
+    if(idx>=0) D.pickup[idx]=rec; else D.pickup.push(rec);
+    const rows=Object.entries(items).map(([masterKey,qty])=>({
+      customerId:rec.customerId, customerName:rec.customerName, region:rec.region,
+      masterKey, qty, unit:ITEMS[masterKey]?.unit||'個',
+    }));
+    const entry={ id:rec.id, type:'collection', driver, date, rows:rows.concat(extraRows),
+      note:rec.note||'', submittedAt:new Date().toISOString() };
+    const ci=colLogs.findIndex(x=>String(x.id)===String(rec.id));
+    if(ci>=0) colLogs[ci]=entry; else colLogs.push(entry);
+    saved.push(cu.name);
+  }
+  // すでにあった日報を空にした場合は削除の確認
+  if(empty.length){
+    const ok=await showDialog({icon:'🗑', title:'削除の確認',
+      msg:`次の顧客の集荷日報を数量なしにしました。削除しますか？\n\n${empty.map(e=>'　'+e.name).join('\n')}`,
+      okText:'削除する', cancelText:'残す（保存しない）'});
+    if(ok){
+      empty.forEach(e=>{
+        D.pickup=D.pickup.filter(r=>String(r.id)!==String(e.rec.id));
+        _colLogsRemovePickup(colLogs, e.rec);
+      });
+    }
+  }
+  if(!saved.length && !empty.length){
+    showAlert({icon:'⚠️', title:'入力なし', msg:'数量が入っている顧客がありません'});
+    return;
+  }
+  lsSet(LS_KEYS.COL, colLogs);
+  try{ if(typeof fbSet==='function'){ await fbSet('col_logs', colLogs); await fbSet('pickup', D.pickup); } }
+  catch(e){ console.error('[_pubSave]', e); alert('保存に失敗しました。通信状態を確認してもう一度保存してください。'); return; }
+  renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
+  _refreshOpenLedger&&_refreshOpenLedger();
+  _showSaveToast(`${date} の集荷日報を保存しました（${saved.length}社）`);
+  // 翌日へ進める
+  _pubShiftDate(1);
 }
 
 function savePU(){
@@ -27623,7 +27929,12 @@ function openStaffDailyEntry(kind, staffName, dateStr){
     d = (mon===curMon) ? `${mon}-${String(today.getDate()).padStart(2,'0')}` : `${mon}-01`;
   }
   window._delEditMode = false;
-  openM(kind==='del' ? 'm-del' : 'm-pu');
+  // ★ 2026-09-22.9: 集荷はまとめ入力を開く
+  if(kind==='pu' && typeof openPuBulk==='function'){
+    openPuBulk({date:d, office, staff:staffName});
+    return;
+  }
+  openM('m-del');
   setTimeout(()=>{
     const p = kind==='del' ? 'dd' : 'pu';
     if($(p+'-date')) $(p+'-date').value = d;
