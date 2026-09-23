@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.17</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.18</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5048,7 +5048,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.17';
+const APP_VER = '2026-09-22.18';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5206,6 +5206,9 @@ function _buildFbDriverEntry(s){
     deptIds: s.deptIds || [],
     primaryDeptId: s.primaryDeptId || null,
     kyuyo: s.kyuyo || '',
+    // ★ 2026-09-22.18: 業務別の給与形態と「時間単価の業務」を日報アプリへ渡す（打刻に業務を付けるため）
+    payMode: s.payMode || null,
+    hourlyBiz: (typeof _hourlyBizOf==='function') ? _hourlyBizOf(s, new Date().toISOString().slice(0,7)) : [],
     canSendNotification: !!s.canSendNotification,
     // ★ PINハッシュを日報アプリ(nikki/drivers)に連携
     //   日報アプリのログイン照合は initialPinHash / pinHash を参照するため、
