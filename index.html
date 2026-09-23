@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.19</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.20</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1455,6 +1455,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <td class="tr mono fw7" id="fix-sum-d" style="font-size:16px;">0</td>
           </tr></tfoot>
         </table>
+      </div>
+
+      <!-- ★ 2026-09-22.20: 郵便局（営業所）の選び間違いをここで直せるようにした -->
+      <div class="fg mb12">
+        <label>郵便局（営業所）<span class="xs muted" style="margin-left:6px;">担当の郵便局から選べます</span></label>
+        <select id="fix-office" class="fi"></select>
       </div>
 
       <div id="fix-hint" style="font-size:11px;color:var(--txt2);margin-bottom:10px;"></div>
@@ -2976,6 +2982,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         営業所
         <span class="xs muted" style="font-size:9px;">番号・名前で検索</span>
       </label>
+      <!-- ★ 2026-09-22.20: 担当の郵便局（台帳でチェックしている郵便局）から選び直せるリスト -->
+      <select id="dd-off-sel" class="fi" style="display:none;margin-bottom:4px;font-size:12px;padding:5px 8px;" onchange="onDdOffSelChange()"></select>
       <div style="position:relative;">
         <input type="text" id="dd-off-input" class="fi" placeholder="1・１・大阪北..."
           oninput="filterDdOff(this)" onfocus="filterDdOff(this)" onblur="hideDdDropdown('dd-off-dd',200)"
@@ -5048,7 +5056,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.19';
+const APP_VER = '2026-09-22.20';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -11920,6 +11928,20 @@ function openCmpFix(id) {
     </div>`;
   }
   if($('fix-reason')) $('fix-reason').value=r.cmpCause||'';
+  // ★ 2026-09-22.20: 郵便局（営業所）の候補＝その人の担当郵便局（宅配の扱いがある拠点）
+  {
+    const sel=$('fix-office');
+    if(sel){
+      const st=(D.staff||[]).find(x=>x && x.name===r.staff);
+      const offs=st ? _getStaffDelOffices(st).map(o=>o.office) : [];
+      const cur=r.office||'';
+      if(cur && !offs.includes(cur)) offs.unshift(cur);
+      sel.innerHTML = offs.length
+        ? offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
+        : `<option value="${esc(cur)}">${esc(cur||'（未設定）')}</option>`;
+      sel.value = cur || (offs[0]||'');
+    }
+  }
 
   const tb=$('tb-fix');
   if(tb){
@@ -12006,6 +12028,14 @@ function applyFix(opt){
     FIX_COLS.forEach(c=>{
       r[c.n]=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
     });
+    // ★ 2026-09-22.20: 郵便局（営業所）の選び直し
+    {
+      const newOff=$('fix-office')?.value||'';
+      if(newOff && newOff!==r.office){
+        r.office=newOff;
+        if(r.postOffice) r.postOffice=newOff;
+      }
+    }
     // 郵便局側は D.postLogs が保存元。表示用フィールドと両方そろえる。
     const logs=Array.isArray(D.postLogs)?D.postLogs:[];
     const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
@@ -12412,6 +12442,8 @@ function editDel(id){
     $('dd-off-input').placeholder = offVal;
   }
   if($('dd-staff')) $('dd-staff').value = r.staff;
+  // ★ 2026-09-22.20: 担当郵便局のリストを用意（営業所の選び直し用）
+  try{ _ddFillOffList(r.staff); }catch(e){}
   setTimeout(()=>{ try{ _ddWorkSync && _ddWorkSync(); }catch(e){} }, 60);
   const stData=D.staff.find(s=>s.name===r.staff);
   if($('dd-staff-input')){
@@ -34805,10 +34837,36 @@ function filterDdStaff(input){
   _showDd('dd-staff-dd',items);
 }
 
+// ★ 2026-09-22.20: 従事員の担当郵便局（メイン＋担当）をリストに出す。
+//   宅配の扱いがある拠点だけ。選び直すと営業所コンボにも反映する。
+function _ddFillOffList(staffName){
+  const sel=$('dd-off-sel'); if(!sel) return;
+  const st=(D.staff||[]).find(x=>x && x.name===staffName);
+  const offs = st ? _getStaffDelOffices(st).map(o=>o.office) : [];
+  const cur = $('dd-off')?.value || '';
+  if(cur && !offs.includes(cur)) offs.unshift(cur);
+  if(!offs.length){ sel.style.display='none'; sel.innerHTML=''; return; }
+  sel.innerHTML = offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
+    + '<option value="__other__">その他（下の欄で検索）</option>';
+  sel.value = cur && offs.includes(cur) ? cur : offs[0];
+  sel.style.display='';
+  if(!cur) onDdOffSelChange();
+}
+function onDdOffSelChange(){
+  const v=$('dd-off-sel')?.value||'';
+  if(!v || v==='__other__'){ const el=$('dd-off-input'); if(el){ el.focus(); } return; }
+  if($('dd-off')) $('dd-off').value=v;
+  const offData=(D.offices||[]).find(o=>o.name===v);
+  if($('dd-off-input')) $('dd-off-input').value = (offData && typeof dispCode==='function')
+    ? `${dispCode(offData.officeCode)} ${v}` : v;
+  if(typeof _autoFillPostByOffice==='function') try{ _autoFillPostByOffice(v); }catch(e){}
+  if(typeof valDel==='function') try{ valDel(); }catch(e){}
+}
 function selectDdStaff(name,empNo){
   if($('dd-staff-input'))$('dd-staff-input').value=empNo?`${empNo} ${name}`:name;
   if($('dd-staff'))$('dd-staff').value=name;
   hideDdDropdown('dd-staff-dd');
+  _ddFillOffList(name);   // ★ 2026-09-22.20
   calcDelAmt();
   // 郵便局を従業員の直近日報から自動入力
   _autoFillPostOffice(name);
