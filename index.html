@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.26</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.27</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5057,7 +5057,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.26';
+const APP_VER = '2026-09-22.27';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -16886,6 +16886,26 @@ function _sdToggleSec(key){
   _sdOpenSec = (_sdOpenSec===key) ? null : key;
   if(typeof renderStaffFSTab==='function') renderStaffFSTab('daily');
 }
+// ★ 2026-09-22.27: その日の勤怠（打刻・手入力）をまるごと削除する
+async function _sdDeleteAtt(name, date){
+  const st=(D.staff||[]).find(x=>x && x.name===name); if(!st) return;
+  const ok = (typeof showDialog==='function')
+    ? await showDialog({icon:'🗑', title:'勤怠の削除',
+        msg:`${name} の ${date} の出勤・退勤の記録を削除します。\n日報アプリの打刻も消えます。よろしいですか?`,
+        okText:'削除する', cancelText:'キャンセル'})
+    : confirm(`${name} の ${date} の勤怠を削除しますか?`);
+  if(!ok) return;
+  const logs=(lsGet(LS_KEYS.ATT,[])||[]).filter(a=>!(_attIsMine(a,st) && String(a.date).replace(/\//g,'-')===date));
+  lsSet(LS_KEYS.ATT, logs);
+  try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
+  catch(e){ console.error('[勤怠削除]', e); alert('保存に失敗しました。通信状態を確認してください。'); return; }
+  _sdOpenSec='att';
+  if(typeof renderStaffFSTab==='function') renderStaffFSTab('daily');
+  if(typeof renderWorkTime==='function' && document.getElementById('wt-root')) renderWorkTime();
+  if(typeof renderSalary==='function') renderSalary();
+  if(typeof _showSaveToast==='function') _showSaveToast(`${date} の勤怠を削除しました`);
+}
+
 // 勤怠の保存（勤務時間画面と同じ仕組み：元の打刻は残し、修正として記録する）
 async function _sdSaveAtt(name, mon){
   const st=(D.staff||[]).find(x=>x && x.name===name); if(!st) return;
@@ -28707,7 +28727,7 @@ function renderStaffDaily(el, name){
       html+=`<!--SD:att:勤怠（${dates.length}日 ／ 合計 ${fmtWM(totalMin)}）:${dates.length}-->`;
       html+=`<div class="xs muted" style="margin-bottom:6px;">時刻は「900」「9:00」のどちらでも入力できます。空欄の日は勤務なしとして扱います。</div>`;
       html+=`<div class="tw"><table id="sd-att-table"><thead><tr>
-        <th>日付</th><th>業務</th><th>打刻</th><th>開始</th><th>終了</th><th class="tr">計上時間</th>
+        <th>日付</th><th>業務</th><th>打刻</th><th>開始</th><th>終了</th><th class="tr">計上時間</th><th></th>
       </tr></thead><tbody>`;
       const _W='日月火水木金土';
       const [_ay,_am]=mon.split('-').map(Number);
@@ -28735,9 +28755,10 @@ function renderStaffDaily(el, name){
           <td><input type="text" class="fi sd-att-in" value="${vIn}" placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;"></td>
           <td><input type="text" class="fi sd-att-out" value="${vOut}" placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;"></td>
           <td class="tr mono">${r?fmtWM(r.workMin):''}</td>
+          <td>${recs.length?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_sdDeleteAtt('${esc(name)}','${dstr}')">削除</button>`:''}</td>
         </tr>`;
       }
-      html+=`<tr style="border-top:2px solid var(--brd,#ccc);"><td class="fw7" colspan="5">月合計</td><td class="tr fw7" style="color:var(--clay,#a56a1a)">${fmtWM(totalMin)}</td></tr>`;
+      html+=`<tr style="border-top:2px solid var(--brd,#ccc);"><td class="fw7" colspan="5">月合計</td><td class="tr fw7" style="color:var(--clay,#a56a1a)">${fmtWM(totalMin)}</td><td></td></tr>`;
       html+=`</tbody></table></div>`;
       html+=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
         <span id="sd-att-msg" class="xs" style="align-self:center;color:var(--red2);"></span>
@@ -41820,7 +41841,7 @@ function renderWorkTime(){
       <td><input type="text" class="fi wt-out" value="${vOut}" placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
       <td class="tr mono wt-calc" style="white-space:nowrap;">${net>0?_wtFmtMin(net):''}</td>
       <td class="xs wt-state" style="white-space:nowrap;color:var(--amb2);">${state}${edited&&!voided?'':''}</td>
-      <td style="white-space:nowrap;">${(edited)?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_wtRevert('${date}')">打刻に戻す</button>`:''}</td>
+      <td style="white-space:nowrap;">${(edited)?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_wtRevert('${date}')">打刻に戻す</button> `:''}${recs.length?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_sdDeleteAtt('${esc(st.name)}','${date}')">削除</button>`:''}</td>
     </tr>`;
   }
   const bizNote = canPick ? '宅配・集荷の両方が時間単価のため、日ごとに業務を選べます。'
