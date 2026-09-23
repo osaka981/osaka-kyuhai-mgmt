@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.10</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.11</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5025,7 +5025,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.10';
+const APP_VER = '2026-09-22.11';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7874,6 +7874,8 @@ function resetStaffModal(){
    'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
    'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  if($('st-yosha-type')) $('st-yosha-type').value='日額';
+  if(typeof onYoshaChange==='function') onYoshaChange();   // ★ 2026-09-22.11: 新規登録時も見出しを合わせる
   // ★ 2026-09-22.1: 業務別の給与形態をクリア
   if(typeof _restoreStPayMode==='function') _restoreStPayMode(null);
   // ★ 2026-09-22.2: updOffSels が選択を保持するようになったので、ここで明示的に「なし」に戻す
@@ -36899,6 +36901,7 @@ function _editStaffImpl(id){
   if(typeof onStGasTypeChange==='function') onStGasTypeChange();
   if($('st-gas-amt'))$('st-gas-amt').value=off.gasAmt||'';
   if($('st-yosha-type'))$('st-yosha-type').value=off.yoshaType||'日額';
+  if(typeof onYoshaChange==='function') onYoshaChange();   // ★ 2026-09-22.11: 見出しを算定方式に合わせる（月額なのに「1日あたり」と出ていた）
   if($('st-yosha-amt'))$('st-yosha-amt').value=off.yoshaAmt||'';
   if($('st-yosha-tax'))$('st-yosha-tax').value=off.yoshaTax||'in';
   if($('st-yosha-note'))$('st-yosha-note').value=off.yoshaNote||'';
