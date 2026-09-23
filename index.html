@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.14</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.15</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5048,7 +5048,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.14';
+const APP_VER = '2026-09-22.15';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -16484,6 +16484,82 @@ function _mgMatchRows(keep, drop){
     return {k,label,st,msg,a:keep[k]||'',b:drop[k]||''};
   });
 }
+// ★ 2026-09-22.15: 項目ごとに、どちらを採用するかを選べるようにした。
+//   simple : 残す側／消す側／空にする
+//   office : 残す側をメイン（もう一方は担当郵便局へ）／消す側をメイン／残す側のみ／消す側のみ
+//   list   : 両方を残す／残す側のみ／消す側のみ／削除
+//   biz    : 残す側／消す側／設定なし
+const MG_SIMPLE = [
+  ['name','氏名'],['kana','フリガナ'],['empNo','社員番号'],['birth','生年月日'],
+  ['tel','電話'],['addr','住所'],['kubun','区分'],['kyuyo','給与形態（基本情報）'],
+  ['tanka','単価'],['status','取引状態'],['note','備考'],
+];
+const MG_LISTS = [['advances','前払い'],['penalties','違約金'],['repairRows','修理・損害代'],
+  ['docs','書類'],['colRoutes','集荷ルート'],['payHistory','給与履歴'],['areaPrices','エリア単価']];
+const _mgSubName = o => (typeof o==='string') ? o : (o && o.name) || '';
+function _mgChoice(id, opts, def){
+  return `<select id="mg-ch-${id}" class="fi" style="width:auto;font-size:11px;padding:3px 6px;" onchange="_mgUpdResult('${id}')">`
+    + opts.map(([v,l])=>`<option value="${v}"${v===def?' selected':''}>${l}</option>`).join('') + '</select>';
+}
+function _mgChVal(id, def){ return $('mg-ch-'+id)?.value || def; }
+function _mgUpdResult(id){
+  // 選択を変えたら「統合後」の表示だけ作り直す
+  const cell=document.querySelector(`[data-res="${id}"]`);
+  if(cell && typeof cell.dataset.kind==='string'){
+    const keep=_mgStaff('keep'), drop=_mgStaff('drop');
+    if(keep&&drop) cell.innerHTML=_mgResultText(id, cell.dataset.kind, keep, drop);
+  }
+}
+function _mgResultText(id, kind, keep, drop){
+  const v=_mgChVal(id, kind==='list'?'both':(kind==='office'?'keepMain':'keep'));
+  if(kind==='simple'){
+    if(v==='keep') return esc(String(keep[id]??''))||'<span class="muted">空</span>';
+    if(v==='drop') return esc(String(drop[id]??''))||'<span class="muted">空</span>';
+    return '<span class="muted">空にする</span>';
+  }
+  if(kind==='office'){
+    const k=keep.office||'', d=drop.office||'';
+    if(v==='keepMain') return `メイン：${esc(k)||'（なし）'}${d&&d!==k?`／担当に ${esc(d)} を追加`:''}`;
+    if(v==='dropMain') return `メイン：${esc(d)||'（なし）'}${k&&k!==d?`／担当に ${esc(k)} を追加`:''}`;
+    if(v==='keepOnly') return `メイン：${esc(k)||'（なし）'}のみ`;
+    return `メイン：${esc(d)||'（なし）'}のみ`;
+  }
+  if(kind==='dept'){
+    const names=ids=>(ids||[]).map(x=>getDepartmentById(x)?.name||x).join('・');
+    if(v==='keep') return esc(names(keep.deptIds));
+    if(v==='drop') return esc(names(drop.deptIds));
+    return esc(names([...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])].map(String))]));
+  }
+  if(kind==='subs'){
+    const ka=(keep.subOffices||[]).map(_mgSubName), da=(drop.subOffices||[]).map(_mgSubName);
+    if(v==='keep') return esc(ka.join('・'))||'<span class="muted">なし</span>';
+    if(v==='drop') return esc(da.join('・'))||'<span class="muted">なし</span>';
+    if(v==='none') return '<span class="muted">削除</span>';
+    return esc([...new Set([...ka,...da])].join('・'))||'<span class="muted">なし</span>';
+  }
+  if(kind==='list'){
+    const a=(keep[id]||[]).length, b=(drop[id]||[]).length;
+    if(v==='keep') return `${a}件（残す側のみ）`;
+    if(v==='drop') return `${b}件（消す側のみ）`;
+    if(v==='none') return '<span class="muted">削除</span>';
+    return `${a+b}件（両方）`;
+  }
+  if(kind==='fp'){
+    const biz=id.replace('fp-','');
+    const cnt=o=>Object.entries(o||{}).filter(([k,x])=>!String(k).startsWith('_')&&Number(x)>0).length;
+    if(v==='keep') return `${cnt(keep.fixedPrices?.[biz])}項目（残す側）`;
+    if(v==='drop') return `${cnt(drop.fixedPrices?.[biz])}項目（消す側）`;
+    return '<span class="muted">設定なし</span>';
+  }
+  if(kind==='biz'){
+    const biz=id.replace('pm-','');
+    const t=o=>o&&o.type?`${o.type}${o.rate?' ¥'+o.rate:''}`:'';
+    if(v==='keep') return esc(t(keep.payMode?.[biz]))||'<span class="muted">未設定</span>';
+    if(v==='drop') return esc(t(drop.payMode?.[biz]))||'<span class="muted">未設定</span>';
+    return '<span class="muted">未設定</span>';
+  }
+  return '';
+}
 function _renderMergePreview(){
   const box=$('mg-preview'); if(!box) return;
   const keep=_mgStaff('keep'), drop=_mgStaff('drop');
@@ -16491,45 +16567,6 @@ function _renderMergePreview(){
   if(String(keep.id)===String(drop.id)){ box.innerHTML='<div class="al al-e"><span>同じ台帳が選ばれています。</span></div>'; return; }
   const ck=_mgCount(keep), cd=_mgCount(drop);
   const sameName = keep.name===drop.name;
-  let rows='';
-  MERGE_FIELDS.forEach(([k,label])=>{
-    const a=keep[k]??'', b=drop[k]??'';
-    if(a==='' && b==='') return;
-    const res = (a!=='' && a!=null) ? a : b;
-    const note = (a!==''&&b!==''&&String(a)!==String(b)) ? '<span class="xs" style="color:var(--amb2);">残す側を採用</span>'
-      : ((a===''||a==null)&&b!=='' ? '<span class="xs" style="color:var(--blu2);">消す側から補う</span>' : '');
-    rows+=`<tr><td>${label}</td><td class="xs">${esc(String(a))}</td><td class="xs">${esc(String(b))}</td><td class="xs fw7">${esc(String(res))} ${note}</td></tr>`;
-  });
-  // 業務別の設定
-  const bizRow=(biz,label)=>{
-    const a=keep.payMode?.[biz]?.type||'', b=drop.payMode?.[biz]?.type||'';
-    const ra=keep.payMode?.[biz]?.rate||'', rb=drop.payMode?.[biz]?.rate||'';
-    if(!a && !b) return '';
-    const res=a?`${a}${ra?' ¥'+ra:''}`:`${b}${rb?' ¥'+rb:''}`;
-    const note=(a&&b)?'<span class="xs" style="color:var(--amb2);">残す側を採用</span>':(!a&&b?'<span class="xs" style="color:var(--blu2);">消す側から採用</span>':'');
-    return `<tr><td>${label}の給与形態</td><td class="xs">${esc(a?a+(ra?' ¥'+ra:''):'')}</td><td class="xs">${esc(b?b+(rb?' ¥'+rb:''):'')}</td><td class="xs fw7">${esc(res)} ${note}</td></tr>`;
-  };
-  rows+=bizRow('del','宅配')+bizRow('col','集荷');
-  const deptNames=ids=>(ids||[]).map(id=>getDepartmentById(id)?.name||id).join('・');
-  const mergedDept=[...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])].map(String))];
-  rows+=`<tr><td>所属部署</td><td class="xs">${esc(deptNames(keep.deptIds))}</td><td class="xs">${esc(deptNames(drop.deptIds))}</td><td class="xs fw7">${esc(deptNames(mergedDept))} <span class="xs" style="color:var(--blu2);">両方を合わせる</span></td></tr>`;
-  const subs=[...new Set([...(keep.subOffices||[]),...(drop.subOffices||[]),...(drop.office&&drop.office!==keep.office?[drop.office]:[])])];
-  rows+=`<tr><td>担当郵便局</td><td class="xs">${esc((keep.subOffices||[]).join('・'))}</td><td class="xs">${esc((drop.subOffices||[]).join('・'))}</td><td class="xs fw7">${esc(subs.join('・'))} <span class="xs" style="color:var(--blu2);">消す側のメイン郵便局も追加</span></td></tr>`;
-  const arrs=[['advances','前払い'],['penalties','違約金'],['repairRows','修理・損害代'],['docs','書類'],['colRoutes','集荷ルート'],['payHistory','給与履歴'],['areaPrices','エリア単価']];
-  arrs.forEach(([k,label])=>{
-    const a=(keep[k]||[]).length, b=(drop[k]||[]).length;
-    if(!a && !b) return;
-    rows+=`<tr><td>${label}</td><td class="xs">${a}件</td><td class="xs">${b}件</td><td class="xs fw7">${a+b}件 <span class="xs" style="color:var(--blu2);">両方を結合</span></td></tr>`;
-  });
-  // 単価タブ
-  const fpRow=(biz,label)=>{
-    const a=Object.entries(keep.fixedPrices?.[biz]||{}).filter(([k,v])=>!String(k).startsWith('_')&&Number(v)>0).length;
-    const b=Object.entries(drop.fixedPrices?.[biz]||{}).filter(([k,v])=>!String(k).startsWith('_')&&Number(v)>0).length;
-    if(!a&&!b) return '';
-    const res=a?'残す側を採用':'消す側から採用';
-    return `<tr><td>${label}単価</td><td class="xs">${a}項目</td><td class="xs">${b}項目</td><td class="xs fw7">${a?a:b}項目 <span class="xs" style="color:${a?'var(--amb2)':'var(--blu2)'};">${res}</span></td></tr>`;
-  };
-  rows+=fpRow('del','宅配')+fpRow('col','集荷');
   // 同一人物かの判定
   const mrows=_mgMatchRows(keep,drop);
   const okN=mrows.filter(r=>r.st==='ok').length, ngN=mrows.filter(r=>r.st==='ng').length, unN=mrows.filter(r=>r.st==='unknown').length;
@@ -16546,6 +16583,48 @@ function _renderMergePreview(){
       ${ngN?'<div class="al al-e" style="margin-top:8px;"><span>一致しない項目があります。別人の可能性があるため、統合する前に台帳の内容を確認してください。</span></div>'
            :(unN?'<div class="al al-w" style="margin-top:8px;"><span>未入力のため確認できない項目があります。同一人物であることを確かめてから統合してください。</span></div>':'')}
     </div>`;
+  // 項目ごとの選択
+  const row=(id,label,kind,optHtml,a,b)=>
+    `<tr><td class="xs">${label}</td><td class="xs">${a}</td><td class="xs">${b}</td>
+      <td>${optHtml}</td><td class="xs fw7" data-res="${id}" data-kind="${kind}">${_mgResultText(id,kind,keep,drop)}</td></tr>`;
+  let rows='';
+  MG_SIMPLE.forEach(([k,label])=>{
+    const a=keep[k]??'', b=drop[k]??'';
+    if((a===''||a==null)&&(b===''||b==null)) return;
+    const def=(a!==''&&a!=null)?'keep':'drop';
+    rows+=row(k,label,'simple',_mgChoice(k,[['keep','残す側'],['drop','消す側'],['none','空にする']],def),
+      esc(String(a))||'<span class="muted">未入力</span>', esc(String(b))||'<span class="muted">未入力</span>');
+  });
+  rows+=row('office','メイン郵便局','office',
+    _mgChoice('office',[['keepMain','残す側をメイン（もう一方は担当へ）'],['dropMain','消す側をメイン（もう一方は担当へ）'],['keepOnly','残す側のみ'],['dropOnly','消す側のみ']],'keepMain'),
+    esc(keep.office||''), esc(drop.office||''));
+  const dn=ids=>(ids||[]).map(x=>getDepartmentById(x)?.name||x).join('・');
+  rows+=row('dept','所属部署','dept',_mgChoice('dept',[['both','両方を合わせる'],['keep','残す側のみ'],['drop','消す側のみ']],'both'),
+    esc(dn(keep.deptIds)), esc(dn(drop.deptIds)));
+  rows+=row('subs','担当郵便局','subs',_mgChoice('subs',[['both','両方を残す'],['keep','残す側のみ'],['drop','消す側のみ'],['none','削除']],'both'),
+    esc((keep.subOffices||[]).map(_mgSubName).join('・'))||'<span class="muted">なし</span>',
+    esc((drop.subOffices||[]).map(_mgSubName).join('・'))||'<span class="muted">なし</span>');
+  ['del','col'].forEach(biz=>{
+    const L=biz==='del'?'宅配':'集荷';
+    const t=o=>o&&o.type?`${o.type}${o.rate?' ¥'+o.rate:''}`:'';
+    const a=t(keep.payMode?.[biz]), b=t(drop.payMode?.[biz]);
+    rows+=row('pm-'+biz, L+'の給与形態','biz',
+      _mgChoice('pm-'+biz,[['keep','残す側'],['drop','消す側'],['none','未設定にする']], a?'keep':(b?'drop':'none')),
+      esc(a)||'<span class="muted">未設定</span>', esc(b)||'<span class="muted">未設定</span>');
+    const cnt=o=>Object.entries(o||{}).filter(([k,x])=>!String(k).startsWith('_')&&Number(x)>0).length;
+    const ca=cnt(keep.fixedPrices?.[biz]), cb=cnt(drop.fixedPrices?.[biz]);
+    rows+=row('fp-'+biz, L+'単価','fp',
+      _mgChoice('fp-'+biz,[['keep','残す側'],['drop','消す側'],['none','設定なし']], ca?'keep':(cb?'drop':'keep')),
+      ca+'項目', cb+'項目');
+  });
+  MG_LISTS.forEach(([k,label])=>{
+    const a=(keep[k]||[]).length, b=(drop[k]||[]).length;
+    if(!a&&!b) return;
+    rows+=row(k,label,'list',_mgChoice(k,[['both','両方を残す'],['keep','残す側のみ'],['drop','消す側のみ'],['none','削除']],'both'),
+      a+'件', b+'件');
+  });
+  const bizNote = (keep.payMode?.del?.type||drop.payMode?.del?.type) && (keep.payMode?.col?.type||drop.payMode?.col?.type)
+    ? '<div class="al al-ok" style="margin-top:8px;"><span>宅配・集荷の両方に給与形態があるため、給与計算では「給与形態（基本情報）」は使いません（社員・パートの内勤用の欄です）。</span></div>' : '';
   box.innerHTML=matchHtml+`
     <div class="al ${sameName?'al-w':'al-e'}" style="margin-bottom:10px;">
       <span>${sameName
@@ -16553,11 +16632,11 @@ function _renderMergePreview(){
         : '氏名が違います（'+esc(keep.name)+' と '+esc(drop.name)+'）。統合すると、消す側の日報の氏名を残す側に揃えます。'}</span>
     </div>
     <div class="tw"><table><thead><tr>
-      <th>項目</th><th>残す：${esc(keep.empNo||'')} ${esc(keep.name)}</th><th>消す：${esc(drop.empNo||'')} ${esc(drop.name)}</th><th>統合後</th>
-    </tr></thead><tbody>${rows}</tbody></table></div>
+      <th>項目</th><th>残す：${esc(keep.empNo||'')} ${esc(keep.name)}</th><th>消す：${esc(drop.empNo||'')} ${esc(drop.name)}</th><th>どちらを採用</th><th>統合後</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>${bizNote}
     <div class="xs muted" style="margin-top:8px;">
       日報：残す側 宅配${ck.del}件／集荷${ck.pu}件、消す側 宅配${cd.del}件／集荷${cd.pu}件${sameName?'（氏名が同じため同じ実績です）':''}<br>
-      打刻：残す側${ck.att}件、消す側${cd.att}件 → 消す側は社員番号を ${esc(keep.empNo||'')} に付け替えます
+      打刻：残す側${ck.att}件、消す側${cd.att}件 → 消す側は社員番号を 統合後の番号 に付け替えます
     </div>`;
 }
 async function _mgExecute(){
@@ -16567,10 +16646,9 @@ async function _mgExecute(){
   }
   const ok=await showDialog({icon:'🔗', title:'統合の確認',
     msg:`${drop.empNo||''} ${drop.name} を ${keep.empNo||''} ${keep.name} にまとめます。\n\n`
-       +`・消す側の設定・履歴は残す側へ移します\n・消す側の台帳は削除します\n・実行前の控えを端末に保存します\n\nこの操作は元に戻せません。`,
+       +`・「統合後」の欄の内容で保存します\n・消す側の台帳は削除します\n・実行前の控えを端末に保存します\n\nこの操作は元に戻せません。`,
     okText:'統合する', cancelText:'キャンセル'});
   if(!ok) return;
-  // 控え
   try{
     localStorage.setItem('mgmt_staff_merge_backup_'+Date.now(),
       JSON.stringify({at:new Date().toISOString(), keep, drop}));
@@ -16578,35 +16656,49 @@ async function _mgExecute(){
 
   const ki=D.staff.findIndex(s=>String(s.id)===String(keep.id));
   const m={...keep};
-  // 空欄を消す側で埋める
-  MERGE_FIELDS.forEach(([k])=>{ if((m[k]===''||m[k]==null) && drop[k]!=null && drop[k]!=='') m[k]=drop[k]; });
-  // 所属部署・担当郵便局
-  m.deptIds=[...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])])];
-  const subs=[...new Set([...(keep.subOffices||[]),...(drop.subOffices||[]),
-    ...((drop.office && drop.office!==keep.office)?[drop.office]:[])])].filter(Boolean);
-  m.subOffices=subs;
-  // 単価・業務別の給与形態（設定がある側を業務ごとに）
-  m.fixedPrices={...(keep.fixedPrices||{})};
-  ['del','col'].forEach(biz=>{
-    const a=keep.fixedPrices?.[biz]||{}, b=drop.fixedPrices?.[biz]||{};
-    const aHas=Object.entries(a).some(([k,v])=>!String(k).startsWith('_')&&Number(v)>0);
-    m.fixedPrices[biz]= aHas ? a : (Object.keys(b).length ? b : a);
+  // 単純な項目
+  MG_SIMPLE.forEach(([k])=>{
+    const a=keep[k]??'', b=drop[k]??'';
+    if((a===''||a==null)&&(b===''||b==null)) return;
+    const v=_mgChVal(k, (a!==''&&a!=null)?'keep':'drop');
+    m[k] = v==='keep' ? keep[k] : (v==='drop' ? drop[k] : '');
   });
+  // メイン郵便局・担当郵便局
+  const offV=_mgChVal('office','keepMain');
+  const subV=_mgChVal('subs','both');
+  const ksub=(keep.subOffices||[]), dsub=(drop.subOffices||[]);
+  let subs = subV==='keep' ? [...ksub] : subV==='drop' ? [...dsub] : subV==='none' ? [] : [...ksub,...dsub];
+  if(offV==='keepMain'){ m.office=keep.office||''; if(drop.office && drop.office!==m.office) subs.push(drop.office); }
+  else if(offV==='dropMain'){ m.office=drop.office||''; if(keep.office && keep.office!==m.office) subs.push(keep.office); }
+  else if(offV==='keepOnly'){ m.office=keep.office||''; }
+  else { m.office=drop.office||''; }
+  const seen=new Set();
+  m.subOffices=subs.filter(o=>{ const n=_mgSubName(o); if(!n||n===m.office||seen.has(n)) return false; seen.add(n); return true; });
+  // 所属部署
+  const depV=_mgChVal('dept','both');
+  m.deptIds = depV==='keep' ? [...(keep.deptIds||[])] : depV==='drop' ? [...(drop.deptIds||[])]
+    : [...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])])];
+  // 単価・業務別の給与形態
+  m.fixedPrices={...(keep.fixedPrices||{})};
   m.payMode={...(keep.payMode||{})};
   ['del','col'].forEach(biz=>{
+    const cnt=o=>Object.entries(o||{}).filter(([k,x])=>!String(k).startsWith('_')&&Number(x)>0).length;
+    const fv=_mgChVal('fp-'+biz, cnt(keep.fixedPrices?.[biz])?'keep':(cnt(drop.fixedPrices?.[biz])?'drop':'keep'));
+    m.fixedPrices[biz] = fv==='keep' ? (keep.fixedPrices?.[biz]||{}) : fv==='drop' ? (drop.fixedPrices?.[biz]||{}) : {};
     const a=keep.payMode?.[biz], b=drop.payMode?.[biz];
-    m.payMode[biz]= (a && a.type) ? a : (b || a || {});
+    const pv=_mgChVal('pm-'+biz, (a&&a.type)?'keep':((b&&b.type)?'drop':'none'));
+    m.payMode[biz] = pv==='keep' ? (a||{}) : pv==='drop' ? (b||{}) : {type:'',rate:0};
   });
-  // 配列は結合
-  [['advances'],['penalties'],['repairRows'],['docs'],['colRoutes'],['payHistory'],['areaPrices']].forEach(([k])=>{
+  // 一覧項目
+  MG_LISTS.forEach(([k])=>{
     const a=keep[k]||[], b=drop[k]||[];
-    if(a.length||b.length) m[k]=[...a,...b];
+    if(!a.length && !b.length) return;
+    const v=_mgChVal(k,'both');
+    m[k] = v==='keep' ? [...a] : v==='drop' ? [...b] : v==='none' ? [] : [...a,...b];
   });
-  // 保証・手当は残す側を優先
   if(!m.hoshoB && drop.hoshoB) m.hoshoB=drop.hoshoB;
   if(!m.hoshoC && drop.hoshoC) m.hoshoC=drop.hoshoC;
   if(!m.uid && drop.uid) m.uid=drop.uid;
-  m.note=[keep.note,drop.note].filter(Boolean).join(' / ');
   m.mergedFrom=[...(keep.mergedFrom||[]), {empNo:drop.empNo||'', name:drop.name, at:new Date().toISOString()}];
   if(ki>=0) D.staff[ki]=m;
 
@@ -16615,23 +16707,25 @@ async function _mgExecute(){
     (D.delivery||[]).forEach(r=>{ if(r.staff===drop.name) r.staff=m.name; });
     (D.pickup||[]).forEach(r=>{ if(r.staff===drop.name) r.staff=m.name; });
   }
+  if(keep.name!==m.name){
+    (D.delivery||[]).forEach(r=>{ if(r.staff===keep.name) r.staff=m.name; });
+    (D.pickup||[]).forEach(r=>{ if(r.staff===keep.name) r.staff=m.name; });
+  }
   // 打刻の社員番号を付け替え
   const att=lsGet(LS_KEYS.ATT,[])||[];
   att.forEach(a=>{
     if(!a) return;
-    const isDrop=(a.driverName===drop.name && String(a.driverId)===String(drop.empNo||''))
-      || (drop.empNo && String(a.driverId)===String(drop.empNo))
-      || String(a.driverId)===String(drop.id);
-    if(isDrop){ a.driverId=String(m.empNo||m.id||''); a.driverName=m.name; }
+    if(_attIsMine(a, drop) || _attIsMine(a, keep)){
+      a.driverId=String(m.empNo||m.id||''); a.driverName=m.name;
+    }
   });
   lsSet(LS_KEYS.ATT, att);
   // 集荷日報の driver を付け替え
   const colLogs=lsGet(LS_KEYS.COL,[])||[];
   colLogs.forEach(l=>{
     if(!l || !l.driver) return;
-    if(String(l.driver.id)===String(drop.empNo||'') || l.driver.name===drop.name){
-      l.driver={...l.driver, id:String(m.empNo||m.id||''), name:m.name};
-    }
+    const hit=[drop,keep].some(x=>String(l.driver.id)===String(x.empNo||'') || l.driver.name===x.name);
+    if(hit) l.driver={...l.driver, id:String(m.empNo||m.id||''), name:m.name};
   });
   lsSet(LS_KEYS.COL, colLogs);
   // 台帳から削除
