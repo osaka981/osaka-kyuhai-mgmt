@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.11</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.12</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1620,6 +1620,27 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
          表記ゆれで崩れる余地があった。
          電話番号だけの一致は自動で選ばない（代表番号を共有していて、
          別人が同じ番号に紐づいている例が実際にあったため）。 -->
+    <!-- ══ 台帳の統合 (2026-09-22.12) ══ -->
+    <div id="s-staffmerge" class="sec">
+      <div class="flbc mb12">
+        <h2 style="margin:0;font-size:16px;font-weight:700;">🔗 従業員台帳の統合</h2>
+      </div>
+      <div class="xs muted" style="margin:-6px 0 10px;">
+        1人が2件の台帳に分かれている場合に、1件にまとめます。残す台帳を軸に、消す台帳の設定・履歴を移し、打刻と集荷日報の社員番号も付け替えます。<br>
+        実行前の控えは端末に保存しますが、<b>元に戻す操作はありません</b>。内容を確認してから実行してください。
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="f2 mb8">
+          <div class="fg"><label>残す台帳</label><select id="mg-keep" class="fi" onchange="_renderMergePreview()"></select></div>
+          <div class="fg"><label>まとめて消す台帳</label><select id="mg-drop" class="fi" onchange="_renderMergePreview()"></select></div>
+        </div>
+        <div id="mg-preview"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+          <button type="button" class="btn b-red" onclick="_mgExecute()">この内容で統合する</button>
+        </div>
+      </div>
+    </div>
+
     <div id="s-uidmatch" class="sec">
       <div class="flbc mb12">
         <h2 style="margin:0;font-size:16px;font-weight:700;">🔗 フリートと台帳の突き合わせ</h2>
@@ -3780,13 +3801,14 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 姓・名（分割） -->
     <div class="fg">
       <label>姓</label>
-      <input type="text" id="st-sei" class="fi" lang="ja" placeholder="山田" oninput="syncStName()">
+      <input type="text" id="st-sei" class="fi" lang="ja" placeholder="山田" oninput="syncStName();_checkStaffDuplicate()">
     </div>
     <div class="fg">
       <label>名</label>
-      <input type="text" id="st-mei" class="fi" lang="ja" placeholder="太郎" oninput="syncStName()">
+      <input type="text" id="st-mei" class="fi" lang="ja" placeholder="太郎" oninput="syncStName();_checkStaffDuplicate()">
     </div>
     <input type="hidden" id="st-name">
+    <div id="st-dup-warn" style="display:none;grid-column:1 / -1;"></div>
     <!-- フリガナ（姓・名・ひらがな自動変換） -->
     <div class="fg">
       <label>フリガナ（姓）</label>
@@ -3806,7 +3828,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <input type="tel" id="st-tel" class="fi" placeholder="090-XXXX-XXXX"
         oninput="toHankakuField(this)" onblur="telField(this)">
     </div>
-    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi" min="1900-01-01" max="2099-12-31"></div>
+    <div class="fg"><label>生年月日</label><input type="date" id="st-birth" class="fi" min="1900-01-01" max="2099-12-31" onchange="_checkStaffDuplicate()"></div>
   </div>
 
   <!-- 緊急連絡先（続柄・氏名・電話） -->
@@ -5025,7 +5047,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.11';
+const APP_VER = '2026-09-22.12';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7874,6 +7896,7 @@ function resetStaffModal(){
    'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
    'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
+  if($('st-dup-warn')){ $('st-dup-warn').style.display='none'; $('st-dup-warn').innerHTML=''; }
   if($('st-yosha-type')) $('st-yosha-type').value='日額';
   if(typeof onYoshaChange==='function') onYoshaChange();   // ★ 2026-09-22.11: 新規登録時も見出しを合わせる
   // ★ 2026-09-22.1: 業務別の給与形態をクリア
@@ -8085,6 +8108,7 @@ const _TOP_TABS = {
     { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
     { s:'acl',         label:'ログインアカウント', badge:'new' },
     { s:'uidmatch',    label:'フリート突き合わせ', badge:'new' },
+    { s:'staffmerge',  label:'台帳の統合', badge:'new' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -8167,6 +8191,7 @@ function navByS(s) {
   if (s==='pu-cust')     {} /* onValue自動更新 */
   if (s==='acl')         { _call('renderAclList'); }
   if (s==='uidmatch')    { _call('renderUidMatch'); }
+  if (s==='staffmerge')  { _call('renderStaffMerge'); }
   if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='pu-count')    _call('renderJetCmp');
   if (s==='staff')       _call('renderStaff');
@@ -16377,6 +16402,210 @@ function _calcBizPay(st, monStr, del, pu, cond){
     total+=sub;
   });
   return {total, breakdown, noAtt, modes};
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-09-22.12: 従業員台帳の統合（1人が2件に分かれている場合）
+//   残す側を軸に、消す側の設定・履歴を移し、打刻や集荷日報の社員番号も付け替える。
+//   実行前の控えを端末に保存する。
+// ════════════════════════════════════════════════════════════
+const MERGE_FIELDS = [
+  ['name','氏名'],['kana','フリガナ'],['empNo','社員番号'],['birth','生年月日'],
+  ['tel','電話'],['email','メール'],['addr','住所'],['office','メイン郵便局'],
+  ['kubun','区分'],['kyuyo','給与形態（基本情報）'],['tanka','単価'],['status','取引状態'],
+];
+function renderStaffMerge(){
+  const sel=(id)=>{
+    const el=$(id); if(!el) return;
+    const cur=el.value;
+    const list=(D.staff||[]).slice().sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+    el.innerHTML='<option value="">（選択）</option>'+list.map(s=>
+      `<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}${s.office?'（'+esc(s.office)+'）':''}</option>`).join('');
+    if(cur) el.value=cur;
+  };
+  sel('mg-keep'); sel('mg-drop');
+  _renderMergePreview();
+}
+function _mgStaff(which){
+  const id=$('mg-'+which)?.value||'';
+  return (D.staff||[]).find(s=>String(s.id)===String(id))||null;
+}
+function _mgCount(st){
+  if(!st) return {del:0,pu:0,att:0};
+  const att=(lsGet(LS_KEYS.ATT,[])||[]).filter(a=>_attIsMine(a,st)).length;
+  return {
+    del:(D.delivery||[]).filter(r=>r.staff===st.name).length,
+    pu:(D.pickup||[]).filter(r=>r.staff===st.name).length,
+    att,
+  };
+}
+function _renderMergePreview(){
+  const box=$('mg-preview'); if(!box) return;
+  const keep=_mgStaff('keep'), drop=_mgStaff('drop');
+  if(!keep||!drop){ box.innerHTML='<div class="al al-w"><span>残す台帳と、まとめて消す台帳を選んでください。</span></div>'; return; }
+  if(String(keep.id)===String(drop.id)){ box.innerHTML='<div class="al al-e"><span>同じ台帳が選ばれています。</span></div>'; return; }
+  const ck=_mgCount(keep), cd=_mgCount(drop);
+  const sameName = keep.name===drop.name;
+  let rows='';
+  MERGE_FIELDS.forEach(([k,label])=>{
+    const a=keep[k]??'', b=drop[k]??'';
+    if(a==='' && b==='') return;
+    const res = (a!=='' && a!=null) ? a : b;
+    const note = (a!==''&&b!==''&&String(a)!==String(b)) ? '<span class="xs" style="color:var(--amb2);">残す側を採用</span>'
+      : ((a===''||a==null)&&b!=='' ? '<span class="xs" style="color:var(--blu2);">消す側から補う</span>' : '');
+    rows+=`<tr><td>${label}</td><td class="xs">${esc(String(a))}</td><td class="xs">${esc(String(b))}</td><td class="xs fw7">${esc(String(res))} ${note}</td></tr>`;
+  });
+  // 業務別の設定
+  const bizRow=(biz,label)=>{
+    const a=keep.payMode?.[biz]?.type||'', b=drop.payMode?.[biz]?.type||'';
+    const ra=keep.payMode?.[biz]?.rate||'', rb=drop.payMode?.[biz]?.rate||'';
+    if(!a && !b) return '';
+    const res=a?`${a}${ra?' ¥'+ra:''}`:`${b}${rb?' ¥'+rb:''}`;
+    const note=(a&&b)?'<span class="xs" style="color:var(--amb2);">残す側を採用</span>':(!a&&b?'<span class="xs" style="color:var(--blu2);">消す側から採用</span>':'');
+    return `<tr><td>${label}の給与形態</td><td class="xs">${esc(a?a+(ra?' ¥'+ra:''):'')}</td><td class="xs">${esc(b?b+(rb?' ¥'+rb:''):'')}</td><td class="xs fw7">${esc(res)} ${note}</td></tr>`;
+  };
+  rows+=bizRow('del','宅配')+bizRow('col','集荷');
+  const deptNames=ids=>(ids||[]).map(id=>getDepartmentById(id)?.name||id).join('・');
+  const mergedDept=[...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])].map(String))];
+  rows+=`<tr><td>所属部署</td><td class="xs">${esc(deptNames(keep.deptIds))}</td><td class="xs">${esc(deptNames(drop.deptIds))}</td><td class="xs fw7">${esc(deptNames(mergedDept))} <span class="xs" style="color:var(--blu2);">両方を合わせる</span></td></tr>`;
+  const subs=[...new Set([...(keep.subOffices||[]),...(drop.subOffices||[]),...(drop.office&&drop.office!==keep.office?[drop.office]:[])])];
+  rows+=`<tr><td>担当郵便局</td><td class="xs">${esc((keep.subOffices||[]).join('・'))}</td><td class="xs">${esc((drop.subOffices||[]).join('・'))}</td><td class="xs fw7">${esc(subs.join('・'))} <span class="xs" style="color:var(--blu2);">消す側のメイン郵便局も追加</span></td></tr>`;
+  const arrs=[['advances','前払い'],['penalties','違約金'],['repairRows','修理・損害代'],['docs','書類'],['colRoutes','集荷ルート'],['payHistory','給与履歴'],['areaPrices','エリア単価']];
+  arrs.forEach(([k,label])=>{
+    const a=(keep[k]||[]).length, b=(drop[k]||[]).length;
+    if(!a && !b) return;
+    rows+=`<tr><td>${label}</td><td class="xs">${a}件</td><td class="xs">${b}件</td><td class="xs fw7">${a+b}件 <span class="xs" style="color:var(--blu2);">両方を結合</span></td></tr>`;
+  });
+  // 単価タブ
+  const fpRow=(biz,label)=>{
+    const a=Object.entries(keep.fixedPrices?.[biz]||{}).filter(([k,v])=>!String(k).startsWith('_')&&Number(v)>0).length;
+    const b=Object.entries(drop.fixedPrices?.[biz]||{}).filter(([k,v])=>!String(k).startsWith('_')&&Number(v)>0).length;
+    if(!a&&!b) return '';
+    const res=a?'残す側を採用':'消す側から採用';
+    return `<tr><td>${label}単価</td><td class="xs">${a}項目</td><td class="xs">${b}項目</td><td class="xs fw7">${a?a:b}項目 <span class="xs" style="color:${a?'var(--amb2)':'var(--blu2)'};">${res}</span></td></tr>`;
+  };
+  rows+=fpRow('del','宅配')+fpRow('col','集荷');
+  box.innerHTML=`
+    <div class="al ${sameName?'al-w':'al-e'}" style="margin-bottom:10px;">
+      <span>${sameName
+        ? '氏名が同じため、宅配日報・集荷日報は両方の台帳に同じ実績が紐づいています。統合すると、給与計算も1人分になります。'
+        : '氏名が違います（'+esc(keep.name)+' と '+esc(drop.name)+'）。統合すると、消す側の日報の氏名を残す側に揃えます。'}</span>
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th>項目</th><th>残す：${esc(keep.empNo||'')} ${esc(keep.name)}</th><th>消す：${esc(drop.empNo||'')} ${esc(drop.name)}</th><th>統合後</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="xs muted" style="margin-top:8px;">
+      日報：残す側 宅配${ck.del}件／集荷${ck.pu}件、消す側 宅配${cd.del}件／集荷${cd.pu}件${sameName?'（氏名が同じため同じ実績です）':''}<br>
+      打刻：残す側${ck.att}件、消す側${cd.att}件 → 消す側は社員番号を ${esc(keep.empNo||'')} に付け替えます
+    </div>`;
+}
+async function _mgExecute(){
+  const keep=_mgStaff('keep'), drop=_mgStaff('drop');
+  if(!keep||!drop||String(keep.id)===String(drop.id)){
+    showAlert({icon:'⚠️', title:'選択が不正', msg:'残す台帳と消す台帳を選んでください'}); return;
+  }
+  const ok=await showDialog({icon:'🔗', title:'統合の確認',
+    msg:`${drop.empNo||''} ${drop.name} を ${keep.empNo||''} ${keep.name} にまとめます。\n\n`
+       +`・消す側の設定・履歴は残す側へ移します\n・消す側の台帳は削除します\n・実行前の控えを端末に保存します\n\nこの操作は元に戻せません。`,
+    okText:'統合する', cancelText:'キャンセル'});
+  if(!ok) return;
+  // 控え
+  try{
+    localStorage.setItem('mgmt_staff_merge_backup_'+Date.now(),
+      JSON.stringify({at:new Date().toISOString(), keep, drop}));
+  }catch(e){ console.warn('[統合] 控えを保存できませんでした', e); }
+
+  const ki=D.staff.findIndex(s=>String(s.id)===String(keep.id));
+  const m={...keep};
+  // 空欄を消す側で埋める
+  MERGE_FIELDS.forEach(([k])=>{ if((m[k]===''||m[k]==null) && drop[k]!=null && drop[k]!=='') m[k]=drop[k]; });
+  // 所属部署・担当郵便局
+  m.deptIds=[...new Set([...(keep.deptIds||[]),...(drop.deptIds||[])])];
+  const subs=[...new Set([...(keep.subOffices||[]),...(drop.subOffices||[]),
+    ...((drop.office && drop.office!==keep.office)?[drop.office]:[])])].filter(Boolean);
+  m.subOffices=subs;
+  // 単価・業務別の給与形態（設定がある側を業務ごとに）
+  m.fixedPrices={...(keep.fixedPrices||{})};
+  ['del','col'].forEach(biz=>{
+    const a=keep.fixedPrices?.[biz]||{}, b=drop.fixedPrices?.[biz]||{};
+    const aHas=Object.entries(a).some(([k,v])=>!String(k).startsWith('_')&&Number(v)>0);
+    m.fixedPrices[biz]= aHas ? a : (Object.keys(b).length ? b : a);
+  });
+  m.payMode={...(keep.payMode||{})};
+  ['del','col'].forEach(biz=>{
+    const a=keep.payMode?.[biz], b=drop.payMode?.[biz];
+    m.payMode[biz]= (a && a.type) ? a : (b || a || {});
+  });
+  // 配列は結合
+  [['advances'],['penalties'],['repairRows'],['docs'],['colRoutes'],['payHistory'],['areaPrices']].forEach(([k])=>{
+    const a=keep[k]||[], b=drop[k]||[];
+    if(a.length||b.length) m[k]=[...a,...b];
+  });
+  // 保証・手当は残す側を優先
+  if(!m.hoshoB && drop.hoshoB) m.hoshoB=drop.hoshoB;
+  if(!m.hoshoC && drop.hoshoC) m.hoshoC=drop.hoshoC;
+  if(!m.uid && drop.uid) m.uid=drop.uid;
+  m.note=[keep.note,drop.note].filter(Boolean).join(' / ');
+  m.mergedFrom=[...(keep.mergedFrom||[]), {empNo:drop.empNo||'', name:drop.name, at:new Date().toISOString()}];
+  if(ki>=0) D.staff[ki]=m;
+
+  // 氏名が違う場合は日報の氏名を揃える
+  if(drop.name!==m.name){
+    (D.delivery||[]).forEach(r=>{ if(r.staff===drop.name) r.staff=m.name; });
+    (D.pickup||[]).forEach(r=>{ if(r.staff===drop.name) r.staff=m.name; });
+  }
+  // 打刻の社員番号を付け替え
+  const att=lsGet(LS_KEYS.ATT,[])||[];
+  att.forEach(a=>{
+    if(!a) return;
+    const isDrop=(a.driverName===drop.name && String(a.driverId)===String(drop.empNo||''))
+      || (drop.empNo && String(a.driverId)===String(drop.empNo))
+      || String(a.driverId)===String(drop.id);
+    if(isDrop){ a.driverId=String(m.empNo||m.id||''); a.driverName=m.name; }
+  });
+  lsSet(LS_KEYS.ATT, att);
+  // 集荷日報の driver を付け替え
+  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  colLogs.forEach(l=>{
+    if(!l || !l.driver) return;
+    if(String(l.driver.id)===String(drop.empNo||'') || l.driver.name===drop.name){
+      l.driver={...l.driver, id:String(m.empNo||m.id||''), name:m.name};
+    }
+  });
+  lsSet(LS_KEYS.COL, colLogs);
+  // 台帳から削除
+  D.staff=D.staff.filter(s=>String(s.id)!==String(drop.id));
+  try{
+    if(typeof fbSet==='function'){
+      await fbSet('staff_full', D.staff);
+      await fbSet('att_logs', att);
+      await fbSet('col_logs', colLogs);
+      await fbSet('delivery', D.delivery);
+      await fbSet('pickup', D.pickup);
+    }
+    if(typeof syncDriversToFirebase==='function') syncDriversToFirebase();
+  }catch(e){ console.error('[統合]', e); alert('保存に失敗しました。通信状態を確認してください。'); return; }
+  if($('mg-drop')) $('mg-drop').value='';
+  renderStaffMerge();
+  renderStaff && renderStaff(); renderSalary && renderSalary(); renderDash && renderDash();
+  _showSaveToast(`${drop.empNo||''} ${drop.name} を ${m.empNo||''} ${m.name} にまとめました`);
+}
+// 新規登録時の重複警告（氏名＋生年月日）
+function _checkStaffDuplicate(){
+  const editId=$('m-staff')?._editId||null;
+  const name=($('st-name')?.value||'').trim();
+  const birth=($('st-birth')?.value||'').trim();
+  const box=$('st-dup-warn'); if(!box) return;
+  if(!name){ box.style.display='none'; box.innerHTML=''; return; }
+  const hits=(D.staff||[]).filter(s=>String(s.id)!==String(editId)
+    && s.name.replace(/[\s　]/g,'')===name.replace(/[\s　]/g,'')
+    && (!birth || !s.birth || s.birth===birth));
+  if(!hits.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='';
+  box.innerHTML=`<div class="al al-w"><span>同じ氏名${birth?'・生年月日':''}の台帳がすでにあります：`
+    + hits.map(s=>`${esc(s.empNo||'')} ${esc(s.name)}${s.office?'（'+esc(s.office)+'）':''}`).join('、')
+    + `。二重登録になっていないか確認してください（まとめる場合は 管理＞台帳の統合）。</span></div>`;
 }
 
 // ─── 従事員 ───
