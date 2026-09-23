@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.18</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.19</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5048,7 +5048,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.18';
+const APP_VER = '2026-09-22.19';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7015,6 +7015,9 @@ function setupRealtimeSync() {
   });
   subscribeNode('nikki/drivers', snap => {
     if (!snap.exists()) return;
+    // ★ 2026-09-22.19: 日報アプリへ渡す「時間単価の業務（hourlyBiz）」が古いデータに無い場合は、
+    //   1度だけ全員分を作り直して送る（台帳を保存しなくても打刻に業務が付くように）
+    setTimeout(()=>{ try{ _ensureDriverBizInfo(); }catch(e){ console.warn('[hourlyBiz同期]', e); } }, 1500);
     if(window._fbWritingGuard && window._fbWritingGuard['drivers']){
       console.log('[fb listener] drivers: 自己書込中のためスキップ');
       return;
@@ -36815,6 +36818,22 @@ async function resetStaffPin(){
 //   全社員分再構築して fbSet('drivers', ...) で保存する。
 //   _buildFbDriverEntry が initialPinHash/pinHash を含むようになったため、
 //   これで日報アプリ側にPINが確実に届く。
+// ★ 2026-09-22.19: nikki/drivers に hourlyBiz が無ければ1度だけ作り直して送る
+let _bizInfoSynced = false;
+function _ensureDriverBizInfo(){
+  if(_bizInfoSynced) return;
+  const cur = lsGet(LS_KEYS.DRIVERS, []) || [];
+  const list = Array.isArray(cur) ? cur : Object.values(cur||{});
+  if(!list.length || !(D.staff||[]).length) return;
+  const need = list.some(d => d && !Array.isArray(d.hourlyBiz));
+  if(!need){ _bizInfoSynced = true; return; }
+  _bizInfoSynced = true;
+  const fbDrivers = D.staff.filter(s=>s.status!=='終了').map(s=>_buildFbDriverEntry(s));
+  if(typeof fbSet==='function') fbSet('drivers', _mergeKeepUnknownDrivers(fbDrivers));
+  lsSet(LS_KEYS.DRIVERS, fbDrivers);
+  console.log('[hourlyBiz同期] nikki/drivers を更新しました', fbDrivers.length);
+}
+
 function _syncPinToDriversNode(staffRec, hash, mode){
   try{
     // 念のため対象staffの最新値が D.staff に反映されていることを保証
