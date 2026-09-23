@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.9</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.10</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5025,7 +5025,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.9';
+const APP_VER = '2026-09-22.10';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12476,23 +12476,26 @@ function openPuBulk(opt){
   openM('m-pu-bulk');
   const today = new Date().toISOString().slice(0,10);
   if($('pub-date')) $('pub-date').value = o.date || today;
-  // 営業所
+  // ★ 2026-09-22.10: 営業所は「拠点・部署管理で集荷にチェックのある拠点」だけ（現状は堺営業所）
+  const colDept = (typeof getDepartmentByType==='function') ? getDepartmentByType('col') : null;
   const offSel = $('pub-off');
   if(offSel){
-    const names = (D.locations||[]).filter(l=>l.active!==false).map(l=>l.name);
-    (D.offices||[]).forEach(x=>{ if(x.name && !names.includes(x.name)) names.push(x.name); });
-    offSel.innerHTML = '<option value="">（未設定）</option>' + [...new Set(names)].sort()
-      .map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    if(o.office) offSel.value = o.office;
+    let locs = colDept ? getActiveLocations(colDept.id) : [];
+    if(!locs.length) locs = (typeof getLocationsByType==='function') ? getLocationsByType(LOC_TYPES.COL_OFFICE) : [];
+    offSel.innerHTML = locs.map(l=>`<option value="${esc(l.name)}">${esc(l.name)}</option>`).join('')
+      || '<option value="">（集荷の拠点が未設定）</option>';
+    // 候補が1つなら自動で決まる。指定があればそれを優先
+    if(o.office && locs.some(l=>l.name===o.office)) offSel.value=o.office;
   }
-  // 従事員
+  // ★ 2026-09-22.10: 従事員は台帳で集荷業務にチェックのある人だけ
   const stSel = $('pub-staff');
   if(stSel){
     const list = (D.staff||[]).filter(s=>s.status!=='終了')
+      .filter(s=>(typeof _staffBizOf==='function' ? _staffBizOf(s) : ['col']).includes('col'))
       .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
     stSel.innerHTML = '<option value="">（選択）</option>' +
       list.map(s=>`<option value="${esc(s.name)}">${esc(s.empNo||'')} ${esc(s.name)}</option>`).join('');
-    if(o.staff) stSel.value = o.staff;
+    if(o.staff && list.some(s=>s.name===o.staff)) stSel.value = o.staff;
   }
   renderPuBulk();
 }
@@ -34260,7 +34263,16 @@ function _comboKey(e, ddId, fallback){
 function filterDdOff(input){
   const q=(input.value||'').trim();
   const qH=toHankaku(q);
-  const items=D.offices.map(o=>{
+  // ★ 2026-09-22.10: 宅配は「拠点・部署管理で宅配にチェックのある拠点」だけを出す（堺営業所などの集荷拠点は出さない）
+  const _delDept=(typeof getDepartmentByType==='function') ? getDepartmentByType('del') : null;
+  const _okOff = o => {
+    if(!_delDept) return true;
+    const loc=(typeof getLocationByName==='function') ? getLocationByName(o.name) : null;
+    if(!loc) return true;                       // 拠点マスタに無い郵便局はそのまま出す
+    const ids=(loc.deptIds||[]).map(String);
+    return !ids.length || ids.includes(String(_delDept.id));
+  };
+  const items=D.offices.filter(_okOff).map(o=>{
     const dispNo=dispCode(o.officeCode||'');
     const match=!q||matchQuery(dispNo,q)||matchQuery(o.name,q)||matchQuery(o.officeCode||'',q);
     return match?{
