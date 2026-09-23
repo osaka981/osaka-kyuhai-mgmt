@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.7</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.8</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4987,7 +4987,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.7';
+const APP_VER = '2026-09-22.8';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6308,6 +6308,50 @@ function _mergeOwnerCompanyDrivers(){
   }catch(e){ console.warn('_mergeOwnerCompanyDrivers failed', e); }
 }
 
+// ★ 2026-09-22.8: 集荷日報（col_logs）の rows を顧客ごとに分ける。
+//   key は顧客ID（無ければ出現順の g0,g1…）。顧客情報の無い行は先頭の顧客に付ける。
+function _splitColRowsByCustomer(rows){
+  const groups = []; const byKey = {};
+  const orphan = [];
+  (rows||[]).forEach(row => {
+    if(!row) return;
+    const cid = row.customerId ? String(row.customerId) : '';
+    const nm  = String(row.customerName||'').trim();
+    if(!cid && !nm){ orphan.push(row); return; }
+    let key = cid ? 'c'+cid : null;
+    if(!key){
+      // 名前だけの行は、同じ名前の既存グループへ
+      const hit = groups.find(g => g.name === nm);
+      key = hit ? hit.key : 'g'+groups.length;
+    }
+    if(!byKey[key]){ byKey[key] = {key, name:nm, rows:[]}; groups.push(byKey[key]); }
+    byKey[key].rows.push(row);
+  });
+  if(orphan.length){
+    if(groups.length) groups[0].rows.push(...orphan);
+    else groups.push({key:'g0', name:'', rows:orphan});
+  }
+  return groups;
+}
+// 集荷日報1件を col_logs から取り除く。分割された1件なら、元の提出からその顧客の行だけを消す
+function _colLogsRemovePickup(colLogs, rec){
+  if(!rec) return colLogs;
+  if(rec._logId != null){
+    const i = colLogs.findIndex(l => String(l.id) === String(rec._logId));
+    if(i >= 0){
+      const g = _splitColRowsByCustomer(colLogs[i].rows||[]).find(g => g.key === rec._custKey);
+      if(g){
+        colLogs[i].rows = (colLogs[i].rows||[]).filter(row => !g.rows.includes(row));
+        if(!colLogs[i].rows.length) colLogs.splice(i,1);
+      }
+    }
+    return colLogs;
+  }
+  const i = colLogs.findIndex(l => String(l.id) === String(rec.id));
+  if(i >= 0) colLogs.splice(i,1);
+  return colLogs;
+}
+
 function applyFirebaseData() {
   // ① 全フィールド版を優先(staff_full)
   const fbStaffFull = lsGet('nikki_staff_full', null);
@@ -6689,8 +6733,10 @@ function applyFirebaseData() {
       }
     });
 
-    const fbPu = colLogs.map(r => {
-      const rows = r.rows || [];
+    // ★ 2026-09-22.8: 日報アプリの1回の提出に複数の顧客がある場合、顧客ごとに1件へ分ける。
+    //   従来は全顧客の数量が先頭の顧客にまとめて計上されていた（請求・支払の両方に影響）。
+    //   1社だけの提出は従来どおり（id も変えない）。
+    const _conv = (r, rows, pid) => {
       // rows[] → items{} に変換(品目別数量を合算)
       const items = {};
       rows.forEach(row => {
@@ -6734,12 +6780,12 @@ function applyFirebaseData() {
       }
 
       // 既存の金額情報を引き継ぐ(col_logsに保存された金額を優先)
-      const existingCharge = existingChargeMap.get(String(r.id));
+      const existingCharge = existingChargeMap.get(String(pid));
       const rowAmount = charterRow?.amount || 0;
       const rowAmtSetAt = charterRow?.amountSetAt || '';
 
       return {
-        id: r.id,
+        id: pid,
         date: r.date,
         office: r.driver?.office || '',
         staff:  r.driver?.name || '',
@@ -6772,9 +6818,26 @@ function applyFirebaseData() {
         note: r.note || '',
         _fromApp: true,
       };
+    };
+    const fbPu = [];
+    const splitLogIds = new Set();
+    colLogs.forEach(r => {
+      const allRows = r.rows || [];
+      const groups = _splitColRowsByCustomer(allRows);
+      if(groups.length <= 1){ fbPu.push(_conv(r, allRows, r.id)); return; }
+      splitLogIds.add(String(r.id));
+      groups.forEach(g => {
+        const rec = _conv(r, g.rows, `${r.id}__${g.key}`);
+        rec._logId = r.id; rec._custKey = g.key;
+        // 備考は先頭の顧客にだけ付ける（全顧客に同じ備考が並ばないように）
+        if(g !== groups[0]) rec.note = '';
+        fbPu.push(rec);
+      });
     });
     const fbIds = new Set(fbPu.map(r => String(r.id)));
-    D.pickup = [...D.pickup.filter(r => !fbIds.has(String(r.id))), ...fbPu];
+    // 分割前の1件（id が提出のid）が D.pickup に残っていると二重計上になるので除く
+    //   分けた1件（_logId あり）は毎回 col_logs から作り直すので、古いものは必ず捨てる
+    D.pickup = [...D.pickup.filter(r => r._logId == null && !fbIds.has(String(r.id)) && !splitLogIds.has(String(r.id))), ...fbPu];
   }
 
   // ★ 2026/09/01: バーコード計数(nikki/jet_scan) → D.pickup へ合流
@@ -9211,7 +9274,9 @@ function updOffSels() {
     [...names].sort().forEach(name=>{
       el.innerHTML += `<option value="${name}">${name}</option>`;
     });
-    if(_prevVal && [...el.options].some(o=>o.value===_prevVal)) el.value = _prevVal;
+    // ★ 2026-09-22.8: pu-off / dd-off は隠し入力（コンボ）で options を持たない。select のときだけ戻す
+    //   （2026-09-22.2 の修正で、集荷日報で営業所を選んだ後に開き直すとエラーで止まっていた）
+    if(el.options && _prevVal && [...el.options].some(o=>o.value===_prevVal)) el.value = _prevVal;
   });
   // 集荷モーダルの顧客セレクト
   const pc = $('pu-cust');
@@ -11404,7 +11469,7 @@ function renderPU() {
       ${cells}
       <td class="tr fw7">${fmt(tot)}</td>
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
-      <td>${r._fromJet?'<span class="xs muted">計数</span>':`<button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button>`}</td>
+      <td>${r._fromJet?'<span class="xs muted">計数</span>':`<button class="btn b-gh btn-sm" onclick="editPU('${r.id}')">編集</button>`}</td>
     </tr>`;
   });
   $('tb-pu').innerHTML=h||`<tr><td colspan="${5+visKeys.length+3}" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
@@ -12386,15 +12451,30 @@ function savePU(){
     penalties:collectPenaltyRows('pu-penalty-rows'),
     gasRows:collectGasRows('pu-gas-rows'),
   };
+  // ★ 2026-09-22.8: 日報アプリの複数顧客の提出から分けた1件を編集した場合は、
+  //   元の提出からこの顧客の分だけを切り出し、独立した1件として保存し直す（他の顧客の分は残す）
+  const colLogs = lsGet(LS_KEYS.COL, []) || [];
+  let _extraRows = [];
   if (editingId) {
-    const idx = D.pickup.findIndex(x => x.id === editingId);
+    const _orig = D.pickup.find(x => String(x.id) === String(editingId));
+    if (_orig && _orig._logId != null) {
+      const li = colLogs.findIndex(l => String(l.id) === String(_orig._logId));
+      if (li >= 0) {
+        const g = _splitColRowsByCustomer(colLogs[li].rows||[]).find(g => g.key === _orig._custKey);
+        if (g) _extraRows = g.rows.filter(row => ['route','route_rest','チャーター'].includes(row.masterKey));
+      }
+      _colLogsRemovePickup(colLogs, _orig);
+      newRec.id = Date.now()*1000 + Math.floor(Math.random()*1000);
+    }
+  }
+  if (editingId) {
+    const idx = D.pickup.findIndex(x => String(x.id) === String(editingId));
     if (idx >= 0) D.pickup[idx] = newRec; else D.pickup.push(newRec);
     const mPu = document.getElementById('m-pu'); if (mPu) mPu._editId = null;
   } else {
     D.pickup.push(newRec);
   }
   // ── localStorage + Firebase に保存 ──
-  const colLogs = lsGet(LS_KEYS.COL, []) || [];
   const rows = Object.entries(items).map(([masterKey, qty]) => ({
     customerId: newRec.customerId,
     customerName: newRec.customerName,
@@ -12409,7 +12489,7 @@ function savePU(){
       const st=(D.staff||[]).find(x=>x && x.name===newRec.staff);
       return { id:String(st?.empNo || st?.id || ''), name:newRec.staff, office:newRec.office };
     })(),
-    date: newRec.date, rows,
+    date: newRec.date, rows: rows.concat(_extraRows),
     note: newRec.note || '',
     submittedAt: new Date().toISOString(),
   };
@@ -12472,7 +12552,8 @@ function editPU(id){
   if($('pu-gas-rows'))$('pu-gas-rows').innerHTML='';
   updPUPrev();
   // 編集IDをセット
-  const mPu=document.getElementById('m-pu');if(mPu)mPu._editId=id;
+  const mPu=document.getElementById('m-pu');if(mPu)mPu._editId=r.id;   // ★ 2026-09-22.8: 実際のidを保持（呼び出し側が文字列でも一致させる）
+  window._puEditOpening=true;   // ★ 2026-09-22.8: openM で初期化させない
   openM('m-pu');
 }
 
@@ -17415,7 +17496,7 @@ function showPUCustDetail(custName){
     <td>${staffLink(r.staff||'−')}</td><td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr mono fw7">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
-    <td><button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button></td>
+    <td><button class="btn b-gh btn-sm" onclick="editPU('${r.id}')">編集</button></td>
   </tr>`).join('');
   const detailEl=$('rpt-pu-cust-detail');
   if(detailEl){ detailEl.style.display=''; detailEl.scrollIntoView({behavior:'smooth',block:'nearest'}); }
@@ -17435,7 +17516,7 @@ function showPUStaffDetail(staffName){
     <td>${custLink(r.customerName||'−')}</td><td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr mono fw7">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
-    <td><button class="btn b-gh btn-sm" onclick="editPU(${r.id})">編集</button></td>
+    <td><button class="btn b-gh btn-sm" onclick="editPU('${r.id}')">編集</button></td>
   </tr>`).join('');
   switchPURptTab('cust');
   const detailEl=$('rpt-pu-cust-detail');
@@ -17724,7 +17805,7 @@ function showPUCustDetail(custName){
     <td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr" style="font-weight:700">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
-    <td style="text-align:center"><button onclick="editPU(${r.id});closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
+    <td style="text-align:center"><button onclick="editPU('${r.id}');closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
   </tr>`).join('');
 
   const bodyHtml=`
@@ -17782,7 +17863,7 @@ function showPUStaffDetail(staffName){
     <td class="xs muted">${officeLink(r.office||'−')}</td>
     <td class="tr" style="font-weight:700">${fmt(Object.values(r.items||{}).reduce((s,v)=>s+v,0))}</td>
     <td class="xs">${r.note||'−'}</td>
-    <td style="text-align:center"><button onclick="editPU(${r.id});closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
+    <td style="text-align:center"><button onclick="editPU('${r.id}');closeReportDetail();" style="border:1px solid #ddd;background:#fff;padding:1px 6px;border-radius:3px;cursor:pointer;font-size:7pt">編集</button></td>
   </tr>`).join('');
 
   const bodyHtml=`
@@ -18005,7 +18086,7 @@ function scanDuplicates(){
             : (isOther
                 ? '<span class="bdg" style="background:rgba(230,126,34,.15);color:var(--amb2);">別便? 要確認</span>'
                 : '<span class="bdg bg">保持</span>')}</td>
-          <td>${(isDup||isOther)?`<button class="btn b-red btn-sm" onclick="deleteSingle('pu',${r.id})">🗑</button>`:''}</td>
+          <td>${(isDup||isOther)?`<button class="btn b-red btn-sm" onclick="deleteSingle('pu','${r.id}')">🗑</button>`:''}</td>
         </tr>`;
       });
       rows += `<tr><td colspan="7" style="height:3px;background:var(--bg3)"></td></tr>`;
@@ -18039,8 +18120,10 @@ function deleteSingle(type, id){
       lsSet(LS_KEYS.YP, ypLogs);
       if(typeof fbSet==='function'){ fbSet('delivery', D.delivery); fbSet('yp_logs', ypLogs); }
     } else {
+      // ★ 2026-09-22.8: 分けた1件なら元の提出からその顧客の分だけ消す
+      const _rec = (D.pickup||[]).find(r=>String(r.id)===String(id));
       removeOne(D.pickup);
-      const colLogs = removeOne(lsGet(LS_KEYS.COL,[])||[]);
+      const colLogs = _colLogsRemovePickup(lsGet(LS_KEYS.COL,[])||[], _rec || {id});
       lsSet(LS_KEYS.COL, colLogs);
       if(typeof fbSet==='function'){ fbSet('pickup', D.pickup); fbSet('col_logs', colLogs); }
     }
@@ -18067,8 +18150,11 @@ function deleteCheckedDup(type){
       if(typeof fbSet==='function'){ fbSet('delivery', D.delivery); fbSet('yp_logs', ypLogs); }
       renderDel && renderDel(); renderDash && renderDash();
     } else {
+      // ★ 2026-09-22.8: 分けた1件は元の提出からその顧客の分だけ消す
+      const _recs = D.pickup.filter(r=>ids.has(String(r.id)));
       D.pickup = D.pickup.filter(r=>!ids.has(String(r.id)));
-      const colLogs = (lsGet(LS_KEYS.COL,[])||[]).filter(r=>!ids.has(String(r.id)));
+      let colLogs = lsGet(LS_KEYS.COL,[])||[];
+      _recs.forEach(rec=>{ colLogs = _colLogsRemovePickup(colLogs, rec); });
       lsSet(LS_KEYS.COL, colLogs);
       if(typeof fbSet==='function'){ fbSet('pickup', D.pickup); fbSet('col_logs', colLogs); }
       renderPU && renderPU(); renderDash && renderDash();
@@ -27679,9 +27765,9 @@ function renderStaffDaily(el, name){
           <td>${custLink(r.customerName)}</td><td class="xs muted">${r.region||''}</td>
           <td class="tr fw7">${tot}</td>
           <td style="white-space:nowrap;">
-            <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editPU(${r.id})">編集</button>
+            <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editPU('${r.id}')">編集</button>
             <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
-              onclick="deleteSingle('pu',${r.id})" title="この日報を削除">削除</button>
+              onclick="deleteSingle('pu','${r.id}')" title="この日報を削除">削除</button>
           </td>
         </tr>`;
       });
@@ -32024,7 +32110,7 @@ function renderCustDocs(el, name){
         <td class="tr">
           <input type="number" id="ch-amt-${r.id}" class="fi" value="${amt||''}" placeholder="0" style="width:130px;text-align:right;font-family:monospace;${!isSet?'background:rgba(192,57,43,.08);border-color:var(--red2);':''}">
         </td>
-        <td><button class="btn b-grn btn-sm" onclick="saveCharterAmount(${r.id})">保存</button></td>
+        <td><button class="btn b-grn btn-sm" onclick="saveCharterAmount('${r.id}')">保存</button></td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -32051,7 +32137,7 @@ function renderCustDocs(el, name){
 
 // チャーター金額保存
 function saveCharterAmount(pickupId){
-  const rec = (D.pickup||[]).find(r=>r.id===pickupId);
+  const rec = (D.pickup||[]).find(r=>String(r.id)===String(pickupId));
   if(!rec || !rec.charter){ showAlert({msg:'データが見つかりません'}); return; }
   const inputEl = document.getElementById(`ch-amt-${pickupId}`);
   if(!inputEl) return;
@@ -32067,9 +32153,13 @@ function saveCharterAmount(pickupId){
   // col_logsも更新(再マージ対策)
   try{
     const colLogs = lsGet(LS_KEYS.COL, []) || [];
-    const log = colLogs.find(l=>String(l.id)===String(pickupId));
+    // ★ 2026-09-22.8: 分けた1件は元の提出の、その顧客の行から探す
+    const log = colLogs.find(l=>String(l.id)===String(rec._logId!=null ? rec._logId : pickupId));
     if(log){
-      const charterRow = (log.rows||[]).find(row=>row.masterKey==='チャーター');
+      const _rows = rec._logId!=null
+        ? ((_splitColRowsByCustomer(log.rows||[]).find(g=>g.key===rec._custKey)||{}).rows||[])
+        : (log.rows||[]);
+      const charterRow = _rows.find(row=>row.masterKey==='チャーター');
       if(charterRow){
         charterRow.amount = amt;
         charterRow.amountSetAt = rec.charter.amountSetAt;
@@ -35665,7 +35755,14 @@ function openM(id){
       try{ valDel(); calcDelAmt(); }catch(e){}
     }
   }
-  if(id==='m-pu'){
+  // ★ 2026-09-22.8: 編集（editPU）から開いたときは初期化しない。
+  //   従来は無条件に初期化していたため、日報一覧の「編集」で開くと顧客・営業所・従事員・日付が
+  //   空になり、保存できなかった（または別の日付で保存されうる）。
+  //   新規で開くときは前回の編集IDを必ず消す（取り消した編集の上書き防止）。
+  if(id==='m-pu' && window._puEditOpening){
+    window._puEditOpening=false;
+  } else if(id==='m-pu'){
+    { const _m=document.getElementById('m-pu'); if(_m) _m._editId=null; }
     updOffSels();
     if($('pu-off-input'))$('pu-off-input').value='';
     if($('pu-staff-input'))$('pu-staff-input').value='';
