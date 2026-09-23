@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.21</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.23</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2983,7 +2983,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <span class="xs muted" style="font-size:9px;">番号・名前で検索</span>
       </label>
       <!-- ★ 2026-09-22.21: 担当の郵便局から選ぶリスト。検索欄は「その他」を選んだときだけ出す -->
-      <select id="dd-off-sel" class="fi" style="display:none;font-size:12px;padding:6px 8px;" onchange="onDdOffSelChange()"></select>
       <div id="dd-off-combo" style="position:relative;">
         <input type="text" id="dd-off-input" class="fi" placeholder="1・１・大阪北..."
           oninput="filterDdOff(this)" onfocus="filterDdOff(this)" onblur="hideDdDropdown('dd-off-dd',200)"
@@ -2992,6 +2991,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div id="dd-off-dd" class="combo-dd" style="display:none;"></div>
         <input type="hidden" id="dd-off">
       </div>
+      <!-- ★ 2026-09-22.23: 担当の郵便局から選び直すリスト（検索欄は常に使えるまま） -->
+      <select id="dd-off-sel" class="fi" style="display:none;width:100%;box-sizing:border-box;margin-top:4px;font-size:11.5px;padding:5px 8px;" onchange="onDdOffSelChange()"></select>
     </div>
 
     <!-- 郵便局：非表示フィールド（内部管理のみ） -->
@@ -5056,7 +5057,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.21';
+const APP_VER = '2026-09-22.23';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -34852,26 +34853,15 @@ function _ddFillOffList(staffName){
   if(cur && !offs.includes(cur)) offs.unshift(cur);
   if(!offs.length){
     sel.style.display='none'; sel.innerHTML='';
-    if(combo) combo.style.display='';
     return;
   }
-  sel.innerHTML = offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')
-    + '<option value="__other__">その他（検索して選ぶ）</option>';
-  sel.value = cur && offs.includes(cur) ? cur : offs[0];
-  sel.style.display='';
-  if(combo) combo.style.display='none';
-  if(!cur) onDdOffSelChange();
+  sel.innerHTML = '<option value="">担当の郵便局から選ぶ…</option>'
+    + offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  sel.value = cur && offs.includes(cur) ? cur : '';
+  sel.style.display='block';
 }
 function onDdOffSelChange(){
   const v=$('dd-off-sel')?.value||'';
-  const combo=$('dd-off-combo');
-  if(v==='__other__'){
-    if(combo) combo.style.display='';
-    const el=$('dd-off-input'); if(el){ el.value=''; el.focus(); }
-    if($('dd-off')) $('dd-off').value='';
-    return;
-  }
-  if(combo) combo.style.display='none';
   if(!v) return;
   if($('dd-off')) $('dd-off').value=v;
   const offData=(D.offices||[]).find(o=>o.name===v);
