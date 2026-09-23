@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.12</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.14</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1631,9 +1631,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div class="card" style="margin-bottom:12px;">
         <div class="f2 mb8">
-          <div class="fg"><label>残す台帳</label><select id="mg-keep" class="fi" onchange="_renderMergePreview()"></select></div>
+          <div class="fg"><label>残す台帳</label><select id="mg-keep" class="fi" onchange="_mgOnKeepChange()"></select></div>
           <div class="fg"><label>まとめて消す台帳</label><select id="mg-drop" class="fi" onchange="_renderMergePreview()"></select></div>
         </div>
+        <div id="mg-note" style="margin-bottom:8px;"></div>
         <div id="mg-preview"></div>
         <div style="display:flex;justify-content:flex-end;margin-top:10px;">
           <button type="button" class="btn b-red" onclick="_mgExecute()">この内容で統合する</button>
@@ -5047,7 +5048,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.12';
+const APP_VER = '2026-09-22.14';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -16415,18 +16416,38 @@ const MERGE_FIELDS = [
   ['tel','電話'],['email','メール'],['addr','住所'],['office','メイン郵便局'],
   ['kubun','区分'],['kyuyo','給与形態（基本情報）'],['tanka','単価'],['status','取引状態'],
 ];
+// ★ 2026-09-22.13: 氏名が重複している人だけを候補に出す
+const _mgKey = n => String(n||'').replace(/[\s　]/g,'');
+function _mgDupStaff(){
+  const cnt={};
+  (D.staff||[]).forEach(s=>{ const k=_mgKey(s.name); if(k) cnt[k]=(cnt[k]||0)+1; });
+  return (D.staff||[]).filter(s=>cnt[_mgKey(s.name)]>1)
+    .sort((a,b)=>_mgKey(a.name).localeCompare(_mgKey(b.name),'ja') || String(a.empNo||'').localeCompare(String(b.empNo||'')));
+}
 function renderStaffMerge(){
-  const sel=(id)=>{
-    const el=$(id); if(!el) return;
-    const cur=el.value;
-    const list=(D.staff||[]).slice().sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
-    el.innerHTML='<option value="">（選択）</option>'+list.map(s=>
-      `<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}${s.office?'（'+esc(s.office)+'）':''}</option>`).join('');
-    if(cur) el.value=cur;
-  };
-  sel('mg-keep'); sel('mg-drop');
+  const dup=_mgDupStaff();
+  const opt=s=>`<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}${s.office?'（'+esc(s.office)+'）':''}</option>`;
+  const keepEl=$('mg-keep'), dropEl=$('mg-drop');
+  const note=$('mg-note');
+  if(note) note.innerHTML = dup.length
+    ? `<span class="xs muted">氏名が重複している ${dup.length}件だけを候補に出しています。</span>`
+    : '<div class="al al-ok"><span>氏名が重複している台帳はありません。</span></div>';
+  if(keepEl){
+    const cur=keepEl.value;
+    keepEl.innerHTML='<option value="">（選択）</option>'+dup.map(opt).join('');
+    if(cur && dup.some(s=>String(s.id)===cur)) keepEl.value=cur;
+  }
+  if(dropEl){
+    const cur=dropEl.value;
+    const keep=_mgStaff('keep');
+    // 残す台帳を選んだら、同じ氏名の台帳だけを出す
+    const list=keep ? dup.filter(s=>String(s.id)!==String(keep.id) && _mgKey(s.name)===_mgKey(keep.name)) : dup;
+    dropEl.innerHTML='<option value="">（選択）</option>'+list.map(opt).join('');
+    if(cur && list.some(s=>String(s.id)===cur)) dropEl.value=cur;
+  }
   _renderMergePreview();
 }
+function _mgOnKeepChange(){ renderStaffMerge(); }
 function _mgStaff(which){
   const id=$('mg-'+which)?.value||'';
   return (D.staff||[]).find(s=>String(s.id)===String(id))||null;
@@ -16439,6 +16460,29 @@ function _mgCount(st){
     pu:(D.pickup||[]).filter(r=>r.staff===st.name).length,
     att,
   };
+}
+// ★ 2026-09-22.14: 同一人物かどうかの判定（氏名・フリガナ・生年月日・電話・住所）
+//   片方でも未入力なら「確認できず」として、どちら側が未入力かを出す。
+function _mgNorm(kind, v){
+  let t=String(v==null?'':v).trim();
+  if(!t) return '';
+  t=t.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+  if(kind==='tel') return t.replace(/[^0-9]/g,'');
+  if(kind==='addr') return t.replace(/[\s　ー−—-]/g,'');
+  return t.replace(/[\s　]/g,'');
+}
+function _mgMatchRows(keep, drop){
+  return [['name','氏名','name'],['kana','フリガナ','name'],['birth','生年月日','name'],
+          ['tel','電話番号','tel'],['addr','住所','addr']].map(([k,label,kind])=>{
+    const a=_mgNorm(kind, keep[k]), b=_mgNorm(kind, drop[k]);
+    let st, msg;
+    if(!a && !b){ st='unknown'; msg='両方とも未入力のため確認できません'; }
+    else if(!a){ st='unknown'; msg='残す側が未入力（消す側：'+esc(String(drop[k]))+'）'; }
+    else if(!b){ st='unknown'; msg='消す側が未入力（残す側：'+esc(String(keep[k]))+'）'; }
+    else if(a===b){ st='ok'; msg='一致'; }
+    else { st='ng'; msg='一致しません'; }
+    return {k,label,st,msg,a:keep[k]||'',b:drop[k]||''};
+  });
 }
 function _renderMergePreview(){
   const box=$('mg-preview'); if(!box) return;
@@ -16486,7 +16530,23 @@ function _renderMergePreview(){
     return `<tr><td>${label}単価</td><td class="xs">${a}項目</td><td class="xs">${b}項目</td><td class="xs fw7">${a?a:b}項目 <span class="xs" style="color:${a?'var(--amb2)':'var(--blu2)'};">${res}</span></td></tr>`;
   };
   rows+=fpRow('del','宅配')+fpRow('col','集荷');
-  box.innerHTML=`
+  // 同一人物かの判定
+  const mrows=_mgMatchRows(keep,drop);
+  const okN=mrows.filter(r=>r.st==='ok').length, ngN=mrows.filter(r=>r.st==='ng').length, unN=mrows.filter(r=>r.st==='unknown').length;
+  const bdg={ok:'<span class="bdg bg">一致</span>', ng:'<span class="bdg" style="background:rgba(220,38,38,.15);color:var(--red2);">不一致</span>',
+              unknown:'<span class="bdg" style="background:rgba(230,126,34,.15);color:var(--amb2);">確認できず</span>'};
+  const matchHtml=`
+    <div class="card" style="margin-bottom:10px;padding:10px 12px;">
+      <div class="xs fw7 mb6">同一人物かの判定　一致 ${okN}／不一致 ${ngN}／確認できず ${unN}</div>
+      <div class="tw"><table><thead><tr><th>項目</th><th>残す側</th><th>消す側</th><th>判定</th></tr></thead><tbody>
+      ${mrows.map(r=>`<tr><td class="xs">${r.label}</td><td class="xs">${esc(String(r.a))||'<span class="muted">未入力</span>'}</td>
+        <td class="xs">${esc(String(r.b))||'<span class="muted">未入力</span>'}</td>
+        <td class="xs">${bdg[r.st]} <span class="muted">${r.msg}</span></td></tr>`).join('')}
+      </tbody></table></div>
+      ${ngN?'<div class="al al-e" style="margin-top:8px;"><span>一致しない項目があります。別人の可能性があるため、統合する前に台帳の内容を確認してください。</span></div>'
+           :(unN?'<div class="al al-w" style="margin-top:8px;"><span>未入力のため確認できない項目があります。同一人物であることを確かめてから統合してください。</span></div>':'')}
+    </div>`;
+  box.innerHTML=matchHtml+`
     <div class="al ${sameName?'al-w':'al-e'}" style="margin-bottom:10px;">
       <span>${sameName
         ? '氏名が同じため、宅配日報・集荷日報は両方の台帳に同じ実績が紐づいています。統合すると、給与計算も1人分になります。'
