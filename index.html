@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.29</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-24.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1489,6 +1489,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
           <input type="search" id="post-list-search" placeholder="郵便局名で検索" style="padding:5px 8px;font-size:11px;border:1px solid var(--brd);border-radius:4px;width:160px;" oninput="renderPostList()">
+          <button class="btn b-gh btn-sm" onclick="bulkGeocode('office')">位置をまとめて取得</button>
           <input type="month" id="post-list-mon" style="padding:5px 8px;font-size:11px;border:1px solid var(--brd);border-radius:4px;" onchange="renderPostList()">
         </div>
       </div>
@@ -1718,7 +1719,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <option value="name-desc">名前 降順 ▼</option>
           </select>
         </div>
-        <button class="btn b-grn btn-sm" onclick="openM('m-cust')">＋ 顧客・契約追加</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn b-gh btn-sm" onclick="bulkGeocode('cust')">位置をまとめて取得</button>
+          <button class="btn b-grn btn-sm" onclick="openM('m-cust')">＋ 顧客・契約追加</button>
+        </div>
       </div>
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>顧客・単価契約一覧</div><span id="cust-count" class="xs muted"></span></div>
@@ -1854,6 +1858,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div id="ig-summary" style="font-size:11px;color:var(--gray2);"></div>
       </div>
       <div id="ig-content"></div>
+    </div>
+
+    <!-- ══ シフト表（別アプリへの案内） ══ -->
+    <div id="s-shift" class="sec">
+      <div class="card">
+        <h2 style="margin:0 0 8px;font-size:16px;font-weight:700;">シフト表</h2>
+        <div class="xs muted" style="margin-bottom:10px;">
+          シフト表は動作を軽くするため別のアプリに分けています。従業員台帳・日報の実績・拠点マスタは同じものを見ています。
+        </div>
+        <button type="button" class="btn b-grn" onclick="openShiftApp()">シフト表を開く</button>
+      </div>
     </div>
 
     <!-- ══ 勤務時間 (2026-09-22.6) ══ -->
@@ -3371,6 +3386,28 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="fg"><label>郵便番号</label><input type="text" id="cu-zip" class="fi" placeholder="599-8247" onblur="onCuZipBlur()"></div>
     <div class="fg"><label>住所</label><input type="text" id="cu-addr" class="fi" placeholder="大阪府大阪市北区○○○"></div>
   </div>
+  <!-- ★ 2026-09-24.3: 集荷先住所（請求書の住所と違う場合に入力） -->
+  <div style="border:1px solid var(--brd);border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;cursor:pointer;">
+      <input type="checkbox" id="cu-pu-same" checked onchange="onCuPuSameChange()">
+      集荷先は上の住所と同じ
+    </label>
+    <div id="cu-pu-addr-wrap" style="display:none;margin-top:8px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;">
+        <div class="fg"><label>集荷先 郵便番号</label><input type="text" id="cu-pu-zip" class="fi" placeholder="599-8247"></div>
+        <div class="fg"><label>集荷先 住所</label><input type="text" id="cu-pu-addr" class="fi" placeholder="大阪府堺市○○○"></div>
+      </div>
+      <div class="xs muted" style="margin-top:4px;">配車・地図はこの住所を使います。空欄のままなら上の住所を使います。</div>
+    </div>
+    <!-- ★ 2026-09-24.4: 配車・地図で使う位置 -->
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+      <span class="xs fw7">位置</span>
+      <input type="text" id="cu-lat" class="fi" style="width:120px;" placeholder="緯度 34.5731">
+      <input type="text" id="cu-lng" class="fi" style="width:120px;" placeholder="経度 135.4829">
+      <button type="button" class="btn b-gh btn-sm" onclick="cuGeocode()">住所から取得</button>
+      <span id="cu-geo-hint" class="xs muted"></span>
+    </div>
+  </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
     <div class="fg"><label>代表者名</label><input type="text" id="cu-rep-name" class="fi" placeholder="山田太郎"></div>
     <div class="fg"><label>代表者役職</label><input type="text" id="cu-rep-title" class="fi" placeholder="代表取締役"></div>
@@ -4774,6 +4811,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
     <div class="fg"><label>所在地</label><input type="text" id="of-addr" class="fi" placeholder="堺市北区○○1-2-3"></div>
+    <!-- ★ 2026-09-24.4: 配車・地図で使う位置 -->
+    <div class="fg" style="grid-column:1 / -1;">
+      <label>位置（配車・地図用）</label>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="of-lat" class="fi" style="width:120px;" placeholder="緯度 34.5731">
+        <input type="text" id="of-lng" class="fi" style="width:120px;" placeholder="経度 135.4829">
+        <button type="button" class="btn b-gh btn-sm" onclick="ofGeocode()">住所から取得</button>
+        <span id="of-geo-hint" class="xs muted"></span>
+      </div>
+    </div>
     <div class="fg"><label>TEL</label><input type="tel" oninput="telField(this)" onblur="telField(this)" id="of-tel" class="fi" placeholder="06-XXXX-XXXX"></div>
     <div class="fg"><label>所長名</label><input type="text" id="of-head" class="fi"></div>
     <div class="fg"><label>FAX</label><input type="tel" oninput="telField(this)" onblur="telField(this)" id="of-fax" class="fi" placeholder="06-XXXX-XXXX"></div>
@@ -5057,7 +5104,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.29';
+const APP_VER = '2026-09-24.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5383,6 +5430,7 @@ const LS_KEYS = {
   COL:      'nikki_col_logs',
   ATT:      'nikki_att_logs',
   ATT_FIX:  'nikki_att_fix',          // ★ 2026-09-22.29: 打刻の修正依頼
+  SHIFTS:   'mgmt_shifts',            // ★ 2026-09-24.1: シフト表
   DRIVERS:  'nikki_drivers',
   CUSTOMERS:'nikki_customers',
   OFFICES:  'nikki_offices',
@@ -8093,6 +8141,7 @@ const _TOP_TABS = {
     { s:'del',        label:'日報一覧' },
     { s:'del-report', label:'日報レポート' },
     { s:'cmp',        label:'郵便局照合', badge:'diff' },
+    { s:'shift',      label:'シフト表', badge:'new' },
     { s:'post-list',  label:'郵便局一覧' },
     { s:'ts-prices',  label:'郵便局単価', badge:'ts' },
     { s:'ts-inv',     label:'郵便局請求書', badge:'ts' },
@@ -14521,6 +14570,98 @@ function updateCuPayPreview(){
 }
 
 // 顧客モーダル: 郵便番号→住所自動入力
+// ★ 2026-09-24.4: 住所 → 緯度経度（国土地理院の住所検索を使う。取れないときは手入力）
+async function geocodeAddress(addr){
+  const q=String(addr||'').trim();
+  if(!q) return null;
+  try{
+    const res=await fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q='+encodeURIComponent(q));
+    if(!res.ok) return null;
+    const list=await res.json();
+    if(!Array.isArray(list) || !list.length) return null;
+    const c=list[0]?.geometry?.coordinates;
+    if(!c || c.length<2) return null;
+    return {lat:Number(c[1]), lng:Number(c[0]), label:list[0]?.properties?.title||''};
+  }catch(e){ console.warn('[住所検索]', e); return null; }
+}
+function _setLatLng(latId, lngId, pos, hintId){
+  if(pos){
+    if($(latId)) $(latId).value=pos.lat.toFixed(6);
+    if($(lngId)) $(lngId).value=pos.lng.toFixed(6);
+    if(hintId && $(hintId)) $(hintId).textContent = `取得しました（${pos.label||''}）`;
+  } else if(hintId && $(hintId)){
+    $(hintId).textContent='住所から位置を取れませんでした。地図の座標を手で入れてください。';
+  }
+}
+// ★ 2026-09-24.5: 位置が未設定のものをまとめて取得する
+//   国土地理院の検索に負荷をかけないよう1件ずつ（0.6秒あけて）処理する
+let _bulkGeoRunning=false;
+async function bulkGeocode(kind){
+  if(_bulkGeoRunning){ showAlert({icon:'⏳', title:'処理中です', msg:'いまの取得が終わるまでお待ちください'}); return; }
+  const isCust = kind==='cust';
+  const list = isCust ? (D.customers||[]) : (D.offices||[]);
+  const targets = list.filter(x=>{
+    if(!x) return false;
+    if(Number(x.lat) && Number(x.lng)) return false;
+    const addr = isCust ? (typeof custPickupAddr==='function' ? custPickupAddr(x) : (x.addr||'')) : (x.addr||'');
+    return String(addr||'').trim() && String(addr).trim()!=='未設定';
+  });
+  if(!targets.length){
+    showAlert({icon:'✅', title:'取得の必要はありません', msg:'位置が未設定で住所のあるものはありませんでした。'});
+    return;
+  }
+  const ok = await showDialog({icon:'📍', title:'位置をまとめて取得',
+    msg:`${targets.length}件の住所から緯度経度を取得します。\n1件ずつ処理するため ${Math.ceil(targets.length*0.7)} 秒ほどかかります。`,
+    okText:'取得する', cancelText:'キャンセル'});
+  if(!ok) return;
+  _bulkGeoRunning=true;
+  let done=0, fail=0;
+  for(const x of targets){
+    const addr = isCust ? custPickupAddr(x) : (x.addr||'');
+    const pos = await geocodeAddress(addr);
+    if(pos){ x.lat=Number(pos.lat.toFixed(6)); x.lng=Number(pos.lng.toFixed(6)); done++; }
+    else fail++;
+    if(typeof _showSaveToast==='function' && (done+fail)%10===0) _showSaveToast(`位置を取得中… ${done+fail}/${targets.length}`);
+    await new Promise(r=>setTimeout(r, 600));
+  }
+  _bulkGeoRunning=false;
+  try{
+    if(typeof fbSet==='function') await fbSet(isCust?'customers':'offices', isCust?D.customers:D.offices);
+  }catch(e){ console.error('[位置の保存]', e); }
+  if(isCust && typeof renderCustTbl==='function') renderCustTbl();
+  if(!isCust && typeof renderPostList==='function') renderPostList();
+  showAlert({icon:'📍', title:'取得が終わりました',
+    msg:`取得できた ${done}件${fail?`\n取得できなかった ${fail}件（住所を確認して、個別に手入力してください）`:''}`});
+}
+
+// 郵便局（営業所）の位置を住所から取る
+async function ofGeocode(){
+  const hint=$('of-geo-hint'); if(hint) hint.textContent='検索中…';
+  const pos=await geocodeAddress($('of-addr')?.value||'');
+  _setLatLng('of-lat','of-lng',pos,'of-geo-hint');
+}
+// 顧客（集荷先）の位置を住所から取る
+async function cuGeocode(){
+  const hint=$('cu-geo-hint'); if(hint) hint.textContent='検索中…';
+  const same=$('cu-pu-same')?.checked;
+  const addr = (!same && $('cu-pu-addr')?.value.trim()) ? $('cu-pu-addr').value.trim() : ($('cu-addr')?.value||'');
+  const pos=await geocodeAddress(addr);
+  _setLatLng('cu-lat','cu-lng',pos,'cu-geo-hint');
+}
+
+// ★ 2026-09-24.3: 集荷先住所の表示切替
+function onCuPuSameChange(){
+  const same=$('cu-pu-same')?.checked;
+  const wrap=$('cu-pu-addr-wrap');
+  if(wrap) wrap.style.display = same ? 'none' : 'block';
+}
+// 配車・地図で使う住所（集荷先があればそちら）
+function custPickupAddr(c){
+  if(!c) return '';
+  if(c.puSameAsAddr===false && String(c.puAddr||'').trim()) return String(c.puAddr).trim();
+  return String(c.addr||'').trim();
+}
+
 async function onCuZipBlur(){
   const zip=($('cu-zip')?.value||'').replace(/[^\d]/g,'');
   if(zip.length!==7) return;
@@ -14678,6 +14819,12 @@ async function saveCust(){
     // 顧客詳細
     zip:$('cu-zip')?.value.trim()||'',
     addr:$('cu-addr')?.value.trim()||'',
+    // ★ 2026-09-24.3: 集荷先住所
+    puSameAsAddr: $('cu-pu-same') ? !!$('cu-pu-same').checked : true,
+    puZip: $('cu-pu-zip')?.value.trim()||'',
+    puAddr: $('cu-pu-addr')?.value.trim()||'',
+    lat: Number($('cu-lat')?.value)||null,
+    lng: Number($('cu-lng')?.value)||null,
     repName:$('cu-rep-name')?.value.trim()||'',
     repTitle:$('cu-rep-title')?.value.trim()||'',
     dept:$('cu-dept')?.value.trim()||'',
@@ -16164,6 +16311,14 @@ function editCust(id){
   // 顧客詳細復元
   if($('cu-zip'))$('cu-zip').value=c.zip||'';
   if($('cu-addr'))$('cu-addr').value=c.addr||'';
+  // ★ 2026-09-24.3: 集荷先住所
+  if($('cu-pu-same')) $('cu-pu-same').checked = (c.puSameAsAddr!==false);
+  if($('cu-pu-zip')) $('cu-pu-zip').value = c.puZip||'';
+  if($('cu-pu-addr')) $('cu-pu-addr').value = c.puAddr||'';
+  if($('cu-lat')) $('cu-lat').value = c.lat||'';
+  if($('cu-lng')) $('cu-lng').value = c.lng||'';
+  if($('cu-geo-hint')) $('cu-geo-hint').textContent='';
+  if(typeof onCuPuSameChange==='function') onCuPuSameChange();
   if($('cu-rep-name'))$('cu-rep-name').value=c.repName||'';
   if($('cu-rep-title'))$('cu-rep-title').value=c.repTitle||'';
   if($('cu-dept'))$('cu-dept').value=c.dept||'';
@@ -16900,6 +17055,13 @@ function _sdToggleSec(key){
   _sdOpenSec = (cur===key) ? 'none' : key;
   if(typeof renderStaffFSTab==='function') renderStaffFSTab('daily');
 }
+
+// ★ 2026-09-24.2: シフト表は別アプリ（shift/）に移しました。
+function openShiftApp(){
+  const url = location.pathname.replace(/[^/]*$/, '').replace(/osaka-kyuhai-mgmt\/$/, '') + 'shift/';
+  window.open(url, '_blank');
+}
+
 // ★ 2026-09-22.29: 打刻の修正依頼（日報アプリから届く）の一覧と承認
 function _attFixAll(){ return lsGet(LS_KEYS.ATT_FIX, []) || []; }
 function _attFixPendingFor(st, mon){
@@ -28203,6 +28365,9 @@ function editOffice(id){
   const codeHint=$('of-code-auto-hint');if(codeHint)codeHint.style.display='none';
   if($('of-name'))$('of-name').value=o.name||'';
   if($('of-addr'))$('of-addr').value=o.addr||'';
+  if($('of-lat'))$('of-lat').value=o.lat||'';
+  if($('of-lng'))$('of-lng').value=o.lng||'';
+  if($('of-geo-hint'))$('of-geo-hint').textContent='';
   if($('of-tel'))$('of-tel').value=o.tel||'';
   if($('of-fax'))$('of-fax').value=o.fax||'';
   if($('of-head'))$('of-head').value=o.head||'';
@@ -28321,6 +28486,8 @@ function addOffice(){
   const offData = {
     officeCode: code, name,
     addr: $('of-addr')?.value.trim()||'未設定',
+    lat: Number($('of-lat')?.value)||null,
+    lng: Number($('of-lng')?.value)||null,
     tel:  $('of-tel')?.value.trim()||'−',
     fax:  $('of-fax')?.value.trim()||'',
     head: $('of-head')?.value.trim()||'未設定',
@@ -28434,7 +28601,8 @@ function addOffice(){
   if($('of-del-price-content'))$('of-del-price-content').style.display='none';
 
   closeM('m-office'); renderAll();
-  ['of-code','of-name','of-addr','of-tel','of-fax','of-head'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  ['of-code','of-name','of-addr','of-tel','of-fax','of-head','of-lat','of-lng'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  if($('of-geo-hint'))$('of-geo-hint').textContent='';
   if($('of-type-del'))$('of-type-del').checked=false;
   if($('of-type-col'))$('of-type-col').checked=false;
   onOfTypeChange();
