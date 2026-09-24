@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.27</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-22.29</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5057,7 +5057,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-22.27';
+const APP_VER = '2026-09-22.29';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5382,6 +5382,7 @@ const LS_KEYS = {
   YP:       'nikki_yp_logs',
   COL:      'nikki_col_logs',
   ATT:      'nikki_att_logs',
+  ATT_FIX:  'nikki_att_fix',          // ★ 2026-09-22.29: 打刻の修正依頼
   DRIVERS:  'nikki_drivers',
   CUSTOMERS:'nikki_customers',
   OFFICES:  'nikki_offices',
@@ -7195,6 +7196,14 @@ function setupRealtimeSync() {
     if (!snap.exists()) return;
     lsSet(LS_KEYS.ATT, snap.val());
     renderSalary(); // 勤怠データ更新時は給与計算を再描画
+  });
+  // ★ 2026-09-22.29: 日報アプリからの打刻修正依頼
+  subscribeNode('nikki/att_fix_requests', snap => {
+    if (!snap.exists()) return;
+    const v=snap.val();
+    lsSet(LS_KEYS.ATT_FIX, Array.isArray(v) ? v : (v ? Object.values(v) : []));
+    try{ if(document.getElementById('wt-root')) renderWorkTime(); }catch(e){}
+    try{ if(typeof _renderFixAlert==='function') _renderFixAlert(); }catch(e){}
   });
 
   // ══ 休業調査システム (Phase 1: 2026/05/01) ══
@@ -16855,6 +16864,7 @@ function _checkStaffDuplicate(){
 // ★ 2026-09-22.26: 従業員ページの日別タブを「宅配日報／集荷日報／勤怠」の3段に分け、
 //   見出しをタップで開閉する（中身のある段を最初に開く）。
 let _sdOpenSec = null;
+let _sdCurrentOpen = null;
 function _sdBuildAccordion(html){
   const re=/<!--SD:(del|pu|att):([^:]*):(\d+)-->/g;
   const marks=[]; let m;
@@ -16870,8 +16880,11 @@ function _sdBuildAccordion(html){
   let tail='';
   const ti=last.body.lastIndexOf('</div>');
   if(ti>=0){ tail=last.body.slice(ti); last.body=last.body.slice(0,ti); }
+  // ★ 2026-09-22.28: 'none' は「すべて閉じる」。未設定のときだけ中身のある段を開く
   let open=_sdOpenSec;
-  if(!open || !secs.some(x=>x.key===open)) open=(secs.find(x=>x.count>0)||secs[0]).key;
+  if(open==='none') open=null;
+  else if(!open || !secs.some(x=>x.key===open)) open=(secs.find(x=>x.count>0)||secs[0]).key;
+  _sdCurrentOpen = open;
   const body = secs.map(sec=>`
     <div class="sd-sec" style="border:1px solid var(--brd);border-radius:6px;margin-bottom:8px;overflow:hidden;">
       <div onclick="_sdToggleSec('${sec.key}')" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;cursor:pointer;background:var(--bg3);">
@@ -16883,9 +16896,108 @@ function _sdBuildAccordion(html){
   return head + body + tail;
 }
 function _sdToggleSec(key){
-  _sdOpenSec = (_sdOpenSec===key) ? null : key;
+  const cur = (_sdOpenSec && _sdOpenSec!=='none') ? _sdOpenSec : (_sdOpenSec==='none' ? null : _sdCurrentOpen);
+  _sdOpenSec = (cur===key) ? 'none' : key;
   if(typeof renderStaffFSTab==='function') renderStaffFSTab('daily');
 }
+// ★ 2026-09-22.29: 打刻の修正依頼（日報アプリから届く）の一覧と承認
+function _attFixAll(){ return lsGet(LS_KEYS.ATT_FIX, []) || []; }
+function _attFixPendingFor(st, mon){
+  return _attFixAll().filter(r=>r && r.status==='pending'
+    && (String(r.driverId)===String(st.empNo||'') || String(r.driverId)===String(st.id) || r.driverName===st.name)
+    && (!mon || String(r.date||'').startsWith(mon)));
+}
+// 判断材料：その日の計数の読み取り時刻・日報の送信時刻
+function _attFixEvidence(st, date){
+  const out=[];
+  try{
+    (lsGet(LS_KEYS.COL,[])||[]).forEach(l=>{
+      if(!l || l.date!==date) return;
+      const nm=l.driver?.name, id=String(l.driver?.id||'');
+      if(nm!==st.name && id!==String(st.empNo||'')) return;
+      if(l.submittedAt) out.push({t:l.submittedAt, what:'集荷日報の送信'});
+      (l.rows||[]).forEach(r=>{ if(r && r.closedAt) out.push({t:r.closedAt, what:'計数の締め'}); });
+    });
+    (lsGet(LS_KEYS.YP,[])||[]).forEach(l=>{
+      if(!l || l.date!==date) return;
+      const nm=l.driver?.name, id=String(l.driver?.id||'');
+      if(nm!==st.name && id!==String(st.empNo||'')) return;
+      if(l.submittedAt) out.push({t:l.submittedAt, what:'宅配日報の送信'});
+    });
+  }catch(e){}
+  return out.sort((a,b)=>String(a.t).localeCompare(String(b.t)));
+}
+function _attFixCardHTML(st, mon){
+  const list=_attFixPendingFor(st, mon);
+  if(!list.length) return '';
+  const hm=v=>v?new Date(v).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}):'--:--';
+  return `<div class="card" style="margin-bottom:10px;border:1px solid var(--amb2);">
+    <div class="xs fw7 mb6" style="color:var(--amb2);">打刻の修正依頼 ${list.length}件（未処理）</div>
+    ${list.map(r=>{
+      const ev=_attFixEvidence(st, r.date);
+      return `<div style="border-top:1px solid var(--brd);padding:8px 0;">
+        <div class="xs fw7">${esc(r.date)}　${esc(r.reqIn)}〜${esc(r.reqOut)}${r.biz?`（${BIZ_LABEL[r.biz]||''}）`:''}</div>
+        <div class="xs" style="color:var(--txt2);">理由：${esc(r.reason||'')}</div>
+        <div class="xs" style="color:var(--txt2);">依頼 ${hm(r.createdAt)}${r.gps?`／位置あり（±${Math.round(r.gps.acc||0)}m）`:'／位置なし'}</div>
+        ${ev.length?`<div class="xs" style="color:var(--txt2);">参考：${ev.map(e=>`${hm(e.t)} ${esc(e.what)}`).join('　')}</div>`:''}
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button type="button" class="btn b-grn btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_attFixDecide('${r.id}','approve')">承認して反映</button>
+          <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_attFixDecide('${r.id}','reject')">却下</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+async function _attFixDecide(id, action){
+  const list=_attFixAll();
+  const i=list.findIndex(r=>String(r.id)===String(id));
+  if(i<0) return;
+  const r=list[i];
+  const st=(D.staff||[]).find(x=>x && (String(x.empNo||'')===String(r.driverId) || String(x.id)===String(r.driverId) || x.name===r.driverName));
+  if(!st){ showAlert({icon:'⚠️', title:'対象者が見つかりません', msg:r.driverName||''}); return; }
+  const ok = await showDialog({icon: action==='approve'?'✅':'🚫',
+    title: action==='approve'?'修正依頼の承認':'修正依頼の却下',
+    msg: `${st.name} ${r.date}\n${r.reqIn}〜${r.reqOut}\n理由：${r.reason||''}\n\n`
+       + (action==='approve'?'この時刻を勤務時間に反映します（元の打刻は残ります）。':'却下します。勤務時間は変わりません。'),
+    okText: action==='approve'?'承認する':'却下する', cancelText:'キャンセル'});
+  if(!ok) return;
+  const now=new Date().toISOString();
+  if(action==='approve'){
+    const logs=lsGet(LS_KEYS.ATT,[])||[];
+    const date=r.date;
+    const idxs=logs.map((a,k)=>(_attIsMine(a,st)&&String(a.date).replace(/\//g,'-')===date)?k:-1).filter(k=>k>=0);
+    const punchIdx=idxs.filter(k=>logs[k].source!=='manual');
+    if(punchIdx.length){
+      const p=logs[punchIdx[0]];
+      p.manualIn=_wtIso(date,r.reqIn); p.manualOut=_wtIso(date,r.reqOut,r.reqIn);
+      p.manualSpan=_spanMin(r.reqIn,r.reqOut);
+      if(r.biz) p.biz=r.biz;
+      p.editedAt=now; p.editedBy='driver-request';
+      punchIdx.slice(1).forEach(k=>{ logs[k].manualSpan=0; logs[k].mergedInto=p.id||date; });
+    } else {
+      const manIdx=idxs.filter(k=>logs[k].source==='manual');
+      const rec={ ...(manIdx.length?logs[manIdx[0]]:{}),
+        id: manIdx.length ? logs[manIdx[0]].id : (Date.now()*1000+Math.floor(Math.random()*1000)),
+        date, driverId:String(st.empNo||st.id||''), driverName:st.name,
+        source:'manual', spanStored:true, biz:r.biz||undefined,
+        manualIn:_wtIso(date,r.reqIn), manualOut:_wtIso(date,r.reqOut,r.reqIn),
+        manualSpan:_spanMin(r.reqIn,r.reqOut), editedAt:now, editedBy:'driver-request' };
+      delete rec.workMin; delete rec.clockIn; delete rec.clockOut;
+      if(manIdx.length) logs[manIdx[0]]=rec; else logs.push(rec);
+    }
+    lsSet(LS_KEYS.ATT, logs);
+    try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
+    catch(e){ console.error('[修正依頼の承認]', e); alert('保存に失敗しました。通信状態を確認してください。'); return; }
+  }
+  list[i]={...r, status: action==='approve'?'approved':'rejected', decidedAt:now, decidedBy:'mgmt'};
+  lsSet(LS_KEYS.ATT_FIX, list);
+  try{ if(typeof fbSet==='function') await fbSet('att_fix_requests', list); }catch(e){ console.error(e); }
+  if(typeof renderWorkTime==='function' && document.getElementById('wt-root')) renderWorkTime();
+  if(typeof renderStaffFSTab==='function' && document.getElementById('fs-body')) { _sdOpenSec='att'; try{ renderStaffFSTab('daily'); }catch(e){} }
+  if(typeof renderSalary==='function') renderSalary();
+  if(typeof _showSaveToast==='function') _showSaveToast(action==='approve'?'修正依頼を承認しました':'修正依頼を却下しました');
+}
+
 // ★ 2026-09-22.27: その日の勤怠（打刻・手入力）をまるごと削除する
 async function _sdDeleteAtt(name, date){
   const st=(D.staff||[]).find(x=>x && x.name===name); if(!st) return;
@@ -28724,7 +28836,9 @@ function renderStaffDaily(el, name){
       let totalMin=0; dates.forEach(d=>{ totalMin+=byDate[d].workMin; });
       const _hb=_hourlyBizOf(_staffObj, mon);
       const _canPick=_hb.length>1;
-      html+=`<!--SD:att:勤怠（${dates.length}日 ／ 合計 ${fmtWM(totalMin)}）:${dates.length}-->`;
+      const _fixPend=_attFixPendingFor(_staffObj, mon);
+      html+=`<!--SD:att:勤怠（${dates.length}日 ／ 合計 ${fmtWM(totalMin)}${_fixPend.length?` ／ 修正依頼 ${_fixPend.length}件`:''}）:${dates.length+_fixPend.length}-->`;
+      html+=_attFixCardHTML(_staffObj, mon);
       html+=`<div class="xs muted" style="margin-bottom:6px;">時刻は「900」「9:00」のどちらでも入力できます。空欄の日は勤務なしとして扱います。</div>`;
       html+=`<div class="tw"><table id="sd-att-table"><thead><tr>
         <th>日付</th><th>業務</th><th>打刻</th><th>開始</th><th>終了</th><th class="tr">計上時間</th><th></th>
@@ -41844,9 +41958,10 @@ function renderWorkTime(){
       <td style="white-space:nowrap;">${(edited)?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_wtRevert('${date}')">打刻に戻す</button> `:''}${recs.length?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_sdDeleteAtt('${esc(st.name)}','${date}')">削除</button>`:''}</td>
     </tr>`;
   }
+  const fixCard = _attFixCardHTML(st, mon);
   const bizNote = canPick ? '宅配・集荷の両方が時間単価のため、日ごとに業務を選べます。'
     : `時間単価の業務：${BIZ_LABEL[hourly[0]]}（${BIZ_LABEL[hourly[0]]}の時給で計算します）`;
-  root.innerHTML=`
+  root.innerHTML=fixCard+`
     <div class="xs muted" style="margin-bottom:6px;">${bizNote} 時刻は「900」「9:00」のどちらでも入力できます。Enterで右へ、行末で次の日へ進みます。
       計上時間は休憩控除と丸めを反映した時間です。空欄の日は勤務なしとして扱います。</div>
     <div class="tw"><table id="wt-table"><thead><tr>
