@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-24.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-25.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5104,7 +5104,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-24.5';
+const APP_VER = '2026-09-25.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7462,12 +7462,8 @@ function renderSubOfficeBadges(){
       candidateSet.add(l.name);
     }
   });
-  // 営業所マスタからのフォールバック (拠点マスタに無い名前のみ)
-  (D.offices||[]).forEach(o=>{
-    if(!o.name) return;
-    if(candidateSet.has(o.name)) return;
-    if(o.typesDel || o.typesCol) candidateSet.add(o.name);
-  });
+  // ★ 2026-09-25.1: 担当郵便局の候補は拠点管理に登録した拠点だけにする。
+  //   納入先としてだけ登録した郵便局（金銭の発生がない先）は候補に出さない。
   const allNames = [...candidateSet].sort();
   const candidates = allNames.filter(n=>n!==mainOff); // メイン郵便局は除外
   const selected = getSubOffices(); // [{name, del, col}]
