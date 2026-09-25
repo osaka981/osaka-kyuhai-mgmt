@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-25.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-25.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5104,7 +5104,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-25.1';
+const APP_VER = '2026-09-25.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7453,12 +7453,14 @@ function renderSubOfficeBadges(){
   // 候補抽出: 拠点マスタ(D.locations)を主データソースとする (営業所マスタは段階的廃止予定)
   // 拠点マスタにレコードがあれば typesDel/typesCol を見て、
   // 拠点マスタに無い場合のみ営業所マスタにフォールバック
+  // ★ 2026-09-25.3: 担当郵便局は宅配の委託先（宅配拠点）だけを候補にする。
+  //   集荷事業の営業所は所属部署の「集荷事業部」で判定するため、ここには出さない。
   const candidateSet = new Set();
   (D.locations||[]).forEach(l=>{
     if(l.active===false) return;
-    if(l.typesDel || l.typesCol) candidateSet.add(l.name);
-    else if(l.type==='post_office' || l.type==='col_office'){
-      // フラグ未設定でも拠点種別から推定して候補に含める
+    if(l.typesDel) candidateSet.add(l.name);
+    else if(!l.typesCol && l.type==='post_office'){
+      // フラグ未設定の郵便局は宅配拠点とみなす
       candidateSet.add(l.name);
     }
   });
@@ -7636,11 +7638,23 @@ function setSubOffices(list){
   }).filter(x=>x.name);
   el.value=JSON.stringify(normalized);
 }
+// ★ 2026-09-25.2: 拠点が対応している業務だけを選べるようにする
+function locModes(name){
+  const l=(D.locations||[]).find(x=>x && x.name===name);
+  if(!l) return {del:true, col:true};
+  const del=!!l.typesDel, col=!!l.typesCol;
+  if(!del && !col){
+    if(l.type==='col_office') return {del:false, col:true};
+    if(l.type==='post_office') return {del:true, col:false};
+    return {del:true, col:true};
+  }
+  return {del, col};
+}
 function toggleSubOfficeBadge(name, wrapEl){
   const list=getSubOffices();
   const idx=list.findIndex(x=>x.name===name);
   if(idx>=0) list.splice(idx,1);
-  else list.push({name, del:true, col:false}); // 新規選択時は宅配デフォルトON
+  else list.push({name, del:true, col:false}); // 新規選択時は宅配ON（集荷は定時集荷の公開範囲として歯車で選ぶ）
   setSubOffices(list);
   renderSubOfficeBadges(); // 全体再描画
 }
