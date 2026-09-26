@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-26.2';
+const APP_VER = '2026-09-26.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12792,7 +12792,16 @@ function renderPuBulk(keepVals){
       #pub-table{font-size:11px;}
       #pub-table th,#pub-table td{padding:2px 3px;white-space:nowrap;}
       #pub-table th:first-child,#pub-table td:first-child{position:sticky;left:0;background:var(--bg2);z-index:2;}
-      #pub-table input[data-k]{width:44px!important;font-size:11px!important;padding:2px 3px!important;}
+      /* ★ 2026-09-26.3: 見出しの文字幅で列幅が決まるため、固定幅の入力欄だと
+         見出しの真下からずれていた。入力欄をマスいっぱいに広げて桁を揃える。 */
+      #pub-table th,#pub-table td{text-align:right;}
+      #pub-table th:first-child,#pub-table td:first-child{text-align:left;}
+      #pub-table input[data-k]{width:100%!important;min-width:40px;box-sizing:border-box;
+        font-size:11px!important;padding:2px 3px!important;text-align:right;}
+      /* 数字の上下ボタンは幅を食って桁がずれるので消す */
+      #pub-table input[data-k]::-webkit-outer-spin-button,
+      #pub-table input[data-k]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+      #pub-table input[data-k]{-moz-appearance:textfield;}
       #pub-table .pub-note{width:90px!important;font-size:10px!important;padding:2px 4px!important;}
     </style>
     <div class="tw" style="max-height:60vh;"><table id="pub-table"><thead><tr>
