@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-26.3';
+const APP_VER = '2026-09-26.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12766,6 +12766,18 @@ function renderPuBulk(keepVals){
   custs.forEach(cu=>{ useMap[cu.id]=new Set(custUseItems(cu, Object.keys(_pubState.vals[cu.id]?.items||{}))); });
   // チャーターは金額の入力が要るので、この表には出さない（下のボタンから個別入力）
   const cols=IK.filter(k=>ITEMS[k].ck!=='charter' && k!=='チャーター' && custs.some(cu=>useMap[cu.id].has(k)));
+  // ★ 2026-09-26.4: 顧客台帳「その他・立替」のカスタム品目（ロジ発送・店入れ など）も列に出す。
+  //   日報アプリと同じ扱いで、月額・日額は日報で数量を打たない（自動計上）ため除く。
+  //   キーは日報アプリと同じ '__custom__' + 品目名。ここを列に出していなかったため、
+  //   カスタム品目が請求の主体になる顧客（ASLAJなど）で入力できなかった。
+  const cusMap={}, cusCols=[], _cusSeen=new Set();
+  custs.forEach(cu=>{
+    const list=(cu.otherItems||[])
+      .filter(o=>o && String(o.name||'').trim() && !['月額','日額'].includes(o.unit||'月額'))
+      .map(o=>({ key:'__custom__'+o.name, name:o.name, unit:o.unit||'個' }));
+    cusMap[cu.id]=new Set(list.map(o=>o.key));
+    list.forEach(o=>{ if(!_cusSeen.has(o.key)){ _cusSeen.add(o.key); cusCols.push(o); } });
+  });
   let rows='';
   custs.forEach(cu=>{
     const ex=exist.find(r=>Number(r.customerId)===Number(cu.id));
@@ -12781,12 +12793,18 @@ function renderPuBulk(keepVals){
         return `<td><input type="number" min="0" class="fi" data-k="${k}" value="${v.items[k]||''}" placeholder="0"
           style="width:64px;font-size:12px;padding:3px 5px;text-align:right;" onkeydown="_pubKey(event,this)" oninput="_pubTotal()"></td>`;
       }).join('')}
+      ${cusCols.map(o=>{
+        if(!cusMap[cu.id].has(o.key)) return '<td class="tr muted" style="text-align:center;">-</td>';
+        if(isJet) return `<td class="tr mono">${(ex.items||{})[o.key]||''}</td>`;
+        return `<td><input type="number" min="0" class="fi" data-k="${esc(o.key)}" value="${v.items[o.key]||''}" placeholder="0"
+          style="width:64px;font-size:12px;padding:3px 5px;text-align:right;" onkeydown="_pubKey(event,this)" oninput="_pubTotal()"></td>`;
+      }).join('')}
       <td>${isJet?'':`<input type="text" class="fi pub-note" value="${esc(v.note||'')}" placeholder="備考" style="width:120px;font-size:11px;padding:3px 5px;">`}</td>
       <td>${isJet?'':`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_pubRemoveCust(${cu.id})">×</button>`}</td>
     </tr>`;
   });
   body.innerHTML=`
-    <div class="xs muted" style="margin-bottom:6px;">「-」の欄は、その顧客が使わない品目です。Enterで右へ、行末で次の顧客へ進みます。
+    <div class="xs muted" style="margin-bottom:6px;">「-」の欄は、その顧客が使わない品目です。色の付いた見出しは顧客台帳のカスタム品目です。Enterで右へ、行末で次の顧客へ進みます。
       計数アプリから来た便は編集できません。空欄のままの顧客は保存しません。</div>
     <style>
       #pub-table{font-size:11px;}
@@ -12802,10 +12820,12 @@ function renderPuBulk(keepVals){
       #pub-table input[data-k]::-webkit-outer-spin-button,
       #pub-table input[data-k]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
       #pub-table input[data-k]{-moz-appearance:textfield;}
+      /* カスタム品目の列は色を変えて、基本品目と見分けられるようにする */
+      #pub-table th.pub-cus{color:var(--clay,#c1724c);font-weight:700;}
       #pub-table .pub-note{width:90px!important;font-size:10px!important;padding:2px 4px!important;}
     </style>
     <div class="tw" style="max-height:60vh;"><table id="pub-table"><thead><tr>
-      <th>顧客（${custs.length}社）</th>${cols.map(k=>`<th class="tr ${ITEMS[k].cls||''}">${itemColLabel(k)}</th>`).join('')}<th>備考</th><th></th>
+      <th>顧客（${custs.length}社）</th>${cols.map(k=>`<th class="tr ${ITEMS[k].cls||''}">${itemColLabel(k)}</th>`).join('')}${cusCols.map(o=>`<th class="tr pub-cus" title="カスタム品目（${esc(o.unit)}）">${esc(o.name)}</th>`).join('')}<th>備考</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
     <div class="tr" style="margin-top:6px;font-size:12px;">合計 <span id="pub-total" class="mono" style="font-weight:700;"></span> 個</div>`;
   _pubTotal();
@@ -12873,9 +12893,16 @@ async function _pubSave(){
     }
     const idx=D.pickup.findIndex(r=>String(r.id)===String(ex?.id));
     if(idx>=0) D.pickup[idx]=rec; else D.pickup.push(rec);
+    // ★ 2026-09-26.4: カスタム品目は ITEMS に無いので、顧客台帳の単位（件/個）を使う
+    const _unitOf = mk => {
+      const k=String(mk||'');
+      if(!k.startsWith('__custom__')) return ITEMS[k]?.unit||'個';
+      const o=(cu.otherItems||[]).find(x=>x && x.name===k.slice(10));
+      return (o && o.unit) || '個';
+    };
     const rows=Object.entries(items).map(([masterKey,qty])=>({
       customerId:rec.customerId, customerName:rec.customerName, region:rec.region,
-      masterKey, qty, unit:ITEMS[masterKey]?.unit||'個',
+      masterKey, qty, unit:_unitOf(masterKey),
     }));
     const entry={ id:rec.id, type:'collection', driver, date, rows:rows.concat(extraRows),
       note:rec.note||'', submittedAt:new Date().toISOString() };
