@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-26.1';
+const APP_VER = '2026-09-26.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6518,7 +6518,15 @@ function applyFirebaseData() {
       return (n && /^\d{3}$/.test(n)) ? ('no:' + n) : ('id:' + (c && c.id));
     };
     const fbKeys = new Set(fbCusts.map(_custKey));
+    // ★ 2026-09-26.2: ここで項目を1つずつ書き写していたため、この一覧に
+    //   書き忘れた項目（useItems / lat / lng / puAddr など）が、Firebase から
+    //   読み直すたびに D.customers から消えていた。
+    //   → 使う品目のチェックが毎回空になり、集荷日報の細分化・カスタム品目の
+    //     列が出ない／集荷コースで顧客の位置が出ない原因になっていた。
+    //   まず ...c で丸ごと引き継ぎ、そのうえで既定値だけを上書きする。
+    //   今後 saveCust に項目を足しても、ここへの追記漏れで消えることはない。
     const newCusts = fbCusts.map(c => ({
+      ...c,
       id: c.id,
       custNo: c.custNo || '',
       name: c.name,
