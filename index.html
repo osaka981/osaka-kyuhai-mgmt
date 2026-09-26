@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-26.4';
+const APP_VER = '2026-09-26.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -29453,24 +29453,100 @@ function renderCustFSTab(key){
   else body.innerHTML=`<div class="fs-card"><div class="ct"><div class="cbar"></div>売上分析</div><div class="xs muted mt8">この画面は未実装です</div></div>`;
 }
 
+// ★ 2026-09-26.5: 1件の集荷日報の中身を「品目 数量」の文字列にする。
+//   カスタム品目（顧客台帳「その他・立替」／キーは __custom__品目名）も含める。
+function _puItemsText(r){
+  const parts=[];
+  (typeof IK!=='undefined'?IK:[]).forEach(k=>{
+    const q=(typeof iq==='function'?iq(r,k):0)||0;
+    if(q>0) parts.push((ITEMS[k].shortLabel||ITEMS[k].label)+' '+q);
+  });
+  Object.entries(r.items||{}).forEach(([k,q])=>{
+    if(String(k).startsWith('__custom__') && Number(q)>0) parts.push(String(k).slice(10)+' '+Number(q));
+  });
+  return parts.join('・');
+}
+// カスタム品目だけの合計（総個数とは分けて出す）
+function _puCustomTotal(r){
+  let t=0;
+  Object.entries(r.items||{}).forEach(([k,q])=>{
+    if(String(k).startsWith('__custom__')) t+=Number(q)||0;
+  });
+  return t;
+}
+// 便の名前。計数アプリから来た便は「第1便」などを持っている。
+function _puBinLabel(r, i){
+  const b = (r._fromJet && r._jet) ? String(r._jet.bin || r._jet.binNo || '') : '';
+  return b || ('便'+(i+1));
+}
+// 日別一覧の明細の開閉
+function _custDailyToggle(key){
+  const trs=document.querySelectorAll('tr[data-cdgrp="'+key+'"]');
+  if(!trs.length) return;
+  let show=null;
+  trs.forEach(tr=>{ if(show===null) show=(tr.style.display==='none'); tr.style.display = show?'':'none'; });
+  const ch=document.getElementById('cdchev-'+key);
+  if(ch) ch.textContent = show?'▼':'▶';
+}
+
 function renderCustDaily(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const mon=$('fs-cu-daily-mon')?.value||ym;
   const rows=(D.pickup||[]).filter(r=>r.customerName===name&&(r.date||'').startsWith(mon));
 
+  // ★ 2026-09-26.5: 同じ日を1行にまとめる。
+  //   計数アプリから来た便や、1日に複数回入力した分が別行で並ぶと、
+  //   何日稼働したのかが数えられなかった。便の内訳は行を開くと出る。
+  const byDate={};
+  rows.forEach(r=>{ const d=r.date||''; (byDate[d]=byDate[d]||[]).push(r); });
+  const dates=Object.keys(byDate).sort();
+
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
       ${_monTabs('fs-cu-daily-mon',mon,"renderCustFSTab('daily')")}
     </div>
-    <div class="ct mb8"><div class="cbar"></div>集荷日報（${rows.length}件）</div>`;
+    <div class="ct mb8"><div class="cbar"></div>集荷日報（${dates.length}日 / ${rows.length}件）</div>`;
 
-  if(rows.length){
+  if(dates.length){
+    html+=`<div class="xs muted" style="margin-bottom:6px;">同じ日は1行にまとめています。便が分かれている日は「▶」で内訳が開きます。</div>`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th>
+      <th style="width:26px;"></th><th>日付</th><th class="tr">便</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th>
     </tr></thead><tbody>`;
-    rows.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(r=>{
-      const tot=IK.reduce((s,k)=>s+(iq(r,k)||0),0);
-      html+=`<tr><td class="mono">${r.date||''}</td><td>${staffLink(r.staff)}</td><td>${officeLink(r.office)}</td><td class="xs muted">${r.region||''}</td><td class="tr fw7">${tot}</td></tr>`;
+    dates.forEach((d,di)=>{
+      const grp=byDate[d];
+      const key=mon.replace(/\W/g,'')+'_'+di;
+      const tot=grp.reduce((s,r)=>s+IK.reduce((t,k)=>t+(iq(r,k)||0),0),0);
+      const cus=grp.reduce((s,r)=>s+_puCustomTotal(r),0);
+      const staffs=[...new Set(grp.map(r=>r.staff).filter(Boolean))];
+      const offs  =[...new Set(grp.map(r=>r.office).filter(Boolean))];
+      const regs  =[...new Set(grp.map(r=>r.region).filter(Boolean))];
+      const multi = grp.length>1;
+      const staffTxt = staffs.length<=2 ? staffs.map(n=>staffLink(n)).join('・')
+                     : staffLink(staffs[0])+`<span class="xs muted"> 他${staffs.length-1}名</span>`;
+      const offTxt   = offs.length<=1 ? (offs[0]?officeLink(offs[0]):'')
+                     : officeLink(offs[0])+`<span class="xs muted"> 他${offs.length-1}</span>`;
+      html+=`<tr${multi?` style="cursor:pointer;" onclick="_custDailyToggle('${key}')"`:''}>
+        <td class="tr">${multi?`<span id="cdchev-${key}" class="xs muted">▶</span>`:''}</td>
+        <td class="mono">${d}</td>
+        <td class="tr">${multi?`<span class="bdg">${grp.length}便</span>`:'<span class="xs muted">1</span>'}</td>
+        <td>${staffTxt}</td><td>${offTxt}</td><td class="xs muted">${regs.join('・')}</td>
+        <td class="tr fw7">${tot}${cus?`<span class="xs muted" style="font-weight:400;"> ＋カスタム ${cus}</span>`:''}</td>
+      </tr>`;
+      if(multi){
+        grp.forEach((r,i)=>{
+          const t1=IK.reduce((t,k)=>t+(iq(r,k)||0),0);
+          const c1=_puCustomTotal(r);
+          html+=`<tr data-cdgrp="${key}" style="display:none;background:var(--sur2);">
+            <td></td>
+            <td class="xs muted" style="padding-left:14px;">${esc(_puBinLabel(r,i))}</td>
+            <td></td>
+            <td class="xs">${staffLink(r.staff)}</td>
+            <td class="xs">${r.office?officeLink(r.office):''}</td>
+            <td class="xs muted">${esc(_puItemsText(r))}</td>
+            <td class="tr xs">${t1}${c1?`<span class="muted"> ＋${c1}</span>`:''}</td>
+          </tr>`;
+        });
+      }
     });
     html+=`</tbody></table></div>`;
   } else {
