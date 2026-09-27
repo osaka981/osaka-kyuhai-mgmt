@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-28.1';
+const APP_VER = '2026-09-28.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -28995,6 +28995,66 @@ function renderStaffDaily(el, name){
     puRows.forEach(r=>{ (_pby[r.date] = _pby[r.date] || []).push(r); });
     let _ptot = 0, _pdays = 0;
     html+=`<!--SD:pu:集荷日報（${puRows.length}件 / 入力 ${Object.keys(_pby).length}日）:${puRows.length}-->`;
+
+    // ★ 2026-09-28.2: 顧客ごと → 品目ごとの月まとめ。
+    //   委託会社と数量を合わせるとき、この表をそのまま突き合わせに使う。
+    //   顧客の行を開くと、その顧客の日付ごとの明細が出る（編集・削除もそこから）。
+    {
+      const _pk=[];
+      IK.forEach(k=>{ if(puRows.some(r=>(iq(r,k)||0)>0)) _pk.push(k); });
+      {
+        const _seen=new Set();
+        puRows.forEach(r=>Object.entries(r.items||{}).forEach(([k,q])=>{
+          if(String(k).startsWith('__custom__') && Number(q)>0 && !_seen.has(k)){ _seen.add(k); _pk.push(k); }
+        }));
+      }
+      const _byCust={};
+      puRows.forEach(r=>{ const c=r.customerName||'（顧客なし）'; (_byCust[c]=_byCust[c]||[]).push(r); });
+      const _cns=Object.keys(_byCust).sort((a,b)=>a.localeCompare(b,'ja'));
+      if(_cns.length && _pk.length){
+        const _th = k => `<th class="tr ${ITEMS[k]?(ITEMS[k].cls||''):''}"${ITEMS[k]?'':' style="color:var(--clay,#c1724c);font-weight:700;"'}>${esc(_puKeyLabel(k))}</th>`;
+        const _tot={}; _pk.forEach(k=>_tot[k]=0); let _gtot=0;
+        let _bd='';
+        _cns.forEach((cn,ci)=>{
+          const list=_byCust[cn].slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+          const gkey='sp'+ci;
+          let _rt=0, _tds='';
+          _pk.forEach(k=>{
+            const v=list.reduce((a,r)=>a+(Number((r.items||{})[k])||0),0);
+            _tot[k]+=v; _rt+=v; _tds+=`<td class="tr">${v||''}</td>`;
+          });
+          _gtot+=_rt;
+          const _days=new Set(list.map(r=>r.date)).size;
+          _bd+=`<tr style="cursor:pointer;" onclick="_staffPuToggle('${gkey}')">
+            <td class="tr"><span id="spchev-${gkey}" class="xs muted">▶</span></td>
+            <td>${custLink(cn)}</td>
+            <td class="xs muted">${_days}日 / ${list.length}件</td>
+            ${_tds}<td class="tr fw7">${_rt||''}</td><td></td></tr>`;
+          list.forEach((r,ri)=>{
+            let _dt='', _drt=0;
+            _pk.forEach(k=>{ const v=Number((r.items||{})[k])||0; _drt+=v; _dt+=`<td class="tr xs">${v||''}</td>`; });
+            _bd+=`<tr data-spgrp="${gkey}" style="display:none;background:var(--sur2);">
+              <td></td><td class="mono xs" style="padding-left:14px;">${r.date||''}</td>
+              <td class="xs muted">${r._fromJet?esc(_puBinLabel(r,ri)):(r.office||'')}</td>
+              ${_dt}<td class="tr xs">${_drt||''}</td>
+              <td style="white-space:nowrap;">${r._fromJet?'<span class="xs muted">計数</span>':
+                `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="event.stopPropagation();editPU('${r.id}')">編集</button>`
+                +`<button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);" onclick="event.stopPropagation();deleteSingle('pu','${r.id}')">削除</button>`}</td></tr>`;
+          });
+        });
+        html+=`<div class="ct mb8" style="margin-top:4px;"><div class="cbar"></div>顧客別 数量まとめ（${mon}）</div>`;
+        html+=`<div class="xs muted" style="margin-bottom:6px;">この月に入力のある品目だけ列にしています。顧客の行をタップすると日付ごとの明細が開きます。</div>`;
+        html+=`<div class="tw"><table><thead><tr>
+          <th style="width:26px;"></th><th>顧客</th><th>稼働</th>${_pk.map(_th).join('')}<th class="tr">計</th><th></th>
+        </tr></thead><tbody>${_bd}</tbody><tfoot><tr style="background:var(--bg3);font-weight:700;">
+          <td colspan="2" style="text-align:center;">月合計</td><td class="xs muted">${_cns.length}社</td>
+          ${_pk.map(k=>`<td class="tr">${_tot[k].toLocaleString()}</td>`).join('')}
+          <td class="tr">${_gtot.toLocaleString()}</td><td></td>
+        </tr></tfoot></table></div>`;
+      }
+    }
+
+    html+=`<div class="ct mb8" style="margin-top:14px;"><div class="cbar"></div>日ごとの入力状況</div>`;
     html+=`<div class="tw"><table><thead><tr>
       <th>日付</th><th>曜</th><th>営業所</th><th>顧客</th><th>地域</th><th class="tr">総個数</th><th></th>
     </tr></thead><tbody>`;
@@ -29487,6 +29547,15 @@ function _custDailySetSub(k){ _custDailySub = k; if(typeof renderCustFSTab==='fu
 function _puBinLabel(r, i){
   const b = (r._fromJet && r._jet) ? String(r._jet.bin || r._jet.binNo || '') : '';
   return b || ('便'+(i+1));
+}
+// ★ 2026-09-28.2: ドライバーページ 顧客別サマリーの明細の開閉
+function _staffPuToggle(key){
+  const trs=document.querySelectorAll('tr[data-spgrp="'+key+'"]');
+  if(!trs.length) return;
+  let show=null;
+  trs.forEach(tr=>{ if(show===null) show=(tr.style.display==='none'); tr.style.display = show?'':'none'; });
+  const ch=document.getElementById('spchev-'+key);
+  if(ch) ch.textContent = show?'▼':'▶';
 }
 // 日別一覧の明細の開閉
 function _custDailyToggle(key){
