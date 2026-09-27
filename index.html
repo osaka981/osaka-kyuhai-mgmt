@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-26.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5105,7 +5105,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-26.5';
+const APP_VER = '2026-09-28.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -29474,6 +29474,15 @@ function _puCustomTotal(r){
   });
   return t;
 }
+// 品目キーの表示名。__custom__ で始まるものは顧客台帳のカスタム品目。
+function _puKeyLabel(k){
+  const s=String(k||'');
+  if(s.startsWith('__custom__')) return s.slice(10);
+  return (ITEMS[s] && (ITEMS[s].shortLabel||ITEMS[s].label)) || s;
+}
+// ★ 2026-09-28.1: 顧客ページ 日報一覧のサブタブ（日別／ゆうパック／ゆうパケット／その他）
+let _custDailySub = 'day';
+function _custDailySetSub(k){ _custDailySub = k; if(typeof renderCustFSTab==='function') renderCustFSTab('daily'); }
 // 便の名前。計数アプリから来た便は「第1便」などを持っている。
 function _puBinLabel(r, i){
   const b = (r._fromJet && r._jet) ? String(r._jet.bin || r._jet.binNo || '') : '';
@@ -29501,13 +29510,73 @@ function renderCustDaily(el, name){
   rows.forEach(r=>{ const d=r.date||''; (byDate[d]=byDate[d]||[]).push(r); });
   const dates=Object.keys(byDate).sort();
 
+  // ★ 2026-09-28.1: 品目の群ごとのサブタブ。入力値のある群だけ出す。
+  //   顧客 × 品目 を一度に広げると横に伸びすぎるため、群で切って縦持ちにする。
+  const _grpOf = k => {
+    const g = ITEMS[k] && ITEMS[k].group;
+    if(g==='ゆうパック')   return 'yp';
+    if(g==='ゆうパケット') return 'pkt';
+    return 'oth';                 // その他・チャーター・カスタム品目
+  };
+  const allKeys=[];
+  IK.forEach(k=>{ if(rows.some(r=>(iq(r,k)||0)>0)) allKeys.push(k); });
+  {
+    const seen=new Set();
+    rows.forEach(r=>Object.entries(r.items||{}).forEach(([k,q])=>{
+      if(String(k).startsWith('__custom__') && Number(q)>0 && !seen.has(k)){ seen.add(k); allKeys.push(k); }
+    }));
+  }
+  const GRPS=[{key:'yp',label:'ゆうパック'},{key:'pkt',label:'ゆうパケット'},{key:'oth',label:'その他・カスタム'}];
+  const keysOf = g => allKeys.filter(k=>_grpOf(k)===g);
+  const liveGrps = GRPS.filter(g=>keysOf(g.key).length);
+  let sub = _custDailySub;
+  if(sub!=='day' && !liveGrps.some(g=>g.key===sub)) sub='day';
+
+  const subTabs = [{key:'day',label:'日別'}].concat(liveGrps).map(t=>{
+    const on = (t.key===sub);
+    return `<button class="btn btn-sm ${on?'':'b-gh'}" style="font-size:11px;padding:4px 12px;${on?'font-weight:700;':''}"
+      onclick="_custDailySetSub('${t.key}')">${t.label}</button>`;
+  }).join('');
+
   let html=`<div class="fs-card">
     <div class="fla gap6 mb12" style="flex-wrap:wrap;align-items:flex-end;">
       ${_monTabs('fs-cu-daily-mon',mon,"renderCustFSTab('daily')")}
     </div>
+    <div class="fla gap6 mb8" style="flex-wrap:wrap;">${subTabs}</div>
     <div class="ct mb8"><div class="cbar"></div>集荷日報（${dates.length}日 / ${rows.length}件）</div>`;
 
-  if(dates.length){
+  if(dates.length && sub!=='day'){
+    // ── 品目別（行＝日付、列＝その群で入力のある品目だけ）──
+    const keys=keysOf(sub);
+    const [_gy,_gm]=mon.split('-').map(Number);
+    const _gwd=['日','月','火','水','木','金','土'];
+    const tot={}; keys.forEach(k=>tot[k]=0); let gtot=0;
+    html+=`<div class="xs muted" style="margin-bottom:6px;">この月に入力のある品目だけ列にしています。空欄は0です。</div>`;
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>曜</th>`
+      + keys.map(k=>`<th class="tr ${ITEMS[k]?(ITEMS[k].cls||''):''}"${ITEMS[k]?'':' style="color:var(--clay,#c1724c);font-weight:700;"'}>${esc(_puKeyLabel(k))}</th>`).join('')
+      + `<th class="tr">計</th></tr></thead><tbody>`;
+    dates.forEach(d=>{
+      const grp=byDate[d];
+      const dow=new Date(_gy,_gm-1,Number(d.slice(8,10))).getDay();
+      const dowCol=dow===0?'var(--red2)':(dow===6?'var(--blu)':'var(--txt2)');
+      const rowBg=(dow===0||dow===6)?'background:rgba(176,154,138,.06);':'';
+      let rt=0;
+      let tds='';
+      keys.forEach(k=>{
+        const v=grp.reduce((a,r)=>a+(Number((r.items||{})[k])||0),0);
+        tot[k]+=v; rt+=v;
+        tds+=`<td class="tr">${v||''}</td>`;
+      });
+      gtot+=rt;
+      html+=`<tr style="${rowBg}"><td class="mono">${d}</td>
+        <td style="text-align:center;color:${dowCol};">${_gwd[dow]}</td>${tds}
+        <td class="tr fw7">${rt||''}</td></tr>`;
+    });
+    html+=`</tbody><tfoot><tr style="background:var(--bg3);font-weight:700;">
+      <td colspan="2" style="text-align:center;">月合計</td>`
+      + keys.map(k=>`<td class="tr">${tot[k].toLocaleString()}</td>`).join('')
+      + `<td class="tr">${gtot.toLocaleString()}</td></tr></tfoot></table></div>`;
+  } else if(dates.length){
     html+=`<div class="xs muted" style="margin-bottom:6px;">同じ日は1行にまとめています。便が分かれている日は「▶」で内訳が開きます。</div>`;
     html+=`<div class="tw"><table><thead><tr>
       <th style="width:26px;"></th><th>日付</th><th class="tr">便</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th>
