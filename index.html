@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1525,6 +1525,30 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 品目別集計 -->
+    <!-- ★ 2026-09-28.3: 集荷照合
+         日報の数量と、相手（顧客・委託会社）からもらった数量を
+         「月 × 顧客 × 品目」で突き合わせる。相手の数量はこの画面に直接打ち込む。
+         計数アプリ(jet_scan)には一切書き戻さない。問い合わせ番号の増減は
+         実物がないと判断できないため、スキャンデータは触らない。 -->
+    <div id="s-pu-cmp" class="sec">
+      <div class="flbc mb12">
+        <div class="fla gap6">
+          <input type="month" id="pc-mon" class="fi" onchange="renderPuCmp()">
+          <select id="pc-st" class="fi" onchange="renderPuCmp()">
+            <option value="diff">差異あり</option>
+            <option value="all">全件</option>
+            <option value="ok">了承済</option>
+          </select>
+        </div>
+        <div class="fla gap6" style="flex-wrap:wrap;flex-shrink:0;">
+          <span class="bdg" id="pc-b-all">顧客 0</span>
+          <span class="bdg" id="pc-b-ng">差異 0</span>
+          <span class="bdg bg" id="pc-b-ok">了承済 0</span>
+        </div>
+      </div>
+      <div id="pc-body"></div>
+    </div>
+
     <!-- 計数照合（バーコード計数アプリの便別実績と郵便局引受数の突き合わせ） -->
     <div id="s-pu-count" class="sec">
       <div class="flbc mb12">
@@ -5105,7 +5129,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-28.2';
+const APP_VER = '2026-09-28.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7310,6 +7334,13 @@ function setupRealtimeSync() {
     CUSTOMER_NOTES = Array.isArray(v) ? v : (v ? Object.values(v) : []);
     lsSet(LS_KEYS.CUSTOMER_NOTES, CUSTOMER_NOTES);
   });
+  // ★ 2026-09-28.3: 集荷照合（相手からもらった数量）
+  subscribeNode('nikki/col_cmp', snap => {
+    if(window._fbWritingGuard && window._fbWritingGuard['col_cmp']) return;
+    D.colCmp = snap.exists() ? (snap.val()||{}) : {};
+    try{ lsSet('nikki_col_cmp', D.colCmp); }catch(e){}
+    if(document.getElementById('s-pu-cmp')?.classList.contains('on') && typeof renderPuCmp==='function') renderPuCmp();
+  }, '集荷照合');
 }
 
 // Firebase接続状態バッジ表示
@@ -8174,6 +8205,7 @@ const _TOP_TABS = {
     { s:'pu-cust',    label:'顧客・契約管理' },
     { s:'pu-inv',     label:'請求書' },
     { s:'pu-count',   label:'計数照合', badge:'new' },
+    { s:'pu-cmp',     label:'集荷照合', badge:'new' },
     { s:'schedule-mgmt',   label:'休業日管理' },
     { s:'schedule-survey', label:'休業調査', badge:'survey' },
   ]},
@@ -8289,6 +8321,7 @@ function navByS(s) {
   if (s==='staffmerge')  { _call('renderStaffMerge'); }
   if (s==='pu-inv')      { _ivBulkState.context='col'; _ivBulkState.tab='customer'; _call('renderInvoiceBulk'); }
   if (s==='pu-count')    _call('renderJetCmp');
+  if (s==='pu-cmp')      _call('renderPuCmp');
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
@@ -11320,6 +11353,211 @@ function _jetDaySummary(mon){
   });
   return Array.from(m.values()).sort((a,b)=>b.date.localeCompare(a.date));
 }
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-09-28.3: 集荷照合（月 × 顧客 × 品目）
+//   左＝日報（ドライバーが入力した数量）／右＝相手（顧客・委託会社からもらった数量）。
+//   相手の数量はこの画面に直接打ち込み、nikki/col_cmp に保存する。
+//   計数アプリ(jet_scan)には絶対に書き戻さない。問い合わせ番号の増減は
+//   実物がないと判断できないため、スキャンデータは触らないという方針。
+//   保存形:
+//     col_cmp["2026-09"]["<顧客id>"] = { ok, okAt, note, items:[{k,v}] }
+//   items を配列で持つのは、カスタム品目名に Firebase のキーに使えない
+//   文字が入っても壊れないようにするため。
+// ════════════════════════════════════════════════════════════
+let _puCmpRows = {};        // 画面の再計算用（顧客id → {keys, rep}）
+
+function _puCmpLoad(){
+  if(!D.colCmp || typeof D.colCmp!=='object'){
+    D.colCmp = lsGet('nikki_col_cmp', {}) || {};
+  }
+  return D.colCmp;
+}
+function _puCmpSave(){
+  try{ lsSet('nikki_col_cmp', D.colCmp||{}); }catch(e){}
+  try{ if(typeof fbSet==='function') fbSet('col_cmp', D.colCmp||{}); }
+  catch(e){ console.warn('[col_cmp] 保存エラー', e); }
+}
+function _puCmpCell(ym, custId){
+  _puCmpLoad();
+  const m = D.colCmp[ym] = D.colCmp[ym] || {};
+  return m[String(custId)] = m[String(custId)] || { ok:false, okAt:'', note:'', items:[] };
+}
+function _puCmpOtherMap(ym, custId){
+  const c = (D.colCmp && D.colCmp[ym] && D.colCmp[ym][String(custId)]) || null;
+  const out = {};
+  const arr = c && Array.isArray(c.items) ? c.items : (c && c.items ? Object.values(c.items) : []);
+  arr.forEach(x=>{ if(x && x.k) out[x.k] = Number(x.v)||0; });
+  return out;
+}
+function _puCmpSetVal(custId, key, val){
+  const ym = $('pc-mon')?.value || ''; if(!ym) return;
+  const c = _puCmpCell(ym, custId);
+  const items = Array.isArray(c.items) ? c.items.slice() : [];
+  const i = items.findIndex(x=>x && x.k===key);
+  const n = parseInt(val);
+  if(!(n>0)){ if(i>=0) items.splice(i,1); }
+  else if(i>=0) items[i] = {k:key, v:n};
+  else items.push({k:key, v:n});
+  c.items = items;
+  _puCmpSave();
+  _puCmpRefresh(custId);
+}
+function _puCmpToggleOk(custId){
+  const ym = $('pc-mon')?.value || ''; if(!ym) return;
+  const c = _puCmpCell(ym, custId);
+  c.ok = !c.ok;
+  c.okAt = c.ok ? new Date().toISOString() : '';
+  _puCmpSave();
+  renderPuCmp();
+}
+// 差異のセルだけ描き直す（全体を作り直すと入力中の欄からフォーカスが外れるため）
+function _puCmpRefresh(custId){
+  const ym = $('pc-mon')?.value || '';
+  const st = _puCmpRows[String(custId)];
+  if(!st) return;
+  const oth = _puCmpOtherMap(ym, custId);
+  let sr=0, so=0;
+  st.keys.forEach((k,ki)=>{
+    const r = st.rep[k]||0, o = oth[k]||0;
+    sr+=r; so+=o;
+    const el = document.getElementById(`pcd_${custId}_${ki}`);
+    if(el){
+      const d = o - r;
+      el.textContent = (d>0?'+':'') + d;
+      el.style.color = d===0 ? 'var(--txt3)' : (d<0 ? 'var(--red2)' : 'var(--grn2)');
+      el.style.fontWeight = d===0 ? '400' : '700';
+    }
+  });
+  const set=(id,txt,col)=>{ const e=document.getElementById(id); if(e){ e.textContent=txt; if(col) e.style.color=col; } };
+  set(`pct_${custId}_rep`, fmt(sr));
+  set(`pct_${custId}_oth`, so?fmt(so):'-');
+  const dt = so - sr;
+  set(`pct_${custId}_dif`, (dt>0?'+':'')+fmt(dt), dt===0?'var(--txt3)':(dt<0?'var(--red2)':'var(--grn2)'));
+}
+
+function renderPuCmp(){
+  const root = document.getElementById('pc-body'); if(!root) return;
+  _puCmpLoad();
+  const el = $('pc-mon');
+  if(el && !el.value){
+    const d = new Date();
+    el.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const ym = el ? el.value : '';
+  const st = $('pc-st')?.value || 'diff';
+  if(!ym){ root.innerHTML='<div class="al al-w"><span>月を選んでください。</span></div>'; return; }
+
+  // 日報側を 顧客 × 品目 に集計
+  const rows = (D.pickup||[]).filter(r=>(r.date||'').startsWith(ym));
+  const agg = {};   // custId → {name, rep:{k:v}, days:Set}
+  rows.forEach(r=>{
+    const id = String(r.customerId||0);
+    if(id==='0') return;
+    const a = agg[id] || (agg[id] = {name:r.customerName||'', rep:{}, days:new Set()});
+    if(!a.name && r.customerName) a.name = r.customerName;
+    a.days.add(r.date);
+    Object.entries(r.items||{}).forEach(([k,q])=>{
+      const n = Number(q)||0; if(!n) return;
+      a.rep[k] = (a.rep[k]||0) + n;
+    });
+  });
+  // 相手側だけ入っている顧客も拾う
+  Object.keys((D.colCmp||{})[ym] || {}).forEach(id=>{
+    if(agg[id]) return;
+    const cu = (D.customers||[]).find(c=>String(c.id)===String(id));
+    const oth = _puCmpOtherMap(ym, id);
+    if(!Object.keys(oth).length) return;
+    agg[id] = {name: cu?cu.name:'（不明な顧客）', rep:{}, days:new Set()};
+  });
+
+  _puCmpRows = {};
+  const list = [];
+  Object.entries(agg).forEach(([id,a])=>{
+    const oth = _puCmpOtherMap(ym, id);
+    const keys = [];
+    IK.forEach(k=>{ if((a.rep[k]||0)>0 || (oth[k]||0)>0) keys.push(k); });
+    Object.keys(a.rep).concat(Object.keys(oth)).forEach(k=>{
+      if(String(k).startsWith('__custom__') && !keys.includes(k)) keys.push(k);
+    });
+    const sr = keys.reduce((s,k)=>s+(a.rep[k]||0),0);
+    const so = keys.reduce((s,k)=>s+(oth[k]||0),0);
+    const hasOther = Object.keys(oth).length>0;
+    const cell = (D.colCmp[ym]||{})[String(id)] || {};
+    list.push({ id, name:a.name, keys, rep:a.rep, oth, sr, so,
+                diff: so-sr, hasOther, ok:!!cell.ok, days:a.days.size });
+    _puCmpRows[String(id)] = {keys, rep:a.rep};
+  });
+  list.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+
+  const ngCount = list.filter(r=>r.hasOther && r.diff!==0 && !r.ok).length;
+  const okCount = list.filter(r=>r.ok).length;
+  const setB=(id,t)=>{ const e=document.getElementById(id); if(e) e.textContent=t; };
+  setB('pc-b-all', '顧客 '+list.length);
+  setB('pc-b-ng',  '差異 '+ngCount);
+  setB('pc-b-ok',  '了承済 '+okCount);
+
+  let view = list;
+  if(st==='diff') view = list.filter(r=>!r.ok && (!r.hasOther || r.diff!==0));
+  if(st==='ok')   view = list.filter(r=>r.ok);
+
+  if(!view.length){
+    root.innerHTML = `<div class="al al-e"><span>ℹ️</span><span>${st==='diff'?'差異のある顧客はありません。':'該当する顧客がありません。'}</span></div>`;
+    return;
+  }
+
+  let body='';
+  view.forEach(r=>{
+    const gk = 'pc'+r.id;
+    const dc = r.diff===0 ? 'var(--txt3)' : (r.diff<0 ? 'var(--red2)' : 'var(--grn2)');
+    body += `<tr style="cursor:pointer;" onclick="_puCmpToggle('${gk}')">
+      <td class="tr"><span id="pcchev-${gk}" class="xs muted">▶</span></td>
+      <td>${custLink(r.name)}${r.ok?'<span class="bdg bg" style="margin-left:5px;">了承</span>':''}</td>
+      <td class="xs muted">${r.days}日</td>
+      <td class="tr fw7" id="pct_${r.id}_rep">${fmt(r.sr)}</td>
+      <td class="tr" id="pct_${r.id}_oth">${r.hasOther?fmt(r.so):'-'}</td>
+      <td class="tr" id="pct_${r.id}_dif" style="color:${dc};font-weight:${r.diff===0?'400':'700'};">${(r.diff>0?'+':'')+fmt(r.diff)}</td>
+      <td><button class="btn btn-sm ${r.ok?'b-gh':''}" style="font-size:10px;padding:3px 10px;"
+        onclick="event.stopPropagation();_puCmpToggleOk('${r.id}')">${r.ok?'了承を外す':'了承'}</button></td>
+    </tr>`;
+    r.keys.forEach((k,ki)=>{
+      const rv = r.rep[k]||0, ov = r.oth[k]||0, d = ov-rv;
+      const kdc = d===0 ? 'var(--txt3)' : (d<0 ? 'var(--red2)' : 'var(--grn2)');
+      body += `<tr data-pcgrp="${gk}" style="display:none;background:var(--sur2);">
+        <td></td>
+        <td class="xs" style="padding-left:14px;${ITEMS[k]?'':'color:var(--clay,#c1724c);font-weight:700;'}">${esc(_puKeyLabel(k))}</td>
+        <td></td>
+        <td class="tr xs">${rv||''}</td>
+        <td class="tr"><input type="number" min="0" class="fi" value="${ov||''}" placeholder="0"
+          style="width:72px;font-size:11px;padding:2px 5px;text-align:right;"
+          onclick="event.stopPropagation();"
+          onchange="_puCmpSetVal('${r.id}','${esc(k)}',this.value)"></td>
+        <td class="tr xs" id="pcd_${r.id}_${ki}" style="color:${kdc};font-weight:${d===0?'400':'700'};">${(d>0?'+':'')+d}</td>
+        <td></td>
+      </tr>`;
+    });
+  });
+
+  root.innerHTML = `
+    <div class="xs muted" style="margin-bottom:6px;">
+      左が日報の数量、右が相手からもらった数量です。相手の数量はここに直接打ち込みます。
+      差異は「相手 − 日報」で、相手のほうが多ければ緑、少なければ赤です。
+      打ち込んだ数量は計数アプリには反映しません。顧客名をタップすると顧客ページで明細を直せます。
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th style="width:26px;"></th><th>顧客</th><th>稼働</th>
+      <th class="tr">日報</th><th class="tr">相手</th><th class="tr">差異</th><th></th>
+    </tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function _puCmpToggle(key){
+  const trs = document.querySelectorAll('tr[data-pcgrp="'+key+'"]');
+  if(!trs.length) return;
+  let show=null;
+  trs.forEach(tr=>{ if(show===null) show=(tr.style.display==='none'); tr.style.display = show?'':'none'; });
+  const ch=document.getElementById('pcchev-'+key);
+  if(ch) ch.textContent = show?'▼':'▶';
+}
+
 function renderJetCmp(){
   _jetPurgePhotos();
   const monEl=$('jc-mon'); if(!monEl) return;
@@ -41511,6 +41749,8 @@ const RESTORE_KEYS = [
   'regions','departments','col_routes','customer_notes','charters',
   // 品目定義（★ 第2〜4段階で追加）
   'item_defs','item_groups',
+  // 集荷照合（相手からもらった数量）★ 2026-09-28.3
+  'col_cmp',
   // バーコード計数
   'jet_scan','jet_scan_nos','jet_adjust','jet_settings','jet_customers',
   // 精算・支払
