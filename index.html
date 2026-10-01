@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1534,6 +1534,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <input type="month" id="pc-mon" class="fi" onchange="renderPuCmp()">
+          <select id="pc-co" class="fi" onchange="renderPuCmp()" title="対象（委託会社で絞ると、その会社のドライバーが入力した分だけを突き合わせます）">
+            <option value="all">全体</option>
+          </select>
           <select id="pc-st" class="fi" onchange="renderPuCmp()">
             <option value="diff">差異あり</option>
             <option value="all">全件</option>
@@ -5129,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-28.3';
+const APP_VER = '2026-09-28.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -11378,13 +11381,20 @@ function _puCmpSave(){
   try{ if(typeof fbSet==='function') fbSet('col_cmp', D.colCmp||{}); }
   catch(e){ console.warn('[col_cmp] 保存エラー', e); }
 }
+// ★ 2026-09-28.4: 対象（全体／自社のみ／委託会社ごと）。
+//   委託会社を選ぶと、その会社のドライバーが入力した分だけを突き合わせる。
+//   相手からもらう数量も会社ごとに別物なので、保存キーに対象を含める。
+//   'all_<顧客id>' ／ 'own_<顧客id>' ／ 'c<会社id>_<顧客id>'
+function _puCmpScope(){ return $('pc-co')?.value || 'all'; }
+function _puCmpKey(custId){ return _puCmpScope() + '_' + String(custId); }
 function _puCmpCell(ym, custId){
   _puCmpLoad();
   const m = D.colCmp[ym] = D.colCmp[ym] || {};
-  return m[String(custId)] = m[String(custId)] || { ok:false, okAt:'', note:'', items:[] };
+  const k = _puCmpKey(custId);
+  return m[k] = m[k] || { ok:false, okAt:'', note:'', items:[] };
 }
 function _puCmpOtherMap(ym, custId){
-  const c = (D.colCmp && D.colCmp[ym] && D.colCmp[ym][String(custId)]) || null;
+  const c = (D.colCmp && D.colCmp[ym] && D.colCmp[ym][_puCmpKey(custId)]) || null;
   const out = {};
   const arr = c && Array.isArray(c.items) ? c.items : (c && c.items ? Object.values(c.items) : []);
   arr.forEach(x=>{ if(x && x.k) out[x.k] = Number(x.v)||0; });
@@ -11448,8 +11458,27 @@ function renderPuCmp(){
   const st = $('pc-st')?.value || 'diff';
   if(!ym){ root.innerHTML='<div class="al al-w"><span>月を選んでください。</span></div>'; return; }
 
+  // 対象セレクト（全体／自社のみ／委託会社ごと）を作り直す。選択は保つ。
+  const coSel = $('pc-co');
+  if(coSel){
+    const keep = coSel.value || 'all';
+    const cos = (D.companies||[]).filter(c=>c && c.name && c.active!==false)
+      .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));
+    coSel.innerHTML = '<option value="all">全体</option><option value="own">自社のみ</option>'
+      + cos.map(c=>`<option value="c${c.id}">${esc(c.name)}</option>`).join('');
+    if([...coSel.options].some(o=>o.value===keep)) coSel.value = keep;
+  }
+  const scope = _puCmpScope();
+  // 従事員 → 所属委託会社
+  const stCo = {};
+  (D.staff||[]).forEach(x=>{ if(x && x.name) stCo[x.name] = x.companyId ? ('c'+x.companyId) : 'own'; });
+  const inScope = r => {
+    if(scope==='all') return true;
+    return (stCo[r.staff] || 'own') === scope;
+  };
+
   // 日報側を 顧客 × 品目 に集計
-  const rows = (D.pickup||[]).filter(r=>(r.date||'').startsWith(ym));
+  const rows = (D.pickup||[]).filter(r=>(r.date||'').startsWith(ym) && inScope(r));
   const agg = {};   // custId → {name, rep:{k:v}, days:Set}
   rows.forEach(r=>{
     const id = String(r.customerId||0);
@@ -11462,8 +11491,10 @@ function renderPuCmp(){
       a.rep[k] = (a.rep[k]||0) + n;
     });
   });
-  // 相手側だけ入っている顧客も拾う
-  Object.keys((D.colCmp||{})[ym] || {}).forEach(id=>{
+  // 相手側だけ入っている顧客も拾う（いま選んでいる対象のものだけ）
+  Object.keys((D.colCmp||{})[ym] || {}).forEach(k=>{
+    if(k.indexOf(scope+'_')!==0) return;
+    const id = k.slice(scope.length+1);
     if(agg[id]) return;
     const cu = (D.customers||[]).find(c=>String(c.id)===String(id));
     const oth = _puCmpOtherMap(ym, id);
@@ -11483,7 +11514,7 @@ function renderPuCmp(){
     const sr = keys.reduce((s,k)=>s+(a.rep[k]||0),0);
     const so = keys.reduce((s,k)=>s+(oth[k]||0),0);
     const hasOther = Object.keys(oth).length>0;
-    const cell = (D.colCmp[ym]||{})[String(id)] || {};
+    const cell = (D.colCmp[ym]||{})[_puCmpKey(id)] || {};
     list.push({ id, name:a.name, keys, rep:a.rep, oth, sr, so,
                 diff: so-sr, hasOther, ok:!!cell.ok, days:a.days.size });
     _puCmpRows[String(id)] = {keys, rep:a.rep};
@@ -11543,6 +11574,8 @@ function renderPuCmp(){
       左が日報の数量、右が相手からもらった数量です。相手の数量はここに直接打ち込みます。
       差異は「相手 − 日報」で、相手のほうが多ければ緑、少なければ赤です。
       打ち込んだ数量は計数アプリには反映しません。顧客名をタップすると顧客ページで明細を直せます。
+      対象を委託会社に切り替えると、その会社のドライバーが入力した分だけを突き合わせます。
+      相手の数量は対象ごとに別々に持つので、全体で入れた数字が会社側に混ざることはありません。
     </div>
     <div class="tw"><table><thead><tr>
       <th style="width:26px;"></th><th>顧客</th><th>稼働</th>
