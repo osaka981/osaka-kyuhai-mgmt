@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-01.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-01.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5132,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-01.2';
+const APP_VER = '2026-10-01.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -29934,6 +29934,9 @@ async function _puQtySave(recId, items){
 //   顧客ページで差異に気づいた流れのまま直せるよう、その便の行まで連れていく。
 function _puJumpToJet(key, date){
   const mon=String(date||'').slice(0,7);
+  // ★ 2026-10-01.3: 顧客ページは画面全体を覆うオーバーレイ（fs-overlay）なので、
+  //   閉じないと下のタブを切り替えても何も起きているように見えない。
+  try{ if(typeof closeFS==='function') closeFS(); }catch(e){}
   try{ if(typeof switchTopTab==='function') switchTopTab('col', true); }catch(e){}
   try{ if(typeof snNav==='function') snNav('pu-count'); }catch(e){}
   const me=document.getElementById('jc-mon');
@@ -30022,9 +30025,10 @@ function renderCustDaily(el, name){
   let sub = _custDailySub;
   if(sub!=='day' && !liveGrps.some(g=>g.key===sub)) sub='day';
 
+  // ★ 2026-10-01.3: 小さくて押しにくかったので、文字と余白を大きくする
   const subTabs = [{key:'day',label:'日別'}].concat(liveGrps).map(t=>{
     const on = (t.key===sub);
-    return `<button class="btn btn-sm ${on?'':'b-gh'}" style="font-size:11px;padding:4px 12px;${on?'font-weight:700;':''}"
+    return `<button class="btn ${on?'b-blu':'b-gh'}" style="font-size:14px;padding:8px 22px;border-radius:7px;${on?'font-weight:700;':''}"
       onclick="_custDailySetSub('${t.key}')">${t.label}</button>`;
   }).join('');
 
