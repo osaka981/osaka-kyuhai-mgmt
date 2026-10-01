@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-09-28.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-01.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5132,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-09-28.4';
+const APP_VER = '2026-10-01.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -29829,13 +29829,128 @@ function _staffPuToggle(key){
   if(ch) ch.textContent = show?'▼':'▶';
 }
 // 日別一覧の明細の開閉
+// ★ 2026-10-01.1: 編集欄（pued-）は「直す」を押したときだけ開く。
+//   日を開いただけで入力欄が並ぶと、誤って上書きする危険があるため。
+//   閉じるときは編集欄も一緒に閉じる。
 function _custDailyToggle(key){
   const trs=document.querySelectorAll('tr[data-cdgrp="'+key+'"]');
   if(!trs.length) return;
-  let show=null;
-  trs.forEach(tr=>{ if(show===null) show=(tr.style.display==='none'); tr.style.display = show?'':'none'; });
+  const first=[...trs].find(tr=>!String(tr.id||'').startsWith('pued-'));
+  if(!first) return;
+  const show=(first.style.display==='none');
+  trs.forEach(tr=>{
+    const isEdit=String(tr.id||'').startsWith('pued-');
+    if(show){ if(!isEdit) tr.style.display=''; }
+    else { tr.style.display='none'; }
+  });
   const ch=document.getElementById('cdchev-'+key);
   if(ch) ch.textContent = show?'▼':'▶';
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-10-01.1: 集荷日報の数量を、顧客ページの便の行から直接直す
+//   ゆうパックの照合（_cmpWriteBackYp）と同じ考え方。日報そのもの（col_logs）を
+//   書き換える。ここを書き戻さないと、次の読み込みで古い値に戻り、
+//   請求にも支払にも効かない。
+//   計数アプリから来た便は触らない（スキャンデータは書き換えない方針）。
+// ════════════════════════════════════════════════════════════
+
+// その顧客で入力しうる品目キー（マスタ品目＋顧客台帳のカスタム品目）。
+// すでに数量が入っているキーは、設定から外れていても必ず出す（消えないように）。
+function _puEditKeys(rec, cu){
+  const keys=[];
+  const have=Object.keys(rec.items||{});
+  (typeof custUseItems==='function' ? custUseItems(cu, have) : IK)
+    .forEach(k=>{ if(ITEMS[k] && ITEMS[k].ck!=='charter' && k!=='チャーター') keys.push(k); });
+  (cu && Array.isArray(cu.otherItems) ? cu.otherItems : [])
+    .filter(o=>o && String(o.name||'').trim() && !['月額','日額'].includes(o.unit||'月額'))
+    .forEach(o=>{ const k='__custom__'+o.name; if(!keys.includes(k)) keys.push(k); });
+  have.forEach(k=>{ if(!keys.includes(k)) keys.push(k); });
+  return keys;
+}
+
+// 数量を書き換えて col_logs へ戻す。savePU と同じ手順を1件ぶんだけ行う。
+async function _puQtySave(recId, items){
+  const rec=(D.pickup||[]).find(r=>String(r.id)===String(recId));
+  if(!rec) return {ok:false, msg:'対象の日報が見つかりませんでした'};
+  if(rec._fromJet) return {ok:false, msg:'計数アプリから来た便は、ここでは直せません'};
+
+  const clean={};
+  Object.entries(items||{}).forEach(([k,v])=>{ const n=parseInt(v)||0; if(n>0) clean[k]=n; });
+  if(!Object.keys(clean).length){
+    return {ok:false, msg:'数量がすべて0です。この日報を無くす場合は削除を使ってください'};
+  }
+
+  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  let extraRows=[];
+  // 日報アプリの複数顧客の提出から分けた1件なら、この顧客の分だけ切り出して独立させる
+  if(rec._logId!=null){
+    const li=colLogs.findIndex(l=>String(l.id)===String(rec._logId));
+    if(li>=0){
+      const g=_splitColRowsByCustomer(colLogs[li].rows||[]).find(g=>g.key===rec._custKey);
+      if(g) extraRows=g.rows.filter(row=>['route','route_rest','チャーター'].includes(row.masterKey));
+    }
+    _colLogsRemovePickup(colLogs, rec);
+    rec.id=Date.now()*1000+Math.floor(Math.random()*1000);
+    delete rec._logId; delete rec._custKey;
+  }
+
+  rec.items=clean;
+
+  const cu=(D.customers||[]).find(c=>Number(c.id)===Number(rec.customerId));
+  const unitOf=mk=>{
+    const k=String(mk||'');
+    if(!k.startsWith('__custom__')) return (ITEMS[k] && ITEMS[k].unit) || '個';
+    const o=(cu && Array.isArray(cu.otherItems) ? cu.otherItems : []).find(x=>x && x.name===k.slice(10));
+    return (o && o.unit) || '個';
+  };
+  const rows=Object.entries(clean).map(([masterKey,qty])=>({
+    customerId:rec.customerId, customerName:rec.customerName, region:rec.region||'',
+    masterKey, qty, unit:unitOf(masterKey),
+  }));
+  const st=(D.staff||[]).find(x=>x && x.name===rec.staff);
+  const entry={
+    id:rec.id, type:'collection',
+    driver:{ id:String((st&&(st.empNo||st.id))||''), name:rec.staff, office:rec.office },
+    date:rec.date, rows:rows.concat(extraRows), note:rec.note||'',
+    submittedAt:new Date().toISOString(),
+  };
+  const ci=colLogs.findIndex(x=>String(x.id)===String(rec.id));
+  if(ci>=0) colLogs[ci]=entry; else colLogs.push(entry);
+
+  lsSet(LS_KEYS.COL, colLogs);
+  let ok=true;
+  if(typeof fbSet==='function'){
+    ok = await fbSet('col_logs', colLogs);
+    fbSet('pickup', D.pickup);
+  }
+  if(ok===false) return {ok:false, msg:'サーバーへの保存に失敗しました。通信を確認してください'};
+  return {ok:true};
+}
+
+// 便の行の下に出る編集欄の開閉
+function _puRowEditToggle(recId){
+  const tr=document.getElementById('pued-'+recId);
+  if(!tr) return;
+  tr.style.display = (tr.style.display==='none') ? '' : 'none';
+}
+// 保存ボタン
+async function _puRowEditSave(recId){
+  const tr=document.getElementById('pued-'+recId);
+  if(!tr) return;
+  const items={};
+  tr.querySelectorAll('input[data-ek]').forEach(inp=>{
+    const n=parseInt(inp.value)||0; if(n>0) items[inp.dataset.ek]=n;
+  });
+  const btn=tr.querySelector('.pued-save');
+  if(btn){ btn.disabled=true; btn.textContent='保存中'; }
+  const r=await _puQtySave(recId, items);
+  if(btn){ btn.disabled=false; btn.textContent='保存'; }
+  if(!r.ok){ showAlert({icon:'⚠️', title:'保存できません', msg:r.msg}); return; }
+  try{ if(typeof _showSaveToast==='function') _showSaveToast('数量を直しました'); }catch(e){}
+  try{ renderPU(); renderDash(); renderSum(); renderPUInv(); }catch(e){}
+  if(typeof renderCustFSTab==='function') renderCustFSTab('daily');
 }
 
 function renderCustDaily(el, name){
@@ -29917,9 +30032,9 @@ function renderCustDaily(el, name){
       + keys.map(k=>`<td class="tr">${tot[k].toLocaleString()}</td>`).join('')
       + `<td class="tr">${gtot.toLocaleString()}</td></tr></tfoot></table></div>`;
   } else if(dates.length){
-    html+=`<div class="xs muted" style="margin-bottom:6px;">同じ日は1行にまとめています。便が分かれている日は「▶」で内訳が開きます。</div>`;
+    html+=`<div class="xs muted" style="margin-bottom:6px;">同じ日は1行にまとめています。「▶」で便の内訳が開き、「直す」で数量を直せます。直した数量は請求と支払の両方に効きます。</div>`;
     html+=`<div class="tw"><table><thead><tr>
-      <th style="width:26px;"></th><th>日付</th><th class="tr">便</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th>
+      <th style="width:26px;"></th><th>日付</th><th class="tr">便</th><th>従事員</th><th>営業所</th><th>地域</th><th class="tr">総個数</th><th></th>
     </tr></thead><tbody>`;
     dates.forEach((d,di)=>{
       const grp=byDate[d];
@@ -29934,28 +30049,49 @@ function renderCustDaily(el, name){
                      : staffLink(staffs[0])+`<span class="xs muted"> 他${staffs.length-1}名</span>`;
       const offTxt   = offs.length<=1 ? (offs[0]?officeLink(offs[0]):'')
                      : officeLink(offs[0])+`<span class="xs muted"> 他${offs.length-1}</span>`;
-      html+=`<tr${multi?` style="cursor:pointer;" onclick="_custDailyToggle('${key}')"`:''}>
-        <td class="tr">${multi?`<span id="cdchev-${key}" class="xs muted">▶</span>`:''}</td>
+      html+=`<tr style="cursor:pointer;" onclick="_custDailyToggle('${key}')">
+        <td class="tr"><span id="cdchev-${key}" class="xs muted">▶</span></td>
         <td class="mono">${d}</td>
-        <td class="tr">${multi?`<span class="bdg">${grp.length}便</span>`:'<span class="xs muted">1</span>'}</td>
+        <td class="tr">${multi?`<span class="bdg">${grp.length}便</span>`:'<span class="xs muted">1便</span>'}</td>
         <td>${staffTxt}</td><td>${offTxt}</td><td class="xs muted">${regs.join('・')}</td>
         <td class="tr fw7">${tot}${cus?`<span class="xs muted" style="font-weight:400;"> ＋カスタム ${cus}</span>`:''}</td>
+        <td></td>
       </tr>`;
-      if(multi){
-        grp.forEach((r,i)=>{
-          const t1=IK.reduce((t,k)=>t+(iq(r,k)||0),0);
-          const c1=_puCustomTotal(r);
-          html+=`<tr data-cdgrp="${key}" style="display:none;background:var(--sur2);">
+      // ★ 2026-10-01.1: 便が1つの日も明細を出す。どの日も同じ手順で直せるようにする。
+      const cuObj=(D.customers||[]).find(c=>c.name===name);
+      grp.forEach((r,i)=>{
+        const t1=IK.reduce((t,k)=>t+(iq(r,k)||0),0);
+        const c1=_puCustomTotal(r);
+        html+=`<tr data-cdgrp="${key}" style="display:none;background:var(--sur2);">
+          <td></td>
+          <td class="xs muted" style="padding-left:14px;">${esc(_puBinLabel(r,i))}</td>
+          <td></td>
+          <td class="xs">${staffLink(r.staff)}</td>
+          <td class="xs">${r.office?officeLink(r.office):''}</td>
+          <td class="xs muted">${esc(_puItemsText(r))}</td>
+          <td class="tr xs">${t1}${c1?`<span class="muted"> ＋${c1}</span>`:''}</td>
+          <td style="white-space:nowrap;">${r._fromJet
+            ? '<span class="xs muted" title="計数アプリの便。引受数の訂正から直してください">計数</span>'
+            : `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_puRowEditToggle('${r.id}')">直す</button>`}</td>
+        </tr>`;
+        if(!r._fromJet){
+          const eks=_puEditKeys(r, cuObj);
+          html+=`<tr id="pued-${r.id}" data-cdgrp="${key}" style="display:none;background:var(--sur2);">
             <td></td>
-            <td class="xs muted" style="padding-left:14px;">${esc(_puBinLabel(r,i))}</td>
-            <td></td>
-            <td class="xs">${staffLink(r.staff)}</td>
-            <td class="xs">${r.office?officeLink(r.office):''}</td>
-            <td class="xs muted">${esc(_puItemsText(r))}</td>
-            <td class="tr xs">${t1}${c1?`<span class="muted"> ＋${c1}</span>`:''}</td>
+            <td colspan="7" style="padding:10px 12px 12px;">
+              <div class="xs muted" style="margin-bottom:6px;">${esc(r.date||'')}　${esc(_puBinLabel(r,i))}　${esc(r.staff||'')}　直すと日報そのものが書き換わり、請求と支払に反映されます。</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end;">
+                ${eks.map(k=>`<label style="display:flex;flex-direction:column;gap:2px;font-size:10px;color:var(--txt2);">
+                  <span${ITEMS[k]?'':' style="color:var(--clay,#c1724c);font-weight:700;"'}>${esc(_puKeyLabel(k))}</span>
+                  <input type="number" min="0" class="fi" data-ek="${esc(k)}" value="${(r.items||{})[k]||''}" placeholder="0"
+                    style="width:68px;font-size:12px;padding:3px 5px;text-align:right;"></label>`).join('')}
+                <button class="btn b-blu btn-sm pued-save" style="font-size:11px;padding:4px 14px;" onclick="_puRowEditSave('${r.id}')">保存</button>
+                <button class="btn b-gh btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puRowEditToggle('${r.id}')">閉じる</button>
+              </div>
+            </td>
           </tr>`;
-        });
-      }
+        }
+      });
     });
     html+=`</tbody></table></div>`;
   } else {
