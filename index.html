@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-01.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-01.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5132,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-01.1';
+const APP_VER = '2026-10-01.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -29929,6 +29929,41 @@ async function _puQtySave(recId, items){
   return {ok:true};
 }
 
+// ★ 2026-10-01.2: 計数アプリから来た便は、引受数の訂正へ案内する。
+//   スキャンデータは書き換えない方針なので、直す先は jet_adjust。
+//   顧客ページで差異に気づいた流れのまま直せるよう、その便の行まで連れていく。
+function _puJumpToJet(key, date){
+  const mon=String(date||'').slice(0,7);
+  try{ if(typeof switchTopTab==='function') switchTopTab('col', true); }catch(e){}
+  try{ if(typeof snNav==='function') snNav('pu-count'); }catch(e){}
+  const me=document.getElementById('jc-mon');
+  if(me && mon) me.value=mon;
+  // 計数照合は顧客のサブタブで絞り込むので、その便が属する顧客に合わせる
+  try{
+    const all=(typeof _jetRowsForMonth==='function') ? _jetRowsForMonth(mon, true) : [];
+    const hit=all.find(r=>r && r.j && String(r.j.key)===String(key));
+    if(hit && typeof _jcCust!=='undefined') _jcCust = hit.cust ? hit.cust : '_none';
+  }catch(e){ console.warn('[_puJumpToJet] 顧客の特定に失敗', e); }
+  try{
+    if(date && typeof jetOpenDay==='function') jetOpenDay(date);
+    else if(typeof renderJetCmp==='function') renderJetCmp();
+  }catch(e){ console.warn('[_puJumpToJet] 描画に失敗', e); }
+  // 行が描かれてから、その便を目立たせて引受数の欄へ入れる
+  setTimeout(()=>{
+    const tr=document.querySelector('#tb-jc tr[data-key="'+String(key).replace(/"/g,'\\"')+'"]');
+    if(!tr){
+      try{ _showSaveToast('その便が見つかりませんでした。月と顧客をご確認ください'); }catch(e){}
+      return;
+    }
+    try{ tr.scrollIntoView({behavior:'smooth', block:'center'}); }catch(e){}
+    const _bg=tr.style.background;
+    tr.style.background='rgba(214,158,46,.18)';
+    setTimeout(()=>{ tr.style.background=_bg; }, 2800);
+    const inp=tr.querySelector('.jc-c3');
+    if(inp){ inp.focus(); if(inp.select) inp.select(); }
+  }, 320);
+}
+
 // 便の行の下に出る編集欄の開閉
 function _puRowEditToggle(recId){
   const tr=document.getElementById('pued-'+recId);
@@ -30071,7 +30106,9 @@ function renderCustDaily(el, name){
           <td class="xs muted">${esc(_puItemsText(r))}</td>
           <td class="tr xs">${t1}${c1?`<span class="muted"> ＋${c1}</span>`:''}</td>
           <td style="white-space:nowrap;">${r._fromJet
-            ? '<span class="xs muted" title="計数アプリの便。引受数の訂正から直してください">計数</span>'
+            ? `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;"
+                 title="計数アプリの便です。スキャンは書き換えず、引受数の訂正で直します"
+                 onclick="_puJumpToJet('${esc((r._jet&&r._jet.key)||'')}','${esc(r.date||'')}')">引受数を直す</button>`
             : `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_puRowEditToggle('${r.id}')">直す</button>`}</td>
         </tr>`;
         if(!r._fromJet){
