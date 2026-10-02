@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1628,7 +1628,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card" id="jc-detailcard" style="display:none">
         <div class="ch"><div class="ct"><div class="cbar"></div><span id="jc-detail-title">便の明細</span></div>
           <button class="btn b-gh btn-sm" onclick="jetCloseDay()">日別一覧に戻る</button></div>
-        <!-- ★ 2026/09/12: この注記の行末に余分な閉じタグがあり、.content が早く
+        <style>
+        /* ★ 2026-10-02.4: 引受数の欄が狭く、例示の数字（計数値）が見切れていた。
+           欄を広げ、幅を食う数字の上下ボタンを消す。 */
+        #tb-jc .jc-c3,#tb-jc .jc-c5{min-width:92px;}
+        #tb-jc input[type=number]::-webkit-outer-spin-button,
+        #tb-jc input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+        #tb-jc input[type=number]{-moz-appearance:textfield;}
+      </style>
+      <!-- ★ 2026/09/12: この注記の行末に余分な閉じタグがあり、.content が早く
              閉じていた。そのため s-pu-sum 以降の全セクションが .content の外に出て、
              flex:1 のコンテンツ領域に押し下げられ画面下部に表示されていた。 -->
         <span class="xs muted">引受数が空なら計数をそのまま計上。入れると引受数で計上します（郵便局引受数を正とする取り決め）</span>
@@ -5132,7 +5140,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-02.3';
+const APP_VER = '2026-10-02.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -11840,8 +11848,8 @@ function renderJetCmp(){
       })()}</td>
       <td class="xs">${esc(j.corpName||'')}</td>
       <td class="tr mono">${fmt(j.c3||0)}</td><td class="tr mono">${fmt(j.c5||0)}</td><td class="tr mono fw7">${fmt((j.c3||0)+(j.c5||0))}</td>
-      <td class="tr"><input type="number" min="0" class="fi jc-c3" style="width:64px;text-align:right" value="${has(a.c3)?a.c3:''}" placeholder="${j.c3||0}"></td>
-      <td class="tr"><input type="number" min="0" class="fi jc-c5" style="width:64px;text-align:right" value="${has(a.c5)?a.c5:''}" placeholder="${j.c5||0}"></td>
+      <td class="tr"><input type="number" min="0" class="fi jc-c3" style="width:92px;text-align:right" value="${has(a.c3)?a.c3:''}" placeholder="${j.c3||0}"></td>
+      <td class="tr"><input type="number" min="0" class="fi jc-c5" style="width:92px;text-align:right" value="${has(a.c5)?a.c5:''}" placeholder="${j.c5||0}"></td>
       <td class="tr mono fw7" style="color:${diff?'var(--red)':'var(--txt2)'}">${diff>0?'+':''}${diff||'0'}</td>
       <td><input type="text" class="fi jc-reason" style="width:150px" value="${esc(a.reason||'')}" placeholder="差異の理由"></td>
       <td>
