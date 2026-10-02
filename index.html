@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5132,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-02.1';
+const APP_VER = '2026-10-02.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -11590,12 +11590,14 @@ function renderPuCmp(){
       let tds='';
       keys.forEach((k,ki)=>{
         const rv=(rep[d]&&rep[d][k])||0, ov=oth[k]||0, df=ov-rv;
-        tds+=`<td style="padding:3px 5px;white-space:nowrap;">
-          <div class="xs muted tr" style="line-height:1.3;">${rv||'0'}</div>
+        // ★ 2026-10-02.2: セルを右揃えにする。入力欄だけ左に寄って、
+        //   上の日報・下の差異と縦に揃っていなかった。
+        tds+=`<td style="padding:3px 6px;white-space:nowrap;text-align:right;">
+          <div class="xs muted" style="line-height:1.35;">${rv||'0'}</div>
           <input type="number" min="0" class="fi" value="${ov||''}" placeholder="0"
-            style="width:62px;font-size:11px;padding:2px 4px;text-align:right;"
+            style="width:72px;font-size:11.5px;padding:2px 5px;text-align:right;display:inline-block;"
             onchange="_puCmpSetDayVal('${id}','${d}','${esc(k)}',this.value)">
-          <div class="xs tr" id="pcdd_${di}_${ki}" style="line-height:1.3;color:${df===0?'var(--txt3)':(df<0?'var(--red2)':'var(--grn2)')};font-weight:${df===0?'400':'700'};">${(df>0?'+':'')+df}</div>
+          <div class="xs" id="pcdd_${di}_${ki}" style="line-height:1.35;color:${df===0?'var(--txt3)':(df<0?'var(--red2)':'var(--grn2)')};font-weight:${df===0?'400':'700'};">${(df>0?'+':'')+df}</div>
         </td>`;
       });
       const rRep=keys.reduce((a,k)=>a+((rep[d]&&rep[d][k])||0),0);
@@ -11621,10 +11623,17 @@ function renderPuCmp(){
         各マスは上が日報の数量、真ん中が相手の数量の入力欄、下が差異です。差異は「相手 − 日報」。
         日報の側を直すときは顧客ページの日報一覧から直してください。
       </div>
+      <style>
+        #pcd-table td,#pcd-table th{padding-top:4px;padding-bottom:4px;}
+        #pcd-table tbody tr td{border-top:1px solid var(--brd2);}
+        #pcd-table input::-webkit-outer-spin-button,
+        #pcd-table input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+        #pcd-table input{-moz-appearance:textfield;}
+      </style>
       <div class="tw" style="max-height:62vh;"><table id="pcd-table"><thead><tr>
         <th style="position:sticky;left:0;background:var(--bg2);z-index:2;">日付</th>
         <th class="tr">日報計</th>
-        ${keys.map((k,ki)=>`<th class="tr ${ITEMS[k]?(ITEMS[k].cls||''):''}"${ITEMS[k]?'':' style="color:var(--clay,#c1724c);font-weight:700;"'}>${esc(_puKeyLabel(k))}<div class="xs" id="pcdc_${ki}" style="font-weight:400;"></div></th>`).join('')}
+        ${keys.map((k,ki)=>`<th class="${ITEMS[k]?(ITEMS[k].cls||''):''}" style="text-align:right;white-space:nowrap;${ITEMS[k]?'':'color:var(--clay,#c1724c);font-weight:700;'}">${esc(_puKeyLabel(k))}<div class="xs" id="pcdc_${ki}" style="font-weight:400;"></div></th>`).join('')}
         <th class="tr">差異</th>
       </tr></thead><tbody>${body}</tbody></table></div>`;
     _puCmpDetailRecalc();
