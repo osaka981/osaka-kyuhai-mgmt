@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5132,7 +5132,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-02.2';
+const APP_VER = '2026-10-02.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -11460,6 +11460,20 @@ function _puCmpToggleOk(custId){
   renderPuCmp();
 }
 
+// ★ 2026-10-02.3: 計数アプリから来た便は、郵便局の引受数との突き合わせを
+//   計数照合で済ませている。集荷照合でも相手の数量を手で入れると二重管理に
+//   なるので、集計から外して計数照合へ案内する。
+function _puJumpToJetMonth(custId, ym){
+  try{ if(typeof closeFS==='function') closeFS(); }catch(e){}
+  try{ if(typeof switchTopTab==='function') switchTopTab('col', true); }catch(e){}
+  try{ if(typeof snNav==='function') snNav('pu-count'); }catch(e){}
+  const me=document.getElementById('jc-mon');
+  if(me && ym) me.value=ym;
+  try{ if(typeof _jcCust!=='undefined') _jcCust = String(custId||''); }catch(e){}
+  try{ if(typeof _jcDay!=='undefined') _jcDay = null; }catch(e){}
+  try{ if(typeof renderJetCmp==='function') renderJetCmp(); }catch(e){}
+}
+
 // ── 一覧と日別、どちらを出しているか ──
 let _puCmpOpenId = '';
 function _puCmpOpen(custId){ _puCmpOpenId = String(custId||''); renderPuCmp(); }
@@ -11473,6 +11487,7 @@ function _puCmpDetailRecalc(){
   const colT={}; st.keys.forEach(k=>colT[k]={rep:0, oth:0});
   let gRep=0, gOth=0;
   st.dates.forEach((d,di)=>{
+    if(st.skip && st.skip.has(d)) return;   // ★ 計数だけの日は合計に入れない
     const oth=_puCmpDayMap(ym, id, d);
     let rRep=0, rOth=0;
     st.keys.forEach((k,ki)=>{
@@ -11547,9 +11562,14 @@ function renderPuCmp(){
     const name=cu?cu.name:'（不明な顧客）';
     const mine=rows.filter(r=>String(r.customerId||0)===String(id));
     const rep={}, dateSet=new Set(), keySet=[];
+    // ★ 2026-10-02.3: その日が計数アプリの便だけで出来ているかを調べる。
+    //   計数だけの日は計数照合で突き合わせ済みなので、ここでは入力させず集計からも外す。
+    const dayJet={};
     mine.forEach(r=>{
       const d=r.date||''; if(!d) return;
       dateSet.add(d);
+      const c=dayJet[d]||(dayJet[d]={jet:0,all:0});
+      c.all++; if(r._fromJet) c.jet++;
       const m=rep[d]||(rep[d]={});
       Object.entries(r.items||{}).forEach(([k,q])=>{
         const n=Number(q)||0; if(!n) return;
@@ -11557,6 +11577,7 @@ function renderPuCmp(){
         if(!keySet.includes(k)) keySet.push(k);
       });
     });
+    const jetOnly = d => !!(dayJet[d] && dayJet[d].all>0 && dayJet[d].jet===dayJet[d].all);
     // 相手だけ入っている日・品目も列と行に出す
     const days=_puCmpDays(ym, id);
     Object.keys(days).forEach(d=>{
@@ -11566,7 +11587,7 @@ function renderPuCmp(){
     });
     const keys=IK.filter(k=>keySet.includes(k)).concat(keySet.filter(k=>!ITEMS[k]));
     const dates=[...dateSet].sort();
-    _puCmpDetail={custId:id, ym, keys, dates, rep};
+    _puCmpDetail={custId:id, ym, keys, dates, rep, skip:new Set(dates.filter(jetOnly))};
 
     if(!dates.length){
       root.innerHTML=`<div class="fla gap6 mb12"><button class="btn b-gh btn-sm" onclick="_puCmpBack()">← 一覧へ戻る</button>
@@ -11588,6 +11609,21 @@ function renderPuCmp(){
       const rowBg=(dow===0||dow===6)?'background:rgba(176,154,138,.06);':'';
       const oth=_puCmpDayMap(ym, id, d);
       let tds='';
+      if(jetOnly(d)){
+        // 計数アプリの便だけの日。引受数の訂正は計数照合で行う。
+        keys.forEach(k=>{
+          const rv=(rep[d]&&rep[d][k])||0;
+          tds+=`<td style="padding:4px 6px;white-space:nowrap;text-align:right;color:var(--txt3);">${rv||'0'}</td>`;
+        });
+        body+=`<tr style="${rowBg}opacity:.75;">
+          <td class="mono" style="white-space:nowrap;">${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span></td>
+          <td class="tr xs muted">${keys.reduce((a,k)=>a+((rep[d]&&rep[d][k])||0),0)||''}</td>
+          ${tds}
+          <td class="tr xs"><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;"
+            onclick="_puJumpToJetMonth('${id}','${ym}')">計数照合</button></td>
+        </tr>`;
+        return;
+      }
       keys.forEach((k,ki)=>{
         const rv=(rep[d]&&rep[d][k])||0, ov=oth[k]||0, df=ov-rv;
         // ★ 2026-10-02.2: セルを右揃えにする。入力欄だけ左に寄って、
@@ -11645,9 +11681,17 @@ function renderPuCmp(){
   rows.forEach(r=>{
     const id = String(r.customerId||0);
     if(id==='0') return;
-    const a = agg[id] || (agg[id] = {name:r.customerName||'', rep:{}, days:new Set()});
+    const a = agg[id] || (agg[id] = {name:r.customerName||'', rep:{}, days:new Set(), jetSum:0, jetN:0, handN:0});
     if(!a.name && r.customerName) a.name = r.customerName;
     a.days.add(r.date);
+    // ★ 2026-10-02.3: 計数アプリの便は計数照合で突き合わせ済み。
+    //   ここでは比較に入れず、参考の数量としてだけ持つ。
+    if(r._fromJet){
+      a.jetN++;
+      Object.entries(r.items||{}).forEach(([k,q])=>{ a.jetSum += Number(q)||0; });
+      return;
+    }
+    a.handN++;
     Object.entries(r.items||{}).forEach(([k,q])=>{
       const n = Number(q)||0; if(!n) return;
       a.rep[k] = (a.rep[k]||0) + n;
@@ -11660,7 +11704,7 @@ function renderPuCmp(){
     const cu = (D.customers||[]).find(c=>String(c.id)===String(id));
     const oth = _puCmpOtherMap(ym, id);
     if(!Object.keys(oth).length) return;
-    agg[id] = {name: cu?cu.name:'（不明な顧客）', rep:{}, days:new Set()};
+    agg[id] = {name: cu?cu.name:'（不明な顧客）', rep:{}, days:new Set(), jetSum:0, jetN:0, handN:0};
   });
 
   const list = [];
@@ -11675,13 +11719,15 @@ function renderPuCmp(){
     const so = keys.reduce((s,k)=>s+(oth[k]||0),0);
     const hasOther = Object.keys(oth).length>0;
     const cell = (D.colCmp[ym]||{})[_puCmpKey(id)] || {};
+    const jetOnlyCust = (a.jetN>0 && a.handN===0);
     list.push({ id, name:a.name, keys, rep:a.rep, oth, sr, so,
                 diff: so-sr, hasOther, ok:!!cell.ok, days:a.days.size,
+                jetSum:a.jetSum, jetN:a.jetN, jetOnly:jetOnlyCust,
                 dayN: Object.keys(_puCmpDays(ym,id)).length });
   });
   list.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
 
-  const ngCount = list.filter(r=>r.hasOther && r.diff!==0 && !r.ok).length;
+  const ngCount = list.filter(r=>!r.jetOnly && r.hasOther && r.diff!==0 && !r.ok).length;
   const okCount = list.filter(r=>r.ok).length;
   const setB=(id,t)=>{ const e=document.getElementById(id); if(e) e.textContent=t; };
   setB('pc-b-all', '顧客 '+list.length);
@@ -11689,7 +11735,7 @@ function renderPuCmp(){
   setB('pc-b-ok',  '了承済 '+okCount);
 
   let view = list;
-  if(st==='diff') view = list.filter(r=>!r.ok && (!r.hasOther || r.diff!==0));
+  if(st==='diff') view = list.filter(r=>!r.ok && !r.jetOnly && (!r.hasOther || r.diff!==0));
   if(st==='ok')   view = list.filter(r=>r.ok);
 
   if(!view.length){
@@ -11700,14 +11746,17 @@ function renderPuCmp(){
   let body='';
   view.forEach(r=>{
     const dc = r.diff===0 ? 'var(--txt3)' : (r.diff<0 ? 'var(--red2)' : 'var(--grn2)');
-    body += `<tr>
-      <td>${custLink(r.name)}${r.ok?'<span class="bdg bg" style="margin-left:5px;">了承</span>':''}</td>
+    body += `<tr${r.jetOnly?' style="opacity:.8;"':''}>
+      <td>${custLink(r.name)}${r.ok?'<span class="bdg bg" style="margin-left:5px;">了承</span>':''}
+        ${r.jetOnly?'<div class="xs muted">計数アプリの便のみ</div>':''}</td>
       <td class="xs muted">${r.days}日${r.dayN?`<br><span style="color:var(--grn2);">相手 ${r.dayN}日入力</span>`:''}</td>
-      <td class="tr fw7">${fmt(r.sr)}</td>
-      <td class="tr">${r.hasOther?fmt(r.so):'<span class="muted">未入力</span>'}</td>
-      <td class="tr" style="color:${r.hasOther?dc:'var(--txt3)'};font-weight:${r.hasOther&&r.diff!==0?'700':'400'};">${r.hasOther?((r.diff>0?'+':'')+fmt(r.diff)):'—'}</td>
+      <td class="tr fw7">${r.jetOnly?fmt(r.jetSum):fmt(r.sr)}${(!r.jetOnly&&r.jetSum)?`<div class="xs muted" style="font-weight:400;">＋計数 ${fmt(r.jetSum)}</div>`:''}${r.jetOnly?'<div class="xs muted" style="font-weight:400;">計数アプリ</div>':''}</td>
+      <td class="tr">${r.jetOnly?'<span class="xs muted">計数照合で確認</span>':(r.hasOther?fmt(r.so):'<span class="muted">未入力</span>')}</td>
+      <td class="tr" style="color:${(!r.jetOnly&&r.hasOther)?dc:'var(--txt3)'};font-weight:${(!r.jetOnly&&r.hasOther&&r.diff!==0)?'700':'400'};">${r.jetOnly?'—':(r.hasOther?((r.diff>0?'+':'')+fmt(r.diff)):'—')}</td>
       <td style="white-space:nowrap;">
-        <button class="btn b-blu btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puCmpOpen('${r.id}')">日別で合わせる</button>
+        ${r.jetOnly
+          ? `<button class="btn b-blu btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puJumpToJetMonth('${r.id}','${ym}')">計数照合へ</button>`
+          : `<button class="btn b-blu btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puCmpOpen('${r.id}')">日別で合わせる</button>`}
         <button class="btn btn-sm ${r.ok?'b-gh':''}" style="font-size:11px;padding:4px 12px;margin-left:4px;"
           onclick="_puCmpToggleOk('${r.id}')">${r.ok?'了承を外す':'了承'}</button>
       </td>
@@ -11717,6 +11766,7 @@ function renderPuCmp(){
   root.innerHTML = `
     <div class="xs muted" style="margin-bottom:6px;">
       月の合計を見て了承する画面です。相手の数量は「日別で合わせる」から日ごとに入れます。
+      計数アプリから来た便は、郵便局の引受数との突き合わせを計数照合で済ませているので、ここでは集計せず「計数照合へ」で移動します。
       差異は「相手 − 日報」で、相手のほうが多ければ緑、少なければ赤です。
       打ち込んだ数量は計数アプリには反映しません。顧客名をタップすると顧客ページで日報を直せます。
       対象を委託会社に切り替えると、その会社のドライバーが入力した分だけを突き合わせます。
