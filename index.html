@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2496,6 +2496,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card">
         <div id="arc-content"></div>
       </div>
+    </div>
+    <!-- ★ 2026-10-08.2: ここの </div> が1つ足りず、アーカイブのセクションが
+         閉じきらないまま「距離料金&見積」と「システム設定」を中に抱え込んでいた。
+         親が非表示のため、その2画面はボタンを押しても何も出なかった。 -->
     </div>
 
     <!-- 距離料金&見積 -->
@@ -5140,7 +5144,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.1';
+const APP_VER = '2026-10-08.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
