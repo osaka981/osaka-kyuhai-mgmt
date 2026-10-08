@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.14</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.15</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.14';
+const APP_VER = '2026-10-08.15';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -20717,19 +20717,25 @@ function renderBillingPay(monStr){
     m.rows.push(r);
   });
 
-  // 金額計算
+  /* ★ 2026-10-08.15: 金額は給与計算・支払明細書と同じ計算（_calcStaffPayment）を使う。
+     ここだけ st.tanka を直接見る独自計算が残っていたため、
+     単価を給与履歴（payHistory）で持っている人は単価も金額も ¥0 になっていた。
+     同じ理由で renderSalary は 2026-09-22.4 で _calcStaffPayment に寄せてあり、
+     この画面だけ旧計算のまま取り残されていた。 */
   Object.values(byStaff).forEach(m => {
-    if(m.kyuyo === '月給'){
-      // 月給：固定額
-      m.amount = m.tanka;
-      m.tankaLabel = `¥${fmt(m.tanka)}/月`;
-    } else {
-      // 歩合：完了×単価 + 転送は別単価なければ同じ
-      const base = (m.kanryo + m.tenso) * m.tanka;
-      const extra = (m.yokonori * 3000) + (m.tokubetsu * 3000);
-      m.amount = base + extra;
-      m.tankaLabel = `¥${fmt(m.tanka)}/個`;
-    }
+    const st = (D.staff||[]).find(s => s.name === m.name);
+    const cond = (st && typeof getActivePayCondition==='function')
+      ? (getActivePayCondition(st, String(monStr||'').replace('-','/')) || {}) : {};
+    const kyuyo = cond.kyuyo || m.kyuyo;
+    const tanka = (cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (Number(m.tanka)||0);
+    m.kyuyo = kyuyo;
+    m.tanka = tanka;
+    m.tankaLabel = (kyuyo === '月給') ? `¥${fmt(tanka)}/月` : `¥${fmt(tanka)}/個`;
+    let amt = 0;
+    try{
+      if(typeof _calcStaffPayment==='function') amt = (_calcStaffPayment(m.name, monStr)||{}).total || 0;
+    }catch(e){ console.error('[renderBillingPay] 支払額の計算に失敗', m.name, e); }
+    m.amount = amt;
   });
 
   const list = Object.values(byStaff).sort((a,b) =>
