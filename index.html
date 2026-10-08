@@ -760,8 +760,25 @@ html[data-wide="1"] .tw-sticky{max-height:calc(100vh - 215px);}
 #cmp-full-btn.on{color:#ffd27a;border-color:rgba(255,210,122,.45);background:rgba(255,210,122,.12);}
 </style>
 
-<!-- PDF-lib (契約書ページ抽出用) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<!-- PDF-lib (契約書ページ抽出用)
+     ★ 2026-10-08.21: 約1MBあり、契約書の書類生成でしか使わないのに
+       毎回 head で読み込んでいた。読み終わるまで画面が出ないため、
+       起動がそのぶん遅く、低スペックの端末ほど効いていた。
+       必要になった時点で読み込む（_loadPdfLib）。 -->
+<script>
+window._loadPdfLib = function(){
+  if(window.PDFLib) return Promise.resolve(window.PDFLib);
+  if(window._pdfLibPromise) return window._pdfLibPromise;
+  window._pdfLibPromise = new Promise(function(resolve, reject){
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+    s.onload  = function(){ resolve(window.PDFLib); };
+    s.onerror = function(){ window._pdfLibPromise = null; reject(new Error('pdf-lib の読み込みに失敗')); };
+    document.head.appendChild(s);
+  });
+  return window._pdfLibPromise;
+};
+</script>
 
 <!-- Firebase SDK -->
 <script type="module">
@@ -886,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.20</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.21</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5250,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.20';
+const APP_VER = '2026-10-08.21';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -8593,7 +8610,12 @@ function navByS(s) {
   if (s==='departments') _call('renderDeptCards');
   if (s==='locations')   _call('renderLocCards');
   if (s==='archive')     _call('renderArchive');
-  if (s==='contract')    { if(typeof initContractSection==='function') setTimeout(initContractSection, 50); }
+  if (s==='contract')    {
+    if(typeof initContractSection==='function') setTimeout(initContractSection, 50);
+    // ★ 2026-10-08.21: 契約書を開いた時点で裏でPDFライブラリを読み始める
+    //   （生成ボタンを押したときに待たされないように）
+    try{ if(typeof _loadPdfLib==='function') _loadPdfLib().catch(function(){}); }catch(e){}
+  }
   if (s==='invoice-bulk') { _ivBulkState.context='hr'; if(!_ivBulkTabAllowed(_ivBulkState.tab)) _ivBulkState.tab='personal'; _call('renderInvoiceBulk'); }
   if (s==='invoice-bulk-admin') { _ivBulkState.context='all'; _call('renderInvoiceBulk'); }
 }
@@ -39891,6 +39913,17 @@ async function generateContractPDF(autoPrint){
     return;
   }
 
+  // ★ 2026-10-08.21: ここで初めて PDF ライブラリを読み込む（起動時には読まない）
+  if(typeof PDFLib === 'undefined'){
+    try{
+      if(typeof _showSaveToast==='function') _showSaveToast('PDFライブラリを読み込んでいます…');
+      await _loadPdfLib();
+    }catch(e){
+      console.error('[contract] pdf-lib 読み込み失敗', e);
+      showAlert({msg:'PDFライブラリを読み込めませんでした。通信を確認して、もう一度お試しください。', type:'error'});
+      return;
+    }
+  }
   if(typeof PDFLib === 'undefined'){
     showAlert({msg:'PDFライブラリの読み込みに失敗しました。ページを再読み込みしてください。', type:'error'});
     return;
