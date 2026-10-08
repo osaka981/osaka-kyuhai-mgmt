@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.11</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.12</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.11';
+const APP_VER = '2026-10-08.12';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -16184,7 +16184,12 @@ function renderUnregisteredFleetCard(){
   const container = $('unregistered-fleet-card');
   if(!container) return;
   const list = getUnregisteredFleetDrivers();
-  if(!list.length){
+  /* ★ 2026-10-08.12: 「無視」した人を戻す場所が無かった。
+     無視すると二度と一覧に出てこず、確認ダイアログの
+     「後から設定で解除できます」という案内先の画面も存在しなかった。
+     無視した人をこのカードの下に出し、「戻す」で解除できるようにする。 */
+  const ignored = _fleetIgnoreList();
+  if(!list.length && !ignored.length){
     container.style.display='none';
     return;
   }
@@ -16195,7 +16200,7 @@ function renderUnregisteredFleetCard(){
   try{ _open = localStorage.getItem('unregFleetOpen') === '1'; }catch(e){}
   let html=`<div class="ch" onclick="toggleUnregisteredFleetCard()"
       style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;">
-      <div class="ct"><div class="cbar" style="background:var(--amb2)"></div>フリート未登録ドライバー（${list.length}名）</div>
+      <div class="ct"><div class="cbar" style="background:var(--amb2)"></div>フリート未登録ドライバー（${list.length}名）${ignored.length?`<span style="font-size:11px;font-weight:600;color:var(--txt2);margin-left:7px;">無視 ${ignored.length}名</span>`:''}</div>
       <span id="unreg-fleet-arrow" style="font-size:var(--sz-sm);color:var(--txt2);padding:0 4px;">${_open?'▲ 閉じる':'▼ 開く'}</span>
     </div>
     <div id="unreg-fleet-body" style="display:${_open?'block':'none'};">
@@ -16223,6 +16228,25 @@ function renderUnregisteredFleetCard(){
       <button class="btn b-gh btn-sm" onclick="ignoreFleetDriver('${esc(d.name)}')">無視</button>
     </div>`;
   });
+
+  if(!list.length){
+    html += `<div class="xs muted" style="padding:8px 2px;">未登録のドライバーはいません。</div>`;
+  }
+
+  // ★ 2026-10-08.12: 無視した人の一覧（ここから戻せる）
+  if(ignored.length){
+    html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--brd2);">
+      <div class="xs muted mb4">無視したドライバー（${ignored.length}名）　「戻す」で未登録一覧に戻ります</div>`;
+    ignored.forEach(n=>{
+      const v=String(n).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid var(--brd);
+            border-radius:6px;margin-bottom:4px;background:var(--bg3);">
+        <div style="flex:1;min-width:0;font-size:var(--sz-tbl);font-weight:700;color:var(--txt2);">${esc(n)}</div>
+        <button class="btn b-blu btn-sm" onclick="unignoreFleetDriver('${v}')">戻す</button>
+      </div>`;
+    });
+    html += `</div>`;
+  }
 
   html += `</div>`;   // #unreg-fleet-body 閉じ
   container.innerHTML=html;
@@ -16402,11 +16426,31 @@ function _openDriverModalFromFleet(md){
   setTimeout(()=>renderStDocLinks(), 200);
 }
 
+// ★ 2026-10-08.12: 無視リストの読み書き
+function _fleetIgnoreList(){
+  try{
+    const v = JSON.parse(localStorage.getItem(_FLEET_IGNORE_KEY)||'[]');
+    return Array.isArray(v) ? v.filter(Boolean) : [];
+  }catch(e){ return []; }
+}
+
+// 無視を解除して未登録一覧に戻す
+function unignoreFleetDriver(name){
+  const norm = String(name||'').replace(/\s+/g,'');
+  try{
+    const list=_fleetIgnoreList().filter(n=>String(n).replace(/\s+/g,'')!==norm);
+    localStorage.setItem(_FLEET_IGNORE_KEY, JSON.stringify(list));
+  }catch(e){}
+  renderUnregisteredFleetCard();
+  renderDash();
+  if(typeof _showSaveToast==='function') _showSaveToast(`${name} を未登録一覧に戻しました`);
+}
+
 // 無視リストに追加
 function ignoreFleetDriver(name){
   showDialog({
     icon:'ℹ️', title:'無視リストに追加',
-    msg:`「${name}」を未登録通知から除外しますか？\n\nこのドライバーは経営管理に登録不要と判断されます。\n後から設定で解除できます。`,
+    msg:`「${name}」を未登録通知から除外しますか？\n\nこのドライバーは経営管理に登録不要と判断されます。\nこのカードの下に「無視したドライバー」として残り、「戻す」でいつでも元に戻せます。`,
     okText:'無視する', cancelText:'キャンセル'
   }).then(ok=>{
     if(!ok) return;
