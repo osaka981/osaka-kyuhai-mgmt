@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5088,6 +5088,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-gh btn-sm" onclick="_peShiftDay(-1)" title="前日">◀ 前日</button>
         <input type="date" id="pe-date" class="fi" onchange="renderPostEntry()" style="font-size:15px;font-weight:700;min-width:150px;">
         <button class="btn b-gh btn-sm" onclick="_peShiftDay(1)" title="翌日">翌日 ▶</button>
+        <button class="btn b-amb btn-sm" onclick="_peMoveOpen()" title="入力した数字をそのまま別の日付へ移します">別の日へ移す</button>
       </div>
     </div>
     <div class="fg" style="min-width:200px;margin:0;">
@@ -5098,6 +5099,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <label>調書の「日計 配達完了」<span style="font-size:9.5px;color:var(--txt3);margin-left:4px;">検算用・任意</span></label>
       <input type="number" min="0" id="pe-chk-kanryo" class="fi" oninput="_postEntryCalc()"
         placeholder="例）554" style="font-size:15px;font-weight:700;font-family:'DM Mono',monospace;text-align:right;">
+    </div>
+  </div>
+
+  <!-- ★ 2026-10-08.3: 日付を間違えて入力したときに、数字をそのまま別の日へ移す -->
+  <div id="pe-move-bar" hidden style="margin-bottom:10px;padding:10px 12px;border-radius:7px;
+       border:1px solid var(--amb);background:rgba(200,150,40,.10);">
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:7px;">
+      いま画面に入っている数字を、そのまま下の日付へ移します。<b>数量は一切変わりません。</b>
+    </div>
+    <div class="fla gap6" style="flex-wrap:wrap;align-items:center;">
+      <span style="font-size:12.5px;font-weight:700;">移す先の日付</span>
+      <input type="date" id="pe-move-to" class="fi" style="font-size:15px;font-weight:700;max-width:170px;">
+      <label style="font-size:12px;display:flex;align-items:center;gap:5px;cursor:pointer;">
+        <input type="checkbox" id="pe-move-del" checked style="width:15px;height:15px;">
+        元の日（<span id="pe-move-src">-</span>）の保存ぶんを消す
+      </label>
+      <button class="btn b-amb btn-sm" onclick="_peMoveRun()">移して保存</button>
+      <button class="btn b-gh btn-sm" onclick="_peMoveClose()">やめる</button>
     </div>
   </div>
 
@@ -5144,7 +5163,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.2';
+const APP_VER = '2026-10-08.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -41082,6 +41101,8 @@ function openPostEntry(preDate, preOff){
 }
 
 function renderPostEntry(){
+  // ★ 2026-10-08.3: 日付や局を変えたら「別の日へ移す」の帯は閉じる（元の日がずれるため）
+  try{ if(typeof _peMoveClose==='function') _peMoveClose(); }catch(_){}
   const date=$('pe-date')?.value||'';
   const off =$('pe-off')?.value||'';
   const tb=$('tb-postentry'); if(!tb) return;
@@ -41243,6 +41264,123 @@ async function savePostEntry(opt){
   }
   if(opt.close){ closeM('m-postentry'); return; }
   _peShiftDay(1);   // 連続入力: 翌日へ
+}
+
+
+// ════════════════════════════════════════════════════════════
+//  ★ 2026-10-08.3: 日付を間違えたときに「数字はそのまま」別の日へ移す
+//   調書を見ながら打った数字を、打ち直さずに正しい日へ付け替えるための機能。
+//   いま画面に出ている入力欄の値を読むので、
+//   ・保存済みの日を開き直した場合
+//   ・まだ保存していない打ちかけの場合
+//   のどちらでも同じように動く。数量には一切手を触れない。
+// ════════════════════════════════════════════════════════════
+
+// 画面の入力欄をそのまま読み取る（savePostEntry と同じ読み方）
+function _peReadRows(){
+  const tb=$('tb-postentry'); if(!tb) return [];
+  const out=[];
+  [...tb.querySelectorAll('tr[data-staff]')].forEach(tr=>{
+    const obj={}; let any=false;
+    POST_COLS.forEach(c=>{
+      const raw=tr.querySelector(`input[data-col="${c.k}"]`)?.value;
+      const v=(raw===''||raw===undefined)?null:Math.max(0,parseInt(raw)||0);
+      obj[c.k]=v;
+      if(v!==null&&v!==0) any=true;
+    });
+    out.push({
+      empNo: tr.getAttribute('data-emp')||'',
+      staff: tr.getAttribute('data-staff')||'',
+      vals: obj,
+      any
+    });
+  });
+  return out;
+}
+
+function _peMoveOpen(){
+  const bar=$('pe-move-bar'); if(!bar) return;
+  const src=$('pe-date')?.value||'';
+  if(!src){ alert('先に日付を入れてください'); return; }
+  const rows=_peReadRows().filter(r=>r.any);
+  if(!rows.length){ alert('移す数字が画面にありません。\n先に数量を入力するか、入力済みの日付を開いてください。'); return; }
+  if($('pe-move-src')) $('pe-move-src').textContent=src;
+  if($('pe-move-to') && !$('pe-move-to').value) $('pe-move-to').value=src;
+  bar.hidden=false;
+  const to=$('pe-move-to'); if(to){ to.focus(); }
+}
+
+function _peMoveClose(){
+  const bar=$('pe-move-bar'); if(bar) bar.hidden=true;
+}
+
+async function _peMoveRun(){
+  const src=$('pe-date')?.value||'';
+  const to =$('pe-move-to')?.value||'';
+  const off=$('pe-off')?.value||'';
+  if(!src||!to){ alert('日付を入れてください'); return; }
+  if(src===to){ alert('移す先が元の日と同じです'); return; }
+
+  const rows=_peReadRows();
+  const live=rows.filter(r=>r.any);
+  if(!live.length){ alert('移す数字が画面にありません'); return; }
+
+  const delSrc = !!$('pe-move-del')?.checked;
+  const names  = live.map(r=>`${r.staff}（${r.empNo||'番号なし'}）`).join('\n  ');
+
+  const ok=await showDialog({
+    icon:'📅', title:'入力した数字を別の日へ移す',
+    msg:`${off}\n\n${src}  →  ${to}\n\n`
+      + `移す人（${live.length}名）:\n  ${names}\n\n`
+      + `数量はそのままです。書き換えません。\n`
+      + (delSrc ? `※ ${src} に保存されているこの${live.length}名ぶんは削除します。\n` : `※ ${src} の保存ぶんはそのまま残します。\n`)
+      + `※ 郵便局データ（調書）だけを直します。日報は触りません。`,
+    okText:'移す', cancelText:'やめる'
+  });
+  if(!ok) return;
+
+  const logs=_postLogsAll();
+
+  // ① 元の日のぶんを消す（この営業所で、いま画面に出ている人だけ）
+  let del=0;
+  if(delSrc){
+    const emps =new Set(rows.map(r=>String(r.empNo||'').trim()).filter(Boolean));
+    const nms  =new Set(rows.map(r=>r.staff).filter(Boolean));
+    for(let i=logs.length-1;i>=0;i--){
+      const l=logs[i];
+      if(l.date!==src) continue;
+      if(off && l.office && l.office!==off) continue;
+      const le=String(l.empNo||'').trim();
+      const hit = le ? emps.has(le) : nms.has(l.staff);
+      if(hit){ logs.splice(i,1); del++; }
+    }
+  }
+
+  // ② 移す先へ入れる（同じ日×社員番号があれば上書き。二重計上を防ぐ）
+  let upd=0, add=0;
+  live.forEach(r=>{
+    const rec={date:to, office:off, empNo:r.empNo, staff:r.staff,
+               ...r.vals, src:'manual', at:new Date().toISOString()};
+    const idx=logs.findIndex(l=>l.date===to &&
+      (r.empNo ? String(l.empNo||'').trim()===r.empNo : l.staff===r.staff));
+    if(idx>=0){ logs[idx]={...logs[idx], ...rec}; upd++; }
+    else { logs.push(rec); add++; }
+  });
+
+  lsSet(LS_KEYS.POSTLOG, logs);
+  try{ if(typeof fbSet==='function') await fbSet('post_logs', logs); }
+  catch(e){ console.error('[_peMoveRun] FB保存エラー',e); }
+
+  _peMoveClose();
+  if($('pe-date')) $('pe-date').value=to;
+  if($('pe-chk-kanryo')) $('pe-chk-kanryo').value='';
+  renderPostEntry();
+  _postEntryCalc();
+  if(typeof renderCmp==='function') renderCmp();
+
+  const msg=`${src} → ${to} へ移しました（新規${add}件 / 更新${upd}件`
+    + (delSrc?` / 元を${del}件削除`:'')+`）`;
+  if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
 }
 
 
