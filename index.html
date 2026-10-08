@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.12</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.13</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.12';
+const APP_VER = '2026-10-08.13';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -20682,6 +20682,8 @@ function showSalesDetail(custName){
 
 // ── 支払明細（従事員） ──
 function renderBillingPay(monStr){
+  // ★ 2026-10-08.13: 照合の印を出すため、郵便局データを1回だけ突き合わせておく
+  try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
   const rows = D.delivery.filter(r => !monStr || (r.date||'').startsWith(monStr));
 
   // 従事員別集計
@@ -20745,7 +20747,9 @@ function renderBillingPay(monStr){
   const tbody = $('tb-bl-staff');
   if(!tbody) return;
   tbody.innerHTML = list.map(m => `<tr>
-    <td class="fw7">${m.name}</td>
+    <td class="fw7">${m.name}
+      ${(()=>{ const b=_cmpBadgeHtml(_cmpStatsForStaff(m.name, monStr));
+               return b?`<div style="margin-top:2px;">${b}</div>`:''; })()}</td>
     <td class="xs muted">${m.office}</td>
     <td><span class="bdg ${m.kubun==='社員'?'bg':m.kubun==='会社委託'?'bb':'by'}">${m.kubun}</span></td>
     <td class="tr mono">${m.days.size}日</td>
@@ -29285,6 +29289,8 @@ function _openGasFor(staffName, ym){
 }
 
 function renderSalary(){
+  // ★ 2026-10-08.13: 照合の印を出すため、郵便局データを1回だけ突き合わせておく
+  try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
   let h='',tot=0,paid=0,unpaid=0,gasNeed=0,gasTarget=0;
   // 表示月を取得
   const salMon=_ymNorm($('sal-mon')?.value||'');
@@ -29329,7 +29335,9 @@ function renderSalary(){
 
     h+=`<tr>
       <td class="fw7">${s.name}</td><td>${kb}</td><td>${s.office}</td>
-      <td class="tr">${kn?fmt(kn):'−'}</td>
+      <td class="tr">${kn?fmt(kn):'−'}
+        ${(()=>{ const b=_cmpBadgeHtml(_cmpStatsForStaff(s.name, salMonStr));
+                 return b?`<div style="margin-top:2px;text-align:right;">${b}</div>`:''; })()}</td>
       <td class="tr">${puTot?fmt(puTot):'−'}</td>
       <td style="font-size:10px;">${gasCell.html}</td>
       <td class="tr" style="font-size:10px;">${breakdown}</td>
@@ -32848,6 +32856,52 @@ function _buildInvoiceProxyHTML(staffName, monStr){
 // 大阪急配 → 従事員への支払い通知。支給・控除を明細化し差引支払額を表示
 // 請求書発行代行と統一レイアウト(2列グリッド: 宛先左 | 発行情報右)
 // ══════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-08.13: 照合の確定状態を支払・給与へ返す（照合6番・案A）
+     数量そのものは照合で直した値が yp_logs → D.delivery と流れ、
+     すでに支払・給与の金額に効いている。効いていなかったのは
+     「照合済かどうか」のほうで、cmpOk は照合画面にしか出ていなかった。
+     そのため未照合・差異が残ったままでも警告なしに金額が出ていた。
+     金額の計算式は変えず、状態だけを表に出す。
+     ※ _cmpDiffs は postKanryo 等を見るため、呼ぶ側で
+       _cmpJoinPostLogs() を1回だけ先に通しておくこと（人数ぶん回すと重い）。
+   ════════════════════════════════════════════════════════════ */
+function _cmpStatsForStaff(name, monStr){
+  const m=String(monStr||'').replace(/\//g,'-').slice(0,7);
+  const nd=v=>String(v||'').replace(/\//g,'-');
+  const rows=(D.delivery||[]).filter(r=>r && r.staff===name && (!m || nd(r.date).startsWith(m)));
+  let ok=0, ng=0, un=0;
+  rows.forEach(r=>{
+    let any=false;
+    try{ any = (typeof _cmpDiffs==='function') ? !!_cmpDiffs(r).any : false; }catch(e){}
+    if(r.cmpOk) ok++;
+    else if(any) ng++;
+    else un++;
+  });
+  return {total:rows.length, ok:ok, ng:ng, un:un, clean:(rows.length>0 && ng===0 && un===0)};
+}
+
+// 一覧に出す小さな印
+function _cmpBadgeHtml(s){
+  if(!s || !s.total) return '';
+  if(s.clean) return '<span class="bdg bg" style="font-size:9.5px;">照合済</span>';
+  const p=[];
+  if(s.ok) p.push('<span class="bdg bg" style="font-size:9.5px;">済'+s.ok+'</span>');
+  if(s.ng) p.push('<span class="bdg br" style="font-size:9.5px;">差異'+s.ng+'</span>');
+  if(s.un) p.push('<span class="bdg bz" style="font-size:9.5px;">未照合'+s.un+'</span>');
+  return p.join(' ');
+}
+
+// 支払明細書に刷る一文
+function _cmpPayNote(s){
+  if(!s || !s.total) return '';
+  if(s.clean) return '照合済';
+  const p=[];
+  if(s.ng) p.push('差異'+s.ng+'件');
+  if(s.un) p.push('未照合'+s.un+'件');
+  return p.join('・')+'を含む（暫定）';
+}
+
 function _buildPayslipHTML(staffName, monStr){
   const pay = _calcStaffPayment(staffName, monStr);
   if(!pay.staff) return null;
@@ -32919,6 +32973,18 @@ function _buildPayslipHTML(staffName, monStr){
       <div style="font-size:12px;line-height:1.9;">
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">発行日</label><span style="background:#e8e8e8;padding:1px 8px;font-weight:700;">${todayStr}</span></div>
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">対象月</label><span style="font-weight:700;">${esc(monLabel)}</span></div>
+        ${(()=>{ /* ★ 2026-10-08.13: 照合の状態を刷る（渡したあとで数字が変わる事故を防ぐ） */
+          try{
+            if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs();
+            const _s=_cmpStatsForStaff(staffName, monStr);
+            const _t=_cmpPayNote(_s);
+            if(!_t) return '';
+            const _c=_s.clean ? '#1a7f4b' : '#b36b00';
+            return `<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;">
+              <label style="color:#555;font-size:11px;">郵便局照合</label>
+              <span style="font-weight:700;color:${_c};">${esc(_t)}</span></div>`;
+          }catch(e){ return ''; }
+        })()}
         <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">支払予定</label><span style="font-weight:700;">${esc(payDateLabel)}</span></div>
         <!-- 発行者(印影を背面に透過) -->
         <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
