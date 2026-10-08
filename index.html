@@ -748,6 +748,16 @@ html[data-wide="1"] .al-i{display:none!important;}
 html[data-wide="1"] .fold-hide{display:none!important;}
 html[data-wide="1"] .tw-sticky{max-height:calc(100vh - 215px);}
 #wide-toggle-btn.on{color:#ffd27a!important;border-color:rgba(255,210,122,.45)!important;background:rgba(255,210,122,.12)!important;}
+
+/* ★ 2026-10-08.10: 照合結果だけを画面いっぱいに出す。
+   フィルターと集計カードが常に居座って一覧が数行しか見えないため、
+   一覧そのものを前面に出して1画面で追えるようにする。 */
+.card.cmp-full{position:fixed;inset:0;z-index:420;margin:0;border-radius:0;
+  padding:8px 12px;overflow:auto;background:var(--sur);}
+.card.cmp-full .fold-hide{display:none!important;}
+.card.cmp-full .al{display:none!important;}
+.card.cmp-full .ch{margin-bottom:6px;}
+#cmp-full-btn.on{color:#ffd27a;border-color:rgba(255,210,122,.45);background:rgba(255,210,122,.12);}
 </style>
 
 <!-- PDF-lib (契約書ページ抽出用) -->
@@ -876,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.9</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.10</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1365,34 +1375,47 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-cmp" class="sec">
       <div class="card mb12">
         <div class="ch">
-          <div class="ct"><div class="cbar"></div>照合フィルター</div>
+          <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="cbar"></div>照合フィルター
+            <!-- ★ 2026-10-08.10: 畳んだときに、いま何で絞っているかをここに出す -->
+            <span id="cmp-filter-brief" style="font-size:12px;font-weight:600;color:var(--txt2);"></span>
+          </div>
           <div class="fla gap6">
+            <button class="btn b-gh btn-sm" id="cmp-filter-fold-btn" onclick="toggleCmpFilter()"
+              title="絞り込みを畳んで表を広く使います">▲ 畳む</button>
             <button class="btn b-amb btn-sm" onclick="openPostEntry()">📮 郵便局データ 手入力</button>
             <button class="btn b-blu btn-sm" onclick="runAutoCompare()">🔄 自動照合実行</button>
           </div>
         </div>
-        <div id="cmp-mon-tabs"></div>
-        <!-- ★ 2026/08/24: 営業所もタブ選択に。実体の select は残して互換を保つ。 -->
-        <div id="cmp-off-tabs"></div>
-        <div class="f3">
-          <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
-          <div class="fg" id="cmp-off-holder" hidden><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
-          <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
+        <!-- ★ 2026-10-08.10: ここから下がまるごと畳める -->
+        <div id="cmp-filter-body">
+          <div id="cmp-mon-tabs"></div>
+          <!-- ★ 2026/08/24: 営業所もタブ選択に。実体の select は残して互換を保つ。 -->
+          <div id="cmp-off-tabs"></div>
+          <div class="f3">
+            <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
+            <div class="fg" id="cmp-off-holder" hidden><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
+            <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
+          </div>
         </div>
       </div>
 
       <!-- 差異サマリー -->
       <div class="krow mb12" id="cmp-kpi"></div>
 
-      <div class="card">
+      <div class="card" id="cmp-card">
         <div class="ch">
           <div class="ct"><div class="cbar"></div>照合結果</div>
           <div class="fla gap6">
+            <!-- ★ 2026-10-08.10: 一覧だけを画面いっぱいに出す -->
+            <button class="btn b-gh btn-sm" id="cmp-full-btn" onclick="toggleCmpFull()">全画面</button>
             <span class="bdg bg" id="cmp-ok-b">照合済 0</span>
             <span class="bdg br" id="cmp-ng-b">差異 0</span>
             <span class="bdg bz" id="cmp-un-b">未照合 0</span>
           </div>
         </div>
+        <!-- ★ 2026-10-08.10: 全画面のときだけ出す絞り込み帯（月・営業所） -->
+        <div id="cmp-fs-bar" hidden></div>
         <div id="cmp-sum" class="fold-hide"></div>
         <button type="button" id="cmp-to-top" class="to-top-btn" onclick="_cmpScrollTop()" title="最上部へ戻る">▲ 最上部へ</button>
         <div class="al al-i mb8" style="font-size:11px;">
@@ -5196,7 +5219,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.9';
+const APP_VER = '2026-10-08.10';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5247,7 +5270,7 @@ function toggleWideMode(){
 function _fitStickyTables(){
   try{
     document.querySelectorAll('.tw-sticky').forEach(el=>{
-      if(!el.offsetParent) return;                  // 表示されていない画面は触らない
+      if(!el.getClientRects().length) return;        // 表示されていない画面は触らない
       const top = el.getBoundingClientRect().top;
       const avail = window.innerHeight - Math.max(top, 0) - 14;
       el.style.maxHeight = Math.max(260, avail) + 'px';
@@ -5258,6 +5281,28 @@ window.addEventListener('resize', function(){
   clearTimeout(window._fitStickyT);
   window._fitStickyT = setTimeout(_fitStickyTables, 120);
 });
+// ★ 2026-10-08.10: 照合結果の全画面表示。
+//   カードを画面いっぱいに出し、絞り込み（月・営業所）は上に帯で出す。
+//   Esc か「閉じる」で戻る。
+function toggleCmpFull(force){
+  const card = document.getElementById('cmp-card');
+  if(!card) return;
+  const on = (typeof force === 'boolean') ? force : !card.classList.contains('cmp-full');
+  card.classList.toggle('cmp-full', on);
+  const bar = document.getElementById('cmp-fs-bar');
+  if(bar) bar.hidden = !on;
+  const btn = document.getElementById('cmp-full-btn');
+  if(btn){ btn.textContent = on ? '閉じる' : '全画面'; btn.classList.toggle('on', on); }
+  document.body.style.overflow = on ? 'hidden' : '';
+  if(on && typeof renderCmp === 'function') renderCmp();
+  setTimeout(function(){ try{ _fitStickyTables(); }catch(_){} }, 50);
+}
+document.addEventListener('keydown', function(ev){
+  if(ev.key !== 'Escape') return;
+  const card = document.getElementById('cmp-card');
+  if(card && card.classList.contains('cmp-full')) toggleCmpFull(false);
+});
+
 // タブ切替・絞り込みのあとに測り直す（描画のたびに呼び出しを足さなくて済むように）
 document.addEventListener('click', function(){
   clearTimeout(window._fitStickyC);
@@ -9173,6 +9218,8 @@ window.onload = () => {
   (function(){ var sz; try{sz=localStorage.getItem('uiSize')}catch(e){} setUiSize(sz||'s'); })();
   // ★ 2026-10-08.5: 「表を広く」のボタン表示を前回の状態に合わせる
   (function(){ var v; try{v=localStorage.getItem('mgmtWide')}catch(e){} setWideMode(v==='1'); })();
+  // ★ 2026-10-08.10: 照合フィルターの折り畳み状態を前回に合わせる
+  (function(){ try{ _cmpFilterFoldInit(); }catch(_){} })();
   setTimeout(function(){ try{ _fitStickyTables(); }catch(_){} }, 400);
   renderAll();
 };
@@ -9194,6 +9241,40 @@ function renderAll() {
 }
 
 // ── 欠落関数のスタブ（Firebase未接続時のエラー防止）──
+/* ★ 2026-10-08.10: 照合フィルターの完全折り畳み。
+   月タブ・営業所タブ・状況をまるごと畳み、見出しの行だけ残す。
+   畳んでいる間も「2026年10月 ・ 大阪西郵便局 ・ 全件」と出すので、
+   いま何で絞っているかは分かる。状態は端末に覚える。 */
+function _cmpFilterBrief(){
+  const el = $('cmp-filter-brief'); if(!el) return;
+  const folded = document.getElementById('cmp-filter-body')?.hidden;
+  if(!folded){ el.textContent=''; return; }
+  const mon = _ymNorm($('cmp-mon')?.value||'');
+  const off = $('cmp-off')?.value||'';
+  const st  = $('cmp-st')?.value||'全件';
+  const monTxt = mon ? (mon.slice(0,4)+'年'+Number(mon.slice(5,7))+'月') : '全期間';
+  el.textContent = `　${monTxt} ・ ${off||'全営業所'} ・ ${st}`;
+}
+
+function setCmpFilterFold(folded){
+  const body = $('cmp-filter-body');
+  const btn  = $('cmp-filter-fold-btn');
+  if(body) body.hidden = !!folded;
+  if(btn)  btn.textContent = folded ? '▼ 絞り込みを開く' : '▲ 畳む';
+  try{ localStorage.setItem('cmpFilterFold', folded ? '1' : '0'); }catch(e){}
+  _cmpFilterBrief();
+  setTimeout(function(){ try{ _fitStickyTables(); }catch(_){} }, 60);
+}
+
+function toggleCmpFilter(){
+  setCmpFilterFold(!$('cmp-filter-body')?.hidden);
+}
+
+function _cmpFilterFoldInit(){
+  let v; try{ v = localStorage.getItem('cmpFilterFold'); }catch(e){}
+  setCmpFilterFold(v === '1');
+}
+
 function renderCmp(){
   // ★ 2026/08/20: ここは従来 toYM() で "2026/08" に変換していたが、
   //   下の比較相手は r.date.substring(0,7) = "2026-08" のためスラッシュ形式では
@@ -9206,7 +9287,27 @@ function renderCmp(){
   const off=$('cmp-off')?.value||'';
   const _ot=$('cmp-off-tabs');
   if(_ot) _ot.innerHTML=_offTabs(off, mon);
+  // ★ 2026-10-08.10: 全画面のときは、同じ絞り込みを一覧の上にも出す
+  const _fsb=$('cmp-fs-bar');
+  if(_fsb && !_fsb.hidden) _fsb.innerHTML=_monTabs('cmp-fs-mon-tab',mon,"_cmpMonSync()",{label:'対象月'})+_offTabs(off, mon);
   const st=$('cmp-st')?.value||'全件';
+  _cmpFilterBrief();          // ★ 2026-10-08.10: 畳んでいるときの表示を今の絞り込みに合わせる
+  // ★ 2026-10-08.10: 全画面のときは、この帯から月・営業所・状況を切り替える
+  //   （全画面はフィルターのカードごと覆い隠すため、帯が空だと絞り込めない）
+  {
+    const _fsBar=$('cmp-fs-bar');
+    if(_fsBar && !_fsBar.hidden){
+      _fsBar.innerHTML =
+        _monTabs('cmp-mon-tab-fs', mon, "_cmpMonSyncFs()", {label:'月'})
+        + _offTabs(off, mon)
+        + `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+             <span style="font-size:13px;font-weight:700;color:var(--txt2);">状況</span>
+             <select id="cmp-st-fs" class="fi" style="max-width:190px;" onchange="_cmpStSyncFs()">
+               ${['全件','差異あり','未照合','照合済'].map(o=>`<option${o===st?' selected':''}>${o}</option>`).join('')}
+             </select>
+           </div>`;
+    }
+  }
   // ★ 2026/08/18: 郵便局調書(D.postLogs)を日報へ突き合わせる。
   //   postLogs は書き換えず、表示用に postKanryo 等を注入するだけ。
   _cmpJoinPostLogs();
@@ -41053,6 +41154,23 @@ function _cmpMonSync(){
   const v=document.getElementById('cmp-mon-tab')?.value||'';
   const real=document.getElementById('cmp-mon');
   if(real && real.value!==v){ real.value=v; }
+  renderCmp();
+}
+
+// ★ 2026-10-08.10: 全画面の帯から月・状況を切り替えるとき
+//   （id を分けないと、全画面でないときのタブと取り違える）
+function _cmpMonSyncFs(){
+  const v=document.getElementById('cmp-mon-tab-fs')?.value||'';
+  const real=document.getElementById('cmp-mon');
+  if(real && real.value!==v){ real.value=v; }
+  const tab=document.getElementById('cmp-mon-tab');
+  if(tab) tab.value=v;
+  renderCmp();
+}
+function _cmpStSyncFs(){
+  const v=document.getElementById('cmp-st-fs')?.value||'全件';
+  const real=document.getElementById('cmp-st');
+  if(real) real.value=v;
   renderCmp();
 }
 
