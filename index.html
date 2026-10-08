@@ -334,6 +334,11 @@ tr.no-hover:hover td, tr.no-hover:hover{background:transparent !important;}
 .al-e{background:var(--red3);border-left:2px solid var(--red2);}
 
 /* FORM */
+/* ★ 2026-10-08.7: hidden を付けた要素が .fg の display:flex に負けて
+   表示され続けていた。照合フィルターの「月」「営業所」のプルダウンは
+   タブに置き換えたとき hidden にしたはずが、ずっと出たままで
+   1行ぶん高さを食っていた。属性のほうを必ず優先させる。 */
+[hidden]{display:none!important;}
 .fg{display:flex;flex-direction:column;gap:3px;}
 .fg label{font-size:var(--sz-lbl,9.5px);color:var(--txt2);font-weight:700;letter-spacing:.3px;}
 .fi{background:var(--bg3);border:1px solid var(--brd2);border-radius:4px;padding:var(--sz-p-fi,6px 9px);color:var(--txt);font-family:inherit;font-size:var(--sz-fi,12px);outline:none;transition:border-color .15s;width:100%;}
@@ -727,8 +732,13 @@ html[data-wide="1"] #top-nav .tn-logo{display:none;}
 html[data-wide="1"] #top-nav .tn-right{padding:5px 12px;gap:7px;}
 html[data-wide="1"] #top-nav .tn-right button{padding:4px 10px;font-size:11px;}
 html[data-wide="1"] #top-nav .tn-tab{padding:7px 18px;font-size:13px;}
-html[data-wide="1"] #sub-nav{padding:6px 14px;min-height:0;gap:6px;}
-html[data-wide="1"] .sn-btn{padding:6px 16px;font-size:13px;}
+html[data-wide="1"] #sub-nav{padding:5px 12px;min-height:0;gap:5px;flex-wrap:nowrap;overflow-x:auto;}
+html[data-wide="1"] .sn-btn{padding:5px 13px;font-size:12.5px;}
+html[data-wide="1"] .f3{grid-template-columns:repeat(auto-fit,minmax(150px,220px));gap:6px;}
+html[data-wide="1"] .f3 .fi{padding:4px 7px;font-size:12px;}
+html[data-wide="1"] .f3 label{font-size:10px;}
+html[data-wide="1"] .otab{padding:5px 12px;}
+html[data-wide="1"] #cmp-mon-tabs>div,html[data-wide="1"] #cmp-off-tabs>div{margin-bottom:6px!important;}
 html[data-wide="1"] .content{padding:8px;}
 html[data-wide="1"] .card{padding:9px 11px;}
 html[data-wide="1"] .card.mb12,html[data-wide="1"] .mb12{margin-bottom:7px;}
@@ -866,7 +876,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.8</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5186,7 +5196,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.6';
+const APP_VER = '2026-10-08.8';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5224,10 +5234,35 @@ function setWideMode(on){
     b.textContent = on ? '元に戻す' : '表を広く';
     b.classList.toggle('on', !!on);
   }
+  setTimeout(function(){ try{ _fitStickyTables(); }catch(_){} }, 60);
 }
 function toggleWideMode(){
   setWideMode(document.documentElement.getAttribute('data-wide') !== '1');
 }
+
+// ★ 2026-10-08.7: 一覧の高さを「画面の下までいっぱい」に合わせる。
+//   これまで CSS で calc(100vh - 300px) と決め打ちしていたため、
+//   上のフィルターやサブタブが2段になる画面では表が画面からはみ出し、
+//   逆に少ない画面では余白が残っていた。実際の位置を測って決める。
+function _fitStickyTables(){
+  try{
+    document.querySelectorAll('.tw-sticky').forEach(el=>{
+      if(!el.offsetParent) return;                  // 表示されていない画面は触らない
+      const top = el.getBoundingClientRect().top;
+      const avail = window.innerHeight - Math.max(top, 0) - 14;
+      el.style.maxHeight = Math.max(260, avail) + 'px';
+    });
+  }catch(_){}
+}
+window.addEventListener('resize', function(){
+  clearTimeout(window._fitStickyT);
+  window._fitStickyT = setTimeout(_fitStickyTables, 120);
+});
+// タブ切替・絞り込みのあとに測り直す（描画のたびに呼び出しを足さなくて済むように）
+document.addEventListener('click', function(){
+  clearTimeout(window._fitStickyC);
+  window._fitStickyC = setTimeout(_fitStickyTables, 160);
+}, true);
 (function(){
   var v;
   try{ v = localStorage.getItem('mgmtWide'); }catch(e){}
@@ -9114,6 +9149,7 @@ window.onload = () => {
   (function(){ var sz; try{sz=localStorage.getItem('uiSize')}catch(e){} setUiSize(sz||'s'); })();
   // ★ 2026-10-08.5: 「表を広く」のボタン表示を前回の状態に合わせる
   (function(){ var v; try{v=localStorage.getItem('mgmtWide')}catch(e){} setWideMode(v==='1'); })();
+  setTimeout(function(){ try{ _fitStickyTables(); }catch(_){} }, 400);
   renderAll();
 };
 
@@ -9903,16 +9939,21 @@ function renderPostList(){
   const kw = (document.getElementById('post-list-search')?.value || '').trim().toLowerCase();
 
   // ── 郵便局拠点の収集(複数ソースをマージ) ──
-  // ソース1: D.locations の typesDel=true の拠点
-  // ソース2: D.offices 全件(旧マスタ、配達拠点として扱う)
+  // ★ 2026-10-08.8: ここは「配達事業を行う拠点の一覧」。
+  //   旧マスタ(D.offices)を無条件に全件入れていたため、集荷事業の
+  //   持込先郵便局(東淀川・都島・平野・大阪港など)や堺営業所まで
+  //   配達拠点として並んでいた。宅配の拠点だけに絞る。
+  // ソース1: D.locations の宅配拠点(type=post_office または 宅配にチェック)
+  // ソース2: D.offices のうち宅配にチェックがあるもの
   // ソース3: D.delivery で実際に office として登場した拠点
   // 全てマージして重複排除(name基準)
   const postsByName = new Map();
 
-  // ソース1: D.locations の typesDel=true
+  // ソース1: D.locations の宅配拠点
   (D.locations||[]).forEach(l => {
     if(!l.name) return;
-    if(l.typesDel === true || (l.prices?.kanryo > 0) || (l.prices?.tenso > 0)){
+    if(l.active === false) return;
+    if(l.typesDel === true || l.type === 'post_office' || (l.prices?.kanryo > 0) || (l.prices?.tenso > 0)){
       postsByName.set(l.name, {
         id: l.id, name: l.name, address: l.address, prices: l.prices||{},
         source: 'location',
@@ -9920,11 +9961,13 @@ function renderPostList(){
     }
   });
 
-  // ソース2: D.offices(旧マスタ)
+  // ソース2: D.offices(旧マスタ) — 宅配にチェックがあるものだけ
   (D.offices||[]).forEach(o => {
     if(!o.name) return;
     // 本社は除外(配達拠点ではない)
     if(o.name === '本社') return;
+    // ★ 2026-10-08.8: 集荷の持込先だけの拠点はここに出さない
+    if(o.typesDel !== true) return;
     if(!postsByName.has(o.name)){
       postsByName.set(o.name, {
         id: o.id, name: o.name, address: o.address||'', prices: o.postPrices||{},
