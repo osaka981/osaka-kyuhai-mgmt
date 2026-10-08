@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.15</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.17</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1245,7 +1245,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
                 <th style="text-align:left">区分</th>
                 <th class="tr">稼働日</th>
                 <th class="tr">完了個数</th>
-                <th class="tr">単価</th>
+                <th class="tr">単価<div style="font-size:9px;font-weight:400;color:var(--txt3);">個数制は完了の単価</div></th>
                 <th class="tr" style="color:#86efac">支払金額</th>
               </tr></thead>
               <tbody id="tb-bl-staff"></tbody>
@@ -2326,10 +2326,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div class="flbc mb12">
         <div class="fla gap6">
-          <input type="month" id="tsinv-mon" class="fi">
-          <select id="tsinv-off" class="fi" style="width:160px;"><option value="">全局</option></select>
+          <input type="month" id="tsinv-mon" class="fi" onchange="renderTSInv()">
+          <select id="tsinv-off" class="fi" style="width:160px;" onchange="renderTSInv()"><option value="">全局</option></select>
         </div>
-        <button class="btn b-grn btn-sm" onclick="renderTSInv()">🔄 請求書生成</button>
+        <button class="btn b-grn btn-sm" onclick="renderTSInv()">🔄 再計算</button>
       </div>
       <div id="ts-inv-content"></div>
     </div>
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.15';
+const APP_VER = '2026-10-08.17';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -8572,6 +8572,7 @@ function navByS(s) {
   if (s==='payment-mgmt') _call('renderPaymentMgmt');
   if (s==='monthly-summary') _call('renderMonthlySummary');
   if (s==='cost-analysis')   _call('renderCostAnalysis');
+  if (s==='ts-inv')      _call('renderTSInv');     // ★ 2026-10-08.17
   if (s==='offices')     _call('renderOffCards');
   if (s==='departments') _call('renderDeptCards');
   if (s==='locations')   _call('renderLocCards');
@@ -20730,7 +20731,24 @@ function renderBillingPay(monStr){
     const tanka = (cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (Number(m.tanka)||0);
     m.kyuyo = kyuyo;
     m.tanka = tanka;
-    m.tankaLabel = (kyuyo === '月給') ? `¥${fmt(tanka)}/月` : `¥${fmt(tanka)}/個`;
+    /* ★ 2026-10-08.16: 単価の出どころ。
+       staff.tanka は「月給」のときしか使わない。個数制（歩合）の単価は
+       完了・転送・夜間・大型… と項目ごとに fixedPrices.del（委託会社所属なら
+       委託会社単価）に入っている。ここで staff.tanka を出していたため、
+       個数制の人は全員 ¥0/個 と表示されていた（金額のほうは正しく出ている）。 */
+    if(kyuyo === '月給'){
+      m.tankaLabel = `¥${fmt(tanka)}/月`;
+    } else {
+      let dp = {};
+      try{ if(typeof _getEffectiveDelPrices==='function') dp = _getEffectiveDelPrices(st) || {}; }catch(e){}
+      const kp = Number(dp.kanryo) || 0;
+      const sub = ['tenso','night','ogata','shukka'].filter(k => Number(dp[k]) > 0).length;
+      m.tankaLabel = kp
+        ? `完了 ¥${fmtUnitPrice(kp)}/個`
+          + (sub ? `<div style="font-size:9px;color:var(--txt3);">ほか${sub}項目</div>` : '')
+        : (tanka ? `¥${fmt(tanka)}/個`
+                 : `<span style="color:var(--txt3);">単価未設定</span>`);
+    }
     let amt = 0;
     try{
       if(typeof _calcStaffPayment==='function') amt = (_calcStaffPayment(m.name, monStr)||{}).total || 0;
@@ -37000,6 +37018,8 @@ function requireTS(section, navEl){
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
     if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
+    // ★ 2026-10-08.17: 郵便局請求書は開いた時点で当月の売上を出す
+    if(section==='ts-inv') setTimeout(()=>{ try{ renderTSInv(); }catch(e){ console.error('[renderTSInv]', e); } },100);
     return;
   }
   tsPendingAction = {type:'nav', section, navEl};
@@ -37868,6 +37888,118 @@ function generatePostInvoice(locationId, monStr){
   }
   // 一覧再描画
   try{ renderPostInvList(); }catch(e){}
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-08.17: 郵便局請求書の画面が空だった原因
+     画面の「請求書生成」ボタンは renderTSInv() を呼んでいるが、
+     その関数がどこにも作られていなかった（押すと ReferenceError）。
+     一方 renderPostInvList() は存在するものの、参照している
+     delinv-post-mon / tb-post-inv などの要素が画面側に無い。
+     画面と中身が最後までつながっていなかった。
+     画面側の id（tsinv-mon / tsinv-off / ts-inv-content）に合わせて作り直す。
+     集計は既存の _calcPostBilling をそのまま使うので、金額の計算は変えない。
+   ════════════════════════════════════════════════════════════ */
+function renderTSInv(){
+  const box = $('ts-inv-content');
+  if(!box) return;
+
+  // 月が空なら当月を入れる（空のままだと何も出ずに迷う）
+  const monEl = $('tsinv-mon');
+  if(monEl && !monEl.value){
+    const d=new Date();
+    monEl.value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const mon = _ymNorm(monEl?.value || '');
+  if(!mon){ box.innerHTML='<div class="card"><div class="xs muted">対象月を選んでください。</div></div>'; return; }
+
+  // 局の選択肢を拠点マスタから作る
+  const sel = $('tsinv-off');
+  let locs = (typeof getBillingLocations==='function') ? (getBillingLocations()||[]) : [];
+  if(sel){
+    const cur = sel.value;
+    sel.innerHTML = ['<option value="">全局</option>']
+      .concat(locs.map(l=>`<option value="${esc(String(l.id))}"${String(cur)===String(l.id)?' selected':''}>${esc(l.name)}</option>`))
+      .join('');
+    if(cur) sel.value = cur;
+  }
+  const filterId = sel?.value || '';
+  if(filterId) locs = locs.filter(l=>String(l.id)===String(filterId));
+
+  if(!locs.length){
+    box.innerHTML = '<div class="card"><div class="xs muted">請求対象の郵便局が拠点マスタにありません。管理 → 拠点管理 で「請求対象」にしてください。</div></div>';
+    return;
+  }
+
+  let rows='', subTotal=0, noPrice=0, noData=0;
+  locs.forEach(loc=>{
+    let bill=null;
+    try{ bill=_calcPostBilling(loc.id, mon); }catch(e){ console.error('[renderTSInv] 集計に失敗', loc.name, e); }
+    const hasPrice = !!(loc.prices && Object.values(loc.prices).some(v=>Number(v)>0));
+    if(!hasPrice) noPrice++;
+    if(!bill || !bill.hasData){
+      noData++;
+      rows += `<tr>
+        <td class="fw7">${esc(loc.name)}</td>
+        <td class="xs muted">${esc(loc.clientCompany||'日本郵便株式会社')}<br>${esc(loc.clientBranch||loc.name)}</td>
+        <td class="tr dim">—</td><td class="tr dim">—</td>
+        <td class="tr dim">—</td><td class="tr dim">—</td><td class="tr dim">—</td>
+        <td>${hasPrice?'<span class="bdg bz">日報なし</span>':'<span class="bdg br">単価未設定</span>'}</td>
+        <td></td></tr>`;
+      return;
+    }
+    const ex  = bill.subtotal||0;
+    const tax = Math.floor(ex*0.1);
+    subTotal += ex;
+    const issuedList = (typeof _getIssuedDocs==='function' ? (_getIssuedDocs('postInvoice', loc.name)||[]) : []);
+    const issued = issuedList.filter(x=>x.month===mon).sort((a,b)=>(b.version||0)-(a.version||0))[0];
+    rows += `<tr>
+      <td class="fw7">${esc(loc.name)}</td>
+      <td class="xs muted">${esc(loc.clientCompany||'日本郵便株式会社')}<br>${esc(loc.clientBranch||loc.name)}</td>
+      <td class="tr mono">${fmt(bill.workDays||0)}</td>
+      <td class="tr mono">${fmt((bill.rawAgg&&bill.rawAgg.kanryo)||0)}</td>
+      <td class="tr mono fw7" style="color:var(--tel2);">¥${fmt(ex)}</td>
+      <td class="tr mono">¥${fmt(tax)}</td>
+      <td class="tr mono fw7">¥${fmt(ex+tax)}</td>
+      <td>${issued?`<span class="bdg bg">発行済 v${issued.version||1}</span>`:'<span class="bdg bz">未発行</span>'}
+          ${hasPrice?'':'<div style="margin-top:2px;"><span class="bdg br" style="font-size:9px;">単価未設定</span></div>'}</td>
+      <td><button class="btn b-red btn-sm" onclick="generatePostInvoice(${loc.id},'${esc(mon)}')">発行</button></td>
+    </tr>`;
+  });
+
+  const tax = Math.floor(subTotal*0.1);
+  box.innerHTML = `
+    <div class="krow mb12">
+      <div class="card" style="padding:10px;text-align:center;">
+        <div class="xs muted mb4">売上合計（税抜）</div>
+        <div class="fw7 lg" style="color:var(--tel2);">¥${fmt(subTotal)}</div></div>
+      <div class="card" style="padding:10px;text-align:center;">
+        <div class="xs muted mb4">消費税10%</div>
+        <div class="fw7 lg">¥${fmt(tax)}</div></div>
+      <div class="card" style="padding:10px;text-align:center;">
+        <div class="xs muted mb4">売上合計（税込）</div>
+        <div class="fw7 lg" style="color:#86efac;">¥${fmt(subTotal+tax)}</div></div>
+      <div class="card" style="padding:10px;text-align:center;">
+        <div class="xs muted mb4">対象局</div>
+        <div class="fw7 lg">${locs.length}局</div></div>
+    </div>
+    ${noPrice?`<div class="al al-w" style="font-size:11.5px;"><span>⚠️</span>
+      <span>単価が未設定の局が <b>${noPrice}局</b> あります。その局は請求金額に出てきません。
+      郵便局 → 郵便局単価 で登録してください。</span></div>`:''}
+    <div class="card">
+      <div class="ch"><div class="ct"><div class="cbar"></div>${esc(mon)} 郵便局別 売上</div>
+        <span class="xs muted">金額は税抜。消費税は10%で計算</span></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th>郵便局</th><th>宛先</th>
+          <th class="tr">稼働日</th><th class="tr">完了個数</th>
+          <th class="tr" style="color:var(--tel2);">売上（税抜）</th>
+          <th class="tr">消費税</th><th class="tr">税込</th>
+          <th>状況</th><th>操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
 }
 
 // 郵便局請求書 一覧の再描画
