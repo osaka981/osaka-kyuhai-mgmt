@@ -717,6 +717,27 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .sn-badge-r{font-size:var(--sz-sn-badge,9px);background:rgba(220,50,50,.85);color:#fff;border-radius:8px;padding:0 5px;min-width:16px;text-align:center;}
 .sn-badge-n{font-size:var(--sz-sn-badge,9px);background:rgba(76,175,136,.2);color:#0a7a5a;border-radius:3px;padding:0 4px;}
 .sn-badge-ts{font-size:var(--sz-sn-badge,9px);background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
+
+/* ★ 2026-10-08.5: 「表を広く」
+   日報・照合の一覧で、見出しと集計カードが画面の半分以上を占めて
+   肝心の表が数行しか見えない状態になっていた。
+   上部（ロゴ・タブ・サブナビ）を薄くし、集計カードと案内文を畳んで、
+   表そのものに高さを回す。月タブ・営業所タブは残す（絞り込みに使うため）。 */
+html[data-wide="1"] #top-nav .tn-logo{display:none;}
+html[data-wide="1"] #top-nav .tn-right{padding:5px 12px;gap:7px;}
+html[data-wide="1"] #top-nav .tn-right button{padding:4px 10px;font-size:11px;}
+html[data-wide="1"] #top-nav .tn-tab{padding:7px 18px;font-size:13px;}
+html[data-wide="1"] #sub-nav{padding:6px 14px;min-height:0;gap:6px;}
+html[data-wide="1"] .sn-btn{padding:6px 16px;font-size:13px;}
+html[data-wide="1"] .content{padding:8px;}
+html[data-wide="1"] .card{padding:9px 11px;}
+html[data-wide="1"] .card.mb12,html[data-wide="1"] .mb12{margin-bottom:7px;}
+html[data-wide="1"] .ch{margin-bottom:7px;}
+html[data-wide="1"] .krow{display:none!important;}
+html[data-wide="1"] .al-i{display:none!important;}
+html[data-wide="1"] .fold-hide{display:none!important;}
+html[data-wide="1"] .tw-sticky{max-height:calc(100vh - 215px);}
+#wide-toggle-btn.on{color:#ffd27a!important;border-color:rgba(255,210,122,.45)!important;background:rgba(255,210,122,.12)!important;}
 </style>
 
 <!-- PDF-lib (契約書ページ抽出用) -->
@@ -845,7 +866,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -862,6 +883,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
     <button onclick="openM('m-del')" style="background:#ff6042;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋局日報</button>
     <button onclick="openPuBulk()" style="background:#009c5a;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">＋集荷日報</button>
+    <button id="wide-toggle-btn" onclick="toggleWideMode()" title="見出しと集計カードを畳んで、表を広く使います"
+      style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700;color:rgba(255,255,255,.6);white-space:nowrap;">表を広く</button>
     <button id="theme-toggle-btn" onclick="toggleTheme()" style="background:none;border:0.5px solid rgba(255,255,255,.2);border-radius:5px;padding:4px 8px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);">🌙</button>
     <button class="tn-ts-btn" id="ts-top-btn" onclick="requireTS('ts-inv',null)">TS</button>
   </div>
@@ -1360,7 +1383,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <span class="bdg bz" id="cmp-un-b">未照合 0</span>
           </div>
         </div>
-        <div id="cmp-sum"></div>
+        <div id="cmp-sum" class="fold-hide"></div>
         <button type="button" id="cmp-to-top" class="to-top-btn" onclick="_cmpScrollTop()" title="最上部へ戻る">▲ 最上部へ</button>
         <div class="al al-i mb8" style="font-size:11px;">
           <span>ℹ️</span>
@@ -1510,7 +1533,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
       <!-- 品目別KPI帯 -->
-      <div class="card mb12">
+      <div class="card mb12 fold-hide">
         <div class="ch"><div class="ct"><div class="cbar"></div>品目別 数量（フィルター期間）</div></div>
         <div id="pu-item-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;"></div>
       </div>
@@ -5163,7 +5186,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.4';
+const APP_VER = '2026-10-08.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5188,6 +5211,27 @@ function setUiSize(sz){
   var sz;
   try{ sz = localStorage.getItem('uiSize'); }catch(e){}
   if(sz) document.documentElement.setAttribute('data-size', sz);
+})();
+
+// ── 表を広く (2026-10-08.5) ──
+//  見出し・サブナビを薄くし、集計カードと案内文を畳んで表に高さを回す。
+//  月タブ・営業所タブは残すので、畳んだままでも絞り込みはできる。
+function setWideMode(on){
+  document.documentElement.setAttribute('data-wide', on ? '1' : '0');
+  try{ localStorage.setItem('mgmtWide', on ? '1' : '0'); }catch(e){}
+  const b = document.getElementById('wide-toggle-btn');
+  if(b){
+    b.textContent = on ? '元に戻す' : '表を広く';
+    b.classList.toggle('on', !!on);
+  }
+}
+function toggleWideMode(){
+  setWideMode(document.documentElement.getAttribute('data-wide') !== '1');
+}
+(function(){
+  var v;
+  try{ v = localStorage.getItem('mgmtWide'); }catch(e){}
+  if(v === '1') document.documentElement.setAttribute('data-wide', '1');
 })();
 
 // ── 社員番号ユーティリティ ──
@@ -9068,6 +9112,8 @@ window.onload = () => {
   $('pu-date').value = d.toISOString().slice(0,10);
   // 表示サイズボタン active 初期化
   (function(){ var sz; try{sz=localStorage.getItem('uiSize')}catch(e){} setUiSize(sz||'s'); })();
+  // ★ 2026-10-08.5: 「表を広く」のボタン表示を前回の状態に合わせる
+  (function(){ var v; try{v=localStorage.getItem('mgmtWide')}catch(e){} setWideMode(v==='1'); })();
   renderAll();
 };
 
