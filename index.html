@@ -876,7 +876,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.8</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.9</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5196,7 +5196,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.8';
+const APP_VER = '2026-10-08.9';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6954,6 +6954,30 @@ function applyFirebaseData() {
 
   // 宅配日報（YP_LOGS → D.delivery）
   // 統合形式(form.del/form.col)と旧形式(form.mochidashi直下)の両方に対応
+
+  /* ★ 2026-10-08.9: 営業所は「その日に選んだ郵便局」を使う。
+     これまで driver.office（ドライバー登録時の所属）だけを見ていたため、
+     大阪西を選んで出した日報が浜寺の照合一覧に並んでいた。
+     日報アプリの統計と請求は postOffice を見ており、経営管理だけが
+     違う欄を読んでいた（＝二重基準）。それをそろえる。
+     ただし無条件に入れ替えると
+       ・「その他（未確定）」がそのまま営業所名になる
+       ・集荷担当の持込先郵便局が宅配の営業所に混ざる
+     ので、拠点マスタで宅配拠点になっている局のときだけ採用し、
+     それ以外は従来どおり driver.office に戻す（＝悪くなる方向がない）。 */
+  const _delOffNameSet = new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l && l.name && l.active!==false && (l.type==='post_office' || l.typesDel)) _delOffNameSet.add(l.name);
+  });
+  (D.offices||[]).forEach(o=>{
+    if(o && o.name && o.typesDel===true) _delOffNameSet.add(o.name);
+  });
+  const _pickDelOffice = (r)=>{
+    const po = String(r && r.postOffice || '').trim();
+    if(po && po !== 'その他（未確定）' && _delOffNameSet.has(po)) return po;
+    return (r && r.driver && r.driver.office) || '';
+  };
+
   const ypLogs = lsGet(LS_KEYS.YP, null);
   if (ypLogs && ypLogs.length) {
     // 宅配レコード(form.del or 旧形式) → D.delivery
@@ -6969,7 +6993,7 @@ function applyFirebaseData() {
         return {
           id: r.id,
           date: r.date,
-          office: r.driver?.office || '',
+          office: _pickDelOffice(r),   // ★ 2026-10-08.9: その日に選んだ郵便局を優先
           postOffice: r.postOffice || '',
           staff: r.driver?.name || '',
           kubun: r.driver?.officeType === 'collection' ? '集荷担当' : '個人事業主',
@@ -13094,7 +13118,10 @@ async function saveDel(){
   // ★ 2026/09/15: ルールが会社ごとに絞るために会社IDを持たせる（自社は空）
   const _coId = String((findStaffByEmpNo(_drvId)||{}).companyId||'');
   // ★ 2026-09-22.21: 編集のときは yp_logs も置き換える（同じidが増えると取込で二重になる）
-  const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()};
+  /* ★ 2026-10-08.9: ここに postOffice を入れていなかったため、
+     手入力した局日報は読み直すと郵便局が空になっていた。
+     営業所をその日の郵便局として扱うようにしたので、必ず持たせる。 */
+  const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,postOffice:(rec.postOffice||rec.office||''),companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()};
   const _ypIdx = ypLogs.findIndex(x=>x && String(x.id)===String(rec.id));
   if(_ypIdx>=0) ypLogs[_ypIdx]=_ypEntry; else ypLogs.push(_ypEntry);
   lsSet(LS_KEYS.YP, ypLogs);
