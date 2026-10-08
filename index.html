@@ -866,7 +866,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.6</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -935,7 +935,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="flbc mb12">
         <div class="fla gap6">
           <div class="otabs" id="del-otabs"></div>
-          <input type="month" id="del-mon" class="fi" onchange="renderDel()">
+          <input type="month" id="del-mon" class="fi" onchange="renderDelOtabs();renderDel()">
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expDelCSV()">📥 CSV出力</button>
@@ -5186,7 +5186,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.5';
+const APP_VER = '2026-10-08.6';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -10092,9 +10092,43 @@ function renderDash() {
 }
 
 // ─── 宅配日報テーブル ───
+
+// ★ 2026-10-08.6: 宅配日報の営業所タブに出す局の一覧。
+//   これまで D.offices（営業所マスタ）をそのまま並べていたため、
+//   集荷事業の「持込先郵便局」（東淀川・都島・平野・大阪港など）まで
+//   宅配日報のタブに混ざって出ていた。
+//   照合画面と同じ考え方にそろえ、
+//     ・拠点マスタで宅配拠点のもの（type=post_office または 宅配にチェック）
+//     ・実際に宅配日報が入っている営業所
+//   だけを出す。件数は選んでいる月のぶん。
+function _delOffList(mon){
+  const names=new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l && l.active!==false && (l.type==='post_office' || l.typesDel)) names.add(l.name);
+  });
+  (D.delivery||[]).forEach(r=>{ if(r.office) names.add(r.office); });
+  if(D.curOff) names.add(D.curOff);          // 選択中のものは必ず残す
+
+  const cnt={};
+  (D.delivery||[]).forEach(r=>{
+    if(mon && String(r.date||'').slice(0,7)!==mon) return;
+    if(r.office) cnt[r.office]=(cnt[r.office]||0)+1;
+  });
+
+  return [...names].filter(Boolean)
+    .sort((a,b)=>(cnt[b]||0)-(cnt[a]||0) || String(a).localeCompare(String(b),'ja'))
+    .map(n=>({name:n, n:cnt[n]||0}));
+}
+
 function renderDelOtabs() {
+  const mon = (typeof _ymNorm==='function') ? _ymNorm($('del-mon')?.value||'') : ($('del-mon')?.value||'');
+  const list = _delOffList(mon);
   let h=`<div class="otab ${D.curOff===''?'on':''}" onclick="setOff('')">全営業所</div>`;
-  D.offices.forEach(o=>h+=`<div class="otab ${D.curOff===o.name?'on':''}" onclick="setOff('${o.name}')">${o.name.replace('営業所','')}</div>`);
+  list.forEach(o=>{
+    const v=String(o.name).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    h+=`<div class="otab ${D.curOff===o.name?'on':''}" onclick="setOff('${v}')">${esc(String(o.name).replace('営業所',''))}`
+     + `<span style="font-size:9.5px;font-weight:400;opacity:.7;margin-left:5px;">${o.n?o.n+'件':'—'}</span></div>`;
+  });
   h+=`<div class="otab otab-add" onclick="openM('m-office')">＋</div>`;
   $('del-otabs').innerHTML=h;
 }
