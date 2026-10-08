@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-02.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5140,7 +5140,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-02.4';
+const APP_VER = '2026-10-08.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5513,10 +5513,41 @@ const lsGet = (k, def) => {
     return def;  // file://など localStorage不可の場合はデフォルト値
   }
 };
+/* ★ 2026-10-08.1: これまで保存に失敗しても黙って素通りしていた。
+   端末の容量が尽きると、サーバーから届いた新しい日報を控えに書けないまま
+   「成功した」ことになり、その古い控えを後からサーバーへ書き戻して
+   届いていた日報を消していた（10月1日のデータが消えた経路）。
+   失敗を記録し、その控えを使う書き戻しを止める。 */
+window._lsFailedKeys = window._lsFailedKeys || {};
 const lsSet = (k, v) => {
-  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
-  // localStorage不可でも動作継続（D.xxx はメモリ上で保持）
+  try {
+    localStorage.setItem(k, JSON.stringify(v));
+    if(window._lsFailedKeys[k]) delete window._lsFailedKeys[k];
+    return true;
+  } catch(e) {
+    window._lsFailedKeys[k] = Date.now();
+    console.error('[lsSet] 端末に保存できませんでした（容量不足の可能性）', k, e);
+    try{ _lsQuotaAlert(); }catch(_){}
+    return false;
+  }
 };
+/* 容量不足は一度だけ大きく知らせる。気づかずに使い続けるのが一番危ない。 */
+let _lsQuotaWarned = false;
+function _lsQuotaAlert(){
+  if(_lsQuotaWarned) return;
+  _lsQuotaWarned = true;
+  setTimeout(()=>{
+    try{
+      alert('この端末の保存容量がいっぱいです。\n\n'
+        + '新しく届いたデータを端末に控えられないため、日報の保存を止めています。\n'
+        + 'このまま使うと、サーバー側のデータを古い内容で上書きする恐れがあります。\n\n'
+        + '管理 → システム設定 で不要な控えを消すか、\n'
+        + 'ブラウザを変えてから、画面を再読み込みしてください。');
+    }catch(e){}
+  }, 0);
+}
+/* その控えが古い（＝保存に失敗したまま）かどうか */
+function _lsStale(key){ return !!window._lsFailedKeys['nikki_' + key]; }
 
 // 休業調査システム データ初期化(localStorageから復元)
 SCHEDULE_OVERRIDES = lsGet(LS_KEYS.SCHEDULE_OVERRIDES, []);
@@ -6331,12 +6362,26 @@ function _fbSanitize(v){
   return v; // string / boolean など
 }
 
+/* ★ 2026-10-08.1: 控えが古いまま書き戻すと、届いていたデータが消える。
+   日報の本体にあたるノードは、端末への保存が失敗していたら書き込まない。 */
+const _FB_GUARDED = ['yp_logs','col_logs','pickup','delivery','att_logs','jet_scan'];
+
 async function fbSet(key, value) {
   // ★ 2026/06/16: undefined混入によるFirebase保存エラー対策
   //   (例: pinChangedAt が undefined のまま staff_full に入り
   //    "value argument contains undefined" で書込が弾かれていた)
   const clean = _fbSanitize(value);
-  lsSet('nikki_' + key, clean);
+  const _okLs = lsSet('nikki_' + key, clean);
+  if(!_okLs && _FB_GUARDED.includes(key)){
+    console.error('[fbSet] 端末に控えられないため共有への書き込みを中止:', key);
+    try{ _lsQuotaAlert(); }catch(e){}
+    return false;
+  }
+  if(_lsStale(key) && _FB_GUARDED.includes(key)){
+    console.error('[fbSet] 控えが古い可能性があるため書き込みを中止:', key);
+    try{ _lsQuotaAlert(); }catch(e){}
+    return false;
+  }
   if (!fbDB) return;
   const { ref, set } = window._fbImports;
   try {
