@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.10</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.11</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1524,6 +1524,20 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg mb12">
         <label>修正理由・メモ</label>
         <input type="text" id="fix-reason" class="fi" placeholder="例：入力ミス、郵便局データ誤り、持戻の数え方の違い など">
+      </div>
+
+      <!-- ★ 2026-10-08.11: 修正履歴（いつ・誰が・いくつからいくつに直したか） -->
+      <div style="border-top:1px solid var(--brd2);padding-top:9px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap;">
+          <span style="font-size:12.5px;font-weight:700;color:var(--txt);">修正履歴</span>
+          <span id="fix-hist-n" style="font-size:11px;color:var(--txt2);"></span>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:11px;color:var(--txt2);">操作者</span>
+            <span id="fix-op-name" style="font-size:11.5px;font-weight:700;color:var(--amb2);"></span>
+            <button class="btn b-gh btn-sm" onclick="setOpName()" style="padding:3px 9px;font-size:10.5px;">変更</button>
+          </span>
+        </div>
+        <div id="fix-hist" style="max-height:190px;overflow:auto;"></div>
       </div>
 
       <div class="mft">
@@ -5219,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.10';
+const APP_VER = '2026-10-08.11';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9407,8 +9421,12 @@ function renderCmp(){
       html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
       html.push('<td class="tr" style="color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
+      // ★ 2026-10-08.11: 直した行には履歴の件数を出す（「修正」から中身を見られる）
+      const _hn=(!orph && Array.isArray(r.fixHistory)) ? r.fixHistory.length : 0;
       html.push('<td style="border-left:2px solid var(--brd2);font-size:11px;">'
-        +(orph?'<span style="color:var(--amb2);">日報の提出なし</span>':esc(r.cmpCause||''))+'</td>');
+        +(orph?'<span style="color:var(--amb2);">日報の提出なし</span>':esc(r.cmpCause||''))
+        +(_hn?'<div style="margin-top:2px;"><span class="bdg bz" style="font-size:9.5px;">履歴 '+_hn+'</span></div>':'')
+        +'</td>');
       html.push('<td><span class="bdg '+scls+'">'+stxt+'</span></td>');
       if(orph){
         html.push('<td><button class="btn btn-sm b-amb" onclick="openPostToNikki(\''+esc(r.date||'')+'\',\''
@@ -12729,6 +12747,7 @@ function openTempSplit(recordId){
   if(!r.fixHistory)r.fixHistory=[];
   r.fixHistory.push({
     at:new Date().toISOString(),
+    by:_opName(),
     type:'tempSplit',
     candidates: candidates.map(t=>t.name),
     diff,
@@ -12769,6 +12788,7 @@ function approveCmp(id){
   if(!r.fixHistory)r.fixHistory=[];
   r.fixHistory.push({
     at:new Date().toISOString(),
+    by:_opName(),
     type:'approve',
     kanryo:r.kanryo,
     postData:r.postData,
@@ -12797,6 +12817,13 @@ function openCmpFix(id) {
     </div>`;
   }
   if($('fix-reason')) $('fix-reason').value=r.cmpCause||'';
+  // ★ 2026-10-08.11: 修正履歴を出す（開いたときに聞かないよう ask=false）
+  {
+    const hw=$('fix-hist'); if(hw) hw.innerHTML=_fixHistHtml(r);
+    const hn=$('fix-hist-n');
+    if(hn){ const c=(r.fixHistory||[]).length; hn.textContent = c ? `${c}件` : ''; }
+    const op=$('fix-op-name'); if(op) op.textContent=_opName(false);
+  }
   // ★ 2026-09-22.20: 郵便局（営業所）の候補＝その人の担当郵便局（宅配の扱いがある拠点）
   {
     const sel=$('fix-office');
@@ -12839,6 +12866,78 @@ function openCmpFix(id) {
 }
 
 // 修正画面で扱う4項目(日報側フィールド / 郵便局側フィールド)
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-08.11: 修正履歴（いつ・誰が・いくつからいくつに直したか）
+     記録そのものは前から r.fixHistory に積んでいたが、
+     ① 見る画面が無く ② 誰が直したかを残していなかった。
+     操作者名は端末ごとに1回だけ聞いて覚える（ログインの仕組みが無いため）。
+   ════════════════════════════════════════════════════════════ */
+function _opName(ask){
+  let v=''; try{ v=localStorage.getItem('mgmtOpName')||''; }catch(e){}
+  if(!v && ask!==false){
+    const t=prompt('この端末の操作者名を入れてください。\n修正履歴に「誰が直したか」として残ります。', '');
+    if(t && t.trim()){ v=t.trim(); try{ localStorage.setItem('mgmtOpName', v); }catch(e){} }
+  }
+  return v || '（未設定）';
+}
+function setOpName(){
+  let cur=''; try{ cur=localStorage.getItem('mgmtOpName')||''; }catch(e){}
+  const t=prompt('この端末の操作者名（修正履歴に残ります）', cur);
+  if(t===null) return;
+  try{ localStorage.setItem('mgmtOpName', t.trim()); }catch(e){}
+  const el=document.getElementById('fix-op-name');
+  if(el) el.textContent=_opName(false);
+}
+
+// 履歴1件ぶんのHTML。applyFix / approveCmp / 暫定合算の3種類に対応する。
+function _fixHistHtml(r){
+  const list=Array.isArray(r && r.fixHistory) ? r.fixHistory.slice() : [];
+  if(!list.length){
+    return '<div style="font-size:11.5px;color:var(--txt3);padding:6px 2px;">修正の履歴はまだありません。</div>';
+  }
+  const LB={kanryo:'完了', tenso:'転送・還付', yakan:'夜間', ogata:'170超'};
+  const sv=v=>(v===null||v===undefined||v==='') ? '—' : String(v);
+  list.reverse();   // 新しいものを上に
+  return list.map(h=>{
+    let when='';
+    try{
+      when = h.at ? new Date(h.at).toLocaleString('ja-JP',
+        {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    }catch(e){ when = String(h.at||''); }
+    const who = esc(h.by || '（記録なし）');
+    let body='', tag='修正', tagCol='var(--blu2)';
+
+    if(h.type==='tempSplit'){
+      tag='暫定合算'; tagCol='var(--amb2)';
+      body = `暫定ドライバーの合算として確認（${esc((h.candidates||[]).join('・'))}　計${h.diff||0}件）`;
+    }else if(h.type==='approve'){
+      tag='了承'; tagCol='var(--amb2)';
+      body = `差異を了承して確定（日報 ${sv(h.kanryo)} / 郵便局 ${sv(h.postData)}）`;
+    }else{
+      const chg=[];
+      Object.keys(h.after||{}).forEach(k=>{
+        const b=(h.before||{})[k]||{}, a=(h.after||{})[k]||{};
+        if(String(sv(b.n))!==String(sv(a.n))) chg.push(`${LB[k]||k}　日報 <b>${esc(sv(b.n))}</b> → <b style="color:var(--grn2);">${esc(sv(a.n))}</b>`);
+        if(String(sv(b.p))!==String(sv(a.p))) chg.push(`${LB[k]||k}　郵便局 <b>${esc(sv(b.p))}</b> → <b style="color:var(--grn2);">${esc(sv(a.p))}</b>`);
+      });
+      if(h.mode==='accept'){ tag='了承'; tagCol='var(--amb2)'; }
+      body = chg.length ? chg.join('<br>')
+           : (h.mode==='accept' ? '差異を認めて確定（数量はそのまま）' : '数量の変更なし');
+    }
+
+    return `<div style="border:1px solid var(--brd2);border-left:3px solid ${tagCol};border-radius:5px;
+                 padding:6px 9px;margin-bottom:6px;background:var(--bg3);">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:3px;">
+        <span style="font-size:10px;font-weight:700;color:#fff;background:${tagCol};border-radius:3px;padding:1px 6px;">${tag}</span>
+        <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--txt2);">${esc(when)}</span>
+        <span style="font-size:11px;color:var(--txt2);">${who}</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--txt);line-height:1.6;">${body}</div>
+      ${h.reason?`<div style="font-size:11px;color:var(--txt2);margin-top:3px;">理由：${esc(h.reason)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
 const FIX_COLS=[
   {k:'kanryo', n:'kanryo', p:'postKanryo', l:'配達完了',   c:'var(--grn2)'},
   {k:'tenso',  n:'tenso',  p:'postTenso',  l:'転送・還付', c:'var(--tel2)'},
@@ -12945,7 +13044,7 @@ function applyFix(opt){
   if(!r.fixHistory) r.fixHistory=[];
   const after={};
   FIX_COLS.forEach(c=>{ after[c.k]={n:r[c.n], p:r[c.p]}; });
-  r.fixHistory.push({at:new Date().toISOString(), mode:opt.accept?'accept':'edit', before, after, reason});
+  r.fixHistory.push({at:new Date().toISOString(), by:_opName(), mode:opt.accept?'accept':'edit', before, after, reason});
 
   // この画面で確定した時点で人が内容を確認済み。差異が残っていても照合済とする。
   const d2=_cmpDiffs(r);
