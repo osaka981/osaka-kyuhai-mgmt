@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.13</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.14</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.13';
+const APP_VER = '2026-10-08.14';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -19192,7 +19192,7 @@ function renderDelReport(){
   const mon   = $('rpt-del-mon')?.value||'';
   const offFlt= $('rpt-del-off')?.value||'';
   const stFlt = $('rpt-del-staff')?.value||'';
-  const monStr= mon.replace('-','/');
+  const monStr= mon;
 
   // フィルター適用
   const rows = D.delivery.filter(r=>{
@@ -19215,7 +19215,7 @@ function openDelSummaryPrint(){
   const mon   = $('rpt-del-mon')?.value||'';
   const offFlt= $('rpt-del-off')?.value||'';
   const stFlt = $('rpt-del-staff')?.value||'';
-  const monStr= mon.replace('-','/');
+  const monStr= mon;
 
   // フィルター適用
   const rows = D.delivery.filter(r=>{
@@ -19478,7 +19478,7 @@ function renderDelReportStaff(rows){
 // 従事員 日次詳細展開
 function showDelStaffDetail(staffName){
   const mon=$('rpt-del-mon')?.value||'';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const rows=D.delivery.filter(r=>r.staff===staffName&&(!mon||r.date?.startsWith(monStr)))
     .sort((a,b)=>a.date?.localeCompare(b.date||'')||0);
   const detailEl=$('rpt-staff-detail');
@@ -19552,7 +19552,7 @@ function renderDelReportOffice(rows){
 
 // 営業所 従事員内訳
 function showOfficeStaffDetail(officeName){
-  const mon=$('rpt-del-mon')?.value||''; const monStr=mon.replace('-','/');
+  const mon=$('rpt-del-mon')?.value||''; const monStr=mon;
   const rows=D.delivery.filter(r=>r.office===officeName&&(!mon||r.date?.startsWith(monStr)));
   const map={};
   rows.forEach(r=>{
@@ -19580,7 +19580,7 @@ function showOfficeStaffDetail(officeName){
 // ── 集荷レポート集計 ──
 function renderPUReport(){
   initPUReportFilters();
-  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon.replace('-','/');
+  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon;
   const offFlt=$('rpt-pu-off')?.value||'';
   const stFlt=$('rpt-pu-staff')?.value||'';
   const cuFlt=$('rpt-pu-cust')?.value||'';
@@ -19664,7 +19664,7 @@ function renderPUReportCust(rows){
 
 // 顧客 日次詳細
 function showPUCustDetail(custName){
-  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon.replace('-','/');
+  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon;
   const rows=D.pickup.filter(r=>r.customerName===custName&&(!mon||r.date?.startsWith(monStr)))
     .sort((a,b)=>a.date?.localeCompare(b.date||'')||0);
   const titleEl=$('rpt-pu-cust-detail-title');
@@ -19684,7 +19684,7 @@ function showPUCustDetail(custName){
 // 集荷 従事員詳細
 function showPUStaffDetail(staffName){
   // 顧客ビューに切替して顧客詳細と同様に表示
-  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon.replace('-','/');
+  const mon=$('rpt-pu-mon')?.value||''; const monStr=mon;
   const rows=D.pickup.filter(r=>r.staff===staffName&&(!mon||r.date?.startsWith(monStr)))
     .sort((a,b)=>a.date?.localeCompare(b.date||'')||0);
   const titleEl=$('rpt-pu-cust-detail-title');
@@ -19705,7 +19705,7 @@ function showPUStaffDetail(staffName){
 // ── CSV出力 ──
 function expDelReportCSV(){
   const mon=$('rpt-del-mon')?.value||'all';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const rows=D.delivery.filter(r=>!mon||mon==='all'||r.date?.startsWith(monStr));
   const header='日付,従事員,営業所,郵便局,持出,完了,転送,夜間,大型,集荷,その他,持戻,翌日,照合状態';
   const body=rows.map(r=>[
@@ -19718,7 +19718,7 @@ function expDelReportCSV(){
   a.download=`宅配日報レポート_${mon}.csv`; a.click();
 }
 function expPUReportCSV(){
-  const mon=$('rpt-pu-mon')?.value||'all'; const monStr=mon.replace('-','/');
+  const mon=$('rpt-pu-mon')?.value||'all'; const monStr=mon;
   const rows=D.pickup.filter(r=>!mon||mon==='all'||r.date?.startsWith(monStr));
   const header='日付,従事員,営業所,顧客名,総個数,備考';
   const body=rows.map(r=>[
@@ -19767,7 +19767,7 @@ function expDetailCSV(){
 // ── 従事員別 日次詳細（フルスクリーン版）──
 function showDelStaffDetail(staffName){
   const mon=$('rpt-del-mon')?.value||'';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const monLabel=mon?mon.replace('-','年')+'月':'全期間';
   const monRange=monToRange(mon);
   const rows=D.delivery.filter(r=>r.staff===staffName&&(!mon||r.date?.startsWith(monStr)))
@@ -19875,7 +19875,7 @@ function showDelStaffDetail(staffName){
 // ── 営業所別 従事員内訳（フルスクリーン版）──
 function showOfficeStaffDetail(officeName){
   const mon=$('rpt-del-mon')?.value||'';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const monLabel=mon?mon.replace('-','年')+'月':'全期間';
   const monRange=monToRange(mon);
   const rows=D.delivery.filter(r=>r.office===officeName&&(!mon||r.date?.startsWith(monStr)));
@@ -19963,7 +19963,7 @@ function showOfficeStaffDetail(officeName){
 // ── 集荷 顧客別日次詳細（フルスクリーン版）──
 function showPUCustDetail(custName){
   const mon=$('rpt-pu-mon')?.value||'';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const monLabel=mon?mon.replace('-','年')+'月':'全期間';
   const monRange=monToRange(mon);
   const rows=D.pickup.filter(r=>r.customerName===custName&&(!mon||r.date?.startsWith(monStr)))
@@ -20022,7 +20022,7 @@ function showPUCustDetail(custName){
 // 集荷 従事員詳細（フルスクリーン版）
 function showPUStaffDetail(staffName){
   const mon=$('rpt-pu-mon')?.value||'';
-  const monStr=mon.replace('-','/');
+  const monStr=mon;
   const monLabel=mon?mon.replace('-','年')+'月':'全期間';
   const monRange=monToRange(mon);
   const rows=D.pickup.filter(r=>r.staff===staffName&&(!mon||r.date?.startsWith(monStr)))
@@ -20558,7 +20558,10 @@ function renderBilling(){
     const def = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     if($('bl-mon')) $('bl-mon').value = def;
   }
-  const monStr = ($('bl-mon')?.value || '').replace('-','/');
+  /* ★ 2026-10-08.14: 日報の日付は 2026-09-15 のハイフン表記に統一済み。
+     ここでスラッシュへ変換していたため startsWith('2026/09') が1件も一致せず、
+     売上明細・支払明細・CSV出力が常に0件になっていた。ハイフンのまま使う。 */
+  const monStr = ($('bl-mon')?.value || '');
   const monLabel = monStr ? monStr.replace('/','-').replace('-','年') + '月' : '全期間';
   if($('bl-sales-period')) $('bl-sales-period').textContent = monLabel;
   if($('bl-pay-period'))   $('bl-pay-period').textContent   = monLabel;
@@ -20636,7 +20639,10 @@ function renderBillingSales(monStr){
 
 function showSalesDetail(custName){
   const mon = $('bl-mon')?.value || '';
-  const monStr = mon.replace('-','/');
+  /* ★ 2026-10-08.14: 日報の日付は 2026-09-15 のハイフン表記に統一済み。
+     ここでスラッシュへ変換していたため startsWith('2026/09') が1件も一致せず、
+     売上明細・支払明細・CSV出力が常に0件になっていた。ハイフンのまま使う。 */
+  const monStr = mon;
   const cu = D.customers.find(c => c.name === custName);
   const rows = D.pickup.filter(r =>
     r.customerName === custName && (!monStr || (r.date||'').startsWith(monStr))
@@ -20775,7 +20781,10 @@ function renderBillingPay(monStr){
 
 function showPayDetail(staffName){
   const mon = $('bl-mon')?.value || '';
-  const monStr = mon.replace('-','/');
+  /* ★ 2026-10-08.14: 日報の日付は 2026-09-15 のハイフン表記に統一済み。
+     ここでスラッシュへ変換していたため startsWith('2026/09') が1件も一致せず、
+     売上明細・支払明細・CSV出力が常に0件になっていた。ハイフンのまま使う。 */
+  const monStr = mon;
   const st = D.staff.find(s => s.name === staffName);
   const tanka = st?.tanka || 0;
   const isMonthly = st?.kyuyo === '月給';
@@ -20870,7 +20879,7 @@ function renderPaymentMgmt(){
     monEl.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   }
   const ym = monEl?.value || '';
-  const monStr = ym.replace('-','/');
+  const monStr = ym;
   const monLabel = ym ? ym.replace('-','年')+'月' : '';
   if($('pm-period')) $('pm-period').textContent = monLabel;
   if(!ym) return;
@@ -21019,7 +21028,10 @@ function savePaymentMgmt(){
 // ── CSV出力 ──
 function expBillingCSV(){
   const mon = $('bl-mon')?.value || 'all';
-  const monStr = mon.replace('-','/');
+  /* ★ 2026-10-08.14: 日報の日付は 2026-09-15 のハイフン表記に統一済み。
+     ここでスラッシュへ変換していたため startsWith('2026/09') が1件も一致せず、
+     売上明細・支払明細・CSV出力が常に0件になっていた。ハイフンのまま使う。 */
+  const monStr = mon;
   if(_blTab === 'sales'){
     const rows = D.pickup.filter(r => mon==='all' || (r.date||'').startsWith(monStr));
     const header = '日付,顧客名,地域,品目,個数,単価,金額';
@@ -31671,6 +31683,10 @@ function _calcStaffPayment(name, monStr){
 }
 
 function _calcCustBilling(custName, monStr){
+  /* ★ 2026-10-08.14: 呼び出し元によって '2026-09' と '2026/09' の2種類が来る。
+     日報の日付はハイフンに統一済みのため、スラッシュのまま比較すると
+     1件も一致せず請求が0円になる。ここで吸収する。 */
+  monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
   const cu=(D.customers||[]).find(c=>c.name===custName);
   if(!cu) return {total:0, breakdown:[], routes:[], charters:[], subtotalEx:0, subtotalIn:0, tax:0};
   const rows=(D.pickup||[]).filter(r=>r.customerName===custName&&(r.date||'').startsWith(monStr));
