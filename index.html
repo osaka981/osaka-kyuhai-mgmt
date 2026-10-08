@@ -845,7 +845,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5163,7 +5163,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.3';
+const APP_VER = '2026-10-08.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -12644,19 +12644,24 @@ function applyFix(opt){
   const before={};
   FIX_COLS.forEach(c=>{ before[c.k]={n:r[c.n], p:r[c.p]}; });
 
+  // ★ 2026-09-22.20: 郵便局（営業所）の選び直し
+  // ★ 2026-10-08.4: 「差異を認めて確定」でも営業所の直しが効くように、
+  //   数量の更新ブロックの外へ出した。宅配は営業所＝郵便局なので両方そろえる。
+  let _offChanged=false;
+  {
+    const newOff=$('fix-office')?.value||'';
+    if(newOff && newOff!==r.office){
+      r.office=newOff;
+      r.postOffice=newOff;
+      _offChanged=true;
+    }
+  }
+
   if(!opt.accept){
     // 日報側を更新
     FIX_COLS.forEach(c=>{
       r[c.n]=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
     });
-    // ★ 2026-09-22.20: 郵便局（営業所）の選び直し
-    {
-      const newOff=$('fix-office')?.value||'';
-      if(newOff && newOff!==r.office){
-        r.office=newOff;
-        if(r.postOffice) r.postOffice=newOff;
-      }
-    }
     // 郵便局側は D.postLogs が保存元。表示用フィールドと両方そろえる。
     const logs=Array.isArray(D.postLogs)?D.postLogs:[];
     const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
@@ -12703,7 +12708,8 @@ function applyFix(opt){
   r.cause=r.cmpCause;
 
   // ★ 2026/08/21: ここまでは全てメモリ上の変更。保存しないとリロードで消える。
-  if(!opt.accept) _cmpWriteBackYp(r);   // 日報側の数量を yp_logs に書き戻す
+  // ★ 2026-10-08.4: 営業所だけを直した場合も書き戻す（戻らないようにする）
+  if(!opt.accept || _offChanged) _cmpWriteBackYp(r);   // 日報側の数量・営業所を yp_logs に書き戻す
   _cmpStateSave(r);                     // 照合状態を別テーブルに保存
 
   closeM('m-cmp-fix');
@@ -42027,6 +42033,17 @@ async function _cmpWriteBackYp(r){
     tgt.yakan=r.yakan||0;
     tgt.ogata=r.ogata||0;
     tgt.mochimodoiri=r.mochimodoiri||0;
+    // ★ 2026-10-08.4: 営業所（郵便局）の直しも必ず書き戻す。
+    //   ここを書いていなかったため、照合画面で営業所を選び直して
+    //   「修正を適用」しても、次に読み直した時点で
+    //   D.delivery が yp_logs の driver.office から作り直され、
+    //   元の営業所（ドライバー登録時の所属）に戻っていた。
+    if(r.office){
+      if(!ypLogs[i].driver || typeof ypLogs[i].driver!=='object') ypLogs[i].driver={};
+      ypLogs[i].driver.office = r.office;
+      ypLogs[i].postOffice    = r.office;
+      ypLogs[i].officeFixedAt = new Date().toISOString();
+    }
     ypLogs[i].updatedAt=new Date().toISOString();
     return await _safeSetYpLogs(ypLogs, '照合修正の書き戻し');
   }catch(e){ console.error('[_cmpWriteBackYp] エラー', e); return false; }
