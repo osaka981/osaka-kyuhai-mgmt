@@ -886,7 +886,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.17</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.20</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5233,7 +5233,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.17';
+const APP_VER = '2026-10-08.20';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5949,21 +5949,37 @@ function renderLocCards(){
 
   // 部署フィルタタブ
   const depts = getActiveDepartments();
+  /* ★ 2026-10-08.20: 持込先の郵便局（集荷で荷物を持っていく先）が
+     「すべて」に大量に並んで、自社の拠点が探しにくくなっていた。
+     無効にした拠点は「すべて」や部署のタブから外し、
+     「持込局（場所）」のタブにまとめる。消すわけではないので、
+     カードはそのタブに残り、有効に戻すこともできる。 */
+  const _offCnt = (D.locations||[]).filter(l=>l && l.active===false).length;
   let tabHTML = `<div class="otab ${_locFilterDeptId==null?'on':''}" onclick="setLocFilter(null)">すべて</div>`;
   depts.forEach(d=>{
     tabHTML += `<div class="otab ${String(_locFilterDeptId)===String(d.id)?'on':''}" onclick="setLocFilter(${d.id})">${esc(d.name)}</div>`;
   });
+  tabHTML += `<div class="otab ${_locFilterDeptId==='inactive'?'on':''}" onclick="setLocFilter('inactive')"
+    title="無効にした拠点。集荷の持込先など、自社の拠点でないものをここにまとめます">持込局（場所）
+    <span style="font-size:9.5px;font-weight:400;opacity:.75;margin-left:4px;">${_offCnt?_offCnt:'—'}</span></div>`;
   tabs.innerHTML = tabHTML;
 
   // 拠点リスト
   let list = (D.locations||[]).slice();
-  if(_locFilterDeptId != null){
-    list = list.filter(l=>(l.deptIds||[]).map(String).includes(String(_locFilterDeptId)));
+  if(_locFilterDeptId === 'inactive'){
+    list = list.filter(l=>l && l.active===false);
+  } else {
+    list = list.filter(l=>l && l.active!==false);     // 無効は「持込局（場所）」へ
+    if(_locFilterDeptId != null){
+      list = list.filter(l=>(l.deptIds||[]).map(String).includes(String(_locFilterDeptId)));
+    }
   }
   list.sort((a,b)=>(a.order||99)-(b.order||99));
 
   if(!list.length){
-    wrap.innerHTML = '<div style="padding:30px;text-align:center;color:var(--txt2);">拠点が登録されていません。</div>';
+    wrap.innerHTML = _locFilterDeptId==='inactive'
+      ? '<div style="padding:30px;text-align:center;color:var(--txt2);">ここには無効にした拠点が入ります。<br>集荷の持込先など、自社の拠点でないものを拠点の編集で「有効にする」を外すと、ここへ移ります。</div>'
+      : '<div style="padding:30px;text-align:center;color:var(--txt2);">拠点が登録されていません。</div>';
     return;
   }
   const typeLabels = {head:'🏢 本社', post_office:'📮 郵便局', col_office:'📦 集荷営業所'};
@@ -9740,9 +9756,17 @@ function updOffSels() {
       else if(l.type==='col_office') _colNames.add(l.name);
     }
   });
-  // 営業所マスタからのフォールバック (拠点マスタに無い名前のみ)
+  /* ★ 2026-10-08.19: 拠点マスタで「有効にする」を外しても選択肢から消えなかった。
+     下の営業所マスタ（旧マスタ）のループが active を一切見ておらず、
+     無効にした拠点と同じ名前をそのまま候補に戻していたため。
+     拠点マスタで無効にした名前は、営業所マスタ側からも拾わない。 */
+  const _offNameDisabled = new Set(
+    (D.locations||[]).filter(l=>l && l.name && l.active===false).map(l=>l.name)
+  );
   (D.offices||[]).forEach(o=>{
     if(!o.name) return;
+    if(o.active===false) return;              // 営業所マスタ自身の無効
+    if(_offNameDisabled.has(o.name)) return;  // 拠点マスタで無効にしたもの
     _allNames.add(o.name);
     if(o.typesDel) _delNames.add(o.name);
     if(o.typesCol) _colNames.add(o.name);
@@ -10112,6 +10136,9 @@ function renderPostList(){
     if(o.name === '本社') return;
     // ★ 2026-10-08.8: 集荷の持込先だけの拠点はここに出さない
     if(o.typesDel !== true) return;
+    // ★ 2026-10-08.19: 拠点マスタで無効にしたものは営業所マスタからも拾わない
+    if(o.active === false) return;
+    if((D.locations||[]).some(l=>l && l.name===o.name && l.active===false)) return;
     if(!postsByName.has(o.name)){
       postsByName.set(o.name, {
         id: o.id, name: o.name, address: o.address||'', prices: o.postPrices||{},
@@ -37913,9 +37940,19 @@ function renderTSInv(){
   const mon = _ymNorm(monEl?.value || '');
   if(!mon){ box.innerHTML='<div class="card"><div class="xs muted">対象月を選んでください。</div></div>'; return; }
 
-  // 局の選択肢を拠点マスタから作る
+  /* 局の選択肢を拠点マスタから作る
+     ★ 2026-10-08.18: ここは請求対象（isBilling）の拠点だけを見ていたため、
+       拠点マスタで「請求書発行対象にする」にチェックが入っていない局は
+       売上があっても一覧から黙って消えていた（大阪西郵便局がそれ）。
+       宅配拠点はすべて並べ、請求対象でないものは印を付けて知らせる。
+       請求書の発行は請求対象の局だけに限る（契約情報が無いため）。 */
   const sel = $('tsinv-off');
-  let locs = (typeof getBillingLocations==='function') ? (getBillingLocations()||[]) : [];
+  const _billSet = new Set(((typeof getBillingLocations==='function') ? (getBillingLocations()||[]) : [])
+    .map(l=>String(l.id)));
+  let locs = (D.locations||[])
+    .filter(l => l && l.active!==false && (l.type==='post_office' || l.typesDel))
+    .sort((a,b)=>(a.order||99)-(b.order||99));
+  const _isBill = l => _billSet.has(String(l.id));
   if(sel){
     const cur = sel.value;
     sel.innerHTML = ['<option value="">全局</option>']
@@ -37927,11 +37964,11 @@ function renderTSInv(){
   if(filterId) locs = locs.filter(l=>String(l.id)===String(filterId));
 
   if(!locs.length){
-    box.innerHTML = '<div class="card"><div class="xs muted">請求対象の郵便局が拠点マスタにありません。管理 → 拠点管理 で「請求対象」にしてください。</div></div>';
+    box.innerHTML = '<div class="card"><div class="xs muted">宅配拠点が拠点マスタにありません。管理 → 拠点管理 で登録してください。</div></div>';
     return;
   }
 
-  let rows='', subTotal=0, noPrice=0, noData=0;
+  let rows='', subTotal=0, noPrice=0, noData=0, noBill=0;
   locs.forEach(loc=>{
     let bill=null;
     try{ bill=_calcPostBilling(loc.id, mon); }catch(e){ console.error('[renderTSInv] 集計に失敗', loc.name, e); }
@@ -37953,6 +37990,8 @@ function renderTSInv(){
     subTotal += ex;
     const issuedList = (typeof _getIssuedDocs==='function' ? (_getIssuedDocs('postInvoice', loc.name)||[]) : []);
     const issued = issuedList.filter(x=>x.month===mon).sort((a,b)=>(b.version||0)-(a.version||0))[0];
+    const bill_ok = _isBill(loc);
+    if(!bill_ok) noBill++;
     rows += `<tr>
       <td class="fw7">${esc(loc.name)}</td>
       <td class="xs muted">${esc(loc.clientCompany||'日本郵便株式会社')}<br>${esc(loc.clientBranch||loc.name)}</td>
@@ -37961,9 +38000,13 @@ function renderTSInv(){
       <td class="tr mono fw7" style="color:var(--tel2);">¥${fmt(ex)}</td>
       <td class="tr mono">¥${fmt(tax)}</td>
       <td class="tr mono fw7">¥${fmt(ex+tax)}</td>
-      <td>${issued?`<span class="bdg bg">発行済 v${issued.version||1}</span>`:'<span class="bdg bz">未発行</span>'}
+      <td>${bill_ok
+            ? (issued?`<span class="bdg bg">発行済 v${issued.version||1}</span>`:'<span class="bdg bz">未発行</span>')
+            : '<span class="bdg ba">請求対象外</span>'}
           ${hasPrice?'':'<div style="margin-top:2px;"><span class="bdg br" style="font-size:9px;">単価未設定</span></div>'}</td>
-      <td><button class="btn b-red btn-sm" onclick="generatePostInvoice(${loc.id},'${esc(mon)}')">発行</button></td>
+      <td>${bill_ok
+            ? `<button class="btn b-red btn-sm" onclick="generatePostInvoice(${loc.id},'${esc(mon)}')">発行</button>`
+            : '<span class="xs muted">—</span>'}</td>
     </tr>`;
   });
 
@@ -37981,11 +38024,16 @@ function renderTSInv(){
         <div class="fw7 lg" style="color:#86efac;">¥${fmt(subTotal+tax)}</div></div>
       <div class="card" style="padding:10px;text-align:center;">
         <div class="xs muted mb4">対象局</div>
-        <div class="fw7 lg">${locs.length}局</div></div>
+        <div class="fw7 lg">${locs.length}局</div>
+        ${noBill?`<div class="xs" style="color:var(--amb2);">うち請求対象外 ${noBill}局</div>`:''}</div>
     </div>
     ${noPrice?`<div class="al al-w" style="font-size:11.5px;"><span>⚠️</span>
       <span>単価が未設定の局が <b>${noPrice}局</b> あります。その局は請求金額に出てきません。
       郵便局 → 郵便局単価 で登録してください。</span></div>`:''}
+    ${noBill?`<div class="al al-w" style="font-size:11.5px;"><span>⚠️</span>
+      <span>拠点マスタで「請求書発行対象」になっていない局が <b>${noBill}局</b> あります。
+      売上は上の合計に入れていますが、<b>請求書は発行できません</b>。
+      管理 → 拠点管理 でその局を開き、「請求書発行対象にする」にチェックを入れてください。</span></div>`:''}
     <div class="card">
       <div class="ch"><div class="ct"><div class="cbar"></div>${esc(mon)} 郵便局別 売上</div>
         <span class="xs muted">金額は税抜。消費税は10%で計算</span></div>
