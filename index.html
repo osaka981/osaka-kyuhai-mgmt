@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-08.21</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5250,7 +5250,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-08.21';
+const APP_VER = '2026-10-09.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5795,6 +5795,44 @@ function getLocationsByType(type){
   return (D.locations||[]).filter(l=>l.type===type && l.active!==false);
 }
 // 郵便局(請求対象)拠点
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.1: 拠点の数え方を1か所にまとめる
+     旧マスタ（D.offices）と拠点マスタ（D.locations）が併存していて、
+     画面ごとにどちらを見るかがバラバラだった。その結果、
+     集荷の持込先郵便局が「営業所数」や「郵便局別 宅配実績」に
+     混ざっていた。判定はここだけに置き、各画面はこれを呼ぶ。
+   ════════════════════════════════════════════════════════════ */
+
+// 拠点マスタで無効にした名前（旧マスタ側から拾い直さないための止め）
+function _disabledLocNames(){
+  return new Set((D.locations||[])
+    .filter(l=>l && l.name && l.active===false).map(l=>l.name));
+}
+
+// 自社が業務を行っている拠点の数（本社と無効は除く）
+function _dashWorkLocCount(){
+  const act=(D.locations||[]).filter(l=>l && l.name && l.active!==false && l.type!=='head');
+  if(act.length) return act.length;
+  // 拠点マスタが無い環境では旧マスタで代替
+  return (D.offices||[]).filter(o=>o && o.name && o.name!=='本社' && o.active!==false).length;
+}
+
+// 宅配を行う拠点の名前（拠点マスタ＋旧マスタの宅配チェック＋実際に日報がある営業所）
+function _dashDelOffices(){
+  const off=_disabledLocNames();
+  const names=new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l && l.name && l.active!==false && (l.type==='post_office' || l.typesDel)) names.add(l.name);
+  });
+  (D.offices||[]).forEach(o=>{
+    if(!o || !o.name) return;
+    if(o.active===false || off.has(o.name)) return;
+    if(o.typesDel===true) names.add(o.name);
+  });
+  (D.delivery||[]).forEach(r=>{ if(r && r.office) names.add(r.office); });
+  return [...names].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+}
+
 function getBillingLocations(){
   return (D.locations||[]).filter(l=>l.isBilling===true && l.active!==false)
     .sort((a,b)=>(a.order||99)-(b.order||99));
@@ -10249,14 +10287,20 @@ function renderDash() {
   $('d-kpi').innerHTML = [
     {l:'当月 配達完了',v:fmt(totK),u:'個',c:'--red',s:'宅配事業'},
     {l:'当月 集荷数量',v:fmt(totPU),u:'個',c:'--tel',s:'集荷事業'},
-    {l:'営業所数',v:D.offices.length,u:'所',c:'--blu',s:`従事員 ${D.staff.length}名`},
+    // ★ 2026-10-09.1: D.offices.length をそのまま出していたため、
+    //   集荷の持込先郵便局（東淀川・都島・平野など）まで営業所に数えていた。
+    {l:'営業所数',v:_dashWorkLocCount(),u:'所',c:'--blu',s:`従事員 ${D.staff.length}名`},
     {l:'照合差異・未照合',v:diffCnt+unCnt,u:'件',c:'--amb',s:'要確認'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div><div class="ks">${k.s}</div></div>`).join('');
 
   // 営業所別(当月)
   const _dashMon = (new Date()).getFullYear()+'-'+String((new Date()).getMonth()+1).padStart(2,'0');
   let h='';
-  D.offices.forEach(o => {
+  /* ★ 2026-10-09.1: ここも D.offices を全件並べていたため、
+     「郵便局別 宅配実績」に堺営業所や持込先の郵便局が混ざっていた。
+     宅配拠点と、実際に宅配日報がある営業所だけを並べる。 */
+  _dashDelOffices().forEach(oName => {
+    const o={name:oName};
     const rs = D.delivery.filter(r=>r.office===o.name);
     const s={mochidashi:0,kanryo:0,yakan:0,tenso:0,mochimodoiri:0,'翌日廻し':0};
     rs.forEach(r=>{for(const k in s)s[k]+=r[k]||0;});
