@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.15</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.16</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5275,7 +5275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.15';
+const APP_VER = '2026-10-09.16';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -39027,13 +39027,18 @@ function openM(id){
       if($('of-status'))$('of-status').value='稼働';
       if($('of-status-reason'))$('of-status-reason').value='';
       onOfStatusChange();
+      /* ★ 2026-10-09.16: 単価欄のクリアは新規追加のときだけにする。
+         ここが新規判定の外にあったため、編集で開いたときも
+         editOffice が入れた単価を直後に空へ戻していた。
+         そのせいで拠点マスタから写した単価が画面に出ず、
+         「反映されていない」ように見えていた（データは入っている）。
+         集荷先だけ残っていたのは、集荷先がこの消去対象に無いため。 */
+      ['of-p60','of-p80','of-p100','of-p120','of-p140','of-p160',
+       'of-pkanryo','of-ptenso','of-pnight','of-pogata','of-pshukka',
+       'of-ps1','of-ps2','of-ps3','of-ps4','of-pmodori'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
+      if($('of-del-price-lock'))$('of-del-price-lock').style.display='block';
+      if($('of-del-price-content'))$('of-del-price-content').style.display='none';
     }
-    // 新規時: 単価フィールドをクリア
-    ['of-p60','of-p80','of-p100','of-p120','of-p140','of-p160',
-     'of-pkanryo','of-ptenso','of-pnight','of-pogata','of-pshukka',
-     'of-ps1','of-ps2','of-ps3','of-ps4','of-pmodori'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
-    if($('of-del-price-lock'))$('of-del-price-lock').style.display='block';
-    if($('of-del-price-content'))$('of-del-price-content').style.display='none';
     // Enterナビ: setupEnterNav()で一括設定済み
     // フォーカスをコードへ
     setTimeout(()=>{const el=$('of-code');if(el){el.focus();el.select();}},80);
