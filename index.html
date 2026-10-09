@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.10</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.12</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5260,7 +5260,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.10';
+const APP_VER = '2026-10-09.12';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6553,6 +6553,20 @@ function saveLocation(){
         .filter(c=>c.name);
       if(!ofRec.postPrices || typeof ofRec.postPrices!=='object') ofRec.postPrices = {};
       ofRec.postPrices.colCompanies = _cols;
+
+      /* ★ 2026-10-09.12: 単価も写す。
+         営業所マスタの単価は一度も登録されておらず全部0のまま残っていた。
+         拠点マスタからは単価が反映されていなかったため、営業所マスタの単価を
+         読んでいる処理（集荷単価など）が0円を返していた。
+         営業所マスタは拠点マスタの写しなので、単価もそろえる。
+         営業所マスタ側の持戻りのキーは modori（拠点マスタは mochimodoiri）。 */
+      const _p = data.prices || {};
+      if(_p && typeof _p === 'object'){
+        ['kanryo','tenso','night','ogata','shukka'].forEach(k=>{
+          if(_p[k] != null) ofRec.postPrices[k] = Number(_p[k]) || 0;
+        });
+        if(_p.mochimodoiri != null) ofRec.postPrices.modori = Number(_p.mochimodoiri) || 0;
+      }
     }
 
     lsSet(LS_KEYS.OFFICES, D.offices);
@@ -14367,11 +14381,12 @@ function getCustPrice(cu, k){
 //   2. 登録されているがpriceが空(null) → デフォルト(office.postPrices.shukka)
 //   3. 登録されていない → デフォルト(office.postPrices.shukka) or 0
 function getDelColUnitPrice(officeName, companyName){
-  const off = (D.offices||[]).find(o=>o.name===officeName);
-  if(!off) return 0;
-  const defaultPrice = off.postPrices?.shukka || 0;
-  const list = off.postPrices?.colCompanies || [];
-  const entry = list.find(c=>c.name===companyName);
+  // ★ 2026-10-09.11: 拠点マスタを正にする。
+  //   営業所マスタの postPrices は写しで、単価が0のまま残っている拠点があり、
+  //   そこを見ると集荷が0円になっていた。
+  if(!officeName) return 0;
+  const defaultPrice = _shukkaPriceOfLoc(officeName);
+  const entry = _colCompaniesOfLoc(officeName).find(c=>c.name===companyName);
   if(!entry) return defaultPrice;
   return entry.price != null ? entry.price : defaultPrice;
 }
@@ -14510,6 +14525,47 @@ function aggregateDelColByCompany(ym){
 // 宅配事業内集荷 支払単価解決
 // ══════════════════════════════════════════════════
 
+/* ★ 2026-10-09.11: 集荷まわりは拠点マスタ(D.locations)を正にする。
+   これまでは営業所マスタ(D.offices)だけを引いていたため、
+   拠点マスタにしか無い郵便局は宅配拠点と判定されず、集荷先も単価も
+   取れなかった。営業所マスタは写しとして残っているので、
+   拠点マスタに無いときだけ従来どおり見る(＝悪くなる方向がない)。 */
+function _locByName(name){
+  if(!name) return null;
+  return (D.locations||[]).find(l=>l && l.name===name && l.active!==false) || null;
+}
+// その拠点が宅配事業の拠点か
+function _isDelLocName(name){
+  const loc = _locByName(name);
+  if(loc) return (loc.type==='post_office' || loc.typesDel===true);
+  const off = (D.offices||[]).find(o=>o && o.name===name);
+  return !!(off && off.typesDel);
+}
+// その拠点の集荷先一覧 [{name, price(null=拠点の集荷単価), kind:'teiji'|'shitei'}]
+function _colCompaniesOfLoc(name){
+  const loc = _locByName(name);
+  if(loc){
+    const t = (loc.shukkaCompaniesTeiji||[]).filter(c=>c&&c.name)
+      .map(c=>({name:c.name, price:null, kind:'teiji'}));
+    const s = (loc.shukkaCompaniesShitei||[]).filter(c=>c&&c.name)
+      .map(c=>({name:c.name, kind:'shitei',
+        price:(c.price==null||c.price==='')?null:(Number(c.price)||0)}));
+    if(t.length || s.length) return t.concat(s);
+  }
+  const off = (D.offices||[]).find(o=>o && o.name===name);
+  return ((off && off.postPrices && off.postPrices.colCompanies)||[])
+    .filter(c=>c&&c.name)
+    .map(c=>({name:c.name, price:(c.price==null?null:c.price), kind:'teiji'}));
+}
+// その拠点の「集荷(定時)」単価
+function _shukkaPriceOfLoc(name){
+  const loc = _locByName(name);
+  const p = loc && loc.prices && loc.prices.shukka;
+  if(p != null && Number(p) > 0) return Number(p);
+  const off = (D.offices||[]).find(o=>o && o.name===name);
+  return (off && off.postPrices && off.postPrices.shukka) || 0;
+}
+
 // 従業員が担当する全郵便局名を返す
 //   - staff.office (メイン) かつ その郵便局が宅配事業対象
 //   - staff.subOffices[] の name (新形式、旧形式両対応)
@@ -14519,20 +14575,16 @@ function _getStaffDelOffices(staff){
   const result = [];
   const addedNames = new Set();
   // メイン営業所
-  if(staff.office){
-    const mainOff = (D.offices||[]).find(o=>o.name===staff.office);
-    if(mainOff && mainOff.typesDel){
-      result.push({office: staff.office, fromMain: true});
-      addedNames.add(staff.office);
-    }
+  if(staff.office && _isDelLocName(staff.office)){
+    result.push({office: staff.office, fromMain: true});
+    addedNames.add(staff.office);
   }
   // サブ営業所
   const subs = Array.isArray(staff.subOffices) ? staff.subOffices : [];
   subs.forEach(s=>{
     const name = (typeof s === 'string') ? s : (s && s.name);
     if(!name || addedNames.has(name)) return;
-    const off = (D.offices||[]).find(o=>o.name===name);
-    if(!off || !off.typesDel) return;
+    if(!_isDelLocName(name)) return;
     result.push({office: name, fromMain: false});
     addedNames.add(name);
   });
@@ -14546,8 +14598,7 @@ function _getMasterColCompaniesForStaff(staff){
   const result = [];
   const seen = new Set();
   offices.forEach(o=>{
-    const off = (D.offices||[]).find(x=>x.name===o.office);
-    const list = off?.postPrices?.colCompanies || [];
+    const list = _colCompaniesOfLoc(o.office);   // ★ 2026-10-09.11: 拠点マスタ優先
     list.forEach(c=>{
       if(!c || !c.name) return;
       const key = c.name + '__' + o.office;
@@ -14568,8 +14619,7 @@ function _getCompanyDelOffices(company){
   subs.forEach(s=>{
     const name = (typeof s === 'string') ? s : (s && s.name);
     if(!name || addedNames.has(name)) return;
-    const off = (D.offices||[]).find(o=>o.name===name);
-    if(!off || !off.typesDel) return;
+    if(!_isDelLocName(name)) return;              // ★ 2026-10-09.11: 拠点マスタ優先
     result.push({office: name, fromMain: false});
     addedNames.add(name);
   });
@@ -14582,8 +14632,7 @@ function _getMasterColCompaniesForCompany(company){
   const result = [];
   const seen = new Set();
   offices.forEach(o=>{
-    const off = (D.offices||[]).find(x=>x.name===o.office);
-    const list = off?.postPrices?.colCompanies || [];
+    const list = _colCompaniesOfLoc(o.office);   // ★ 2026-10-09.11: 拠点マスタ優先
     list.forEach(c=>{
       if(!c || !c.name) return;
       const key = c.name + '__' + o.office;
