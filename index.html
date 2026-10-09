@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5250,7 +5250,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.1';
+const APP_VER = '2026-10-09.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5815,6 +5815,27 @@ function _dashWorkLocCount(){
   if(act.length) return act.length;
   // 拠点マスタが無い環境では旧マスタで代替
   return (D.offices||[]).filter(o=>o && o.name && o.name!=='本社' && o.active!==false).length;
+}
+
+/* 自社の拠点の名前（宅配の郵便局＋集荷営業所。本社・無効＝持込先は除く）
+   ★ 2026-10-09.2: 従業員・委託会社・ドライバーの「担当営業所」はこれを使う。
+   集荷の営業所はいま堺のみだが、選べないと集荷ドライバーの台帳に
+   営業所が入らず、日報アプリから来る集荷日報が営業所で切れなくなる。 */
+function _ownOfficeNames(){
+  const off=_disabledLocNames();
+  const names=new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l && l.name && l.active!==false && l.type!=='head') names.add(l.name);
+  });
+  (D.offices||[]).forEach(o=>{
+    if(!o || !o.name) return;
+    if(o.name==='本社') return;
+    if(o.active===false || off.has(o.name)) return;
+    if(o.status==='廃止' || o.status==='終了') return;
+    if(names.size && !(D.locations||[]).some(l=>l && l.name===o.name)) return;  // 拠点マスタに無いものは足さない
+    names.add(o.name);
+  });
+  return [...names].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
 }
 
 // 宅配を行う拠点の名前（拠点マスタ＋旧マスタの宅配チェック＋実際に日報がある営業所）
@@ -12574,8 +12595,22 @@ function renderSum() {
         <td class="tr fw7 mono">${fmt(c.tot)}</td><td class="tr" style="color:var(--tel2)">¥${fmt(c.amt)}</td></tr>`).join('')}
       </tbody></table></div></div>`;
   } else if (view==='off') {
-    const om={};D.offices.forEach(o=>{om[o.name]={name:o.name,items:{},tot:0};});
-    rows.forEach(r=>{if(!om[r.office])om[r.office]={name:r.office,items:{},tot:0};IK.forEach(k=>{const q=iq(r,k);om[r.office].items[k]=(om[r.office].items[k]||0)+q;om[r.office].tot+=q;});});
+    /* ★ 2026-10-09.2: 集荷日報の r.office は、集荷専従のドライバーだと空になる。
+       （日報アプリが workType==='collection' のとき office を空で保存するため）
+       そのためここは名前の無い行ができていた。
+       外注費分析と同じく、従業員台帳の営業所（s.office）で集計する。
+       並べるのは自社の拠点だけ。持込先の郵便局は出さない。 */
+    const om={};
+    _ownOfficeNames().forEach(n=>{om[n]={name:n,items:{},tot:0};});
+    const _sumOffOf = r => {
+      const st=(D.staff||[]).find(x=>x && x.name===r.staff);
+      return (st && st.office) || r.office || '未設定';
+    };
+    rows.forEach(r=>{
+      const on=_sumOffOf(r);
+      if(!om[on])om[on]={name:on,items:{},tot:0};
+      IK.forEach(k=>{const q=iq(r,k);om[on].items[k]=(om[on].items[k]||0)+q;om[on].tot+=q;});
+    });
     el.innerHTML=`<div class="card"><div class="ch"><div class="ct"><div class="cbar"></div>営業所別集計</div></div><div class="tw"><table>
       <thead><tr><th>営業所</th>${IK.map(k=>`<th class="tr ${ITEMS[k].cls}">${ITEMS[k].label}</th>`).join('')}<th class="tr">合計</th></tr></thead>
       <tbody>${Object.values(om).map(o=>`<tr><td class="fw7">${o.name}</td>
@@ -19265,7 +19300,8 @@ function initDelReportFilters(){
   const mon = $('rpt-del-mon');
   if(mon && !mon.value){ const d=new Date(); mon.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
   const offSel = $('rpt-del-off');
-  if(offSel){ offSel.innerHTML='<option value="">全営業所</option>'; D.offices.forEach(o=>offSel.innerHTML+=`<option>${o.name}</option>`); }
+  // ★ 2026-10-09.2: 宅配のレポートなので宅配拠点だけを出す
+  if(offSel){ offSel.innerHTML='<option value="">全営業所</option>'; _dashDelOffices().forEach(n=>offSel.innerHTML+=`<option>${esc(n)}</option>`); }
   const stSel = $('rpt-del-staff');
   if(stSel){ stSel.innerHTML='<option value="">全従事員</option>'; D.staff.forEach(s=>stSel.innerHTML+=`<option>${s.name}</option>`); }
 }
@@ -21295,7 +21331,8 @@ function renderMonthlySummary(){
 
   // 営業所別
   const officeMap={};
-  D.offices.filter(o=>o.status!=='廃止').forEach(o=>{officeMap[o.name]={name:o.name,kanryo:0,days:0,cost:0,drivers:0};});
+  // ★ 2026-10-09.2: 宅配実績の集計なので宅配拠点だけを並べる
+  _dashDelOffices().forEach(n=>{officeMap[n]={name:n,kanryo:0,days:0,cost:0,drivers:0};});
   driverStats.forEach(d=>{
     const off=officeMap[d.office];
     if(off){off.kanryo+=d.kanryo;off.days+=d.days;off.cost+=d.cost;off.drivers++;}
@@ -41851,8 +41888,10 @@ function openPostEntry(preDate, preOff){
   // 営業所プルダウン
   const sel=$('pe-off');
   if(sel){
-    const list=[...new Set((D.delivery||[]).map(r=>r.office).filter(Boolean))]
-      .concat((D.offices||[]).map(o=>o.name||o).filter(Boolean));
+    /* ★ 2026-10-09.2: 営業所マスタを全件足していたため、集荷の持込先郵便局も
+       選べてしまっていた。ここは郵便局の調書を打ち込む画面なので、
+       間違って選ぶとその局の調書として保存される。宅配拠点だけに絞る。 */
+    const list=_dashDelOffices().slice();
     if(off) list.push(off);
     const uniq=[...new Set(list)].filter(Boolean);
     sel.innerHTML=uniq.map(o=>`<option value="${esc(o)}"${o===off?' selected':''}>${esc(o)}</option>`).join('');
