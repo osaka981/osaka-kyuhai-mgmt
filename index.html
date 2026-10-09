@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.9</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.10</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5044,16 +5044,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fg"><label style="font-size:9px;">その他3（円）</label><input type="number" id="of-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
           <div class="fg"><label style="font-size:9px;">その他4（円）</label><input type="number" id="of-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         </div>
-        <!-- 定時集荷先 -->
+        <!-- 集荷先（拠点マスタの写し・編集不可） -->
+        <!-- ★ 2026-10-09.10: 集荷先の登録は拠点マスタ1本にまとめた。
+             ここは拠点マスタを保存したときに自動で書き写される「写し」で、
+             日報アプリと支払の単価解決がこの値を読んでいる。
+             二重に登録できると名前がずれて単価が出なくなるため、入口を閉じる。 -->
         <div style="margin-top:8px;border-top:1px solid rgba(192,57,43,.15);padding-top:8px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <div>
-              <div class="xs muted fw7">📦 定時集荷先</div>
-              <div style="font-size:9px;color:var(--txt2);margin-top:2px;">会社名のみ記入 → 「集荷」枠のデフォルト単価を適用 / 単価も記入 → 例外単価を適用</div>
+          <div style="margin-bottom:6px;">
+            <div class="xs muted fw7">📦 集荷先（拠点マスタの写し）</div>
+            <div style="font-size:9px;color:var(--txt2);margin-top:3px;line-height:1.6;">
+              ここは編集できません。<b>集荷先の登録・変更・削除は拠点マスタの「集荷先登録」で行ってください。</b><br>
+              拠点マスタを保存すると、この一覧が自動で書き換わります。日報アプリの集荷の入力欄と、支払の集荷単価はこの値を見ています。
             </div>
-            <button type="button" class="btn b-gh btn-sm" onclick="addColCompanyRow()">＋ 集荷先追加</button>
           </div>
           <div id="of-col-companies" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
+          <div id="of-col-companies-empty" style="display:none;font-size:10px;color:var(--txt2);padding:8px;text-align:center;">
+            集荷先は登録されていません
+          </div>
         </div>
         <!-- 複数単価条件 -->
         <div style="margin-top:8px;border-top:1px solid rgba(192,57,43,.15);padding-top:8px;">
@@ -5253,7 +5260,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.9';
+const APP_VER = '2026-10-09.10';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -37477,10 +37484,13 @@ function addColCompanyRow(name, price){
   row.className = 'of-col-cmp-row';
   row.style.cssText = 'display:grid;grid-template-columns:1fr 140px 30px;gap:6px;align-items:end;';
   const escVal = v => (v==null?'':String(v).replace(/"/g,'&quot;'));
+  // ★ 2026-10-09.10: 拠点マスタの写しなので読み取り専用。
+  //   値は collectColCompanies が読むため、disabled ではなく readonly にする。
+  const ro = 'readonly tabindex="-1" style="font-size:10px;padding:3px 6px;background:var(--bg3);color:var(--txt2);cursor:default;"';
   row.innerHTML = `
-    <div class="fg"><label style="font-size:9px;">会社名</label><input type="text" class="fi of-col-cmp-name" style="font-size:10px;padding:3px 6px;" placeholder="例: ユック" value="${escVal(name)}"></div>
-    <div class="fg"><label style="font-size:9px;">単価（空欄=デフォルト）</label><input type="number" class="fi of-col-cmp-price" style="font-size:10px;padding:3px 6px;" placeholder="デフォルト" value="${escVal(price)}"></div>
-    <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>`;
+    <div class="fg"><label style="font-size:9px;">集荷先名</label><input type="text" class="fi of-col-cmp-name" ${ro} value="${escVal(name)}"></div>
+    <div class="fg"><label style="font-size:9px;">単価（空欄=「集荷」枠の単価）</label><input type="text" class="fi of-col-cmp-price" ${ro} value="${escVal(price)}"></div>
+    <span style="color:var(--txt3);font-size:11px;text-align:center;" title="拠点マスタで編集してください">🔒</span>`;
   list.appendChild(row);
 }
 
@@ -37504,6 +37514,9 @@ function restoreColCompanies(list){
   if(!wrap) return;
   wrap.innerHTML = '';
   (list||[]).forEach(c=>addColCompanyRow(c.name, c.price));
+  // ★ 2026-10-09.10: 1件も無いときは、空であることをはっきり出す
+  const empty = document.getElementById('of-col-companies-empty');
+  if(empty) empty.style.display = (list && list.length) ? 'none' : 'block';
 }
 
 // ══════════════════════════════════════════════════
