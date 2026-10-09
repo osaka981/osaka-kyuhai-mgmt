@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5250,7 +5250,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.3';
+const APP_VER = '2026-10-09.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9877,7 +9877,11 @@ function updOffSels() {
     const isFilter = id === 'cmp-off';
     const isStaffMain = id === 'st-off';
     el.innerHTML = isFilter ? '<option value="">全営業所</option>' :
-                   isStaffMain ? '<option value="">なし(集荷専属など)</option>' : '';
+                   /* ★ 2026-10-09.4: 「なし(集荷専属など)」を廃止。
+                      集荷の拠点（堺営業所）を選べるので「なし」を使う理由がなく、
+                      空のまま保存すると外注費分析や営業所フィルタから漏れる。
+                      未選択の状態は残して、保存時に必須にする。 */
+                   isStaffMain ? '<option value="">選択してください</option>' : '';
 
     // それぞれのselectに対応する候補名セットを選択
     let names;
@@ -22213,7 +22217,10 @@ function saveStaff(continueAdd=false){
   const _onlyCol = _hasCol && !_hasDel;
   // 宅配を含む場合はメイン郵便局必須
   if(_hasDel && !officeName){console.log('[saveStaff] 中断: 宅配なのに郵便局未選択');alert('宅配を担当する場合はメイン郵便局を選択してください');return;}
-  // 集荷専属(集荷のみ)で郵便局選択あり → 警告だけしてそのまま許可
+  /* ★ 2026-10-09.4: 宅配でも集荷でも、拠点を必ず選ばせる。
+     空のままだと s.office が無くなり、外注費分析・品目別集計・
+     従業員の営業所フィルタから漏れる（「未設定」に落ちる）。 */
+  if(!officeName){console.log('[saveStaff] 中断: 拠点未選択');alert('メイン郵便局（所属拠点）を選択してください。\n集荷専従の方は「堺営業所」、内勤・役員の方は「本社」を選んでください。');return;}
   // 社員番号：手入力 or 自動
   // ★編集モードでは原則 empNo を変更しない(既存値を維持)
   //   自動採番は新規追加時のみ走らせる。これにより
