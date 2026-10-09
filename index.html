@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.14</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.15</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4818,7 +4818,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 郵便局単価 -->
-    <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 郵便局単価</div>
+    <!-- ★ 2026-10-09.15: 税区分を拠点マスタに追加。郵便局への請求は税別が既定。 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;margin-bottom:8px;">
+      <div class="xs muted fw7" style="letter-spacing:.4px;">■ 郵便局単価</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-left:auto;">
+        <label for="loc-price-tax" style="font-size:10px;color:var(--txt2);">税区分</label>
+        <select id="loc-price-tax" class="fi" style="font-size:11px;padding:3px 6px;width:auto;">
+          <option value="ex">税別</option>
+          <option value="in">税込</option>
+        </select>
+      </div>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
       <div class="fg"><label>完了</label><input type="number" id="loc-price-kanryo" class="fi" placeholder="0" step="0.01"></div>
       <div class="fg"><label>転送</label><input type="number" id="loc-price-tenso" class="fi" placeholder="0" step="0.01"></div>
@@ -5111,7 +5121,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <button class="btn confirm-btn" onclick="toggleConfirmPanel('of')" id="of-confirm-btn">📋 登録確認</button>
     <button class="btn b-gh" onclick="closeM('m-office')">キャンセル</button>
     <button class="btn b-red btn-sm" id="of-del-btn" style="display:none;" onclick="deleteOffice()">🗑 削除</button>
-    <button class="btn b-grn" id="of-save-btn" onclick="addOffice()">💾 保存</button>
+    <!-- ★ 2026-10-09.15: 営業所マスタは拠点マスタの写しなので保存させない。
+         ここで保存できると、画面に出ている値（空や0）で拠点マスタを
+         上書きしてしまう経路が残り続ける。入口ごと閉じる。 -->
+    <div style="flex:1;font-size:11px;color:var(--txt2);line-height:1.6;text-align:left;">
+      この画面は拠点マスタの写しです。編集は <b>管理 → 拠点管理</b> で行ってください。
+    </div>
   </div>
 </div>
 </div>
@@ -5260,7 +5275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.14';
+const APP_VER = '2026-10-09.15';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6212,6 +6227,8 @@ function openLocModal(id){
   document.getElementById('loc-price-ogata').value = p.ogata || '';
   document.getElementById('loc-price-shukka').value = p.shukka || '';
   document.getElementById('loc-price-mochi').value = p.mochimodoiri || '';
+  // ★ 2026-10-09.15: 税区分。未設定は税別。
+  { const _t=document.getElementById('loc-price-tax'); if(_t) _t.value = (p._taxType === 'in') ? 'in' : 'ex'; }
 
   // 集荷先(定時/指定事業所)の復元
   if(typeof loadLocShukkaCompanies === 'function') loadLocShukkaCompanies(l);
@@ -6431,6 +6448,8 @@ function saveLocation(){
       ogata:  parseFloat(document.getElementById('loc-price-ogata').value) || 0,
       shukka: parseFloat(document.getElementById('loc-price-shukka').value) || 0,
       mochimodoiri: parseFloat(document.getElementById('loc-price-mochi').value) || 0,
+      // ★ 2026-10-09.15: 税区分。既定は税別。
+      _taxType: (document.getElementById('loc-price-tax')?.value === 'in') ? 'in' : 'ex',
     };
     // 既存のcolCompanies(旧形式の指定事業所集荷単価)があれば保持
     if(existingLoc?.prices?.colCompanies){
@@ -6566,6 +6585,8 @@ function saveLocation(){
           if(_p[k] != null) ofRec.postPrices[k] = Number(_p[k]) || 0;
         });
         if(_p.mochimodoiri != null) ofRec.postPrices.modori = Number(_p.mochimodoiri) || 0;
+        // ★ 2026-10-09.15: 税区分も写す（既定は税別）
+        ofRec.postPrices._taxType = (_p._taxType === 'in') ? 'in' : 'ex';
       }
     }
 
@@ -6582,7 +6603,11 @@ function saveLocation(){
 
   closeM('m-loc');
   renderLocCards();
-  toast(id?'拠点を更新しました':'拠点を追加しました');
+  // ★ 2026-10-09.15: toast は定義されていない関数で、ここだけ素で呼んでいたため
+  //   保存のたびに ReferenceError が出ていた（保存自体は通っていた）。
+  //   他の13か所と同じく、有ればトースト・無ければ何も出さない形にそろえる。
+  if(typeof toast === 'function') toast(id?'拠点を更新しました':'拠点を追加しました','ok');
+  else console.info(id?'[拠点マスタ] 更新しました':'[拠点マスタ] 追加しました');
 }
 
 function deleteLocation(){
@@ -29730,6 +29755,13 @@ function setOfTax(type){
   if(inBtn){ inBtn.style.background=type==='in'?'var(--grn)':'transparent'; inBtn.style.color=type==='in'?'#fff':'var(--txt2)'; inBtn.style.borderColor=type==='in'?'var(--grn)':'var(--brd2)'; }
 }
 function addOffice(){
+  /* ★ 2026-10-09.15: 営業所マスタからの保存を全面的に止める。
+     ここは拠点マスタの写しを表示する画面で、保存すると画面の値（空や0）が
+     拠点マスタへ書き戻され、単価・FAX・所長名が消える事故が実際に起きた。
+     保存ボタンは外したが、別の経路から呼ばれても書き込まないよう閉じておく。 */
+  showAlert({msg:'営業所マスタは拠点マスタの写しです。\n編集は 管理 → 拠点管理 から行ってください。'});
+  return;
+  /* eslint-disable no-unreachable */
   const editId = $('m-office')?._editId || null;
   const name = $('of-name')?.value.trim();
   if(!name){alert('営業所名を入力してください');return;}
