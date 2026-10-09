@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.8</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4886,9 +4886,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- 集荷先登録(定時集荷先・指定事業所集荷先) -->
-    <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 集荷先登録 (明細・支払表示用)</div>
-    <div style="font-size:10px;color:var(--txt2);margin-bottom:8px;line-height:1.5;">
-      明細書には集荷先名で件数表示。請求書・支払代行書では「集荷」(定時)で合算表示・指定事業所集荷は会社別に表示されます。
+    <div class="xs muted fw7 mb8" style="margin-top:10px;letter-spacing:.4px;">■ 集荷先登録 (郵便局への請求用)</div>
+    <div style="font-size:10px;color:var(--txt2);margin-bottom:8px;line-height:1.6;">
+      ここに登録した集荷先が、郵便局データ手入力の入力欄になります。<br>
+      集荷先名は<b>弊社の管理用の名前</b>です。郵便局から1社ずつ数量が来る局は会社名で、定時・指定事業所をまとめて日別で送ってくる局は「定時集荷（まとめ）」のような名前で登録してください。<br>
+      請求書では、定時集荷先の合計が「集荷委託」、指定事業所集荷先の合計が「指定事業所集荷」になります。<br>
+      <b>集荷事業（堺営業所・顧客への請求）とは別物です。</b>ここは宅配事業の、郵便局へ請求する集荷だけを扱います。
     </div>
     <!-- 定時集荷先 -->
     <div style="background:rgba(46,139,87,.05);border:1px solid rgba(46,139,87,.25);border-radius:5px;padding:8px;margin-bottom:6px;">
@@ -5250,7 +5253,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.6';
+const APP_VER = '2026-10-09.8';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6324,32 +6327,22 @@ function addLocShukkaCompany(type, data){
   row.dataset.rowId = rowId;
   row.style.cssText = 'display:grid;grid-template-columns:1fr ' + (type==='shitei'?'90px 70px ':'') + 'auto;gap:5px;align-items:center;';
 
-  // 顧客選択肢を生成(顧客マスタから取得)
-  const customers = (D.customers||[]).filter(c=>c.status!=='終了').sort((a,b)=>{
-    const na = parseInt(_normalizeCustNo?.(a.custNo)) || 9999;
-    const nb = parseInt(_normalizeCustNo?.(b.custNo)) || 9999;
-    return na - nb;
-  });
-  const custOpts = ['<option value="">-- 顧客を選択 (任意) --</option>']
-    .concat(customers.map(c=>`<option value="${c.id}" ${data?.custId==c.id?'selected':''}>${esc(c.name||'')}</option>`))
-    .join('');
+  // ★ 2026-10-09.7: 顧客を選ぶ欄を外した。
+  //   ここは宅配事業（郵便局への請求）の集荷先で、集荷事業（堺営業所・顧客への請求）
+  //   とは別物。顧客マスタと結びつける意味がないため選択欄ごと削除する。
+  //   既に登録済みの custId は、保存で消えないよう行に持たせて書き戻す。
+  row.dataset.custId = (data && data.custId!=null) ? String(data.custId) : '';
 
   if(type === 'teiji'){
     row.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-        <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: A商事)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
-        <select class="fi loc-shukka-cust" style="font-size:11px;padding:3px 6px;">${custOpts}</select>
-      </div>
+      <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: A商事／定時集荷まとめ)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
       <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
     `;
   } else {
     // 指定事業所集荷先(単価+税モード付き)
     const taxFlag = data?._tax || 'ex';
     row.innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
-        <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: C工業)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
-        <select class="fi loc-shukka-cust" style="font-size:11px;padding:3px 6px;">${custOpts}</select>
-      </div>
+      <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: C工業／指定事業所まとめ)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
       <input type="number" class="fi loc-shukka-price" placeholder="単価" value="${data?.price||''}" step="0.01" style="font-size:11px;padding:3px 6px;text-align:right;">
       <select class="fi loc-shukka-tax" style="font-size:10px;padding:3px 4px;">
         <option value="ex" ${taxFlag==='ex'?'selected':''}>税別</option>
@@ -6378,14 +6371,16 @@ function loadLocShukkaCompanies(loc){
 function collectLocShukkaCompanies(){
   const teiji = [];
   const shitei = [];
+  // ★ 2026-10-09.7: 顧客選択欄は廃止。既存の custId は行から書き戻して保持する。
+  const _keepCust = row => { const v=parseInt(row.dataset.custId); return isNaN(v)?null:v; };
   document.querySelectorAll('#loc-shukka-teiji-list .loc-shukka-row').forEach(row=>{
     const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
-    const custId = parseInt(row.querySelector('.loc-shukka-cust')?.value) || null;
+    const custId = _keepCust(row);
     if(name) teiji.push({id:row.dataset.rowId, name, custId});
   });
   document.querySelectorAll('#loc-shukka-shitei-list .loc-shukka-row').forEach(row=>{
     const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
-    const custId = parseInt(row.querySelector('.loc-shukka-cust')?.value) || null;
+    const custId = _keepCust(row);
     const price = parseFloat(row.querySelector('.loc-shukka-price')?.value) || 0;
     const _tax = row.querySelector('.loc-shukka-tax')?.value || 'ex';
     if(name) shitei.push({id:row.dataset.rowId, name, custId, price, _tax});
@@ -6532,6 +6527,27 @@ function saveLocation(){
       if(data.fax)  ofRec.fax  = data.fax;
       if(data.head) ofRec.head = data.head;
     }
+
+    // ★ 2026-10-09.8: 集荷先の登録を拠点マスタ1本にまとめる。
+    //   日報アプリの「定時集荷先」の入力欄と、集荷単価の解決の一部は、
+    //   いまも営業所マスタの postPrices.colCompanies を見ている。
+    //   そのため拠点マスタにだけ集荷先を登録しても、ドライバーの画面には
+    //   欄が出ず、入力されても単価が見つからず0円になっていた。
+    //   拠点マスタを正として、保存のたびにこちらへ同じ内容を写す。
+    //   ・定時集荷先       → price: null（拠点共通の「集荷(定時)」単価を使う）
+    //   ・指定事業所集荷先 → price: 会社ごとの単価
+    if(type === 'post_office'){
+      const _cols = []
+        .concat((data.shukkaCompaniesTeiji||[]).map(c=>({ name:c&&c.name, price:null })))
+        .concat((data.shukkaCompaniesShitei||[]).map(c=>({
+          name: c&&c.name,
+          price: (!c || c.price==null || c.price==='') ? null : (Number(c.price)||0)
+        })))
+        .filter(c=>c.name);
+      if(!ofRec.postPrices || typeof ofRec.postPrices!=='object') ofRec.postPrices = {};
+      ofRec.postPrices.colCompanies = _cols;
+    }
+
     lsSet(LS_KEYS.OFFICES, D.offices);
     if(typeof fbSet==='function'){
       fbSet('offices', D.offices.map(o=>({
