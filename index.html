@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.12</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.14</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5260,7 +5260,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.12';
+const APP_VER = '2026-10-09.14';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -25794,14 +25794,19 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
 function _getCompanyInfo(){
   const info = (typeof _getSystemInfo === 'function') ? _getSystemInfo() : {};
   return {
+    /* ★ 2026-10-09.13: 既定値が開発時のダミーのままだった。
+       自社情報が未設定のまま書類を出すと、西成の架空住所・06-XXXX-XXXX・
+       T1234567890123 がそのまま印字される。実在の情報にそろえる。
+       インボイス登録番号だけは、誤った番号を印字するほうが危険なので
+       ダミーを置かず空にする（空欄なら気づける）。 */
     name: info.companyName || '大阪急配株式会社',
     repName: info.repName || '川村 知弘',
-    zip: info.zip || '〒557-0034',
-    addr: info.addr || '大阪府大阪市西成区松1-2-3',
-    tel: info.tel || '06-XXXX-XXXX',
-    fax: info.fax || '',
+    zip: info.zip || '〒599-8247',
+    addr: info.addr || '大阪府堺市北区常磐町3-12-5',
+    tel: info.tel || '072-258-9811',
+    fax: info.fax || '072-258-9812',
     email: info.email || 'info@osaka981.co.jp',
-    invoiceNo: info.invoiceNo || 'T1234567890123',
+    invoiceNo: info.invoiceNo || '',
     bankName: info.bankName || '○○銀行 ○○支店',
     bankAccount: info.bankAccount || '普通 1234567 オオサカキュウハイ(カ',
     companyStampImage: info.companyStampImage || '',
@@ -29850,22 +29855,15 @@ function addOffice(){
         loc.clientBranch  = $('of-clientBranch')?.value.trim()  || loc.clientBranch  || offData.name;
         loc.invoiceNo     = $('of-invoiceNo')?.value.trim()     || '';
       }
-      // 単価もPIN認証時のみ更新(postPricesから同期)
-      if(postPrices){
-        loc.prices = {
-          kanryo: postPrices.kanryo || 0,
-          tenso:  postPrices.tenso || 0,
-          night:  postPrices.night || 0,
-          ogata:  postPrices.ogata || 0,
-          shukka: postPrices.shukka || 0,
-          mochimodoiri: postPrices.modori || 0,
-          colCompanies: postPrices.colCompanies || [],
-        };
-      }
+      /* ★ 2026-10-09.14: 営業所マスタから拠点マスタへ単価を書き戻すのをやめた。
+         ここで postPrices を拠点マスタへ写していたため、営業所の画面を開いて
+         保存しただけで、拠点マスタの単価が画面に出ていた値（＝0）で
+         上書きされていた。実際に大阪西の単価が全部0になった。
+         単価の持ち主は拠点マスタ1つだけ。営業所マスタはその写しなので、
+         写しから元へ戻す経路は要らない。 */
     } else {
-      // 本社/集荷営業所なら請求関係をクリア
+      // 本社/集荷営業所なら請求対象から外す（単価は拠点マスタのものなので触らない）
       loc.isBilling = false;
-      loc.prices = null;
     }
     lsSet(LS_KEYS.LOCATIONS, D.locations);
     if(typeof fbSet==='function') fbSet('locations', D.locations);
@@ -35744,11 +35742,14 @@ function loadSystemInfoToForm(){
   const info=_getSystemInfo();
   if($('sys-company-name'))$('sys-company-name').value=info.companyName||'大阪急配株式会社';
   if($('sys-rep-name'))$('sys-rep-name').value=info.repName||'川村 知弘';
-  if($('sys-zip'))$('sys-zip').value=info.zip||'';
-  if($('sys-addr'))$('sys-addr').value=info.addr||'';
-  if($('sys-tel'))$('sys-tel').value=info.tel||'';
-  if($('sys-fax'))$('sys-fax').value=info.fax||'';
-  if($('sys-email'))$('sys-email').value=info.email||'';
+  /* ★ 2026-10-09.13: 住所・電話などは灰色の見本(placeholder)が出ているだけで
+     中身は空だった。空のまま書類を出すと既定値が印字されるので、
+     未設定のときは実在の値を入れておき、保存すればそのまま記録されるようにする。 */
+  if($('sys-zip'))$('sys-zip').value=info.zip||'599-8247';
+  if($('sys-addr'))$('sys-addr').value=info.addr||'大阪府堺市北区常磐町3-12-5';
+  if($('sys-tel'))$('sys-tel').value=info.tel||'072-258-9811';
+  if($('sys-fax'))$('sys-fax').value=info.fax||'072-258-9812';
+  if($('sys-email'))$('sys-email').value=info.email||'info@osaka981.co.jp';
   if($('sys-invoice-no'))$('sys-invoice-no').value=info.invoiceNo||'';
   // 銀行セット描画
   renderBankSets();
