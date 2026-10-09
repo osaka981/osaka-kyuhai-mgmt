@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5250,7 +5250,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.2';
+const APP_VER = '2026-10-09.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7948,16 +7948,30 @@ function applyDeptToOfficeFields(fromUserChange){
   const subSec = document.getElementById('st-sub-offices-section');
   if(subSec) subSec.style.display = hasDel ? '' : 'none';
 
-  // 集荷専属(集荷のみ)の場合、ユーザー操作起因の変更時にメイン郵便局を「なし」に切替
-  // 既存編集データの自動上書きは避ける(fromUserChange=true のみ)
+  /* 集荷専属(集荷のみ)にしたときの扱い。既存データの自動上書きは避ける(fromUserChange=true のみ)
+     ★ 2026-10-09.3: これまではメイン郵便局を「なし」（空）にしていたが、
+       空にすると s.office が無くなり、外注費分析・品目別集計・
+       従業員の営業所フィルタから漏れる（「未設定」に落ちる）。
+       集荷の拠点は1つしか無いので、それを自動で入れる。
+       将来集荷の拠点が複数になったら、迷わないよう従来どおり空にして選び直してもらう。 */
   if(onlyCol && fromUserChange){
     const offEl = $('st-off');
-    if(offEl && offEl.value !== ''){
-      offEl.value = '';
-      // 自動採番表示もクリア
-      if(typeof prevEmpNo==='function') prevEmpNo();
+    const colNames = [...new Set((D.locations||[])
+      .filter(l=>l && l.name && l.active!==false && l.type!=='head'
+                 && (l.type==='col_office' || l.typesCol))
+      .map(l=>l.name))];
+    if(offEl){
+      if(colNames.length===1){
+        if(offEl.value !== colNames[0]){
+          offEl.value = colNames[0];
+          if(typeof prevEmpNo==='function') prevEmpNo();
+        }
+      } else if(offEl.value !== ''){
+        offEl.value = '';
+        if(typeof prevEmpNo==='function') prevEmpNo();
+      }
     }
-    // 担当郵便局もクリア
+    // 担当郵便局（宅配の追加分）はクリア
     if(typeof setSubOffices==='function') setSubOffices([]);
     if(typeof renderSubOfficeBadges==='function') renderSubOfficeBadges();
   }
