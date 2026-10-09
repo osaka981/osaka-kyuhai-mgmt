@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.16</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.17</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5275,7 +5275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.16';
+const APP_VER = '2026-10-09.17';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -31177,6 +31177,18 @@ function renderOfficeFSTab(key){
   else if(key==='ledger') renderOfficeLedger(body, name);
 }
 
+/* ★ 2026-10-09.17: 集荷先ごとの内訳を短く文字にする。
+   日報アプリから来た日報は form.col.companies を持っており、
+   applyFirebaseData で r.shukkaCompanies に写してある。
+   経営管理から直接入力した日は内訳が無いので空にする。 */
+function _shukkaBreakdown(r){
+  const list = (r && Array.isArray(r.shukkaCompanies)) ? r.shukkaCompanies : [];
+  const parts = list
+    .filter(c=>c && c.name && (parseInt(c.count)||0) > 0)
+    .map(c=>esc(c.name)+' '+(parseInt(c.count)||0));
+  return parts.length ? parts.join(' ／ ') : '';
+}
+
 function renderOfficeDel(el, name){
   const now=new Date(), ym=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   // 月優先順: ①既存セレクタ値 ②外部から指定された月 ③当月
@@ -31191,7 +31203,10 @@ function renderOfficeDel(el, name){
         staffKey:'of-del',staffList:_sf.list,staffSel:_sf.sel,staffCb:"renderOfficeFSTab('del')"}):''}
     <div class="ct mb8"><div class="cbar"></div>宅配日報（${rows.length}件）</div>`;
   if(rows.length){
-    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th></tr></thead><tbody>`;
+    /* ★ 2026-10-09.17: 営業所ページの宅配日報に「集荷」列が無かった。
+       郵便局へ請求する定時集荷はこの一覧からしか追えないため足す。
+       集荷先ごとの内訳も右に出す。 */
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);">集荷</th><th style="border-right:0;">集荷の内訳</th></tr></thead><tbody>`;
     // ★ 2026/08/11: 同じ日付をまとめ、日付が変わるところで区切って見やすくする。
     // ★ 2026/08/18: 各日の末尾に日計行を追加(郵便局の調書と同じ粒度で突き合わせるため)
     const _wd=['日','月','火','水','木','金','土'];
@@ -31206,16 +31221,16 @@ function renderOfficeDel(el, name){
     });
     _groups.forEach((g,gi)=>{
       // ★ 2026/08/27: 日の切れ目(照合結果と同じ表現にそろえる)
-      if(gi>0) html+=`<tr class="no-hover"><td colspan="9" style="height:8px;padding:0;border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>`
-        +`<tr class="no-hover"><td colspan="9" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>`;
+      if(gi>0) html+=`<tr class="no-hover"><td colspan="11" style="height:8px;padding:0;border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>`
+        +`<tr class="no-hover"><td colspan="11" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>`;
       const dow=(()=>{ const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
       const dowCol = dow==='日'?'var(--red2)':(dow==='土'?'var(--blu)':'var(--txt2)');
-      const sum={mochi:0,kanryo:0,yakan:0,tenso:0,ogata:0,modori:0,yoku:0};
+      const sum={mochi:0,kanryo:0,yakan:0,tenso:0,ogata:0,modori:0,yoku:0,shukka:0};
       g.rows.forEach((r,ri)=>{
         sum.mochi+=(r.mochidashi||0); sum.kanryo+=(r.kanryo||0); sum.yakan+=(r.yakan||0);
         sum.tenso+=(r.tenso||0); sum.ogata+=(r.ogata||0);
-        sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0);
+        sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0); sum.shukka+=(r.shukka||0);
         const isNew=(ri===0);
         html+=`<tr>
           <td class="mono" style="${isNew?'font-weight:700;font-size:13px;':'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
@@ -31224,6 +31239,8 @@ function renderOfficeDel(el, name){
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
           <td class="tr" style="color:var(--pur2)">${r.ogata||0}</td>
           <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
+          <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${r.shukka||0}</td>
+          <td class="xs muted" style="white-space:nowrap;">${_shukkaBreakdown(r)}</td>
         </tr>`;
       });
       // 日計
@@ -31241,6 +31258,8 @@ function renderOfficeDel(el, name){
         <td class="tr fw7" style="font-size:15px;color:var(--pur2);">${sum.ogata}</td>
         <td class="tr fw7" style="font-size:15px;">${sum.modori}</td>
         <td class="tr fw7" style="font-size:15px;">${sum.yoku}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--grn2);border-left:2px solid var(--brd2);">${sum.shukka}</td>
+        <td></td>
       </tr>`;
     });
     html+=`</tbody></table></div>`;
