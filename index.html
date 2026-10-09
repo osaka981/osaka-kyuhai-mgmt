@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.8</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.9</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5253,7 +5253,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.8';
+const APP_VER = '2026-10-09.9';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7157,6 +7157,17 @@ function applyFirebaseData() {
       .map(r => {
         const f = r.form || {};
         const d = f.del || f; // form.del優先、なければトップレベル
+        /* ★ 2026-10-09.9: 日報アプリの定時集荷が日報一覧に出ていなかった。
+           アプリは集荷を form.col.companies（集荷先ごとの件数）に書くが、
+           ここでは d.shukka（経営管理で直接入力したときの欄）しか見ておらず、
+           アプリから来た日報の集荷が常に0になっていた。
+           集荷先ごとの合計を拾って、経営管理の直接入力が無いときはそれを使う。 */
+        const _colTotal = (()=>{
+          const c = f.col;
+          if(!c) return 0;
+          if(c.total != null) return parseInt(c.total) || 0;
+          return (c.companies||[]).reduce((a,x)=>a+(parseInt(x && x.count)||0), 0);
+        })();
         return {
           id: r.id,
           date: r.date,
@@ -7171,7 +7182,8 @@ function applyFirebaseData() {
           mochimodoiri: d.mochimodoiri || 0,
           '翌日廻し':   d['翌日廻し'] || 0,
           ogata:      d.ogata || 0,
-          shukka:     d.shukka || 0,
+          shukka:     (d.shukka || 0) || _colTotal,
+          shukkaCompanies: (f.col && f.col.companies) || [],   // 集荷先ごとの内訳
           note:       f.notes || '',
           postData:   null,
           status:     '未照合',
