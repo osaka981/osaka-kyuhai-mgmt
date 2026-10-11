@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.21</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.22</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4766,7 +4766,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 拠点 追加・編集モーダル (Phase 2) -->
 <div id="m-loc" class="mbg" data-no-bgclose>
-<!-- ★ 2026-10-09.21: 集荷先の行に旧名称と終了日が入って600pxでは狭い。画面案と同じ幅にする -->
+<!-- ★ 2026-10-09.22: 集荷先の行に旧名称と終了日が入って600pxでは狭い。画面案と同じ幅にする -->
 <div class="modal" style="width:1240px;max-width:98vw;">
   <div class="mhd"><div class="mtt" id="m-loc-title">📍 拠点を追加</div><button class="mx" onclick="closeM('m-loc')">×</button></div>
   <input type="hidden" id="loc-edit-id">
@@ -5226,6 +5226,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;align-items:center;">
     <div style="font-size:11.5px;color:var(--txt2);flex:1 1 auto;">
       <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
+      右の<span style="color:var(--grn2);">緑</span>は定時集荷先、<span style="color:var(--amb2);">黄</span>は指定事業所集荷先で、<b>拠点マスタに登録した集荷先がそのまま列になります。</b>集荷だけの人も、集荷に数を入れればその日は稼働として保存されます。<br>
       左端の <span style="color:var(--txt3);">⠿</span> をドラッグすると、調書に合わせて行を並び替えられます。<br>
       <span style="color:var(--txt3);">キー操作：</span>
       <b>Enter</b> 右へ（行末で次の人）／<b>Shift+Enter</b> 戻る／<b>↑↓</b> 同じ列で上下
@@ -5275,7 +5276,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <div class="tw" style="max-height:calc(100vh - 330px);overflow:auto;">
     <table>
-      <thead><tr>
+      <thead><tr id="pe-head-row">
         <th style="width:26px;"></th>
         <th style="width:100px;">社員番号</th>
         <th style="width:140px;">氏名</th>
@@ -5286,7 +5287,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <th class="tr" style="width:110px;color:var(--pur2);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
       </tr></thead>
       <tbody id="tb-postentry"></tbody>
-      <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
+      <tfoot><tr id="pe-foot-row" style="background:var(--sur2);border-top:2px solid var(--brd2);">
         <td colspan="3" style="font-size:14px;font-weight:700;">日計
           <span style="font-size:12.5px;font-weight:600;color:var(--txt2);margin-left:6px;">稼動 <span id="pe-sum-active">0</span> 人</span></td>
         <td class="tr mono fw7" id="pe-sum-mochi"  style="font-size:16px;">0</td>
@@ -5316,7 +5317,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.21';
+const APP_VER = '2026-10-09.22';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -42297,6 +42298,106 @@ function _postEntryStaff(office){
   });
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.22: 郵便局データ手入力に「集荷先ごとの列」を足す
+     列は拠点マスタに登録した集荷先。定時集荷先と指定事業所集荷先を
+     分けて出し、請求書の「集荷委託」「指定事業所集荷」にそのまま使う。
+     ・終了日を過ぎた集荷先は列に出さない（過去の実績は消えない）
+     ・旧名称で保存されている過去の日報は、新しい名前の列に寄せる
+     ・内訳を持たない過去データは「未分類」列に出し、そこから振り分ける
+     保存先は従来どおり D.postLogs。1レコードに
+       shukkaCompanies:[{name,count,kind}] と shukka(合計) を持たせる。
+   ════════════════════════════════════════════════════════════ */
+let _PE_SH_COLS = [];   // いま画面に出ている集荷列 [{key,name,kind,prevName}]
+
+// いまの営業所・日付で出すべき集荷先（宅配日報入力と同じ定義を使う）
+function _peShukkaDefs(){
+  const off = $('pe-off')?.value || '';
+  const dt  = $('pe-date')?.value || '';
+  if(typeof _ddShukkaDefs === 'function'){
+    try{ return _ddShukkaDefs(off, dt) || []; }catch(e){ return []; }
+  }
+  return [];
+}
+
+// 1人ぶんの保存済みデータを、集荷先ごとの数に割り振る
+function _peResolveCol(ex, defs){
+  const out = { vals:{}, unknown:0 };
+  (defs||[]).forEach(d=>{ out.vals[d.name]=''; });
+  if(!ex) return out;
+  const list = Array.isArray(ex.shukkaCompanies) ? ex.shukkaCompanies : null;
+  if(list && list.length){
+    list.forEach(c=>{
+      if(!c) return;
+      const nm = String(c.name||'').trim();
+      const n  = Math.max(0, parseInt(c.count)||0);
+      if(!n) return;
+      if(c.kind==='unknown' || nm==='未分類'){ out.unknown += n; return; }
+      const d = (defs||[]).find(x=>x.name===nm)
+             || (defs||[]).find(x=>x.prevName && x.prevName===nm);
+      if(d) out.vals[d.name] = (parseInt(out.vals[d.name])||0) + n;
+      else  out.unknown += n;   // 削除された集荷先など
+    });
+  }else if(ex.shukka!=null && ex.shukka!==''){
+    out.unknown = Math.max(0, parseInt(ex.shukka)||0);   // 内訳を持たない過去データ
+  }
+  return out;
+}
+
+// 集荷先名は日本語・記号を含むので、属性セレクタ用に引用符を逃がす
+function _peSelEsc(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
+
+function _peShColor(kind){
+  return kind==='shitei' ? 'var(--amb2)' : (kind==='unknown' ? 'var(--txt3)' : 'var(--grn2)');
+}
+
+// 1行（1人）ぶんの集荷の入力欄を読む
+function _peReadColOfRow(tr){
+  const list=[]; let total=0;
+  if(!tr) return {list, total};
+  tr.querySelectorAll('input[data-sh]').forEach(el=>{
+    const n = Math.max(0, parseInt(el.value)||0);
+    if(!n) return;
+    const kind = el.getAttribute('data-shkind') || 'teiji';
+    const name = el.getAttribute('data-shname') || '';
+    if(!name) return;
+    list.push({ name, count:n, kind });
+    total += n;
+  });
+  return {list, total};
+}
+
+// 見出し行と日計行の集荷列を作り直す
+function _peRenderHead(){
+  const hr=$('pe-head-row'), fr=$('pe-foot-row');
+  if(hr) hr.querySelectorAll('.pe-dyn').forEach(e=>e.remove());
+  if(fr) fr.querySelectorAll('.pe-dyn').forEach(e=>e.remove());
+  _PE_SH_COLS.forEach((c,i)=>{
+    const col=_peShColor(c.kind);
+    const edge=(i===0?'border-left:2px solid var(--brd2);':'');
+    const sub = c.kind==='shitei' ? '指定事業所'
+              : c.kind==='unknown' ? '内訳なし' : '定時';
+    if(hr){
+      const th=document.createElement('th');
+      th.className='tr pe-dyn';
+      th.style.cssText='width:118px;color:'+col+';'+edge;
+      th.innerHTML = esc(c.name)
+        + '<div style="font-size:9px;font-weight:400;color:var(--txt3);">'
+        + sub + (c.prevName ? '／旧 '+esc(c.prevName) : '') + '</div>';
+      hr.appendChild(th);
+    }
+    if(fr){
+      const td=document.createElement('td');
+      td.className='tr mono fw7 pe-dyn';
+      td.id='pe-shsum-'+i;
+      td.style.cssText='font-size:15px;color:'+col+';'+edge;
+      td.textContent='0';
+      fr.appendChild(td);
+    }
+  });
+}
+
 // ★ 2026/08/20: 照合結果の日計行からも呼べるよう、日付・営業所を受け取れるようにした。
 //   指定があればその日を開き、無ければ従来どおり(前回の日付 or 当日)。
 function openPostEntry(preDate, preOff){
@@ -42329,16 +42430,30 @@ function renderPostEntry(){
   const logs=_postLogsAll();
   const staff=_peApplyOrder(_postEntryStaff(off), off);   // 局ごとの手動並びを適用
 
+  /* ★ 2026-10-09.22: 集荷先ごとの列を用意する。
+     先に全員ぶんを引き当てて、内訳の持たないデータがある時だけ
+     「未分類」列を出す。 */
+  const defs = _peShukkaDefs();
+  const found = staff.map(s=>{
+    const emp=String(s.empNo||'').trim();
+    const ex=logs.find(l=>l.date===date&&emp&&String(l.empNo||'').trim()===emp) ||
+             logs.find(l=>l.date===date&&l.staff===s.name);
+    return { s, emp, ex, res:_peResolveCol(ex, defs) };
+  });
+  _PE_SH_COLS = defs.map(d=>({ key:d.name, name:d.name, kind:d.kind, prevName:d.prevName||'' }));
+  if(found.some(f=>f.res.unknown>0)){
+    _PE_SH_COLS.push({ key:'__unknown__', name:'未分類', kind:'unknown', prevName:'' });
+  }
+  _peRenderHead();
+
   if(!staff.length){
-    tb.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:18px;color:var(--txt2);font-size:13px;">
+    tb.innerHTML=`<tr><td colspan="99" style="text-align:center;padding:18px;color:var(--txt2);font-size:13px;">
       対象の従事員がいません。先に従業員台帳を登録してください。</td></tr>`;
     return;
   }
 
-  tb.innerHTML=staff.map((s,i)=>{
-    const emp=String(s.empNo||'').trim();
-    const ex=logs.find(l=>l.date===date&&emp&&String(l.empNo||'').trim()===emp) ||
-             logs.find(l=>l.date===date&&l.staff===s.name);
+  tb.innerHTML=found.map((f,i)=>{
+    const s=f.s, emp=f.emp, ex=f.ex;
     const cells=POST_COLS.map(c=>{
       const v = ex && ex[c.k]!==undefined && ex[c.k]!==null && ex[c.k]!=='' ? ex[c.k] : '';
       // data-col で列を識別する。並び替えでDOM順が変わってもidに依存しないため。
@@ -42350,6 +42465,24 @@ function renderPostEntry(){
                  background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
       </td>`;
     }).join('');
+    // 集荷先ごとの欄
+    const shCells=_PE_SH_COLS.map((c,ci)=>{
+      const raw = (c.key==='__unknown__') ? f.res.unknown : f.res.vals[c.key];
+      const v = (raw===''||raw==null) ? '' : raw;
+      const bg = c.kind==='shitei' ? 'rgba(184,134,11,.07)'
+               : c.kind==='unknown' ? 'rgba(140,146,153,.08)' : 'rgba(46,139,87,.07)';
+      const bd = c.kind==='shitei' ? 'rgba(184,134,11,.45)'
+               : c.kind==='unknown' ? 'var(--brd2)' : 'rgba(46,139,87,.45)';
+      return `<td style="padding:2px 4px;${ci===0?'border-left:2px solid var(--brd2);':''}">
+        <input type="number" min="0" inputmode="numeric" data-sh="${esc(c.key)}" data-shkind="${esc(c.kind)}"
+          data-shname="${esc(c.name)}" value="${v}"
+          oninput="_postEntryCalc()" onfocus="this.select()" onkeydown="_peKeyNav(event,this)"
+          title="${esc(c.name)}（${c.kind==='shitei'?'指定事業所集荷':c.kind==='unknown'?'内訳なし':'定時集荷'}）"
+          style="width:100%;padding:5px 8px;text-align:right;font-size:15px;font-weight:700;
+                 font-family:'DM Mono',monospace;border:1px solid ${bd};border-radius:5px;
+                 background:${bg};color:var(--txt);">
+      </td>`;
+    }).join('');
     return `<tr draggable="true" data-staff="${esc(s.name||'')}" data-emp="${esc(emp)}"
       ondragstart="_peDragStart(event,this)" ondragover="_peDragOver(event,this)"
       ondrop="_peDrop(event,this)" ondragend="_peDragEnd(event)">
@@ -42358,7 +42491,7 @@ function renderPostEntry(){
       <td class="mono" style="font-size:14px;color:${emp?'var(--amb2)':'var(--red2)'};font-weight:700;white-space:nowrap;">
         ${emp?esc(emp):'未設定'}</td>
       <td style="font-size:14px;font-weight:600;white-space:nowrap;">${esc(s.name||'')}</td>
-      ${cells}
+      ${cells}${shCells}
     </tr>`;
   }).join('');
   _postEntryCalc();
@@ -42371,6 +42504,8 @@ function _postEntryCalc(){
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
   const sum={}; POST_COLS.forEach(c=>sum[c.k]=0);
   let active=0;
+  // ★ 2026-10-09.22: 集荷列ぶんの受け皿
+  const shSum=_PE_SH_COLS.map(()=>0);
   rows.forEach(tr=>{
     let any=false;
     POST_COLS.forEach(c=>{
@@ -42379,10 +42514,18 @@ function _postEntryCalc(){
       if(!isNaN(v)&&v!==0){ any=true; }
       if(!isNaN(v)) sum[c.k]+=v;
     });
+    // ★ 2026-10-09.22: 集荷だけを担当する人は宅配の欄が空のままになる。
+    //   集荷に数が入っていればその日は稼働として扱う。
+    _PE_SH_COLS.forEach((c,ci)=>{
+      const v=parseInt(tr.querySelector(`input[data-sh="${_peSelEsc(c.key)}"]`)?.value);
+      if(!isNaN(v)&&v!==0){ any=true; }
+      if(!isNaN(v)) shSum[ci]+=v;
+    });
     if(any) active++;
     tr.style.background = any ? 'rgba(80,140,220,.06)' : 'transparent';
   });
   POST_COLS.forEach(c=>{ const e=$('pe-sum-'+c.k); if(e) e.textContent=sum[c.k].toLocaleString(); });
+  _PE_SH_COLS.forEach((c,ci)=>{ const e=$('pe-shsum-'+ci); if(e) e.textContent=shSum[ci].toLocaleString(); });
   const ae=$('pe-sum-active'); if(ae) ae.textContent=active;
   // 入力欄に戻って打ち直した時点で確認バーは引っ込める
   try{ if(document.activeElement && document.activeElement.tagName==='INPUT'
@@ -42441,6 +42584,11 @@ async function savePostEntry(opt){
       obj[c.k]=v;
       if(v!==null&&v!==0) any=true;
     });
+    // ★ 2026-10-09.22: 集荷先ごとの数。合計は shukka に入れる。
+    const col=_peReadColOfRow(tr);
+    if(col.total>0) any=true;
+    obj.shukkaCompanies = col.list;
+    obj.shukka          = col.total;
     if(!any) return;                       // 空行=その日は稼働なし
     const emp=tr.getAttribute('data-emp')||'';
     if(!emp) noJp++;
@@ -42508,6 +42656,11 @@ function _peReadRows(){
       obj[c.k]=v;
       if(v!==null&&v!==0) any=true;
     });
+    // ★ 2026-10-09.22: 集荷もそのまま移す
+    const col=_peReadColOfRow(tr);
+    if(col.total>0) any=true;
+    obj.shukkaCompanies = col.list;
+    obj.shukka          = col.total;
     out.push({
       empNo: tr.getAttribute('data-emp')||'',
       staff: tr.getAttribute('data-staff')||'',
@@ -42755,8 +42908,9 @@ function _peGrid(){
   const tb=$('tb-postentry'); if(!tb) return null;
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
   if(!rows.length) return null;
-  const grid=rows.map(tr=>POST_COLS.map(c=>tr.querySelector(`input[data-col="${c.k}"]`)));
-  return grid;
+  /* ★ 2026-10-09.22: 集荷列を足したので、POST_COLS 固定ではなく
+     行の中の入力欄をそのままDOM順で並べる。Enter と ←→ が集荷まで続く。 */
+  return rows.map(tr=>[...tr.querySelectorAll('input[data-col],input[data-sh]')]);
 }
 
 function _peFocus(el){
@@ -42783,17 +42937,19 @@ function _peKeyNav(ev, el){
   }
 
   const grid=_peGrid(); if(!grid) return;
-  const col=POST_COLS.findIndex(c=>c.k===el.getAttribute('data-col'));
-  let row=-1;
-  for(let i=0;i<grid.length;i++){ if(grid[i][col]===el){ row=i; break; } }
+  let row=-1, col=-1;
+  for(let i=0;i<grid.length;i++){
+    const j=grid[i].indexOf(el);
+    if(j>=0){ row=i; col=j; break; }
+  }
   if(row<0||col<0) return;
 
   ev.preventDefault();
   const back = ev.shiftKey;
-  const lastRow=grid.length-1, lastCol=POST_COLS.length-1;
+  const lastRow=grid.length-1, lastCol=grid[row].length-1;
 
-  if(k==='ArrowUp')    { _peFocus(grid[Math.max(0,row-1)][col]); return; }
-  if(k==='ArrowDown')  { _peFocus(grid[Math.min(lastRow,row+1)][col]); return; }
+  if(k==='ArrowUp')    { const r=Math.max(0,row-1);        _peFocus(grid[r][Math.min(col,grid[r].length-1)]); return; }
+  if(k==='ArrowDown')  { const r=Math.min(lastRow,row+1);  _peFocus(grid[r][Math.min(col,grid[r].length-1)]); return; }
 
   // Enter / ←→ : 横送り。行末まで来たら次の行の先頭へ。
   const fwd = (k==='ArrowRight') || (k==='Enter' && !back);
@@ -42803,7 +42959,7 @@ function _peKeyNav(ev, el){
     else _peGotoSave();   // 最終行の最終列 → 保存ボタンへ
   } else {
     if(col>0) _peFocus(grid[row][col-1]);
-    else if(row>0) _peFocus(grid[row-1][lastCol]);
+    else if(row>0) _peFocus(grid[row-1][grid[row-1].length-1]);
   }
 }
 
