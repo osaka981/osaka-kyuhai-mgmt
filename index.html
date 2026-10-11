@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.17</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.18</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4901,6 +4901,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       ここに登録した集荷先が、郵便局データ手入力の入力欄になります。<br>
       集荷先名は<b>弊社の管理用の名前</b>です。郵便局から1社ずつ数量が来る局は会社名で、定時・指定事業所をまとめて日別で送ってくる局は「定時集荷（まとめ）」のような名前で登録してください。<br>
       請求書では、定時集荷先の合計が「集荷委託」、指定事業所集荷先の合計が「指定事業所集荷」になります。<br>
+      <b>名前を変えるときは「旧名称」に前の名前を入れてください。</b>過去の日報と結びつき、一覧には「新名称（旧○○）」と出ます。<br>
+      <b>来月からなくなる集荷先は、削除ではなく「終了日」を入れてください。</b>削除すると過去の日報が読めなくなります。<br>
       <b>集荷事業（堺営業所・顧客への請求）とは別物です。</b>ここは宅配事業の、郵便局へ請求する集荷だけを扱います。
     </div>
     <!-- 定時集荷先 -->
@@ -5275,7 +5277,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.17';
+const APP_VER = '2026-10-09.18';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6349,7 +6351,12 @@ function addLocShukkaCompany(type, data){
   row.className = 'loc-shukka-row';
   row.dataset.shukkaType = type;
   row.dataset.rowId = rowId;
-  row.style.cssText = 'display:grid;grid-template-columns:1fr ' + (type==='shitei'?'90px 70px ':'') + 'auto;gap:5px;align-items:center;';
+  /* ★ 2026-10-09.18: 旧名称と終了日を追加。
+     旧名称を入れておくと、過去の日報に旧い名前で残っている件数を
+     同じ集荷先として読める。一覧では「新名称（旧○○）」と出す。
+     終了日を入れるとその日より後は入力欄に出ないが、過去の実績は残る。
+     来月からなくなる集荷先は、削除ではなく終了日を入れること。 */
+  row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) 150px ' + (type==='shitei'?'82px 64px ':'') + '104px auto;gap:5px;align-items:center;';
 
   // ★ 2026-10-09.7: 顧客を選ぶ欄を外した。
   //   ここは宅配事業（郵便局への請求）の集荷先で、集荷事業（堺営業所・顧客への請求）
@@ -6360,6 +6367,8 @@ function addLocShukkaCompany(type, data){
   if(type === 'teiji'){
     row.innerHTML = `
       <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: A商事／定時集荷まとめ)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
+      <input type="text" class="fi loc-shukka-prev" placeholder="旧名称(無ければ空)" value="${esc(data?.prevName||'')}" style="font-size:11px;padding:3px 6px;" title="名前を変えたとき、前の名前をここへ。過去の日報と結びつきます">
+      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11px;padding:3px 6px;" title="終了日。この日より後は入力欄に出ません">
       <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
     `;
   } else {
@@ -6367,11 +6376,13 @@ function addLocShukkaCompany(type, data){
     const taxFlag = data?._tax || 'ex';
     row.innerHTML = `
       <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: C工業／指定事業所まとめ)" value="${esc(data?.name||'')}" style="font-size:11px;padding:3px 6px;">
+      <input type="text" class="fi loc-shukka-prev" placeholder="旧名称(無ければ空)" value="${esc(data?.prevName||'')}" style="font-size:11px;padding:3px 6px;" title="名前を変えたとき、前の名前をここへ。過去の日報と結びつきます">
       <input type="number" class="fi loc-shukka-price" placeholder="単価" value="${data?.price||''}" step="0.01" style="font-size:11px;padding:3px 6px;text-align:right;">
       <select class="fi loc-shukka-tax" style="font-size:10px;padding:3px 4px;">
         <option value="ex" ${taxFlag==='ex'?'selected':''}>税別</option>
         <option value="in" ${taxFlag==='in'?'selected':''}>税込</option>
       </select>
+      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11px;padding:3px 6px;" title="終了日。この日より後は入力欄に出ません">
       <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:3px 8px;font-size:10px;cursor:pointer;">削除</button>
     `;
   }
@@ -6397,17 +6408,20 @@ function collectLocShukkaCompanies(){
   const shitei = [];
   // ★ 2026-10-09.7: 顧客選択欄は廃止。既存の custId は行から書き戻して保持する。
   const _keepCust = row => { const v=parseInt(row.dataset.custId); return isNaN(v)?null:v; };
+  // ★ 2026-10-09.18: 旧名称と終了日も保存する
+  const _prev = row => row.querySelector('.loc-shukka-prev')?.value.trim() || '';
+  const _end  = row => row.querySelector('.loc-shukka-end')?.value.trim() || '';
   document.querySelectorAll('#loc-shukka-teiji-list .loc-shukka-row').forEach(row=>{
     const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
     const custId = _keepCust(row);
-    if(name) teiji.push({id:row.dataset.rowId, name, custId});
+    if(name) teiji.push({id:row.dataset.rowId, name, custId, prevName:_prev(row), endedAt:_end(row)});
   });
   document.querySelectorAll('#loc-shukka-shitei-list .loc-shukka-row').forEach(row=>{
     const name = row.querySelector('.loc-shukka-name')?.value.trim() || '';
     const custId = _keepCust(row);
     const price = parseFloat(row.querySelector('.loc-shukka-price')?.value) || 0;
     const _tax = row.querySelector('.loc-shukka-tax')?.value || 'ex';
-    if(name) shitei.push({id:row.dataset.rowId, name, custId, price, _tax});
+    if(name) shitei.push({id:row.dataset.rowId, name, custId, price, _tax, prevName:_prev(row), endedAt:_end(row)});
   });
   return { shukkaCompaniesTeiji: teiji, shukkaCompaniesShitei: shitei };
 }
@@ -31177,6 +31191,34 @@ function renderOfficeFSTab(key){
   else if(key==='ledger') renderOfficeLedger(body, name);
 }
 
+/* ★ 2026-10-09.18: 集荷を「定時」と「指定事業所」に分ける。
+   日報は集荷先ごとの件数を持っているので、その名前が
+   拠点マスタのどちらに登録されているかで振り分ける。
+   ・指定事業所集荷先にある名前  → 指定事業所
+   ・それ以外(定時・スポット・未登録) → 定時
+   ・内訳を持たない日(経営管理からの直接入力) → すべて定時
+   請求書の「集荷委託」と「指定事業所集荷」の2行にそのまま対応する。 */
+function _shukkaSplit(r){
+  const out = {teiji:0, shitei:0};
+  const total = parseInt(r && r.shukka) || 0;
+  const list = (r && Array.isArray(r.shukkaCompanies)) ? r.shukkaCompanies : [];
+  if(!list.length){ out.teiji = total; return out; }
+  const loc = (typeof _locByName === 'function') ? _locByName(r.office) : null;
+  const shitei = new Set(((loc && loc.shukkaCompaniesShitei) || [])
+    .filter(c=>c && c.name).map(c=>c.name));
+  let sum = 0;
+  list.forEach(c=>{
+    const n = parseInt(c && c.count) || 0;
+    if(!n) return;
+    sum += n;
+    if(c && c.name && shitei.has(c.name)) out.shitei += n;
+    else out.teiji += n;
+  });
+  // 内訳の合計が集荷数に足りないときは差分を定時へ
+  if(total > sum) out.teiji += (total - sum);
+  return out;
+}
+
 /* ★ 2026-10-09.17: 集荷先ごとの内訳を短く文字にする。
    日報アプリから来た日報は form.col.companies を持っており、
    applyFirebaseData で r.shukkaCompanies に写してある。
@@ -31206,7 +31248,7 @@ function renderOfficeDel(el, name){
     /* ★ 2026-10-09.17: 営業所ページの宅配日報に「集荷」列が無かった。
        郵便局へ請求する定時集荷はこの一覧からしか追えないため足す。
        集荷先ごとの内訳も右に出す。 */
-    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);">集荷</th><th style="border-right:0;">集荷の内訳</th></tr></thead><tbody>`;
+    html+=`<div class="tw"><table><thead><tr><th>日付</th><th>従事員</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">転送</th><th class="tr">大型</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);">定時集荷</th><th class="tr">指定事業所</th><th style="border-right:0;">集荷先</th></tr></thead><tbody>`;
     // ★ 2026/08/11: 同じ日付をまとめ、日付が変わるところで区切って見やすくする。
     // ★ 2026/08/18: 各日の末尾に日計行を追加(郵便局の調書と同じ粒度で突き合わせるため)
     const _wd=['日','月','火','水','木','金','土'];
@@ -31221,16 +31263,16 @@ function renderOfficeDel(el, name){
     });
     _groups.forEach((g,gi)=>{
       // ★ 2026/08/27: 日の切れ目(照合結果と同じ表現にそろえる)
-      if(gi>0) html+=`<tr class="no-hover"><td colspan="11" style="height:8px;padding:0;border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>`
-        +`<tr class="no-hover"><td colspan="11" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>`;
+      if(gi>0) html+=`<tr class="no-hover"><td colspan="12" style="height:8px;padding:0;border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>`
+        +`<tr class="no-hover"><td colspan="12" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>`;
       const dow=(()=>{ const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         return m ? _wd[new Date(+m[1],+m[2]-1,+m[3]).getDay()] : ''; })();
       const dowCol = dow==='日'?'var(--red2)':(dow==='土'?'var(--blu)':'var(--txt2)');
-      const sum={mochi:0,kanryo:0,yakan:0,tenso:0,ogata:0,modori:0,yoku:0,shukka:0};
+      const sum={mochi:0,kanryo:0,yakan:0,tenso:0,ogata:0,modori:0,yoku:0,shukka:0,shuTeiji:0,shuShitei:0};
       g.rows.forEach((r,ri)=>{
         sum.mochi+=(r.mochidashi||0); sum.kanryo+=(r.kanryo||0); sum.yakan+=(r.yakan||0);
         sum.tenso+=(r.tenso||0); sum.ogata+=(r.ogata||0);
-        sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0); sum.shukka+=(r.shukka||0);
+        sum.modori+=(r.mochimodoiri||0); sum.yoku+=(r['翌日廻し']||0); sum.shukka+=(r.shukka||0); { const _sp=_shukkaSplit(r); sum.shuTeiji+=_sp.teiji; sum.shuShitei+=_sp.shitei; }
         const isNew=(ri===0);
         html+=`<tr>
           <td class="mono" style="${isNew?'font-weight:700;font-size:13px;':'color:transparent;'}">${g.date||''}${isNew&&dow?` <span style="color:${dowCol};font-weight:700;">${dow}</span>`:''}</td>
@@ -31239,7 +31281,8 @@ function renderOfficeDel(el, name){
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr">${r.tenso||0}</td>
           <td class="tr" style="color:var(--pur2)">${r.ogata||0}</td>
           <td class="tr">${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
-          <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${r.shukka||0}</td>
+          <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${_shukkaSplit(r).teiji||0}</td>
+          <td class="tr" style="color:var(--amb2);">${_shukkaSplit(r).shitei||0}</td>
           <td class="xs muted" style="white-space:nowrap;">${_shukkaBreakdown(r)}</td>
         </tr>`;
       });
@@ -31258,7 +31301,8 @@ function renderOfficeDel(el, name){
         <td class="tr fw7" style="font-size:15px;color:var(--pur2);">${sum.ogata}</td>
         <td class="tr fw7" style="font-size:15px;">${sum.modori}</td>
         <td class="tr fw7" style="font-size:15px;">${sum.yoku}</td>
-        <td class="tr fw7" style="font-size:15px;color:var(--grn2);border-left:2px solid var(--brd2);">${sum.shukka}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--grn2);border-left:2px solid var(--brd2);">${sum.shuTeiji}</td>
+        <td class="tr fw7" style="font-size:15px;color:var(--amb2);">${sum.shuShitei}</td>
         <td></td>
       </tr>`;
     });
