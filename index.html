@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.20</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.21</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4766,7 +4766,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
 <!-- 拠点 追加・編集モーダル (Phase 2) -->
 <div id="m-loc" class="mbg" data-no-bgclose>
-<!-- ★ 2026-10-09.20: 集荷先の行に旧名称と終了日が入って600pxでは狭い。画面案と同じ幅にする -->
+<!-- ★ 2026-10-09.21: 集荷先の行に旧名称と終了日が入って600pxでは狭い。画面案と同じ幅にする -->
 <div class="modal" style="width:1240px;max-width:98vw;">
   <div class="mhd"><div class="mtt" id="m-loc-title">📍 拠点を追加</div><button class="mx" onclick="closeM('m-loc')">×</button></div>
   <input type="hidden" id="loc-edit-id">
@@ -4944,7 +4944,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <span style="font-size:11px;font-weight:700;color:var(--grn2);">定時集荷先 <span style="font-weight:400;color:var(--txt2);">(単価は上記「集荷(定時)」を共有)</span></span>
         <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="addLocShukkaCompany('teiji')">+ 集荷先追加</button>
       </div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) 190px 140px 64px;gap:6px;padding:0 2px 4px;font-size:9.5px;color:var(--txt2);">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 190px 170px 64px;gap:6px;padding:0 2px 4px;font-size:9.5px;color:var(--txt2);">
         <div>集荷先名</div><div>旧名称（過去の日報と結びつけます）</div><div>終了日</div><div></div>
       </div>
       <div id="loc-shukka-teiji-list" style="display:flex;flex-direction:column;gap:4px;"></div>
@@ -4955,7 +4955,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <span style="font-size:11px;font-weight:700;color:var(--amb2);">指定事業所集荷先 <span style="font-weight:400;color:var(--txt2);">(会社ごとに単価設定)</span></span>
         <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="addLocShukkaCompany('shitei')">+ 集荷先追加</button>
       </div>
-      <div style="display:grid;grid-template-columns:minmax(0,1fr) 190px 100px 78px 140px 64px;gap:6px;padding:0 2px 4px;font-size:9.5px;color:var(--txt2);">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 190px 100px 78px 170px 64px;gap:6px;padding:0 2px 4px;font-size:9.5px;color:var(--txt2);">
         <div>集荷先名</div><div>旧名称</div><div>単価</div><div>税区分</div><div>終了日</div><div></div>
       </div>
       <div id="loc-shukka-shitei-list" style="display:flex;flex-direction:column;gap:4px;"></div>
@@ -5316,7 +5316,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.20';
+const APP_VER = '2026-10-09.21';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6395,7 +6395,7 @@ function addLocShukkaCompany(type, data){
      同じ集荷先として読める。一覧では「新名称（旧○○）」と出す。
      終了日を入れるとその日より後は入力欄に出ないが、過去の実績は残る。
      来月からなくなる集荷先は、削除ではなく終了日を入れること。 */
-  row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) 190px ' + (type==='shitei'?'100px 78px ':'') + '140px 64px;gap:6px;align-items:center;';
+  row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) 190px ' + (type==='shitei'?'100px 78px ':'') + '170px 64px;gap:6px;align-items:center;';
 
   // ★ 2026-10-09.7: 顧客を選ぶ欄を外した。
   //   ここは宅配事業（郵便局への請求）の集荷先で、集荷事業（堺営業所・顧客への請求）
@@ -6407,7 +6407,7 @@ function addLocShukkaCompany(type, data){
     row.innerHTML = `
       <input type="text" class="fi loc-shukka-name" placeholder="集荷先名(例: A商事／定時集荷まとめ)" value="${esc(data?.name||'')}" style="font-size:12px;padding:6px 8px;">
       <input type="text" class="fi loc-shukka-prev" placeholder="無ければ空" value="${esc(data?.prevName||'')}" style="font-size:12px;padding:6px 8px;" title="名前を変えたとき、前の名前をここへ。過去の日報と結びつきます">
-      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11.5px;padding:6px 8px;" title="終了日。この日より後は入力欄に出ません">
+      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11.5px;padding:6px 8px;min-width:0;width:100%;box-sizing:border-box;" title="終了日。この日より後は入力欄に出ません">
       <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:6px 0;font-size:11px;cursor:pointer;">削除</button>
     `;
   } else {
@@ -6421,7 +6421,7 @@ function addLocShukkaCompany(type, data){
         <option value="ex" ${taxFlag==='ex'?'selected':''}>税別</option>
         <option value="in" ${taxFlag==='in'?'selected':''}>税込</option>
       </select>
-      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11.5px;padding:6px 8px;" title="終了日。この日より後は入力欄に出ません">
+      <input type="date" class="fi loc-shukka-end" value="${esc(data?.endedAt||'')}" style="font-size:11.5px;padding:6px 8px;min-width:0;width:100%;box-sizing:border-box;" title="終了日。この日より後は入力欄に出ません">
       <button type="button" onclick="this.closest('.loc-shukka-row').remove()" style="background:rgba(220,53,69,.1);color:#dc3545;border:1px solid rgba(220,53,69,.3);border-radius:4px;padding:6px 0;font-size:11px;cursor:pointer;">削除</button>
     `;
   }
