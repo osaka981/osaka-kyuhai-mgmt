@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.18</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.19</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3114,7 +3114,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 基本情報 -->
   <input type="hidden" id="dd-post">
   <div style="display:grid;grid-template-columns:160px 1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel();_ddWorkSync&&_ddWorkSync()" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel();_ddWorkSync&&_ddWorkSync();try{renderDdColInputs()}catch(_){}" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
 
     <!-- ① 営業所コンボ：番号/名前で検索、確定で郵便局・従業員に連動 -->
     <div class="fg">
@@ -3186,7 +3186,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:4px 3px;"><input type="number" id="dd-tenso"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt();autoCalcModori()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-ogata"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td style="padding:4px 3px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" readonly tabindex="-1" title="下の「集荷」欄の合計です。そちらで入力してください" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;background:var(--bg3);color:var(--txt2);cursor:default;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
@@ -3229,6 +3229,38 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </tr>
     </tbody>
   </table>
+  </div>
+
+  <!-- ★ 2026-10-09.19: 宅配事業の集荷。拠点マスタの集荷先ごとに入れる。
+       上の表の「集荷」はここの合計が入るだけの読み取り専用欄。
+       定時集荷先の合計が請求書の「集荷委託」、
+       指定事業所集荷先の合計が「指定事業所集荷」になる。 -->
+  <div class="card" id="dd-col-card" style="padding:11px 13px;margin-top:10px;">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;">
+      <div class="xs muted fw7">■ 集荷</div>
+      <span class="xs" style="color:var(--txt3);" id="dd-col-hint">営業所を選ぶと、その局の集荷先が出ます</span>
+      <div style="flex:1;"></div>
+      <span class="xs" style="color:var(--txt2);">合計 <b id="dd-col-total" style="font-family:'DM Mono',monospace;font-size:16px;color:var(--txt);">0</b> 個</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="background:rgba(46,139,87,.06);border:1px solid rgba(46,139,87,.25);border-radius:5px;padding:10px 12px;">
+        <div style="font-size:11.5px;font-weight:700;color:var(--grn2);margin-bottom:7px;">定時集荷先 <span style="font-weight:400;color:var(--txt3);">請求書の「集荷委託」</span></div>
+        <div id="dd-col-teiji" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+      <div style="background:rgba(184,134,11,.06);border:1px solid rgba(184,134,11,.25);border-radius:5px;padding:10px 12px;">
+        <div style="font-size:11.5px;font-weight:700;color:var(--amb2);margin-bottom:7px;">指定事業所集荷先 <span style="font-weight:400;color:var(--txt3);">請求書の「指定事業所集荷」</span></div>
+        <div id="dd-col-shitei" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+    </div>
+    <div id="dd-col-unknown-row" style="display:none;margin-top:9px;background:var(--bg3);border:1px solid var(--brd2);border-radius:5px;padding:10px 12px;">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:9px;align-items:center;">
+        <div>
+          <label for="dd-col-unknown" style="font-size:12px;">未分類</label>
+          <div class="xs" style="color:var(--txt3);line-height:1.6;margin-top:2px;">集荷先の内訳を持たない過去の日報です。上の欄へ振り分けると消えます。</div>
+        </div>
+        <input type="number" min="0" id="dd-col-unknown" class="fi" value="0" oninput="onDdColInput()" style="text-align:right;padding:7px 8px;font-size:15px;font-weight:700;">
+      </div>
+    </div>
   </div>
 
   <!-- 持出・検証・手当 -->
@@ -5277,7 +5309,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.18';
+const APP_VER = '2026-10-09.19';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -13464,6 +13496,154 @@ function normalizeReportDates(){
   return n;
 }
 
+/* ★ 2026-10-09.19: 宅配事業の集荷を集荷先ごとに入力する。
+   拠点マスタに登録した集荷先（定時／指定事業所）をそのまま欄にする。
+   これで経営管理から直接入力した日にも内訳が付き、
+   請求書の「集荷委託」と「指定事業所集荷」に自動で振り分けられる。
+   ・終了日を過ぎた集荷先は出さない（その日に実績があれば灰色で出す）
+   ・旧名称で入っている過去の件数は、新しい名前の欄に合流させる
+   ・スポット集荷など拠点マスタに無い名前は「未分類」に入れる */
+let _ddColCounts  = {};   // {集荷先名: 件数}
+let _ddColUnknown = 0;    // 内訳を持たない過去データの受け皿
+
+// その局・その日に有効な集荷先を返す
+function _ddShukkaDefs(officeName, dateStr){
+  const loc = (typeof _locByName === 'function') ? _locByName(officeName) : null;
+  if(!loc) return [];
+  const d = String(dateStr || '').replace(/\//g, '-').slice(0, 10);
+  const pick = (arr, kind) => (arr || [])
+    .filter(c => c && c.name)
+    .map(c => ({
+      name: String(c.name),
+      kind: kind,
+      prevName: String(c.prevName || ''),
+      endedAt: String(c.endedAt || '')
+    }))
+    .filter(c => !c.endedAt || !d || d <= c.endedAt);
+  return pick(loc.shukkaCompaniesTeiji, 'teiji').concat(pick(loc.shukkaCompaniesShitei, 'shitei'));
+}
+
+// 画面の入力値を控える（描き直しで消えないように）
+function _ddColReadDom(){
+  document.querySelectorAll('#dd-col-card .dd-col-inp').forEach(el => {
+    const nm = el.getAttribute('data-cname') || '';
+    if(nm) _ddColCounts[nm] = Math.max(0, parseInt(el.value) || 0);
+  });
+  const u = $('dd-col-unknown');
+  if(u) _ddColUnknown = Math.max(0, parseInt(u.value) || 0);
+}
+
+function _ddColTotal(){
+  let t = 0;
+  Object.keys(_ddColCounts).forEach(k => { t += parseInt(_ddColCounts[k]) || 0; });
+  return t + (parseInt(_ddColUnknown) || 0);
+}
+
+function onDdColInput(){
+  _ddColReadDom();
+  const t = _ddColTotal();
+  const sh = $('dd-shukka'); if(sh) sh.value = t;
+  const b  = $('dd-col-total'); if(b) b.textContent = t;
+  if(typeof calcDelAmt === 'function'){ try{ calcDelAmt(); }catch(e){} }
+}
+
+// 入力欄を描く。営業所・日付・編集のたびに呼ぶ
+function renderDdColInputs(){
+  const card = $('dd-col-card'); if(!card) return;
+  _ddColReadDom();
+  const off  = $('dd-off')?.value || '';
+  const date = $('dd-date')?.value || '';
+  const defs = _ddShukkaDefs(off, date);
+
+  // 旧名称で入っている件数を新しい名前へ寄せる
+  defs.forEach(c => {
+    if(c.prevName && _ddColCounts[c.prevName] != null){
+      _ddColCounts[c.name] = (parseInt(_ddColCounts[c.name]) || 0) + (parseInt(_ddColCounts[c.prevName]) || 0);
+      delete _ddColCounts[c.prevName];
+    }
+  });
+
+  const known = new Set();
+  defs.forEach(c => { known.add(c.name); if(c.prevName) known.add(c.prevName); });
+  // 拠点マスタに無い名前（終了済み・スポットなど）は未分類へ寄せる
+  Object.keys(_ddColCounts).forEach(k => {
+    if(!known.has(k)){
+      _ddColUnknown = (parseInt(_ddColUnknown) || 0) + (parseInt(_ddColCounts[k]) || 0);
+      delete _ddColCounts[k];
+    }
+  });
+
+  const rows = (list, idPfx, brd) => list.map((c, i) => {
+    const v = parseInt(_ddColCounts[c.name]) || 0;
+    const prev = c.prevName ? `<span style="font-size:10px;color:var(--txt3);">（旧 ${esc(c.prevName)}）</span>` : '';
+    const eid = idPfx + i;
+    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:8px;align-items:center;">
+      <label for="${eid}" style="font-size:12px;">${esc(c.name)}${prev}</label>
+      <input type="number" min="0" id="${eid}" class="fi dd-col-inp" data-cname="${esc(c.name)}" data-ckind="${c.kind}"
+        value="${v}" oninput="onDdColInput()"
+        style="text-align:right;padding:7px 8px;font-size:15px;font-weight:700;border-color:${brd};">
+    </div>`;
+  }).join('') || '<div class="xs" style="color:var(--txt3);padding:4px 2px;">登録なし</div>';
+
+  const t = $('dd-col-teiji'), sh = $('dd-col-shitei');
+  if(t)  t.innerHTML  = rows(defs.filter(c => c.kind === 'teiji'),  'ddcol-t', 'rgba(46,139,87,.45)');
+  if(sh) sh.innerHTML = rows(defs.filter(c => c.kind === 'shitei'), 'ddcol-s', 'rgba(184,134,11,.45)');
+
+  const ur = $('dd-col-unknown-row'), ui = $('dd-col-unknown');
+  if(ui) ui.value = parseInt(_ddColUnknown) || 0;
+  if(ur) ur.style.display = ((parseInt(_ddColUnknown) || 0) > 0) ? '' : 'none';
+
+  const hint = $('dd-col-hint');
+  if(hint) hint.textContent = off
+    ? (defs.length ? (off + ' の集荷先') : (off + ' に集荷先の登録がありません（拠点マスタで登録）'))
+    : '営業所を選ぶと、その局の集荷先が出ます';
+
+  onDdColInput();
+}
+
+// 入力欄を空に戻す（新規入力のとき）
+function resetDdColInputs(){
+  _ddColCounts = {};
+  _ddColUnknown = 0;
+  renderDdColInputs();
+}
+
+// 保存用：集荷先ごとの件数 [{name,count,kind}]
+function collectDdColCompanies(){
+  _ddColReadDom();
+  const out = [];
+  document.querySelectorAll('#dd-col-card .dd-col-inp').forEach(el => {
+    const nm = el.getAttribute('data-cname') || '';
+    const kd = el.getAttribute('data-ckind') || 'teiji';
+    const n  = Math.max(0, parseInt(el.value) || 0);
+    if(nm && n > 0) out.push({ name: nm, count: n, kind: kd });
+  });
+  const u = Math.max(0, parseInt(_ddColUnknown) || 0);
+  if(u > 0) out.push({ name: '未分類', count: u, kind: 'unknown' });
+  return out;
+}
+
+// 既存レコードから入力欄へ戻す
+function loadDdColFromRecord(r){
+  _ddColCounts = {};
+  _ddColUnknown = 0;
+  const list = (r && Array.isArray(r.shukkaCompanies)) ? r.shukkaCompanies : [];
+  if(list.length){
+    list.forEach(c => {
+      if(!c || !c.name) return;
+      if(c.kind === 'unknown' || c.name === '未分類'){
+        _ddColUnknown += parseInt(c.count) || 0;
+      } else {
+        _ddColCounts[c.name] = (parseInt(_ddColCounts[c.name]) || 0) + (parseInt(c.count) || 0);
+      }
+    });
+  } else {
+    // 内訳を持たない過去データ。合計をそのまま未分類へ置く
+    _ddColUnknown = Math.max(0, parseInt(r && r.shukka) || 0);
+  }
+  renderDdColInputs();
+}
+
 async function saveDel(){
   const n=id=>Math.max(0,parseInt($(id)?.value)||0);
   const mochi=n('dd-mochi'),kanryo=n('dd-kanryo'),yakan=n('dd-yakan'),
@@ -13520,6 +13700,8 @@ async function saveDel(){
     mochimodoiri:modori,'翌日廻し':yoku,
     ogata:n('dd-ogata'),
     shukka:n('dd-shukka'),
+    // ★ 2026-10-09.19: 集荷先ごとの内訳。請求書の2行へ振り分ける元になる
+    shukkaCompanies: (typeof collectDdColCompanies==='function' ? collectDdColCompanies() : []),
     sonota:[n('dd-s1'),n('dd-s2'),n('dd-s3'),n('dd-s4')],
     // 個数局：省略（郵便局照合タブで管理）
     // 単価
@@ -13557,6 +13739,14 @@ async function saveDel(){
      手入力した局日報は読み直すと郵便局が空になっていた。
      営業所をその日の郵便局として扱うようにしたので、必ず持たせる。 */
   const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,postOffice:(rec.postOffice||rec.office||''),companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()};
+  /* ★ 2026-10-09.19: 集荷の内訳は日報アプリと同じ form.col に入れる。
+     こうしておくと、アプリから来た日報と同じ読み方で扱える。 */
+  if(rec.shukkaCompanies && rec.shukkaCompanies.length){
+    _ypEntry.form.col = {
+      companies: rec.shukkaCompanies.map(c=>({name:c.name, count:c.count})),
+      total: rec.shukkaCompanies.reduce((a,c)=>a+(parseInt(c.count)||0),0)
+    };
+  }
   const _ypIdx = ypLogs.findIndex(x=>x && String(x.id)===String(rec.id));
   if(_ypIdx>=0) ypLogs[_ypIdx]=_ypEntry; else ypLogs.push(_ypEntry);
   lsSet(LS_KEYS.YP, ypLogs);
@@ -13677,6 +13867,9 @@ function editDel(id){
   $('dd-yoku').value   = r['翌日廻し']||0;
   $('dd-ogata').value  = r.ogata||0;
   $('dd-shukka').value = r.shukka||0;
+  // ★ 2026-10-09.19: 集荷先ごとの内訳を欄へ戻す。
+  //   内訳を持たない過去の日報は、合計が「未分類」に入る。
+  if(typeof loadDdColFromRecord==='function'){ try{ loadDdColFromRecord(r); }catch(e){} }
   ['s1','s2','s3','s4'].forEach((k,i)=>{if($('dd-'+k))$('dd-'+k).value=(r.sonota||[])[i]||0;});
   ['yokonori','tokubetsu'].forEach(k=>{if($('dd-'+k))$('dd-'+k).value=r[k]||0;});
   if($('dd-note')) $('dd-note').value=r.note||'';
@@ -37138,6 +37331,8 @@ function onDdOffSelChange(){
     ? `${dispCode(offData.officeCode)} ${v}` : v;
   if(typeof _autoFillPostByOffice==='function') try{ _autoFillPostByOffice(v); }catch(e){}
   if(typeof valDel==='function') try{ valDel(); }catch(e){}
+  // ★ 2026-10-09.19: 局が変われば集荷先も変わる
+  if(typeof renderDdColInputs==='function') try{ renderDdColInputs(); }catch(e){}
 }
 function selectDdStaff(name,empNo){
   if($('dd-staff-input'))$('dd-staff-input').value=empNo?`${empNo} ${name}`:name;
@@ -38977,6 +39172,8 @@ function openM(id){
        'dd-s1','dd-s2','dd-s3','dd-s4','dd-modori','dd-yoku',
        'dd-yokonori','dd-tokubetsu'].forEach(id=>{ const el=$(id); if(el) el.value=0; });
       if($('dd-note')) $('dd-note').value='';
+      // ★ 2026-10-09.19: 集荷先ごとの欄も空に戻す
+      if(typeof resetDdColInputs==='function'){ try{ resetDdColInputs(); }catch(e){} }
       if($('dd-charter-rows')) $('dd-charter-rows').innerHTML='';
       if($('dd-penalty-rows')) $('dd-penalty-rows').innerHTML='';
       if($('dd-gas-rows')) $('dd-gas-rows').innerHTML='';
