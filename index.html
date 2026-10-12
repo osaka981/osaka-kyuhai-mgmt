@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.32</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.33</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1199,6 +1199,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fla gap6 mb10">
         <button id="bl-tab-sales" class="btn b-blu btn-sm" onclick="switchBillingTab('sales')">💰 売上明細（集荷）</button>
         <button id="bl-tab-pay" class="btn b-gh btn-sm" onclick="switchBillingTab('pay')">💸 支払明細（従事員）</button>
+        <button id="bl-tab-adj" class="btn b-gh btn-sm" onclick="switchBillingTab('adj')">🗓 月末調整</button>
       </div>
 
       <!-- 売上明細 -->
@@ -1295,6 +1296,53 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <tfoot id="tf-bl-pay-detail"></tfoot>
             </table>
           </div>
+        </div>
+      </div>
+
+      <!-- ★ 2026-10-09.33: 月末調整（特別手当・違約金）
+           日報では分からないものを、月末に人ごとに入れる画面。
+           緑の列は日報から集めた数で、ここでは直せない。 -->
+      <div id="bl-view-adj" style="display:none;">
+        <div class="card mb12">
+          <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+            <div class="fg" style="flex:0 0 auto;margin:0;">
+              <label style="font-size:11px;">営業所でしぼる</label>
+              <select id="adj-off" class="fi" onchange="renderMonthAdj()" style="min-width:180px;"></select>
+            </div>
+            <button class="btn b-gh btn-sm" onclick="renderMonthAdj()">🔄 更新</button>
+            <div style="flex:1;"></div>
+            <button class="btn b-grn btn-sm" onclick="saveMonthAdj()">💾 この月の調整を保存</button>
+          </div>
+          <div class="al al-i mt8" style="font-size:11px;">
+            <span>ℹ️</span>
+            <span>対象月は上の「対象月」を使います。<b>緑の列は日報から集めた数</b>で、ここでは直せません。<b>黄の列がこの画面で入れるもの</b>です。違約金を入れたら理由も書いてください。</span>
+          </div>
+          <div class="al al-w mt8" style="font-size:11px;">
+            <span>⚠️</span>
+            <span>いまは<b>記録だけ</b>です。支払明細への反映は次の差し替えで入れます。</span>
+          </div>
+        </div>
+
+        <div class="card mb12">
+          <div class="ch">
+            <div class="ct"><div class="cbar"></div>月末調整 <span id="adj-period" class="xs muted"></span></div>
+            <span id="adj-count" class="xs muted"></span>
+          </div>
+          <div class="tw"><table>
+            <thead><tr>
+              <th style="width:92px;">社員番号</th>
+              <th style="width:140px;">氏名</th>
+              <th style="width:150px;">営業所</th>
+              <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);width:110px;">横乗り<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+              <th class="tr" style="color:var(--grn2);width:120px;">駐車立替<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+              <th class="tr" style="color:var(--grn2);width:110px;">走行<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+              <th class="tr" style="border-left:2px solid var(--brd2);color:var(--amb2);width:120px;">特別手当<div style="font-size:9px;font-weight:400;color:var(--txt3);">件数</div></th>
+              <th class="tr" style="color:var(--red2);width:130px;">違約金<div style="font-size:9px;font-weight:400;color:var(--txt3);">円</div></th>
+              <th>違約金の理由</th>
+            </tr></thead>
+            <tbody id="tb-adj"></tbody>
+            <tfoot id="tf-adj"></tfoot>
+          </table></div>
         </div>
       </div>
 
@@ -5384,7 +5432,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.32';
+const APP_VER = '2026-10-09.33';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5806,6 +5854,7 @@ const LS_KEYS = {
   SURVEY_RESPONSES:   'nikki_survey_responses',    // 回答状況
   SCHEDULE_LOGS:      'nikki_schedule_logs',       // 変更ログ
   CUSTOMER_NOTES:     'nikki_customer_notes',      // 顧客申し送りメモ
+  MONTHLY_ADJ:        'nikki_monthly_adj',         // ★ 2026-10-09.33: 月末調整（特別手当・違約金）
   // ★ 2026/08/18: 郵便局から受領した調書データ(請求根拠)。
   //   日報(YP)とは別物。相互に上書きせず、郵便局照合タブで突き合わせる。
   POSTLOG:            'nikki_post_logs',
@@ -6861,7 +6910,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state','monthly_adj'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -7041,6 +7090,11 @@ function applyFirebaseData() {
   try{
     const _oil = lsGet('nikki_oil_state', null);
     if(_oil && typeof _oil === 'object' && !Array.isArray(_oil)) D.oilState = _oil;
+  }catch(e){}
+  // ★ 2026-10-09.33: 月末調整
+  try{
+    const _adj = lsGet(LS_KEYS.MONTHLY_ADJ, null);
+    if(Array.isArray(_adj)) D.monthlyAdj = _adj;
   }catch(e){}
   // ① 全フィールド版を優先(staff_full)
   const fbStaffFull = lsGet('nikki_staff_full', null);
@@ -21417,8 +21471,12 @@ function switchBillingTab(tab){
   _blTab = tab;
   $('bl-view-sales').style.display = tab==='sales' ? '' : 'none';
   $('bl-view-pay').style.display   = tab==='pay'   ? '' : 'none';
+  // ★ 2026-10-09.33: 月末調整
+  if($('bl-view-adj')) $('bl-view-adj').style.display = tab==='adj' ? '' : 'none';
   $('bl-tab-sales').className = 'btn btn-sm ' + (tab==='sales' ? 'b-blu' : 'b-gh');
   $('bl-tab-pay').className   = 'btn btn-sm ' + (tab==='pay'   ? 'b-blu' : 'b-gh');
+  if($('bl-tab-adj')) $('bl-tab-adj').className = 'btn btn-sm ' + (tab==='adj' ? 'b-blu' : 'b-gh');
+  if(tab==='adj'){ try{ renderMonthAdj(); }catch(e){ console.error(e); } return; }
   renderBilling();
 }
 
@@ -21556,6 +21614,201 @@ function showSalesDetail(custName){
   const titleEl  = $('bl-sales-detail-title');
   if(titleEl) titleEl.innerHTML = `<div class="cbar"></div>${custName} 売上明細`;
   if(detailEl){ detailEl.style.display=''; detailEl.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.33: 月末調整（特別手当・違約金）
+     特別手当と違約金は月末にしか決まらないので、日報からは切り離す。
+     ここで月×人ごとに入れる。日報から集めた数（横乗り・駐車立替・走行）は
+     見るだけで、直せない。
+     保存先は D.monthlyAdj:
+       [{ ym:'2026-10', staff:'高橋 清衛', empNo:'6089',
+          tokubetsu:1, penalty:5000, penaltyReason:'誤配1件', at:'...' }]
+     いまは記録だけで、支払明細には反映していない。
+   ════════════════════════════════════════════════════════════ */
+function _adjAll(){
+  if(!Array.isArray(D.monthlyAdj)){
+    const v = lsGet(LS_KEYS.MONTHLY_ADJ, []);
+    D.monthlyAdj = Array.isArray(v) ? v : [];
+  }
+  return D.monthlyAdj;
+}
+function _adjFind(ym, staff){
+  return _adjAll().find(a => a && a.ym===ym && a.staff===staff) || null;
+}
+
+/* その月・その人の日報から、横乗り・駐車立替・走行距離を集める */
+function _adjDelSums(ym, staff){
+  const out={yoko:0, park:0, dist:0, days:0};
+  (D.delivery||[]).forEach(r=>{
+    if(!r || r.staff!==staff) return;
+    if(!String(r.date||'').startsWith(ym)) return;
+    out.days++;
+    out.yoko += parseInt(r.yokonori)||0;
+    out.park += parseInt(r.parking)||0;
+    let d=(r.distance!=null)?parseInt(r.distance):null;
+    if(d==null && r.odoStart!=null && r.odoEnd!=null) d=parseInt(r.odoEnd)-parseInt(r.odoStart);
+    if(d!=null && !isNaN(d) && d>0) out.dist += d;
+  });
+  return out;
+}
+
+function renderMonthAdj(){
+  const tb=$('tb-adj'); if(!tb) return;
+  const ym=($('bl-mon')?.value||'').slice(0,7);
+  const offSel=$('adj-off');
+
+  // 営業所のしぼり込み（宅配拠点だけ）
+  if(offSel && !offSel.dataset.filled){
+    const list=(typeof _dashDelOffices==='function') ? _dashDelOffices() : [];
+    offSel.innerHTML='<option value="">すべて</option>'
+      + [...new Set(list)].filter(Boolean).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    offSel.dataset.filled='1';
+  }
+  const off=offSel?.value||'';
+
+  const pe=$('adj-period'); if(pe) pe.textContent = ym ? ('（'+ym+'）') : '（対象月を選んでください）';
+  if(!ym){
+    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">上の「対象月」を選んでください</td></tr>';
+    if($('tf-adj')) $('tf-adj').innerHTML='';
+    return;
+  }
+
+  /* その月に日報のある人を出す。
+     日報が1日も無い人にも違約金を付けたい場合があるので、
+     その営業所の在籍者も合わせて並べる。 */
+  const names=new Set();
+  (D.delivery||[]).forEach(r=>{
+    if(!r || !String(r.date||'').startsWith(ym)) return;
+    if(off && r.office!==off) return;
+    if(r.staff) names.add(r.staff);
+  });
+  (D.staff||[]).forEach(st=>{
+    if(!st || st.status==='終了') return;
+    if(off){
+      const hit = st.office===off
+        || (typeof _getStaffDelOffices==='function' && _getStaffDelOffices(st).some(o=>o.office===off));
+      if(!hit) return;
+    }
+    if(st.name) names.add(st.name);
+  });
+
+  const rows=[...names].sort((a,b)=>{
+    const sa=(D.staff||[]).find(x=>x&&x.name===a), sb=(D.staff||[]).find(x=>x&&x.name===b);
+    const ea=String(sa?.empNo||''), eb=String(sb?.empNo||'');
+    if(ea&&eb&&ea!==eb) return ea.localeCompare(eb,'ja',{numeric:true});
+    return String(a).localeCompare(String(b),'ja');
+  });
+
+  if(!rows.length){
+    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">対象の従事員がいません</td></tr>';
+    if($('tf-adj')) $('tf-adj').innerHTML='';
+    if($('adj-count')) $('adj-count').textContent='';
+    return;
+  }
+
+  const tot={yoko:0,park:0,dist:0,toku:0,pen:0};
+  tb.innerHTML=rows.map(name=>{
+    const st=(D.staff||[]).find(x=>x&&x.name===name);
+    const emp=String(st?.empNo||'');
+    const sums=_adjDelSums(ym, name);
+    const a=_adjFind(ym, name) || {};
+    const toku=parseInt(a.tokubetsu)||0;
+    const pen=parseInt(a.penalty)||0;
+    tot.yoko+=sums.yoko; tot.park+=sums.park; tot.dist+=sums.dist;
+    tot.toku+=toku; tot.pen+=pen;
+    const gre='color:var(--grn2);';
+    return `<tr data-staff="${esc(name)}" data-emp="${esc(emp)}">
+      <td class="mono" style="color:var(--amb2);font-weight:700;">${emp?esc(emp):'<span style="color:var(--red2)">未設定</span>'}</td>
+      <td class="fw7">${staffLink(name)}</td>
+      <td class="xs muted">${esc(st?.office||'')}</td>
+      <td class="tr mono" style="border-left:2px solid var(--brd2);${gre}">${sums.yoko||0}</td>
+      <td class="tr mono" style="${gre}">${sums.park?('¥'+fmt(sums.park)):0}</td>
+      <td class="tr mono" style="${gre}">${sums.dist?(fmt(sums.dist)+' km'):0}</td>
+      <td style="border-left:2px solid var(--brd2);padding:4px 6px;">
+        <input type="number" min="0" class="fi adj-toku" value="${toku||0}"
+          aria-label="特別手当の件数"
+          style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;border-color:#7a6433;padding:6px 8px;">
+      </td>
+      <td style="padding:4px 6px;">
+        <input type="number" min="0" class="fi adj-pen" value="${pen||0}" oninput="_adjPenSync(this)"
+          aria-label="違約金の金額"
+          style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;border-color:${pen>0?'var(--red2)':'var(--brd2)'};padding:6px 8px;">
+      </td>
+      <td style="padding:4px 6px;">
+        <input type="text" class="fi adj-reason" value="${esc(a.penaltyReason||'')}"
+          placeholder="（違約金を入れたら必須）" aria-label="違約金の理由"
+          style="font-size:12px;padding:6px 8px;">
+      </td>
+    </tr>`;
+  }).join('');
+
+  if($('tf-adj')) $('tf-adj').innerHTML=`<tr style="background:var(--sur2);font-weight:700;">
+    <td colspan="3">合計　${rows.length} 人</td>
+    <td class="tr mono" style="border-left:2px solid var(--brd2);color:var(--grn2);">${tot.yoko}</td>
+    <td class="tr mono" style="color:var(--grn2);">¥${fmt(tot.park)}</td>
+    <td class="tr mono" style="color:var(--grn2);">${fmt(tot.dist)} km</td>
+    <td class="tr mono" style="border-left:2px solid var(--brd2);color:var(--amb2);">${tot.toku}</td>
+    <td class="tr mono" style="color:var(--red2);">¥${fmt(tot.pen)}</td>
+    <td></td>
+  </tr>`;
+  if($('adj-count')) $('adj-count').textContent = rows.length+'人';
+}
+
+// 違約金を入れたら枠を赤くして、理由の必要さを見せる
+function _adjPenSync(el){
+  const v=parseInt(el.value)||0;
+  el.style.borderColor = v>0 ? 'var(--red2)' : 'var(--brd2)';
+  const tr=el.closest('tr');
+  const rs=tr && tr.querySelector('.adj-reason');
+  if(rs) rs.style.borderColor = (v>0 && !rs.value.trim()) ? 'var(--red2)' : 'var(--brd2)';
+}
+
+async function saveMonthAdj(){
+  const ym=($('bl-mon')?.value||'').slice(0,7);
+  if(!ym){ showAlert({msg:'対象月を選んでください。'}); return; }
+  const tb=$('tb-adj'); if(!tb) return;
+  const rows=[...tb.querySelectorAll('tr[data-staff]')];
+
+  // 違約金があるのに理由が無い行を止める
+  const bad=[];
+  rows.forEach(tr=>{
+    const pen=parseInt(tr.querySelector('.adj-pen')?.value)||0;
+    const rs=(tr.querySelector('.adj-reason')?.value||'').trim();
+    if(pen>0 && !rs) bad.push(tr.getAttribute('data-staff')||'');
+  });
+  if(bad.length){
+    showAlert({msg:'違約金の理由が空の人がいます。\n\n'+bad.join('\n')+'\n\n理由を書いてから保存してください。'});
+    return;
+  }
+
+  const all=_adjAll();
+  let add=0, upd=0, del=0;
+  rows.forEach(tr=>{
+    const name=tr.getAttribute('data-staff')||'';
+    const emp=tr.getAttribute('data-emp')||'';
+    const toku=Math.max(0, parseInt(tr.querySelector('.adj-toku')?.value)||0);
+    const pen =Math.max(0, parseInt(tr.querySelector('.adj-pen')?.value)||0);
+    const rs  =(tr.querySelector('.adj-reason')?.value||'').trim();
+    const idx=all.findIndex(a=>a && a.ym===ym && a.staff===name);
+    if(!toku && !pen && !rs){
+      // すべて空 → 記録を消す（残しておく意味がない）
+      if(idx>=0){ all.splice(idx,1); del++; }
+      return;
+    }
+    const rec={ ym, staff:name, empNo:emp, tokubetsu:toku, penalty:pen,
+                penaltyReason:rs, at:new Date().toISOString() };
+    if(idx>=0){ all[idx]={...all[idx], ...rec}; upd++; }
+    else { all.push(rec); add++; }
+  });
+
+  D.monthlyAdj=all;
+  lsSet(LS_KEYS.MONTHLY_ADJ, all);
+  try{ if(typeof fbSet==='function') await fbSet('monthly_adj', all); }catch(e){ console.warn('[月末調整] 保存エラー', e); }
+  renderMonthAdj();
+  const msg=ym+' の月末調整を保存しました（新規'+add+'件 / 更新'+upd+'件'+(del?(' / 削除'+del+'件'):'')+'）';
+  if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
 }
 
 // ── 支払明細（従事員） ──
