@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.22</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.23</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5226,7 +5226,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;align-items:center;">
     <div style="font-size:11.5px;color:var(--txt2);flex:1 1 auto;">
       <b>空欄の行は「稼働なし」</b>として保存されません。保存すると自動で翌日へ進みます。
-      右の<span style="color:var(--grn2);">緑</span>は定時集荷先、<span style="color:var(--amb2);">黄</span>は指定事業所集荷先で、<b>拠点マスタに登録した集荷先がそのまま列になります。</b>集荷だけの人も、集荷に数を入れればその日は稼働として保存されます。<br>
+      右の<span style="color:var(--grn2);">緑</span>は定時集荷先、<span style="color:var(--amb2);">黄</span>は指定事業所集荷先で、<b>拠点マスタに登録した集荷先がそのまま列になります。</b>集荷だけの人も、集荷に数を入れればその日は稼働として保存されます。
+      <b>集荷の欄が出るのは、従業員台帳の担当郵便局で ⚙ →「集荷」にチェックのある人だけ</b>です。それ以外は斜線になり、Enter は170超から次の人の持ち出しへ進みます。<br>
       左端の <span style="color:var(--txt3);">⠿</span> をドラッグすると、調書に合わせて行を並び替えられます。<br>
       <span style="color:var(--txt3);">キー操作：</span>
       <b>Enter</b> 右へ（行末で次の人）／<b>Shift+Enter</b> 戻る／<b>↑↓</b> 同じ列で上下
@@ -5317,7 +5318,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.22';
+const APP_VER = '2026-10-09.23';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -13594,14 +13595,37 @@ function renderDdColInputs(){
   }).join('') || '<div class="xs" style="color:var(--txt3);padding:4px 2px;">登録なし</div>';
 
   const t = $('dd-col-teiji'), sh = $('dd-col-shitei');
+  const ur = $('dd-col-unknown-row'), ui = $('dd-col-unknown');
+  const hint = $('dd-col-hint');
+
+  /* ★ 2026-10-09.23: 集荷を担当しない人には集荷先を出さない。
+     判定は従業員台帳の担当郵便局 → ⚙ →「集荷」のチェック。
+     集荷先はお客様の名前なので、担当しない人には見せない。
+     ただし、既に件数が入っている日は、見えないまま消えないよう欄を出す。 */
+  const stName = $('dd-staff')?.value || '';
+  const hasColData = ((parseInt(_ddColUnknown) || 0) > 0)
+    || Object.keys(_ddColCounts).some(k => (parseInt(_ddColCounts[k]) || 0) > 0);
+  const allowed = !stName || !off
+    || (typeof _isStaffColAtOffice === 'function' ? _isStaffColAtOffice(stName, off) : true)
+    || hasColData;
+
+  if(!allowed){
+    if(t)  t.innerHTML  = '';
+    if(sh) sh.innerHTML = '';
+    if(ur) ur.style.display = 'none';
+    if(ui) ui.value = 0;
+    if(hint) hint.textContent = stName + ' は ' + off
+      + ' の集荷担当ではありません（従業員台帳 → 担当郵便局 → ⚙ → 集荷 にチェック）';
+    onDdColInput();
+    return;
+  }
+
   if(t)  t.innerHTML  = rows(defs.filter(c => c.kind === 'teiji'),  'ddcol-t', 'rgba(46,139,87,.45)');
   if(sh) sh.innerHTML = rows(defs.filter(c => c.kind === 'shitei'), 'ddcol-s', 'rgba(184,134,11,.45)');
 
-  const ur = $('dd-col-unknown-row'), ui = $('dd-col-unknown');
   if(ui) ui.value = parseInt(_ddColUnknown) || 0;
   if(ur) ur.style.display = ((parseInt(_ddColUnknown) || 0) > 0) ? '' : 'none';
 
-  const hint = $('dd-col-hint');
   if(hint) hint.textContent = off
     ? (defs.length ? (off + ' の集荷先') : (off + ' に集荷先の登録がありません（拠点マスタで登録）'))
     : '営業所を選ぶと、その局の集荷先が出ます';
@@ -14810,6 +14834,27 @@ function _shukkaPriceOfLoc(name){
 //   - staff.office (メイン) かつ その郵便局が宅配事業対象
 //   - staff.subOffices[] の name (新形式、旧形式両対応)
 // returns: [{office: string, fromMain: bool}] の配列(重複排除済)
+/* ★ 2026-10-09.23: その人がその郵便局で「定時集荷・指定事業所集荷」を担当するか。
+   判定は従業員台帳の担当郵便局バッジ → ⚙ →「📦 集荷」のチェック
+   （staff.subOffices[].col）。ここにチェックが無い人には集荷先を出さない。
+   集荷先はお客様の名前なので、担当しない人には見せない。 */
+function _isStaffColAtOffice(staff, officeName){
+  if(!staff || !officeName) return false;
+  let s = staff;
+  if(typeof s === 'string'){
+    const q = s.trim();
+    s = (D.staff||[]).find(x=>x && (x.name===q || String(x.empNo||'').trim()===q));
+  }
+  if(!s) return false;
+  const subs = Array.isArray(s.subOffices) ? s.subOffices : [];
+  const hit = subs.find(x=>{
+    const nm = (typeof x==='string') ? x : (x && x.name);
+    return nm === officeName;
+  });
+  if(!hit || typeof hit === 'string') return false;   // 旧形式(文字列)は宅配のみ
+  return !!hit.col;
+}
+
 function _getStaffDelOffices(staff){
   if(!staff) return [];
   const result = [];
@@ -37347,6 +37392,8 @@ function selectDdStaff(name,empNo){
   if($('dd-staff'))$('dd-staff').value=name;
   hideDdDropdown('dd-staff-dd');
   _ddFillOffList(name);   // ★ 2026-09-22.20
+  // ★ 2026-10-09.23: 人によって集荷欄の出し分けが変わるので作り直す
+  try{ if(typeof renderDdColInputs === 'function') renderDdColInputs(); }catch(e){}
   calcDelAmt();
   // 郵便局を従業員の直近日報から自動入力
   _autoFillPostOffice(name);
@@ -42465,6 +42512,29 @@ function renderPostEntry(){
                  background:${c.bill?'var(--sur2)':'var(--bg3)'};color:var(--txt);">
       </td>`;
     }).join('');
+    /* ★ 2026-10-09.23: 集荷を担当しない人は欄を出さない（斜線）。
+       Enter の横送りも入力欄を辿るので、170超の次は自動で次の人の持ち出しへ進む。
+       ただし、その日に既に集荷の数が入っている人は、見えないまま消えないよう欄を出す。 */
+    const hasColData = (f.res.unknown>0) || Object.keys(f.res.vals).some(k=>{
+      const v=f.res.vals[k]; return v!=='' && v!=null && (parseInt(v)||0)>0;
+    });
+    const canCol = _isStaffColAtOffice(f.s, off) || hasColData;
+    if(_PE_SH_COLS.length && !canCol){
+      const blank=`<td colspan="${_PE_SH_COLS.length}" style="padding:6px;border-left:2px solid var(--brd2);
+        text-align:center;color:var(--txt3);font-size:11px;
+        background:repeating-linear-gradient(135deg,transparent,transparent 7px,rgba(128,128,128,.07) 7px,rgba(128,128,128,.07) 14px);"
+        title="従業員台帳 → 担当郵便局 → ⚙ → 集荷 にチェックを入れると欄が出ます">集荷の担当なし</td>`;
+      return `<tr draggable="true" data-staff="${esc(s.name||'')}" data-emp="${esc(emp)}"
+        ondragstart="_peDragStart(event,this)" ondragover="_peDragOver(event,this)"
+        ondrop="_peDrop(event,this)" ondragend="_peDragEnd(event)">
+        <td style="width:26px;text-align:center;cursor:grab;color:var(--txt3);font-size:15px;user-select:none;"
+            title="ドラッグで並び替え">⠿</td>
+        <td class="mono" style="font-size:14px;color:${emp?'var(--amb2)':'var(--red2)'};font-weight:700;white-space:nowrap;">
+          ${emp?esc(emp):'未設定'}</td>
+        <td style="font-size:14px;font-weight:600;white-space:nowrap;">${esc(s.name||'')}</td>
+        ${cells}${blank}
+      </tr>`;
+    }
     // 集荷先ごとの欄
     const shCells=_PE_SH_COLS.map((c,ci)=>{
       const raw = (c.key==='__unknown__') ? f.res.unknown : f.res.vals[c.key];
