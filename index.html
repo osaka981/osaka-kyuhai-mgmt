@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.24</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.25</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -987,7 +987,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th class="tr">持出</th><th class="tr">完了</th>
             <th class="tr" style="color:var(--blu2)">夜間</th>
             <th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th>
-            <th class="tr">大型</th><th class="tr">集荷</th>
+            <th class="tr">大型</th>
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th>
+            <th class="tr" style="color:var(--amb2);">指定事業所</th>
             <th class="tr" style="color:var(--tel2)">金額</th>
             <th>検証</th><th>照合</th><th></th>
           </tr></thead>
@@ -5318,7 +5320,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.24';
+const APP_VER = '2026-10-09.25';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -10613,13 +10615,15 @@ function renderDel() {
       <td class="tr fw7">${r.mochidashi}</td><td class="tr">${r.kanryo}</td>
       <td class="tr" style="color:var(--blu2)">${r.yakan}</td>
       <td class="tr">${r.tenso}</td><td class="tr">${r.mochimodoiri}</td><td class="tr">${r['翌日廻し']}</td>
-      <td class="tr">${r.ogata||0}</td><td class="tr">${r.shukka||0}</td>
+      <td class="tr">${r.ogata||0}</td>
+      <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);" title="${_shukkaBreakdown(r,'teiji')}">${_shukkaSplit(r).teiji||0}</td>
+      <td class="tr" style="color:var(--amb2);" title="${_shukkaBreakdown(r,'shitei')}">${_shukkaSplit(r).shitei||0}</td>
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
       <td style="text-align:center">${vc}</td><td>${sb}</td>
       <td><button class="btn b-gh btn-sm" onclick="editDel(${r.id})">編集</button></td>
     </tr>`;
   });
-  $('tb-del').innerHTML=h||`<tr><td colspan="14" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
+  $('tb-del').innerHTML=h||`<tr><td colspan="17" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
 }
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
@@ -30437,12 +30441,12 @@ function renderStaffDaily(el, name){
     delRows.forEach(r=>{ (_byDate[r.date] = _byDate[r.date] || []).push(r); });
     // ★ 2026-10-09.6: 大型(170超)を列に追加。夜間と同じ「完了の内訳」なのに
     //   この一覧だけ列が無く、日ごとの大型を画面で確認できなかった。
-    const _t = {mochi:0,kanryo:0,yakan:0,ogata:0,tenso:0,modori:0,yoku:0,shukka:0};
+    const _t = {mochi:0,kanryo:0,yakan:0,ogata:0,tenso:0,modori:0,yoku:0,shukka:0,shuTeiji:0,shuShitei:0};
     let _days = 0;
     html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計',hidePeople:true,showShukka:true});
     html+=`<!--SD:del:宅配日報（入力 ${delRows.length}日 / ${_last}日中）:${delRows.length}-->`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">大型</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr">集荷</th><th>備考</th><th></th>
+      <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">大型</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th><th class="tr" style="color:var(--amb2);">指定事業所</th><th>集荷先</th><th>備考</th><th></th>
     </tr></thead><tbody>`;
     for(let _d=1; _d<=_last; _d++){
       const ds = `${mon}-${String(_d).padStart(2,'0')}`;
@@ -30455,7 +30459,7 @@ function renderStaffDaily(el, name){
         html+=`<tr style="${rowBg}">
           <td class="mono" style="color:var(--txt3);">${ds}</td>
           <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
-          <td colspan="10" class="xs" style="color:var(--txt3);">未入力</td>
+          <td colspan="12" class="xs" style="color:var(--txt3);">未入力</td>
           <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openStaffDailyEntry('del','${esc(name)}','${ds}')">＋入力</button></td>
         </tr>`;
         continue;
@@ -30468,6 +30472,9 @@ function renderStaffDaily(el, name){
         _t.ogata+=r.ogata||0;
         _t.tenso+=r.tenso||0; _t.modori+=r.mochimodoiri||0;
         _t.yoku+=r['翌日廻し']||0; _t.shukka+=r.shukka||0;
+        // ★ 2026-10-09.25: 集荷を定時と指定事業所に分ける
+        const _sp=_shukkaSplit(r);
+        _t.shuTeiji+=_sp.teiji; _t.shuShitei+=_sp.shitei;
         html+=`<tr style="${rowBg}">
           <td class="mono">${ds}</td>
           <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
@@ -30475,7 +30482,10 @@ function renderStaffDaily(el, name){
           <td class="tr fw7">${r.mochidashi||0}</td><td class="tr fw7">${r.kanryo||0}</td>
           <td class="tr" style="color:var(--y60)">${r.yakan||0}</td><td class="tr" style="color:var(--y60)">${r.ogata||0}</td><td class="tr">${r.tenso||0}</td>
           <td class="tr"${_ng?' style="color:var(--red2);font-weight:700;" title="持出≠完了+転送+持戻+翌日"':''}>${r.mochimodoiri||0}</td><td class="tr">${r['翌日廻し']||0}</td>
-          <td class="tr">${r.shukka||0}</td><td class="xs muted">${r.note||''}</td>
+          <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${_sp.teiji||0}</td>
+          <td class="tr" style="color:var(--amb2);">${_sp.shitei||0}</td>
+          <td class="xs muted" style="white-space:nowrap;">${_shukkaBreakdown(r)}</td>
+          <td class="xs muted">${r.note||''}</td>
           <td style="white-space:nowrap;">
             <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button>
             <button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);"
@@ -30490,7 +30500,9 @@ function renderStaffDaily(el, name){
       <td class="tr">${_t.mochi.toLocaleString()}</td><td class="tr">${_t.kanryo.toLocaleString()}</td>
       <td class="tr">${_t.yakan.toLocaleString()}</td><td class="tr">${_t.ogata.toLocaleString()}</td><td class="tr">${_t.tenso.toLocaleString()}</td>
       <td class="tr">${_t.modori.toLocaleString()}</td><td class="tr">${_t.yoku.toLocaleString()}</td>
-      <td class="tr">${_t.shukka.toLocaleString()}</td><td colspan="2"></td>
+      <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${_t.shuTeiji.toLocaleString()}</td>
+      <td class="tr" style="color:var(--amb2);">${_t.shuShitei.toLocaleString()}</td>
+      <td colspan="3"></td>
     </tr></tfoot></table></div>`;
   }
 
@@ -31454,15 +31466,25 @@ function _shukkaSplit(r){
   const total = parseInt(r && r.shukka) || 0;
   const list = (r && Array.isArray(r.shukkaCompanies)) ? r.shukkaCompanies : [];
   if(!list.length){ out.teiji = total; return out; }
+  /* ★ 2026-10-09.25: 郵便局データ手入力・宅配日報入力は kind を一緒に保存する。
+     kind があればそれを信じる。無い（日報アプリ経由）ときだけ名前で引く。
+     旧名称で入っている過去ぶんも拾えるように prevName も見る。 */
   const loc = (typeof _locByName === 'function') ? _locByName(r.office) : null;
-  const shitei = new Set(((loc && loc.shukkaCompaniesShitei) || [])
-    .filter(c=>c && c.name).map(c=>c.name));
+  const shitei = new Set();
+  ((loc && loc.shukkaCompaniesShitei) || []).forEach(c=>{
+    if(!c || !c.name) return;
+    shitei.add(c.name);
+    if(c.prevName) shitei.add(c.prevName);
+  });
   let sum = 0;
   list.forEach(c=>{
     const n = parseInt(c && c.count) || 0;
     if(!n) return;
     sum += n;
-    if(c && c.name && shitei.has(c.name)) out.shitei += n;
+    const kind = c && c.kind;
+    if(kind === 'shitei') out.shitei += n;
+    else if(kind === 'teiji' || kind === 'unknown') out.teiji += n;
+    else if(c && c.name && shitei.has(c.name)) out.shitei += n;
     else out.teiji += n;
   });
   // 内訳の合計が集荷数に足りないときは差分を定時へ
@@ -31474,10 +31496,24 @@ function _shukkaSplit(r){
    日報アプリから来た日報は form.col.companies を持っており、
    applyFirebaseData で r.shukkaCompanies に写してある。
    経営管理から直接入力した日は内訳が無いので空にする。 */
-function _shukkaBreakdown(r){
+function _shukkaBreakdown(r, only){
   const list = (r && Array.isArray(r.shukkaCompanies)) ? r.shukkaCompanies : [];
+  /* ★ 2026-10-09.25: only に 'teiji' / 'shitei' を渡すと、その種別だけを出す。
+     種別の判定は _shukkaSplit と同じ（kind 優先、無ければ拠点マスタの名前）。 */
+  const loc = (typeof _locByName === 'function') ? _locByName(r && r.office) : null;
+  const shitei = new Set();
+  ((loc && loc.shukkaCompaniesShitei) || []).forEach(c=>{
+    if(!c || !c.name) return;
+    shitei.add(c.name);
+    if(c.prevName) shitei.add(c.prevName);
+  });
+  const kindOf = c => {
+    if(c && (c.kind==='shitei' || c.kind==='teiji' || c.kind==='unknown')) return c.kind==='unknown' ? 'teiji' : c.kind;
+    return (c && c.name && shitei.has(c.name)) ? 'shitei' : 'teiji';
+  };
   const parts = list
     .filter(c=>c && c.name && (parseInt(c.count)||0) > 0)
+    .filter(c=>!only || kindOf(c)===only)
     .map(c=>esc(c.name)+' '+(parseInt(c.count)||0));
   return parts.length ? parts.join(' ／ ') : '';
 }
