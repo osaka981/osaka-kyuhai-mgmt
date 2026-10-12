@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.30</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.31</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1448,6 +1448,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <th colspan="3" class="tr cmp-grp" data-grp="0" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">完了＋転送還付</th>
               <th colspan="3" class="tr cmp-grp" data-grp="1" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(80,140,220,.13),rgba(80,140,220,.13)),var(--bg3);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
               <th colspan="3" class="tr cmp-grp" data-grp="2" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(150,110,200,.13),rgba(150,110,200,.13)),var(--bg3);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <th rowspan="2" style="border-left:2px solid var(--brd2);">手当・立替<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">クリックで日報を直す</div></th>
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
@@ -5370,7 +5371,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.30';
+const APP_VER = '2026-10-09.31';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9672,7 +9673,7 @@ function renderCmp(){
     ? _cmpSumHeader(rows, orphans, (mon||'全期間')+(off?'　'+off:''))
     : '';
   const tbody=$('tb-cmp'); if(!tbody) return;
-  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="14" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="16" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
   const sorted=rows.concat(orphans).sort(function(a,b){
@@ -9699,9 +9700,9 @@ function renderCmp(){
   const html=[];
   groups.forEach(function(g,gi){
     // ★ 2026/08/27: 日の切れ目。影は使わず、余白の中央に線を1本引くだけにする。
-    if(gi>0) html.push('<tr class="no-hover"><td colspan="15" style="height:8px;padding:0;'
+    if(gi>0) html.push('<tr class="no-hover"><td colspan="16" style="height:8px;padding:0;'
       +'border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>'
-      +'<tr class="no-hover"><td colspan="15" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
+      +'<tr class="no-hover"><td colspan="16" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
@@ -9743,6 +9744,19 @@ function renderCmp(){
       html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
       html.push('<td class="tr" style="color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
+      /* ★ 2026-10-09.31: 横乗り・駐車立替・給油・走行距離をここにも出す。
+         紙の日報を見ながら数合わせするとき、この画面を離れずに直せるよう
+         タグを押すとその日報の入力モーダルが開く。 */
+      if(orph){
+        html.push('<td style="border-left:2px solid var(--brd2);color:var(--txt3);font-size:11px;">&#8212;</td>');
+      }else{
+        const _tg=_teateTags(r);
+        html.push('<td style="border-left:2px solid var(--brd2);white-space:nowrap;cursor:pointer;" '
+          +'title="クリックするとこの日報を開いて直せます" '
+          +'data-id="'+esc(String(r.id||''))+'" onclick="editDel(this.dataset.id)">'
+          +(_tg || '<span style="font-size:10px;color:var(--txt3);">なし</span>')
+          +'</td>');
+      }
       // ★ 2026-10-08.11: 直した行には履歴の件数を出す（「修正」から中身を見られる）
       const _hn=(!orph && Array.isArray(r.fixHistory)) ? r.fixHistory.length : 0;
       html.push('<td style="border-left:2px solid var(--brd2);font-size:11px;">'
@@ -9779,6 +9793,22 @@ function renderCmp(){
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
     html.push('<td class="tr fw7" style="color:var(--pur2);">'+fmt(sum.no)+'</td>');
     html.push(diffCell(doo));
+    // ★ 2026-10-09.31: その日の手当・立替の合計
+    {
+      let _y=0,_p=0,_d=0,_g=false;
+      g.rows.forEach(function(x){
+        if(!x || x._orphan) return;
+        _y+=parseInt(x.yokonori)||0;
+        _p+=parseInt(x.parking)||0;
+        if(x.refueled) _g=true;
+        let _dd=(x.distance!=null)?parseInt(x.distance):null;
+        if(_dd==null && x.odoStart!=null && x.odoEnd!=null) _dd=parseInt(x.odoEnd)-parseInt(x.odoStart);
+        if(_dd!=null && !isNaN(_dd) && _dd>0) _d+=_dd;
+      });
+      html.push('<td style="border-left:2px solid var(--brd2);white-space:nowrap;">'
+        + _teateTags({yokonori:_y, yokonoriWith:[], parking:_p, refueled:_g, distance:_d||null})
+        + '</td>');
+    }
     // その日の郵便局データを手入力する導線。営業所が1つに定まるときだけ渡す。
     const offs=[...new Set(g.rows.map(function(x){return x.office||'';}).filter(Boolean))];
     const gOff=offs.length===1?offs[0]:(off||'');
@@ -30656,12 +30686,12 @@ function renderStaffDaily(el, name){
     delRows.forEach(r=>{ (_byDate[r.date] = _byDate[r.date] || []).push(r); });
     // ★ 2026-10-09.6: 大型(170超)を列に追加。夜間と同じ「完了の内訳」なのに
     //   この一覧だけ列が無く、日ごとの大型を画面で確認できなかった。
-    const _t = {mochi:0,kanryo:0,yakan:0,ogata:0,tenso:0,modori:0,yoku:0,shukka:0,shuTeiji:0,shuShitei:0};
+    const _t = {mochi:0,kanryo:0,yakan:0,ogata:0,tenso:0,modori:0,yoku:0,shukka:0,shuTeiji:0,shuShitei:0,yoko:0,park:0,dist:0};
     let _days = 0;
     html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計',hidePeople:true,showShukka:true});
     html+=`<!--SD:del:宅配日報（入力 ${delRows.length}日 / ${_last}日中）:${delRows.length}-->`;
     html+=`<div class="tw"><table><thead><tr>
-      <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">大型</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th><th class="tr" style="color:var(--amb2);">指定事業所</th><th>集荷先</th><th>備考</th><th></th>
+      <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">大型</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th><th class="tr" style="color:var(--amb2);">指定事業所</th><th>集荷先</th><th style="border-left:2px solid var(--brd2);">手当・立替</th><th>備考</th><th></th>
     </tr></thead><tbody>`;
     for(let _d=1; _d<=_last; _d++){
       const ds = `${mon}-${String(_d).padStart(2,'0')}`;
@@ -30674,7 +30704,7 @@ function renderStaffDaily(el, name){
         html+=`<tr style="${rowBg}">
           <td class="mono" style="color:var(--txt3);">${ds}</td>
           <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
-          <td colspan="12" class="xs" style="color:var(--txt3);">未入力</td>
+          <td colspan="13" class="xs" style="color:var(--txt3);">未入力</td>
           <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="openStaffDailyEntry('del','${esc(name)}','${ds}')">＋入力</button></td>
         </tr>`;
         continue;
@@ -30690,6 +30720,12 @@ function renderStaffDaily(el, name){
         // ★ 2026-10-09.25: 集荷を定時と指定事業所に分ける
         const _sp=_shukkaSplit(r);
         _t.shuTeiji+=_sp.teiji; _t.shuShitei+=_sp.shitei;
+        // ★ 2026-10-09.31: 手当・立替・走行距離の月合計
+        _t.yoko+=parseInt(r.yokonori)||0;
+        _t.park+=parseInt(r.parking)||0;
+        { let _d=(r.distance!=null)?parseInt(r.distance):null;
+          if(_d==null && r.odoStart!=null && r.odoEnd!=null) _d=parseInt(r.odoEnd)-parseInt(r.odoStart);
+          if(_d!=null && !isNaN(_d) && _d>0) _t.dist+=_d; }
         html+=`<tr style="${rowBg}">
           <td class="mono">${ds}</td>
           <td style="text-align:center;color:${dowCol};">${_wd[dow]}</td>
@@ -30700,6 +30736,7 @@ function renderStaffDaily(el, name){
           <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${_sp.teiji||0}</td>
           <td class="tr" style="color:var(--amb2);">${_sp.shitei||0}</td>
           <td class="xs muted" style="white-space:nowrap;">${_shukkaBreakdown(r)}</td>
+          <td style="border-left:2px solid var(--brd2);white-space:nowrap;">${_teateTags(r)}</td>
           <td class="xs muted">${r.note||''}</td>
           <td style="white-space:nowrap;">
             <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="editDel(${r.id})">編集</button>
@@ -30717,7 +30754,9 @@ function renderStaffDaily(el, name){
       <td class="tr">${_t.modori.toLocaleString()}</td><td class="tr">${_t.yoku.toLocaleString()}</td>
       <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">${_t.shuTeiji.toLocaleString()}</td>
       <td class="tr" style="color:var(--amb2);">${_t.shuShitei.toLocaleString()}</td>
-      <td colspan="3"></td>
+      <td></td>
+      <td style="border-left:2px solid var(--brd2);white-space:nowrap;">${_teateTags({yokonori:_t.yoko, yokonoriWith:[], parking:_t.park, refueled:false, distance:_t.dist})}</td>
+      <td colspan="2"></td>
     </tr></tfoot></table></div>`;
   }
 
@@ -31705,6 +31744,35 @@ function _shukkaSplit(r){
   // 内訳の合計が集荷数に足りないときは差分を定時へ
   if(total > sum) out.teiji += (total - sum);
   return out;
+}
+
+
+/* ★ 2026-10-09.31: 横乗り・駐車料金の立替・給油・走行距離を、
+   一覧でも照合でも同じ見た目の小さなタグで出す。
+   紙の日報を見ながら数合わせするとき、目で拾えるようにするため。
+   マウスを載せると横乗りの相手が出る。 */
+function _teateTags(r){
+  if(!r) return '';
+  const chip = (txt, col, bg, title) =>
+    '<span title="'+esc(title||'')+'" style="display:inline-block;font-size:10px;font-weight:700;'
+    + 'color:'+col+';background:'+bg+';border-radius:9px;padding:2px 7px;margin:1px 3px 1px 0;'
+    + 'white-space:nowrap;">'+txt+'</span>';
+  const out=[];
+  const yk = parseInt(r.yokonori) || 0;
+  if(yk > 0){
+    const names = Array.isArray(r.yokonoriWith)
+      ? r.yokonoriWith.map(x=>String(x||'').trim()).filter(Boolean) : [];
+    out.push(chip('横乗 '+yk, 'var(--grn2)', 'rgba(46,139,87,.16)',
+      names.length ? names.join(' ／ ') : '横乗り '+yk+'件'));
+  }
+  const pk = parseInt(r.parking) || 0;
+  if(pk > 0) out.push(chip('駐 ¥'+fmt(pk), 'var(--amb2)', 'rgba(184,134,11,.16)', '駐車料金の立替'));
+  if(r.refueled) out.push(chip('給油', 'var(--tel2)', 'rgba(32,151,154,.16)', '給油あり（燃料費はCSV取込）'));
+  let ds = (r.distance!=null) ? parseInt(r.distance) : null;
+  if(ds==null && r.odoStart!=null && r.odoEnd!=null) ds = parseInt(r.odoEnd) - parseInt(r.odoStart);
+  if(ds!=null && !isNaN(ds)) out.push(chip(fmt(ds)+'km', 'var(--blu2)', 'rgba(80,140,220,.16)',
+    '走行距離'+((r.odoStart!=null&&r.odoEnd!=null)?('（'+fmt(r.odoStart)+' → '+fmt(r.odoEnd)+'）'):'')));
+  return out.join('');
 }
 
 /* ★ 2026-10-09.17: 集荷先ごとの内訳を短く文字にする。
