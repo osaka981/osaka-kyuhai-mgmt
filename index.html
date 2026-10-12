@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.23</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.24</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5318,7 +5318,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.23';
+const APP_VER = '2026-10-09.24';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -22710,8 +22710,13 @@ function saveStaff(continueAdd=false){
     holder:$('st-bank-holder')?.value.trim()||'',
   };
 
-  // 追加郵便局を収集（バッジUIから） - 新形式: [{name, del, col}]
-  const subOffices=getSubOffices().filter(o=>o.name!==officeName);
+  /* 追加郵便局を収集（バッジUIから） - 新形式: [{name, del, col}]
+     ★ 2026-10-09.24: メイン郵便局ぶんを無条件に捨てていたため、
+     メイン局のバッジで「📦 集荷」にチェックを入れても保存で消えていた。
+     （高橋さん・メイン=西成郵便局で発生）
+     集荷のチェックがある場合はメイン局も残す。宅配だけなら従来どおり捨てる
+     （メイン局の宅配は staff.office から分かるため、持つ必要がない）。 */
+  const subOffices=getSubOffices().filter(o=>o.name!==officeName || !!o.col);
 
   /* ★ 2026/09/14: 社員番号が変わったときは、旧番号を履歴に残す。
      過去の日報・計数・郵便局CSVは旧番号で記録されているため、
