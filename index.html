@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.34</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.36</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1308,22 +1308,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
          緑の列は日報から集めた数で、ここでは直せない。 -->
     <div id="s-month-adj" class="sec">
       <div class="card mb12">
-        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
-          <div class="fg" style="flex:0 0 auto;margin:0;">
-            <label style="font-size:11px;">対象月</label>
-            <input type="month" id="adj-mon" class="fi" onchange="renderMonthAdj()" style="min-width:150px;">
-          </div>
-          <div class="fg" style="flex:0 0 auto;margin:0;">
-            <label style="font-size:11px;">営業所でしぼる</label>
-            <select id="adj-off" class="fi" onchange="renderMonthAdj()" style="min-width:180px;"></select>
-          </div>
+        <!-- ★ 2026-10-09.35: 年月と営業所をタブで選ぶ -->
+        <input type="hidden" id="adj-mon">
+        <div id="adj-mon-tabs" style="margin-bottom:8px;"></div>
+        <div id="adj-off-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:center;">
           <button class="btn b-gh btn-sm" onclick="renderMonthAdj()">🔄 更新</button>
           <div style="flex:1;"></div>
           <button class="btn b-grn btn-sm" onclick="saveMonthAdj()">💾 この月の調整を保存</button>
         </div>
         <div class="al al-i mt8" style="font-size:11px;">
           <span>ℹ️</span>
-          <span><b>緑の列は日報から集めた数</b>で、ここでは直せません。<b>黄・赤の列がこの画面で入れるもの</b>です。違約金を入れたら理由も書いてください。</span>
+          <span><b>緑の列は日報から集めた数</b>で、ここでは直せません。<b>黄・赤の列がこの画面で入れるもの</b>です。違約金を入れたら理由も書いてください。<br>
+          違約金は<b>郵便局の請求で相殺</b>し、<b>本人からも回収</b>します。この2つは月がずれることがあるので、それぞれの月を入れてください（はじめは対象月が入っています）。</span>
         </div>
         <div class="al al-w mt8" style="font-size:11px;">
           <span>⚠️</span>
@@ -1341,12 +1338,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th style="width:92px;">社員番号</th>
             <th style="width:140px;">氏名</th>
             <th style="width:150px;">営業所</th>
-            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);width:110px;">横乗り<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-            <th class="tr" style="color:var(--grn2);width:120px;">駐車立替<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-            <th class="tr" style="color:var(--grn2);width:110px;">走行<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--amb2);width:120px;">特別手当<div style="font-size:9px;font-weight:400;color:var(--txt3);">件数</div></th>
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);width:110px;">横乗り<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報・本人へ支払</div></th>
+            <th class="tr" style="color:var(--grn2);width:130px;">駐車立替<div style="font-size:9px;font-weight:400;color:var(--txt3);">局へ請求・本人へ支払</div></th>
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--amb2);width:120px;">特別手当<div style="font-size:9px;font-weight:400;color:var(--txt3);">件数・本人へ支払</div></th>
             <th class="tr" style="color:var(--red2);width:130px;">違約金<div style="font-size:9px;font-weight:400;color:var(--txt3);">円</div></th>
-            <th>違約金の理由</th>
+            <th style="min-width:180px;">違約金の理由</th>
+            <th style="width:130px;border-left:2px solid var(--brd2);">局請求へ<div style="font-size:9px;font-weight:400;color:var(--txt3);">相殺する月</div></th>
+            <th style="width:130px;">本人から回収<div style="font-size:9px;font-weight:400;color:var(--txt3);">給与から引く月</div></th>
           </tr></thead>
           <tbody id="tb-adj"></tbody>
           <tfoot id="tf-adj"></tfoot>
@@ -5438,7 +5436,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.34';
+const APP_VER = '2026-10-09.36';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -21667,20 +21665,32 @@ function renderMonthAdj(){
     mEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   }
   const ym=(mEl?.value||'').slice(0,7);
-  const offSel=$('adj-off');
 
-  // 営業所のしぼり込み（宅配拠点だけ）
-  if(offSel && !offSel.dataset.filled){
-    const list=(typeof _dashDelOffices==='function') ? _dashDelOffices() : [];
-    offSel.innerHTML='<option value="">すべて</option>'
-      + [...new Set(list)].filter(Boolean).map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
-    offSel.dataset.filled='1';
+  // ★ 2026-10-09.35: 年月のタブ
+  const mt=$('adj-mon-tabs');
+  if(mt && typeof _monTabs==='function'){
+    mt.innerHTML=_monTabs('adj-mon', ym, "renderMonthAdj()", {back:5});
   }
-  const off=offSel?.value||'';
+
+  // ★ 2026-10-09.35: 営業所のタブ（宅配拠点だけ）
+  const off=String(window._adjOff||'');
+  const ot=$('adj-off-tabs');
+  if(ot){
+    const offs=[...new Set((typeof _dashDelOffices==='function' ? _dashDelOffices() : []))].filter(Boolean);
+    const mk=(v,l)=>{
+      const on=(off===v);
+      return `<button type="button" onclick="setAdjOff('${esc(v).replace(/'/g,"\\'")}')"
+        style="padding:7px 15px;border-radius:7px;cursor:pointer;line-height:1.1;white-space:nowrap;
+               border:1px solid ${on?'var(--blu)':'var(--brd2)'};
+               background:${on?'var(--blu)':'var(--sur2)'};
+               color:${on?'#fff':'var(--txt2)'};font-size:${on?'13px':'12.5px'};font-weight:700;">${esc(l)}</button>`;
+    };
+    ot.innerHTML = mk('','すべて') + offs.map(o=>mk(o,o)).join('');
+  }
 
   const pe=$('adj-period'); if(pe) pe.textContent = ym ? ('（'+ym+'）') : '（対象月を選んでください）';
   if(!ym){
-    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">対象月を選んでください</td></tr>';
+    tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--txt2);">対象月を選んでください</td></tr>';
     if($('tf-adj')) $('tf-adj').innerHTML='';
     return;
   }
@@ -21712,7 +21722,7 @@ function renderMonthAdj(){
   });
 
   if(!rows.length){
-    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">対象の従事員がいません</td></tr>';
+    tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--txt2);">対象の従事員がいません</td></tr>';
     if($('tf-adj')) $('tf-adj').innerHTML='';
     if($('adj-count')) $('adj-count').textContent='';
     return;
@@ -21735,7 +21745,6 @@ function renderMonthAdj(){
       <td class="xs muted">${esc(st?.office||'')}</td>
       <td class="tr mono" style="border-left:2px solid var(--brd2);${gre}">${sums.yoko||0}</td>
       <td class="tr mono" style="${gre}">${sums.park?('¥'+fmt(sums.park)):0}</td>
-      <td class="tr mono" style="${gre}">${sums.dist?(fmt(sums.dist)+' km'):0}</td>
       <td style="border-left:2px solid var(--brd2);padding:4px 6px;">
         <input type="number" min="0" class="fi adj-toku" value="${toku||0}"
           aria-label="特別手当の件数"
@@ -21751,6 +21760,16 @@ function renderMonthAdj(){
           placeholder="（違約金を入れたら必須）" aria-label="違約金の理由"
           style="font-size:12px;padding:6px 8px;">
       </td>
+      <td style="padding:4px 6px;border-left:2px solid var(--brd2);">
+        <input type="month" class="fi adj-billym" value="${esc(a.penaltyBillYm || ym)}"
+          aria-label="郵便局の請求で相殺する月"
+          style="font-size:11.5px;padding:5px 6px;">
+      </td>
+      <td style="padding:4px 6px;">
+        <input type="month" class="fi adj-dedym" value="${esc(a.penaltyDeductYm || ym)}"
+          aria-label="本人の給与から引く月"
+          style="font-size:11.5px;padding:5px 6px;">
+      </td>
     </tr>`;
   }).join('');
 
@@ -21758,13 +21777,15 @@ function renderMonthAdj(){
     <td colspan="3">合計　${rows.length} 人</td>
     <td class="tr mono" style="border-left:2px solid var(--brd2);color:var(--grn2);">${tot.yoko}</td>
     <td class="tr mono" style="color:var(--grn2);">¥${fmt(tot.park)}</td>
-    <td class="tr mono" style="color:var(--grn2);">${fmt(tot.dist)} km</td>
     <td class="tr mono" style="border-left:2px solid var(--brd2);color:var(--amb2);">${tot.toku}</td>
     <td class="tr mono" style="color:var(--red2);">¥${fmt(tot.pen)}</td>
-    <td></td>
+    <td colspan="3"></td>
   </tr>`;
   if($('adj-count')) $('adj-count').textContent = rows.length+'人';
 }
+
+// ★ 2026-10-09.35: 営業所タブ
+function setAdjOff(v){ window._adjOff = String(v||''); renderMonthAdj(); }
 
 // 違約金を入れたら枠を赤くして、理由の必要さを見せる
 function _adjPenSync(el){
@@ -21801,14 +21822,22 @@ async function saveMonthAdj(){
     const toku=Math.max(0, parseInt(tr.querySelector('.adj-toku')?.value)||0);
     const pen =Math.max(0, parseInt(tr.querySelector('.adj-pen')?.value)||0);
     const rs  =(tr.querySelector('.adj-reason')?.value||'').trim();
+    const bym =(tr.querySelector('.adj-billym')?.value||'').slice(0,7);
+    const dym =(tr.querySelector('.adj-dedym')?.value||'').slice(0,7);
     const idx=all.findIndex(a=>a && a.ym===ym && a.staff===name);
     if(!toku && !pen && !rs){
       // すべて空 → 記録を消す（残しておく意味がない）
       if(idx>=0){ all.splice(idx,1); del++; }
       return;
     }
+    /* ★ 2026-10-09.36: 違約金は郵便局への請求で相殺し、本人からも回収する。
+       この2つは月がずれることがあるので、それぞれの月を持たせる。
+       空なら対象月とみなす。 */
     const rec={ ym, staff:name, empNo:emp, tokubetsu:toku, penalty:pen,
-                penaltyReason:rs, at:new Date().toISOString() };
+                penaltyReason:rs,
+                penaltyBillYm:   pen>0 ? (bym || ym) : '',
+                penaltyDeductYm: pen>0 ? (dym || ym) : '',
+                at:new Date().toISOString() };
     if(idx>=0){ all[idx]={...all[idx], ...rec}; upd++; }
     else { all.push(rec); add++; }
   });
