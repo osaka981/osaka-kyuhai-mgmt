@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.28</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.29</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5330,7 +5330,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.28';
+const APP_VER = '2026-10-09.29';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5584,11 +5584,16 @@ function _buildFbDriverEntry(s){
     birth:    s.birth    || '',
     // ★ 2026/09/01: バーコード計数アプリのID照合で氏名と一緒に自動入力するため電話番号も連携
     tel:      s.tel      || '',
-    /* ★ 2026-10-09.28: 日報アプリの「給油した」チェックを出す人を決めるために連携する。
+    /* ★ 2026-10-09.29: 日報アプリの「給油した」チェックを出す人を決めるために連携する。
        会社のカードを使う人だけに出す。自分のカードで給油する人はCSVも来ないので出さない。
        判定は「カード貸出=あり」または「燃料CSV連携の車番が入っている」。
-       車番だけ入っていて貸出が「なし」のままの人がいるため、どちらか一方でも拾う。 */
-    gasCard: !!(
+       車番だけ入っていて貸出が「なし」のままの人がいるため、どちらか一方でも拾う。
+       ※ 台帳の offset.gasCard は「カード番号(参考)」の文字列で別物。
+         紛らわしいので、判定結果は gasCardOn という別の名前で渡し、
+         元の設定（貸出・車番）もそのまま添える。 */
+    gasCardLend: (s.offset && s.offset.gasCardLend) || '',
+    gasCardNo:   (s.offset && String(s.offset.gasCardNo || '').trim()) || '',
+    gasCardOn: !!(
       (s.offset && s.offset.gasCardLend === 'あり') ||
       (s.offset && String(s.offset.gasCardNo || '').trim())
     ),
