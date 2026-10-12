@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.25</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.27</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3173,10 +3173,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#9cf;">夜間</th>
         <th style="padding:8px 6px;text-align:center;font-size:12.5px;">大型</th>
         <th style="padding:8px 6px;text-align:center;font-size:12.5px;color:#afa;">集荷</th>
-        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
-        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
-        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
-        <th style="padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
+        <!-- ★ 2026-10-09.27: その他1〜4 は宅配事業で使わないため欄を隠す。
+             入力欄そのものは残してあるので、過去に数が入っている日報は
+             そのまま保存し直され、金額も変わらない。 -->
+        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
+        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
+        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
+        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
       </tr>
     </thead>
     <tbody>
@@ -3189,10 +3192,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-ogata"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" readonly tabindex="-1" title="下の「集荷」欄の合計です。そちらで入力してください" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;background:var(--bg3);color:var(--txt2);cursor:default;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
       </tr>
       <!-- 個数行の右下：クイック保存 -->
       <tr class="no-hover" style="background:transparent !important;">
@@ -3210,10 +3213,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-ogata-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-shukka-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td style="padding:4px 3px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
       </tr>
       <!-- 金額行（管理者のみ表示） -->
       <tr id="del-amt-row" style="display:none;">
@@ -3224,10 +3227,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--blu2);" id="da-yakan">0</td>
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-ogata">0</td>
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--grn2);" id="da-shukka">0</td>
-        <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s1">0</td>
-        <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s2">0</td>
-        <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s3">0</td>
-        <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s4">0</td>
+        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s1">0</td>
+        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s2">0</td>
+        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s3">0</td>
+        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s4">0</td>
       </tr>
     </tbody>
   </table>
@@ -3336,29 +3339,36 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <div class="fg mt8"><label>備考</label><input type="text" id="dd-note" class="fi" placeholder="特記事項など"></div>
 
-  <!-- チャーター -->
+  <!-- ★ 2026-10-09.27: チャーター・違約金・燃料費は日報の入口から外した。
+       チャーターは「チャーター入力」、燃料費はCSV取込、違約金は月末調整が入口。
+       ただし過去に入っている日報を開いたときだけ、消えないよう出す。
+       入力欄そのものは残してあるので、保存のしかたは変わらない。 -->
+  <div id="dd-charter-wrap" style="display:none;">
   <div class="sep mt8"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <div class="xs muted fw7" style="letter-spacing:.4px;">🚐 チャーター（任意・都度入力）</div>
+    <div class="xs muted fw7" style="letter-spacing:.4px;">🚐 チャーター（この日報に残っているぶん）</div>
     <button type="button" class="btn b-amb btn-sm" onclick="addDelCharterRow()">＋ 追加</button>
   </div>
   <div id="dd-charter-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+  </div>
 
-  <!-- 違約金 -->
+  <div id="dd-penalty-wrap" style="display:none;">
   <div class="sep mt8"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <div class="xs muted fw7" style="letter-spacing:.4px;color:var(--red2);">⚠️ 違約金（請求書反映）</div>
+    <div class="xs muted fw7" style="letter-spacing:.4px;color:var(--red2);">⚠️ 違約金（この日報に残っているぶん）</div>
     <button type="button" class="btn b-gh btn-sm" onclick="addDelPenaltyRow()">＋ 追加</button>
   </div>
   <div id="dd-penalty-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+  </div>
 
-  <!-- 燃料費 -->
+  <div id="dd-gas-wrap" style="display:none;">
   <div class="sep mt8"></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ 燃料費</div>
+    <div class="xs muted fw7" style="letter-spacing:.4px;">⛽ 燃料費（この日報に残っているぶん）</div>
     <button type="button" class="btn b-gh btn-sm" onclick="addDelGasRow()">＋ 追加</button>
   </div>
   <div id="dd-gas-rows" style="display:flex;flex-direction:column;gap:5px;"></div>
+  </div>
 
   <div class="mft">
     <button class="btn b-gh" onclick="closeM('m-del')">キャンセル</button>
@@ -5320,7 +5330,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.25';
+const APP_VER = '2026-10-09.27';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -13564,7 +13574,18 @@ function onDdColInput(){
 function renderDdColInputs(){
   const card = $('dd-col-card'); if(!card) return;
   _ddColReadDom();
-  const off  = $('dd-off')?.value || '';
+  /* ★ 2026-10-09.26: 隠しフィールドが空でも、見えている営業所欄の文字から引く。
+     「6 西成郵便局」のように番号が頭に付くので、拠点名と後方一致で合わせる。 */
+  let off = $('dd-off')?.value || '';
+  if(!off){
+    const txt = String($('dd-off-input')?.value || '').trim();
+    if(txt){
+      const names = (D.locations||[]).filter(l=>l && l.active!==false).map(l=>l.name)
+        .concat((D.offices||[]).map(o=>o && o.name));
+      const hit = names.filter(Boolean).find(n => txt===n || txt.endsWith(' '+n) || txt.endsWith(n));
+      if(hit) off = hit;
+    }
+  }
   const date = $('dd-date')?.value || '';
   const defs = _ddShukkaDefs(off, date);
 
@@ -13635,6 +13656,26 @@ function renderDdColInputs(){
     : '営業所を選ぶと、その局の集荷先が出ます';
 
   onDdColInput();
+}
+
+/* ★ 2026-10-09.27: チャーター・違約金・燃料費は、その日報に行が残っているときだけ出す。
+   ふだんは隠れていて、古い日報を開いたときだけ現れる。 */
+function _ddSyncExtraSections(){
+  [['dd-charter-wrap','dd-charter-rows'],
+   ['dd-penalty-wrap','dd-penalty-rows'],
+   ['dd-gas-wrap','dd-gas-rows']].forEach(([w,r])=>{
+    const wrap=$(w), rows=$(r);
+    if(!wrap) return;
+    wrap.style.display = (rows && rows.children.length) ? '' : 'none';
+  });
+}
+
+/* 宅配日報モーダルの「作り直し」をひとまとめにする。
+   集荷欄は営業所・日付・従事員で中身が変わるので、
+   個々のフックに頼らず、開いた時・直した時にここを通す。 */
+function _ddRefresh(){
+  try{ if(typeof renderDdColInputs==='function') renderDdColInputs(); }catch(e){}
+  try{ _ddSyncExtraSections(); }catch(e){}
 }
 
 // 入力欄を空に戻す（新規入力のとき）
@@ -13855,6 +13896,9 @@ function _resetDelForm(){
   if($('dd-charter-rows'))$('dd-charter-rows').innerHTML='';
   if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
   if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
+  // ★ 2026-10-09.27: 集荷欄と付随セクションを作り直す
+  try{ if(typeof resetDdColInputs==='function') resetDdColInputs(); }catch(e){}
+  try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
   valDel(); calcDelAmt();
   // 保存後は日付欄にフォーカス
   setTimeout(()=>{ const e=$('dd-date');if(e)e.focus(); },100);
@@ -13912,6 +13956,8 @@ function editDel(id){
   restoreCharterRows('dd-charter-rows', r.charters||[]);
   restorePenaltyRows('dd-penalty-rows', r.penalties||[]);
   restoreGasRows('dd-gas-rows', r.gasRows||[]);
+  // ★ 2026-10-09.27: 行が残っているセクションだけ出す
+  try{ _ddSyncExtraSections(); }catch(e){}
   // 単価
   if(r.unit){
     ['kanryo','tenso','yakan','ogata','shukka'].forEach(k=>{if($('dd-'+k+'-u'))$('dd-'+k+'-u').value=r.unit[k]||0;});
@@ -37317,6 +37363,10 @@ function selectDdOff(name,dispNo,offCode){
   // 従業員コンボを営業所で絞り込んで候補表示
   const staffInp=$('dd-staff-input');
   if(staffInp){filterDdStaff(staffInp);}
+  /* ★ 2026-10-09.26: ここで集荷欄を作り直していなかったため、
+     営業所を選んでも「登録なし」のままだった。
+     （担当の郵便局から選ぶ セレクト側 onDdOffSelChange にだけ入っていた） */
+  if(typeof renderDdColInputs==='function') try{ renderDdColInputs(); }catch(e){}
 }
 
 // 営業所確定→郵便局自動入力
@@ -37401,20 +37451,26 @@ function filterDdStaff(input){
 
 // ★ 2026-09-22.20: 従事員の担当郵便局（メイン＋担当）をリストに出す。
 //   宅配の扱いがある拠点だけ。選び直すと営業所コンボにも反映する。
+/* ★ 2026-10-09.27: 営業所の下にあった「担当の郵便局から選ぶ…」のセレクトを外した。
+   ①営業所 → ②従事員 の順で入れるので、選び直しの欄は要らない。
+   代わりに、従事員の担当郵便局が1つだけなら営業所を自動で入れる。
+   セレクトの要素自体は残して常に隠す（他から呼ばれても落ちないようにするため）。 */
 function _ddFillOffList(staffName){
-  const sel=$('dd-off-sel'), combo=$('dd-off-combo'); if(!sel) return;
+  const sel=$('dd-off-sel');
+  if(sel){ sel.style.display='none'; sel.innerHTML=''; }
   const st=(D.staff||[]).find(x=>x && x.name===staffName);
-  const offs = st ? _getStaffDelOffices(st).map(o=>o.office) : [];
+  if(!st) return;
+  const offs = (typeof _getStaffDelOffices==='function')
+    ? _getStaffDelOffices(st).map(o=>o.office).filter(Boolean) : [];
+  if(offs.length !== 1) return;          // 複数ある人は自分で選んでもらう
   const cur = $('dd-off')?.value || '';
-  if(cur && !offs.includes(cur)) offs.unshift(cur);
-  if(!offs.length){
-    sel.style.display='none'; sel.innerHTML='';
-    return;
-  }
-  sel.innerHTML = '<option value="">担当の郵便局から選ぶ…</option>'
-    + offs.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  sel.value = cur && offs.includes(cur) ? cur : '';
-  sel.style.display='block';
+  if(cur) return;                        // 既に入っていれば触らない
+  const only = offs[0];
+  if($('dd-off')) $('dd-off').value = only;
+  const offData=(D.offices||[]).find(o=>o && o.name===only);
+  if($('dd-off-input')) $('dd-off-input').value = (offData && typeof dispCode==='function')
+    ? `${dispCode(offData.officeCode)} ${only}` : only;
+  if(typeof _autoFillPostByOffice==='function') try{ _autoFillPostByOffice(only); }catch(e){}
 }
 function onDdOffSelChange(){
   const v=$('dd-off-sel')?.value||'';
@@ -38900,6 +38956,9 @@ function saveDelContinue(){
     if($('dd-charter-rows'))$('dd-charter-rows').innerHTML='';
     if($('dd-penalty-rows'))$('dd-penalty-rows').innerHTML='';
     if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
+    // ★ 2026-10-09.27: 営業所・日付が決まったこの時点で集荷欄を作り直す
+    try{ if(typeof resetDdColInputs==='function') resetDdColInputs(); }catch(e){}
+    try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
     valDel(); calcDelAmt();
     window._delContinueMode = false;
     // 営業所・従業員は保持済みなので、そのまま持出の入力へ進む
@@ -39275,6 +39334,11 @@ function openM(id){
       if($('dd-gas-rows')) $('dd-gas-rows').innerHTML='';
       try{ valDel(); calcDelAmt(); }catch(e){}
     }
+    /* ★ 2026-10-09.27: 編集で開いた時も、「保存して続けて入力」で戻った時も、
+       開いた直後に集荷欄と付随セクションを必ず作り直す。
+       営業所の入れ直しが終わったあとに走るよう、少し遅らせる。 */
+    try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
+    setTimeout(()=>{ try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){} }, 160);
   }
   // ★ 2026-09-22.8: 編集（editPU）から開いたときは初期化しない。
   //   従来は無条件に初期化していたため、日報一覧の「編集」で開くと顧客・営業所・従事員・日付が
