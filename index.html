@@ -875,6 +875,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="ni" data-s="staff" onclick="nav(this)"><span class="ni-ico">👥</span>従業員管理</div>
       <div class="ni" data-s="company" onclick="nav(this)"><span class="ni-ico">🏭</span>委託会社管理</div>
       <div class="ni" data-s="salary" onclick="nav(this)"><span class="ni-ico">💴</span>給与計算</div>
+      <div class="ni" data-s="month-adj" onclick="nav(this)"><span class="ni-ico">🗓</span>月末調整</div>
       <div class="ni" data-s="pay-history" onclick="nav(this)"><span class="ni-ico">📅</span>給与履歴管理</div>
       <div class="ni" data-s="contract" onclick="nav(this)"><span class="ni-ico"></span>契約書</div>
     </div>
@@ -903,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.33</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.34</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1199,7 +1200,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fla gap6 mb10">
         <button id="bl-tab-sales" class="btn b-blu btn-sm" onclick="switchBillingTab('sales')">💰 売上明細（集荷）</button>
         <button id="bl-tab-pay" class="btn b-gh btn-sm" onclick="switchBillingTab('pay')">💸 支払明細（従事員）</button>
-        <button id="bl-tab-adj" class="btn b-gh btn-sm" onclick="switchBillingTab('adj')">🗓 月末調整</button>
       </div>
 
       <!-- 売上明細 -->
@@ -1299,53 +1299,59 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
       </div>
 
-      <!-- ★ 2026-10-09.33: 月末調整（特別手当・違約金）
-           日報では分からないものを、月末に人ごとに入れる画面。
-           緑の列は日報から集めた数で、ここでは直せない。 -->
-      <div id="bl-view-adj" style="display:none;">
-        <div class="card mb12">
-          <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
-            <div class="fg" style="flex:0 0 auto;margin:0;">
-              <label style="font-size:11px;">営業所でしぼる</label>
-              <select id="adj-off" class="fi" onchange="renderMonthAdj()" style="min-width:180px;"></select>
-            </div>
-            <button class="btn b-gh btn-sm" onclick="renderMonthAdj()">🔄 更新</button>
-            <div style="flex:1;"></div>
-            <button class="btn b-grn btn-sm" onclick="saveMonthAdj()">💾 この月の調整を保存</button>
-          </div>
-          <div class="al al-i mt8" style="font-size:11px;">
-            <span>ℹ️</span>
-            <span>対象月は上の「対象月」を使います。<b>緑の列は日報から集めた数</b>で、ここでは直せません。<b>黄の列がこの画面で入れるもの</b>です。違約金を入れたら理由も書いてください。</span>
-          </div>
-          <div class="al al-w mt8" style="font-size:11px;">
-            <span>⚠️</span>
-            <span>いまは<b>記録だけ</b>です。支払明細への反映は次の差し替えで入れます。</span>
-          </div>
-        </div>
 
-        <div class="card mb12">
-          <div class="ch">
-            <div class="ct"><div class="cbar"></div>月末調整 <span id="adj-period" class="xs muted"></span></div>
-            <span id="adj-count" class="xs muted"></span>
+    </div>
+
+
+    <!-- ══ 月末調整（特別手当・違約金） 2026-10-09.34 ══
+         日報では分からないものを、月末に人ごとに入れる画面。
+         緑の列は日報から集めた数で、ここでは直せない。 -->
+    <div id="s-month-adj" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="flex:0 0 auto;margin:0;">
+            <label style="font-size:11px;">対象月</label>
+            <input type="month" id="adj-mon" class="fi" onchange="renderMonthAdj()" style="min-width:150px;">
           </div>
-          <div class="tw"><table>
-            <thead><tr>
-              <th style="width:92px;">社員番号</th>
-              <th style="width:140px;">氏名</th>
-              <th style="width:150px;">営業所</th>
-              <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);width:110px;">横乗り<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-              <th class="tr" style="color:var(--grn2);width:120px;">駐車立替<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-              <th class="tr" style="color:var(--grn2);width:110px;">走行<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
-              <th class="tr" style="border-left:2px solid var(--brd2);color:var(--amb2);width:120px;">特別手当<div style="font-size:9px;font-weight:400;color:var(--txt3);">件数</div></th>
-              <th class="tr" style="color:var(--red2);width:130px;">違約金<div style="font-size:9px;font-weight:400;color:var(--txt3);">円</div></th>
-              <th>違約金の理由</th>
-            </tr></thead>
-            <tbody id="tb-adj"></tbody>
-            <tfoot id="tf-adj"></tfoot>
-          </table></div>
+          <div class="fg" style="flex:0 0 auto;margin:0;">
+            <label style="font-size:11px;">営業所でしぼる</label>
+            <select id="adj-off" class="fi" onchange="renderMonthAdj()" style="min-width:180px;"></select>
+          </div>
+          <button class="btn b-gh btn-sm" onclick="renderMonthAdj()">🔄 更新</button>
+          <div style="flex:1;"></div>
+          <button class="btn b-grn btn-sm" onclick="saveMonthAdj()">💾 この月の調整を保存</button>
+        </div>
+        <div class="al al-i mt8" style="font-size:11px;">
+          <span>ℹ️</span>
+          <span><b>緑の列は日報から集めた数</b>で、ここでは直せません。<b>黄・赤の列がこの画面で入れるもの</b>です。違約金を入れたら理由も書いてください。</span>
+        </div>
+        <div class="al al-w mt8" style="font-size:11px;">
+          <span>⚠️</span>
+          <span>いまは<b>記録だけ</b>です。支払明細への反映は次の差し替えで入れます。</span>
         </div>
       </div>
 
+      <div class="card mb12">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>月末調整 <span id="adj-period" class="xs muted"></span></div>
+          <span id="adj-count" class="xs muted"></span>
+        </div>
+        <div class="tw"><table>
+          <thead><tr>
+            <th style="width:92px;">社員番号</th>
+            <th style="width:140px;">氏名</th>
+            <th style="width:150px;">営業所</th>
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);width:110px;">横乗り<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+            <th class="tr" style="color:var(--grn2);width:120px;">駐車立替<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+            <th class="tr" style="color:var(--grn2);width:110px;">走行<div style="font-size:9px;font-weight:400;color:var(--txt3);">日報の合計</div></th>
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--amb2);width:120px;">特別手当<div style="font-size:9px;font-weight:400;color:var(--txt3);">件数</div></th>
+            <th class="tr" style="color:var(--red2);width:130px;">違約金<div style="font-size:9px;font-weight:400;color:var(--txt3);">円</div></th>
+            <th>違約金の理由</th>
+          </tr></thead>
+          <tbody id="tb-adj"></tbody>
+          <tfoot id="tf-adj"></tfoot>
+        </table></div>
+      </div>
     </div>
 
     <!-- 入金管理 -->
@@ -5432,7 +5438,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.33';
+const APP_VER = '2026-10-09.34';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -8875,6 +8881,7 @@ const _TOP_TABS = {
     { s:'staff',       label:'従業員管理' },
     { s:'company',     label:'委託会社管理' },
     { s:'salary',      label:'給与計算' },
+    { s:'month-adj',   label:'月末調整', badge:'new' },
     { s:'worktime',    label:'勤務時間' },
     { s:'pay-history', label:'給与履歴' },
     { s:'contract',    label:'契約書' },
@@ -8987,6 +8994,7 @@ function navByS(s) {
   if (s==='staff')       _call('renderStaff');
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
+  if (s==='month-adj')   _call('renderMonthAdj');   // ★ 2026-10-09.34
   if (s==='worktime')    _call('renderWorkTime');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
@@ -21471,12 +21479,8 @@ function switchBillingTab(tab){
   _blTab = tab;
   $('bl-view-sales').style.display = tab==='sales' ? '' : 'none';
   $('bl-view-pay').style.display   = tab==='pay'   ? '' : 'none';
-  // ★ 2026-10-09.33: 月末調整
-  if($('bl-view-adj')) $('bl-view-adj').style.display = tab==='adj' ? '' : 'none';
   $('bl-tab-sales').className = 'btn btn-sm ' + (tab==='sales' ? 'b-blu' : 'b-gh');
   $('bl-tab-pay').className   = 'btn btn-sm ' + (tab==='pay'   ? 'b-blu' : 'b-gh');
-  if($('bl-tab-adj')) $('bl-tab-adj').className = 'btn btn-sm ' + (tab==='adj' ? 'b-blu' : 'b-gh');
-  if(tab==='adj'){ try{ renderMonthAdj(); }catch(e){ console.error(e); } return; }
   renderBilling();
 }
 
@@ -21656,7 +21660,13 @@ function _adjDelSums(ym, staff){
 
 function renderMonthAdj(){
   const tb=$('tb-adj'); if(!tb) return;
-  const ym=($('bl-mon')?.value||'').slice(0,7);
+  // 対象月。未設定なら当月を入れる
+  const mEl=$('adj-mon');
+  if(mEl && !mEl.value){
+    const d=new Date();
+    mEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const ym=(mEl?.value||'').slice(0,7);
   const offSel=$('adj-off');
 
   // 営業所のしぼり込み（宅配拠点だけ）
@@ -21670,7 +21680,7 @@ function renderMonthAdj(){
 
   const pe=$('adj-period'); if(pe) pe.textContent = ym ? ('（'+ym+'）') : '（対象月を選んでください）';
   if(!ym){
-    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">上の「対象月」を選んでください</td></tr>';
+    tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--txt2);">対象月を選んでください</td></tr>';
     if($('tf-adj')) $('tf-adj').innerHTML='';
     return;
   }
@@ -21766,7 +21776,7 @@ function _adjPenSync(el){
 }
 
 async function saveMonthAdj(){
-  const ym=($('bl-mon')?.value||'').slice(0,7);
+  const ym=($('adj-mon')?.value||'').slice(0,7);
   if(!ym){ showAlert({msg:'対象月を選んでください。'}); return; }
   const tb=$('tb-adj'); if(!tb) return;
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
@@ -38262,7 +38272,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月末調整','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -39440,6 +39450,7 @@ function nav(el){
   if(s==='pu-inv')       renderPUInv();
   if(s==='pu-sum')       renderSum();
   if(s==='salary')       renderSalary();
+  if(s==='month-adj')    { if(typeof renderMonthAdj==='function') renderMonthAdj(); }   // ★ 2026-10-09.34
   if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
