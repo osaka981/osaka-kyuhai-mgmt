@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.29</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.30</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3279,17 +3279,57 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
       <div class="fg"><label>翌日廻し</label><input type="number" id="dd-yoku" class="fi" min="0" value="0" oninput="valDel()"></div>
     </div>
-    <div class="card" style="padding:10px;">
-      <div class="xs muted fw7 mb8">■ 手当（件数）</div>
-      <div class="fg mb8">
-        <label>横乗手当（件数）</label>
-        <input type="number" id="dd-yokonori" class="fi" min="0" value="0" oninput="calcDelAmt()" placeholder="0">
-        <div class="xs muted" id="dd-yokonori-rate" style="margin-top:2px;"></div>
+    <!-- ★ 2026-10-09.30: 日報アプリから来た手当・立替・走行距離。
+         合っていればそのまま、違うところだけ直す。
+         特別手当は月末にしか決まらないため、ここでは扱わない（欄は残して隠す）。 -->
+    <div class="card" style="padding:10px;border-color:rgba(46,139,87,.45);">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+        <div class="xs muted fw7">■ 手当・立替</div>
+        <span style="font-size:9px;color:var(--grn2);background:rgba(46,139,87,.16);border-radius:9px;padding:2px 7px;">日報アプリから</span>
       </div>
-      <div class="fg">
-        <label>特別手当（件数）</label>
-        <input type="number" id="dd-tokubetsu" class="fi" min="0" value="0" oninput="calcDelAmt()" placeholder="0">
-        <div class="xs muted" id="dd-tokubetsu-rate" style="margin-top:2px;"></div>
+
+      <div style="display:flex;align-items:baseline;gap:7px;">
+        <span style="font-size:11px;">横乗り</span>
+        <span class="xs" style="color:var(--txt3);">誰の横乗りか</span>
+        <div style="flex:1;"></div>
+        <span class="xs" style="color:var(--txt2);"><b id="dd-yoko-cnt" class="mono" style="font-size:14px;color:var(--grn2);">0</b> 件</span>
+      </div>
+      <div id="dd-yoko-list" style="display:flex;flex-direction:column;gap:5px;margin-top:5px;"></div>
+      <button type="button" class="btn b-gh btn-sm" style="width:100%;margin-top:5px;font-size:10.5px;padding:5px 0;" onclick="ddYokoAdd('')">＋ 相手を追加</button>
+      <div class="xs" id="dd-yokonori-rate" style="color:var(--txt3);margin-top:4px;"></div>
+      <input type="number" id="dd-yokonori" min="0" value="0" style="display:none;">
+      <input type="number" id="dd-tokubetsu" min="0" value="0" style="display:none;">
+
+      <div class="fg mb8" style="margin-top:9px;">
+        <label>駐車料金 立替（円）</label>
+        <input type="number" id="dd-parking" class="fi" min="0" value="0" placeholder="0" style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">
+      </div>
+
+      <label id="dd-gas-wrap2" for="dd-refueled" style="display:none;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;">
+        <input type="checkbox" id="dd-refueled" style="width:16px;height:16px;">
+        <span style="font-size:11.5px;">給油した</span>
+        <span class="xs" style="color:var(--txt3);">燃料費はCSV取込で突き合わせ</span>
+      </label>
+
+      <div style="border-top:1px dashed var(--brd);padding-top:8px;">
+        <div class="xs muted fw7 mb6">走行距離（メーター）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="fg" style="margin:0;">
+            <label>出発時</label>
+            <input type="number" id="dd-odo1" class="fi" min="0" placeholder="0" oninput="ddOdoCalc()" style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">
+          </div>
+          <div class="fg" style="margin:0;">
+            <label>帰局時</label>
+            <input type="number" id="dd-odo2" class="fi" min="0" placeholder="0" oninput="ddOdoCalc()" style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">
+          </div>
+        </div>
+        <div style="display:flex;align-items:baseline;margin-top:7px;">
+          <span class="xs" style="color:var(--txt2);">この日の走行</span>
+          <div style="flex:1;"></div>
+          <span id="dd-odo-dist" class="mono fw7" style="font-size:16px;color:var(--blu2);">-</span>
+          <span class="xs" style="color:var(--txt2);margin-left:3px;">km</span>
+        </div>
+        <div class="xs" id="dd-odo-err" style="color:var(--red2);margin-top:4px;display:none;"></div>
       </div>
     </div>
     <div class="card" id="del-total-card" style="padding:10px;display:none;">
@@ -5330,7 +5370,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.29';
+const APP_VER = '2026-10-09.30';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7310,6 +7350,22 @@ function applyFirebaseData() {
           ogata:      d.ogata || 0,
           shukka:     (d.shukka || 0) || _colTotal,
           shukkaCompanies: (f.col && f.col.companies) || [],   // 集荷先ごとの内訳
+          /* ★ 2026-10-09.30: 日報アプリの「手当・立替」と走行距離を受ける。
+             form.teate にまとまっているが、form 直下にも同じ値が入っているので
+             どちらでも拾えるようにする（古い版のデータ対策）。 */
+          ...(()=>{
+            const t = f.teate || f;
+            const _n = v => (v==null || v==='') ? null : (parseInt(v) || 0);
+            return {
+              yokonori:     _n(t.yokonori) || 0,
+              yokonoriWith: Array.isArray(t.yokonoriWith) ? t.yokonoriWith.map(x=>String(x||'')) : [],
+              parking:      _n(t.parking) || 0,
+              refueled:     !!t.refueled,
+              odoStart:     _n(t.odoStart),
+              odoEnd:       _n(t.odoEnd),
+              distance:     _n(t.distance),
+            };
+          })(),
           note:       f.notes || '',
           postData:   null,
           status:     '未照合',
@@ -13673,6 +13729,97 @@ function renderDdColInputs(){
 
 /* ★ 2026-10-09.27: チャーター・違約金・燃料費は、その日報に行が残っているときだけ出す。
    ふだんは隠れていて、古い日報を開いたときだけ現れる。 */
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.30: 宅配日報モーダルの「手当・立替」と走行距離
+     日報アプリで入った値を受けて、紙と違うところだけ直す。
+     横乗りは相手の名前を並べる。件数はその行数で、支払はこの件数だけを使う。
+     名前は記録として残すだけで、支払にも請求にも使わない。
+   ════════════════════════════════════════════════════════════ */
+let _ddYokoNames = [];
+
+function ddYokoAdd(name){
+  _ddYokoNames.push(String(name||''));
+  renderDdYoko();
+}
+function ddYokoDel(i){ _ddYokoNames.splice(i,1); renderDdYoko(); }
+function ddYokoInput(i,v){
+  _ddYokoNames[i] = String(v||'');
+  _ddYokoSyncCount();
+}
+function _ddYokoCount(){ return _ddYokoNames.filter(n=>String(n||'').trim()).length; }
+function _ddYokoSyncCount(){
+  const n=_ddYokoCount();
+  const b=$('dd-yoko-cnt'); if(b) b.textContent=n;
+  const h=$('dd-yokonori'); if(h) h.value=n;   // 支払計算が読む件数
+  try{ if(typeof calcDelAmt==='function') calcDelAmt(); }catch(e){}
+}
+function renderDdYoko(){
+  const wrap=$('dd-yoko-list'); if(!wrap) return;
+  wrap.innerHTML=_ddYokoNames.map((n,i)=>`
+    <div style="display:flex;gap:5px;align-items:center;">
+      <input type="text" class="fi" value="${esc(n)}" placeholder="名前" autocomplete="off"
+        aria-label="横乗りの相手" oninput="ddYokoInput(${i},this.value)"
+        style="flex:1;min-width:0;font-size:11.5px;padding:5px 7px;">
+      <button type="button" onclick="ddYokoDel(${i})" aria-label="この行を消す"
+        style="width:26px;height:26px;flex-shrink:0;background:transparent;border:1px solid var(--brd2);border-radius:4px;color:var(--txt2);font-size:11px;cursor:pointer;">✕</button>
+    </div>`).join('');
+  _ddYokoSyncCount();
+}
+function resetDdYoko(){ _ddYokoNames=[]; renderDdYoko(); }
+
+// 走行距離
+function ddOdoCalc(){
+  const a=parseInt($('dd-odo1')?.value), b=parseInt($('dd-odo2')?.value);
+  const ok = !isNaN(a) && !isNaN(b);
+  const d=$('dd-odo-dist');
+  if(d) d.textContent = (ok && b>=a) ? (b-a).toLocaleString() : '-';
+  const e=$('dd-odo-err');
+  if(e){
+    if(ok && b<a){ e.textContent='⚠ 帰局時が出発時より小さくなっています'; e.style.display='block'; }
+    else e.style.display='none';
+  }
+}
+
+// 給油の欄は会社カードの人だけ
+function ddSyncGasRow(){
+  const wrap=$('dd-gas-wrap2'); if(!wrap) return;
+  const st=(D.staff||[]).find(x=>x && x.name===($('dd-staff')?.value||''));
+  const o=(st && st.offset) || {};
+  const on = !!(o.gasCardLend==='あり' || String(o.gasCardNo||'').trim());
+  wrap.style.display = on ? 'flex' : 'none';
+  if(!on){ const c=$('dd-refueled'); if(c) c.checked=false; }
+}
+
+// 日報レコードから欄へ戻す
+function loadDdTeate(r){
+  _ddYokoNames = Array.isArray(r && r.yokonoriWith) ? r.yokonoriWith.map(x=>String(x||'')) : [];
+  if(!_ddYokoNames.length && (parseInt(r && r.yokonori)||0) > 0){
+    // 名前を持たない古いデータ。件数ぶんの空欄を出す
+    _ddYokoNames = new Array(parseInt(r.yokonori)||0).fill('');
+  }
+  if($('dd-parking'))  $('dd-parking').value  = (parseInt(r && r.parking)||0);
+  if($('dd-refueled')) $('dd-refueled').checked = !!(r && r.refueled);
+  if($('dd-odo1')) $('dd-odo1').value = (r && r.odoStart!=null) ? r.odoStart : '';
+  if($('dd-odo2')) $('dd-odo2').value = (r && r.odoEnd  !=null) ? r.odoEnd   : '';
+  renderDdYoko(); ddOdoCalc(); ddSyncGasRow();
+}
+
+// 保存用
+function collectDdTeate(){
+  const names=_ddYokoNames.map(n=>String(n||'').trim()).filter(Boolean);
+  const a=parseInt($('dd-odo1')?.value), b=parseInt($('dd-odo2')?.value);
+  const A=isNaN(a)?null:a, B=isNaN(b)?null:b;
+  return {
+    yokonori: names.length,
+    yokonoriWith: names,
+    parking: Math.max(0, parseInt($('dd-parking')?.value)||0),
+    refueled: !!$('dd-refueled')?.checked,
+    odoStart: A, odoEnd: B,
+    distance: (A!=null && B!=null && B>=A) ? (B-A) : null
+  };
+}
+
 function _ddSyncExtraSections(){
   [['dd-charter-wrap','dd-charter-rows'],
    ['dd-penalty-wrap','dd-penalty-rows'],
@@ -13689,6 +13836,7 @@ function _ddSyncExtraSections(){
 function _ddRefresh(){
   try{ if(typeof renderDdColInputs==='function') renderDdColInputs(); }catch(e){}
   try{ _ddSyncExtraSections(); }catch(e){}
+  try{ ddOdoCalc(); ddSyncGasRow(); }catch(e){}
 }
 
 // 入力欄を空に戻す（新規入力のとき）
@@ -13798,6 +13946,8 @@ async function saveDel(){
     unit:{kanryo:n('dd-kanryo-u'),tenso:n('dd-tenso-u'),yakan:n('dd-yakan-u'),ogata:n('dd-ogata-u'),shukka:n('dd-shukka-u'),s:[n('dd-s1-u'),n('dd-s2-u'),n('dd-s3-u'),n('dd-s4-u')]},
     // 手当
     yokonori:n('dd-yokonori'),tokubetsu:n('dd-tokubetsu'),
+    // ★ 2026-10-09.30: 横乗りの相手・駐車料金の立替・給油・走行距離
+    ...(typeof collectDdTeate==='function' ? collectDdTeate() : {}),
     note:$('dd-note')?.value||'',
     charters:collectCharterRows('dd-charter-rows'),
     penalties:collectPenaltyRows('dd-penalty-rows'),
@@ -13911,6 +14061,10 @@ function _resetDelForm(){
   if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
   // ★ 2026-10-09.27: 集荷欄と付随セクションを作り直す
   try{ if(typeof resetDdColInputs==='function') resetDdColInputs(); }catch(e){}
+  // ★ 2026-10-09.30: 手当・立替・走行距離も空に戻す
+  try{ if(typeof resetDdYoko==='function') resetDdYoko(); }catch(e){}
+  ['dd-parking','dd-odo1','dd-odo2'].forEach(id=>{const e=$(id);if(e)e.value='';});
+  if($('dd-refueled')) $('dd-refueled').checked=false;
   try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
   valDel(); calcDelAmt();
   // 保存後は日付欄にフォーカス
@@ -13965,6 +14119,8 @@ function editDel(id){
   if(typeof loadDdColFromRecord==='function'){ try{ loadDdColFromRecord(r); }catch(e){} }
   ['s1','s2','s3','s4'].forEach((k,i)=>{if($('dd-'+k))$('dd-'+k).value=(r.sonota||[])[i]||0;});
   ['yokonori','tokubetsu'].forEach(k=>{if($('dd-'+k))$('dd-'+k).value=r[k]||0;});
+  // ★ 2026-10-09.30: 手当・立替・走行距離を戻す
+  try{ if(typeof loadDdTeate==='function') loadDdTeate(r); }catch(e){}
   if($('dd-note')) $('dd-note').value=r.note||'';
   restoreCharterRows('dd-charter-rows', r.charters||[]);
   restorePenaltyRows('dd-penalty-rows', r.penalties||[]);
@@ -37504,6 +37660,7 @@ function selectDdStaff(name,empNo){
   _ddFillOffList(name);   // ★ 2026-09-22.20
   // ★ 2026-10-09.23: 人によって集荷欄の出し分けが変わるので作り直す
   try{ if(typeof renderDdColInputs === 'function') renderDdColInputs(); }catch(e){}
+  try{ if(typeof ddSyncGasRow === 'function') ddSyncGasRow(); }catch(e){}
   calcDelAmt();
   // 郵便局を従業員の直近日報から自動入力
   _autoFillPostOffice(name);
@@ -38971,6 +39128,9 @@ function saveDelContinue(){
     if($('dd-gas-rows'))$('dd-gas-rows').innerHTML='';
     // ★ 2026-10-09.27: 営業所・日付が決まったこの時点で集荷欄を作り直す
     try{ if(typeof resetDdColInputs==='function') resetDdColInputs(); }catch(e){}
+    try{ if(typeof resetDdYoko==='function') resetDdYoko(); }catch(e){}
+    ['dd-parking','dd-odo1','dd-odo2'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+    if($('dd-refueled')) $('dd-refueled').checked=false;
     try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
     valDel(); calcDelAmt();
     window._delContinueMode = false;
@@ -39342,6 +39502,10 @@ function openM(id){
       if($('dd-note')) $('dd-note').value='';
       // ★ 2026-10-09.19: 集荷先ごとの欄も空に戻す
       if(typeof resetDdColInputs==='function'){ try{ resetDdColInputs(); }catch(e){} }
+      // ★ 2026-10-09.30: 手当・立替・走行距離
+      if(typeof resetDdYoko==='function'){ try{ resetDdYoko(); }catch(e){} }
+      ['dd-parking','dd-odo1','dd-odo2'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+      if($('dd-refueled')) $('dd-refueled').checked=false;
       if($('dd-charter-rows')) $('dd-charter-rows').innerHTML='';
       if($('dd-penalty-rows')) $('dd-penalty-rows').innerHTML='';
       if($('dd-gas-rows')) $('dd-gas-rows').innerHTML='';
