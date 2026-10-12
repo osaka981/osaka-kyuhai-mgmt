@@ -903,7 +903,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.31</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.32</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3331,6 +3331,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <span class="xs" style="color:var(--txt2);margin-left:3px;">km</span>
         </div>
         <div class="xs" id="dd-odo-err" style="color:var(--red2);margin-top:4px;display:none;"></div>
+
+        <!-- ★ 2026-10-09.32: オイル交換。日報アプリが持っている値を出し、ここでも直せる -->
+        <div style="border-top:1px dashed var(--brd);margin-top:8px;padding-top:7px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span class="xs" style="color:var(--txt2);">次回オイル交換</span>
+            <div style="flex:1;"></div>
+            <span id="dd-oil-next" class="mono" style="font-size:12.5px;color:var(--txt);">-</span>
+            <span class="xs" style="color:var(--txt2);">km</span>
+            <span id="dd-oil-left" class="xs" style="color:var(--txt2);"></span>
+            <button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:3px 9px;" onclick="ddOilEdit()">変更</button>
+          </div>
+          <div class="xs" id="dd-oil-sub" style="color:var(--txt3);margin-top:3px;"></div>
+        </div>
       </div>
     </div>
     <div class="card" id="del-total-card" style="padding:10px;display:none;">
@@ -5371,7 +5384,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.31';
+const APP_VER = '2026-10-09.32';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6848,7 +6861,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -6862,6 +6875,38 @@ async function syncFromFirebase() {
   renderAll();
   showFbStatus(true);
   console.log('Firebase同期完了');
+}
+
+/* ★ 2026-10-09.32: オイル交換の状態（日報アプリが書く nikki/oil_state）。
+   ドライバーごとに { nextKm, lastKm, changedAt }。
+   経営管理は読むだけでなく、内勤が直せるようにもする。 */
+function _oilAll(){
+  if(!D.oilState || typeof D.oilState!=='object'){
+    D.oilState = lsGet('nikki_oil_state', {}) || {};
+    if(typeof D.oilState !== 'object' || Array.isArray(D.oilState)) D.oilState = {};
+  }
+  return D.oilState;
+}
+function _oilKeyOfStaff(st){
+  if(!st) return '';
+  // 日報アプリのドライバーIDは 社員番号（無ければ内部ID）
+  return String(st.empNo || st.id || '');
+}
+function _oilOfStaffName(name){
+  const st=(D.staff||[]).find(x=>x && x.name===name);
+  if(!st) return null;
+  const o=_oilAll()[_oilKeyOfStaff(st)];
+  return (o && typeof o==='object') ? o : null;
+}
+async function _oilSaveFor(name, obj){
+  const st=(D.staff||[]).find(x=>x && x.name===name);
+  if(!st) return false;
+  const all=_oilAll();
+  all[_oilKeyOfStaff(st)] = obj;
+  D.oilState = all;
+  lsSet('nikki_oil_state', all);
+  try{ if(typeof fbSet==='function') await fbSet('oil_state', all); }catch(e){ console.warn('[oil] 保存エラー', e); }
+  return true;
 }
 
 // Firebaseデータ → D に反映(データ変換含む)
@@ -6992,6 +7037,11 @@ function _colLogsRemovePickup(colLogs, rec){
 }
 
 function applyFirebaseData() {
+  // ★ 2026-10-09.32: オイル交換の状態を取り込む（日報アプリが書く）
+  try{
+    const _oil = lsGet('nikki_oil_state', null);
+    if(_oil && typeof _oil === 'object' && !Array.isArray(_oil)) D.oilState = _oil;
+  }catch(e){}
   // ① 全フィールド版を優先(staff_full)
   const fbStaffFull = lsGet('nikki_staff_full', null);
   if(fbStaffFull && fbStaffFull.length){
@@ -13800,6 +13850,7 @@ function resetDdYoko(){ _ddYokoNames=[]; renderDdYoko(); }
 
 // 走行距離
 function ddOdoCalc(){
+  try{ ddOilSync(); }catch(e){}
   const a=parseInt($('dd-odo1')?.value), b=parseInt($('dd-odo2')?.value);
   const ok = !isNaN(a) && !isNaN(b);
   const d=$('dd-odo-dist');
@@ -13809,6 +13860,61 @@ function ddOdoCalc(){
     if(ok && b<a){ e.textContent='⚠ 帰局時が出発時より小さくなっています'; e.style.display='block'; }
     else e.style.display='none';
   }
+}
+
+
+/* ★ 2026-10-09.32: オイル交換の行（宅配日報モーダル）
+   日報アプリの値をそのまま出す。内勤もここから直せる。 */
+function ddOilSync(){
+  const ne=$('dd-oil-next'), le=$('dd-oil-left'), sb=$('dd-oil-sub');
+  if(!ne) return;
+  const name=$('dd-staff')?.value||'';
+  const o=(typeof _oilOfStaffName==='function') ? _oilOfStaffName(name) : null;
+  const next=(o && o.nextKm!=null) ? parseInt(o.nextKm) : null;
+  const b=parseInt($('dd-odo2')?.value);
+  if(next==null){
+    ne.textContent='未設定';
+    if(le) le.textContent='';
+    if(sb) sb.textContent = name ? 'まだ登録がありません。「変更」から決められます。' : '';
+    return;
+  }
+  ne.textContent=fmt(next);
+  if(le){
+    if(isNaN(b)) le.textContent='';
+    else{
+      const left=next-b;
+      le.innerHTML = (left<=0)
+        ? '<span style="color:var(--red2);font-weight:700;">超過 '+fmt(Math.abs(left))+' km</span>'
+        : 'あと <b class="mono" style="font-size:13px;color:'+(left<=300?'var(--amb2)':'var(--txt2)')+';">'+fmt(left)+'</b> km';
+    }
+  }
+  if(sb){
+    const parts=[];
+    if(o.lastKm!=null)    parts.push('前回 '+fmt(parseInt(o.lastKm))+' km');
+    if(o.changedAt)       parts.push('交換日 '+esc(String(o.changedAt)));
+    sb.textContent = parts.join('　');
+  }
+}
+
+async function ddOilEdit(){
+  const name=$('dd-staff')?.value||'';
+  if(!name){ showAlert({msg:'先に従事員を選んでください。'}); return; }
+  const o=(typeof _oilOfStaffName==='function') ? _oilOfStaffName(name) : null;
+  const b=parseInt($('dd-odo2')?.value);
+  const base=!isNaN(b) ? b : ((o && o.lastKm!=null) ? parseInt(o.lastKm) : 0);
+  const cur=(o && o.nextKm!=null) ? parseInt(o.nextKm) : (base+4000);
+  const v=prompt(name+' の次回オイル交換距離（km）\n\n空のままOKを押すと、帰局メーターから4,000km先にします。', String(cur));
+  if(v===null) return;   // キャンセル
+  const n=parseInt(String(v).replace(/[^0-9-]/g,''));
+  const next=isNaN(n) ? (base+4000) : n;
+  const rec={
+    nextKm: next,
+    lastKm: (o && o.lastKm!=null) ? parseInt(o.lastKm) : null,
+    changedAt: (o && o.changedAt) || null
+  };
+  await _oilSaveFor(name, rec);
+  ddOilSync();
+  if(typeof _showSaveToast==='function') _showSaveToast(name+' の次回オイル交換を '+fmt(next)+' km にしました');
 }
 
 // 給油の欄は会社カードの人だけ
@@ -13832,7 +13938,7 @@ function loadDdTeate(r){
   if($('dd-refueled')) $('dd-refueled').checked = !!(r && r.refueled);
   if($('dd-odo1')) $('dd-odo1').value = (r && r.odoStart!=null) ? r.odoStart : '';
   if($('dd-odo2')) $('dd-odo2').value = (r && r.odoEnd  !=null) ? r.odoEnd   : '';
-  renderDdYoko(); ddOdoCalc(); ddSyncGasRow();
+  renderDdYoko(); ddOdoCalc(); ddSyncGasRow(); ddOilSync();
 }
 
 // 保存用
@@ -13866,7 +13972,7 @@ function _ddSyncExtraSections(){
 function _ddRefresh(){
   try{ if(typeof renderDdColInputs==='function') renderDdColInputs(); }catch(e){}
   try{ _ddSyncExtraSections(); }catch(e){}
-  try{ ddOdoCalc(); ddSyncGasRow(); }catch(e){}
+  try{ ddOdoCalc(); ddSyncGasRow(); ddOilSync(); }catch(e){}
 }
 
 // 入力欄を空に戻す（新規入力のとき）
@@ -30689,6 +30795,37 @@ function renderStaffDaily(el, name){
     const _t = {mochi:0,kanryo:0,yakan:0,ogata:0,tenso:0,modori:0,yoku:0,shukka:0,shuTeiji:0,shuShitei:0,yoko:0,park:0,dist:0};
     let _days = 0;
     html+=_delSumHeader(delRows,{title:esc(name)+' '+mon+' 合計',hidePeople:true,showShukka:true});
+    /* ★ 2026-10-09.32: この人のオイル交換の状態。
+       日報アプリが持っている値で、走った距離との差を出す。 */
+    html+=(()=>{
+      const o=(typeof _oilOfStaffName==='function') ? _oilOfStaffName(name) : null;
+      // その月でいちばん新しい帰局メーター
+      let last=null;
+      delRows.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).some(r=>{
+        if(r && r.odoEnd!=null){ last=parseInt(r.odoEnd); return true; }
+        return false;
+      });
+      const next=(o && o.nextKm!=null) ? parseInt(o.nextKm) : null;
+      const bits=[];
+      if(next==null){
+        bits.push('<span style="color:var(--txt3);">次回オイル交換：未設定</span>');
+      }else{
+        bits.push('次回オイル交換 <b class="mono" style="font-size:14px;">'+fmt(next)+'</b> km');
+        if(last!=null && !isNaN(last)){
+          const left=next-last;
+          bits.push(left<=0
+            ? '<span style="color:var(--red2);font-weight:700;">超過 '+fmt(Math.abs(left))+' km</span>'
+            : '<span style="color:'+(left<=300?'var(--amb2)':'var(--txt2)')+';">あと <b class="mono" style="font-size:14px;">'+fmt(left)+'</b> km</span>');
+          bits.push('<span style="color:var(--txt3);">直近のメーター '+fmt(last)+' km</span>');
+        }
+        if(o.lastKm!=null)  bits.push('<span style="color:var(--txt3);">前回 '+fmt(parseInt(o.lastKm))+' km</span>');
+        if(o.changedAt)     bits.push('<span style="color:var(--txt3);">交換日 '+esc(String(o.changedAt))+'</span>');
+      }
+      return '<div class="card" style="padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;">'
+        + '<span class="xs muted fw7" style="letter-spacing:.4px;">⛽ オイル</span>'
+        + bits.join('<span style="color:var(--brd2);">／</span>')
+        + '</div>';
+    })();
     html+=`<!--SD:del:宅配日報（入力 ${delRows.length}日 / ${_last}日中）:${delRows.length}-->`;
     html+=`<div class="tw"><table><thead><tr>
       <th>日付</th><th>曜</th><th>営業所</th><th class="tr">持出</th><th class="tr">完了</th><th class="tr">夜間</th><th class="tr">大型</th><th class="tr">転送</th><th class="tr">持戻</th><th class="tr">翌日</th><th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th><th class="tr" style="color:var(--amb2);">指定事業所</th><th>集荷先</th><th style="border-left:2px solid var(--brd2);">手当・立替</th><th>備考</th><th></th>
@@ -37729,6 +37866,7 @@ function selectDdStaff(name,empNo){
   // ★ 2026-10-09.23: 人によって集荷欄の出し分けが変わるので作り直す
   try{ if(typeof renderDdColInputs === 'function') renderDdColInputs(); }catch(e){}
   try{ if(typeof ddSyncGasRow === 'function') ddSyncGasRow(); }catch(e){}
+  try{ if(typeof ddOilSync === 'function') ddOilSync(); }catch(e){}
   calcDelAmt();
   // 郵便局を従業員の直近日報から自動入力
   _autoFillPostOffice(name);
