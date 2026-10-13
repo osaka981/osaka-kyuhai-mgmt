@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.38</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.39</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5468,7 +5468,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.38';
+const APP_VER = '2026-10-09.39';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -21658,7 +21658,7 @@ function showSalesDetail(custName){
 
 
 /* ════════════════════════════════════════════════════════════
-   ★ 2026-10-09.38: 月締め（委託料以外の相殺・立替）
+   ★ 2026-10-09.39: 月締め（委託料以外の相殺・立替）
      委託料（完了・夜間・定時／指定事業所集荷・集荷単価・時給）はここには出さない。
      本人へ支払うもの（＋）と、本人から引くもの（−）だけを並べ、差引を見せる。
 
@@ -21710,20 +21710,109 @@ function _mcFind(ym, off){
 /* その人のメイン郵便局（従業員台帳の営業所） */
 function _adjMainOff(st){ return String(st && st.office || ''); }
 
-/* 設定に飛ぶ ── ここで直してそのまま月締めに戻れるように */
-function _adjGoStaff(name){
+/* ════════ 設定へ飛ぶ ════════
+   ★ 2026-10-09.39: 0 を含めたどの金額を押しても、台帳のその項目まで開く。
+     従業員台帳のタブ（offset＝控除・手当／advance＝前払い）まで切り替えて、
+     その欄までスクロールし、少しの間だけ枠を光らせる。
+     台帳を閉じたら月締めを引き直すが、打ちかけの数字は戻す。 */
+function _adjGoStaff(name, tab, fieldId){
   const st=(D.staff||[]).find(x=>x&&x.name===name);
   if(!st){ showAlert({msg:'従事員が見つかりません'}); return; }
+  const snap=_adjSnapshot();
   if(typeof editStaff==='function') editStaff(st.id);
-  else if(typeof openFS==='function') openFS('staff', name);
+  else if(typeof openFS==='function'){ openFS('staff', name); return; }
+  // タブを切り替えて、その欄まで送る
+  setTimeout(()=>{
+    try{ if(tab && typeof switchStTab==='function') switchStTab(tab); }catch(e){}
+    setTimeout(()=>_adjSpot(fieldId), 200);
+  }, 280);
+  _adjWatchClose(snap);
+}
+function _adjGoDaily(name){
+  const snap=_adjSnapshot();
+  if(typeof openFS==='function') openFS('staff', name);   // 日報一覧が最初に出る
+  _adjWatchClose(snap, 'fs-overlay');
 }
 function _adjGoGas(){
   if(typeof navByS==='function') navByS('gas-mgmt');
 }
+/* その欄までスクロールして、少しの間だけ枠を光らせる */
+function _adjSpot(fieldId){
+  const el=fieldId && document.getElementById(fieldId);
+  if(!el) return;
+  try{ el.scrollIntoView({block:'center', behavior:'smooth'}); }
+  catch(e){ try{ el.scrollIntoView(); }catch(_){} }
+  const bs=el.style.boxShadow, bc=el.style.borderColor;
+  el.style.boxShadow='0 0 0 3px var(--amb2)';
+  el.style.borderColor='var(--amb2)';
+  if(el.tagName==='INPUT'||el.tagName==='SELECT'){ try{ el.focus({preventScroll:true}); }catch(e){} }
+  setTimeout(()=>{ el.style.boxShadow=bs; el.style.borderColor=bc; }, 2400);
+}
+/* 打ちかけの特別手当・違約金を覚えておく（台帳から戻ったときに消さないため） */
+function _adjSnapshot(){
+  const out={};
+  document.querySelectorAll('#tb-adj tr[data-staff]').forEach(tr=>{
+    out[tr.getAttribute('data-staff')]={
+      toku:tr.querySelector('.adj-toku')?.value,
+      pen: tr.querySelector('.adj-pen')?.value
+    };
+  });
+  document.querySelectorAll('#tb-adj-pen tr[data-staff]').forEach(tr=>{
+    const k=tr.getAttribute('data-staff');
+    out[k]=Object.assign(out[k]||{}, {
+      reason:tr.querySelector('.adjp-reason')?.value,
+      bill:  tr.querySelector('.adjp-billym')?.value,
+      ded:   tr.querySelector('.adjp-dedym')?.value
+    });
+  });
+  return out;
+}
+function _adjRestore(snap){
+  if(!snap) return;
+  document.querySelectorAll('#tb-adj tr[data-staff]').forEach(tr=>{
+    const v=snap[tr.getAttribute('data-staff')]; if(!v) return;
+    const t=tr.querySelector('.adj-toku'), pn=tr.querySelector('.adj-pen');
+    if(t && v.toku!=null) t.value=v.toku;
+    if(pn && v.pen!=null) pn.value=v.pen;
+  });
+  _adjPenRows(true);
+  document.querySelectorAll('#tb-adj-pen tr[data-staff]').forEach(tr=>{
+    const v=snap[tr.getAttribute('data-staff')]; if(!v) return;
+    const r=tr.querySelector('.adjp-reason'), b=tr.querySelector('.adjp-billym'), d=tr.querySelector('.adjp-dedym');
+    if(r && v.reason) r.value=v.reason;
+    if(b && v.bill)   b.value=v.bill;
+    if(d && v.ded)    d.value=v.ded;
+  });
+  document.querySelectorAll('#tb-adj tr[data-staff] .adj-toku').forEach(el=>_adjRecalc(el));
+}
+/* 台帳が閉じたら月締めを引き直す（直した単価をすぐ反映させる）
+   ★ 従業員台帳は class="on" で開き、フルスクリーンは display で開くので両方見る。
+     開くまでは待ち、開いたあと閉じた1回だけ引き直す。 */
+function _adjWatchClose(snap, id){
+  const el=$(id||'m-staff'); if(!el) return;
+  const isOpen=()=> el.classList.contains('on')
+                 || (el.style.display && el.style.display!=='none');
+  let opened=false;
+  const t=setInterval(()=>{
+    if(isOpen()){ opened=true; return; }
+    if(!opened) return;              // まだ開いていないだけ
+    clearInterval(t);
+    const sec=$('s-month-adj');
+    if(sec && getComputedStyle(sec).display!=='none'){
+      try{ renderMonthAdj(); _adjRestore(snap); }catch(e){}
+    }
+  }, 350);
+  setTimeout(()=>clearInterval(t), 600000);
+}
 /* 設定へ飛ぶ小さな文字 */
 function _adjFix(txt, onclick){
-  return `<span onclick="event.stopPropagation();${onclick}" title="クリックで設定を開く"
+  return `<span onclick="event.stopPropagation();${onclick}" title="クリックで台帳のその欄を開く"
     style="font-size:9.5px;color:var(--blu2);cursor:pointer;text-decoration:underline dotted;line-height:1.3;">${esc(txt)}</span>`;
+}
+/* 金額そのものを押せるようにする（0 でも押せる） */
+function _adjAmt(html, onclick, tip){
+  return `<span onclick="event.stopPropagation();${onclick}" title="${esc(tip||'クリックで台帳のその欄を開く')}"
+    style="cursor:pointer;border-bottom:1px dotted var(--brd2);padding-bottom:1px;">${html}</span>`;
 }
 
 /* ── 1人分の「委託料以外」をまとめる ──
@@ -21965,7 +22054,17 @@ function renderMonthAdj(){
     const sub = t => t ? `<div style="font-size:9.5px;color:var(--txt3);line-height:1.3;">${esc(t)}</div>` : '';
     const dim = e.isMain ? '' : 'opacity:.35;';
     const netCol = e.net>0 ? 'var(--grn2)' : (e.net<0 ? 'var(--red2)' : 'var(--txt3)');
-    const go = `_adjGoStaff('${esc(name).replace(/'/g,"\\'")}')`;
+    /* 台帳のどの欄に飛ぶか（offset＝控除・手当タブ／advance＝前払いタブ） */
+    const q = esc(name).replace(/'/g,"\\'");
+    const goY  = `_adjGoStaff('${q}','offset','st-yokonori-unit')`;   // 横乗手当の単価
+    const goT  = `_adjGoStaff('${q}','offset','st-tokubetsu-unit')`;  // 特別手当の単価
+    const goG  = `_adjGoStaff('${q}','offset','st-gas-card-lend')`;   // 燃料カード
+    const goP  = `_adjGoStaff('${q}','offset','st-penalty-list')`;    // 台帳の違約金
+    const goR  = `_adjGoStaff('${q}','offset','st-repair-list')`;     // 修理・免責
+    const goA  = `_adjGoStaff('${q}','advance','ptab-content-advance')`; // 前払い
+    const goYo = `_adjGoStaff('${q}','offset','st-yosha-type')`;      // 庸車
+    const goD  = `_adjGoDaily('${q}')`;                               // 日報一覧
+    const go   = goY;
     // メイン／サブの印。サブの人は台帳ぶんがメインの画面に出ることを書いておく
     const kind = e.isMain
       ? `<span style="font-size:9px;color:var(--txt3);">${esc(st.office||'')}</span>`
@@ -21975,34 +22074,34 @@ function renderMonthAdj(){
       <td class="mono" style="color:var(--amb2);font-weight:700;">${emp?esc(emp):'<span style="color:var(--red2)">未設定</span>'}</td>
       <td class="fw7">${staffLink(name)}<div>${kind}</div></td>
 
-      <td class="tr mono" style="border-left:2px solid var(--grn2);">${yen(e.yoko)}
-        ${e.yokoCnt ? (unitY ? sub(e.yokoCnt+'回×¥'+fmt(unitY)) : (e.yokoCnt+'回 '+_adjFix('単価未設定',go))) : ''}</td>
+      <td class="tr mono" style="border-left:2px solid var(--grn2);">${_adjAmt(yen(e.yoko), goY, '台帳の横乗手当（円/回）を開く')}
+        ${e.yokoCnt ? (unitY ? sub(e.yokoCnt+'回×¥'+fmt(unitY)) : (e.yokoCnt+'回 '+_adjFix('単価未設定',goY))) : ''}</td>
       <td class="tr" style="padding:4px 6px;">
         <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
           <input type="number" min="0" class="fi adj-toku" value="${toku||0}" oninput="_adjRecalc(this)"
             aria-label="${esc(name)} の特別手当の件数"
             style="width:58px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;border-color:#7a6433;padding:5px 6px;">
-          <span class="mono adj-toku-amt" style="min-width:62px;text-align:right;">${yen(e.toku)}</span>
+          <span class="mono adj-toku-amt" style="min-width:62px;text-align:right;">${_adjAmt(yen(e.toku), goT, '台帳の特別手当（円/回）を開く')}</span>
         </div>
-        ${unitT ? sub('単価 ¥'+fmt(unitT)) : _adjFix('単価未設定', go)}
+        ${unitT ? sub('単価 ¥'+fmt(unitT)) : _adjFix('単価未設定', goT)}
       </td>
-      <td class="tr mono">${yen(e.park)}${sub(e.park?'この局へ請求':'')}</td>
+      <td class="tr mono">${_adjAmt(yen(e.park), goD, 'この人の日報一覧を開く（駐車料金は日報から）')}${sub(e.park?'この局へ請求':'')}</td>
       <td class="tr mono adj-plus" style="color:var(--grn2);font-weight:700;">${yen(e.plus)}</td>
 
-      <td class="tr mono" style="border-left:2px solid var(--red2);${dim}">${yen(e.gas)}
+      <td class="tr mono" style="border-left:2px solid var(--red2);${dim}">${_adjAmt(yen(e.gas), goG, '台帳の燃料費（カード貸出・費用負担）を開く')}
         ${!e.isMain ? '' : (e.gasFix==='gas' ? _adjFix(e.gasNote,'_adjGoGas()')
-                        : e.gasFix==='staff' ? _adjFix(e.gasNote, go) : sub(e.gasNote))}</td>
+                        : e.gasFix==='staff' ? _adjFix(e.gasNote, goG) : sub(e.gasNote))}</td>
       <td class="tr" style="padding:4px 6px;">
         <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
           <input type="number" min="0" step="100" class="fi adj-pen" value="${pen||0}" oninput="_adjRecalc(this)"
             aria-label="${esc(name)} の違約金"
             style="width:88px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;border-color:${pen>0?'var(--red2)':'#7a6433'};padding:5px 6px;">
         </div>
-        ${sub(e.pen ? ('この月に引く ¥'+fmt(e.pen)+(e.penNote?('／'+e.penNote):'')) : '')}
+        ${e.pen ? _adjFix('この月に引く ¥'+fmt(e.pen)+(e.penNote?('／'+e.penNote):''), goP) : _adjFix('台帳の違約金を見る', goP)}
       </td>
-      <td class="tr mono" style="${dim}">${yen(e.repair)}${e.isMain?sub(e.repairNote):''}</td>
-      <td class="tr mono" style="${dim}">${yen(e.adv)}${e.isMain?sub(e.advNote):''}</td>
-      <td class="tr mono" style="${dim}">${yen(e.yosha)}${e.isMain?sub(e.yoshaNote):''}</td>
+      <td class="tr mono" style="${dim}">${_adjAmt(yen(e.repair), goR, '台帳の修理・損害代（免責）を開く')}${e.isMain?sub(e.repairNote):''}</td>
+      <td class="tr mono" style="${dim}">${_adjAmt(yen(e.adv), goA, '台帳の前払いタブを開く')}${e.isMain?sub(e.advNote):''}</td>
+      <td class="tr mono" style="${dim}">${_adjAmt(yen(e.yosha), goYo, '台帳の庸車を開く')}${e.isMain?sub(e.yoshaNote):''}</td>
       <td class="tr mono adj-minus" style="color:var(--red2);font-weight:700;">${yen(e.minus)}</td>
 
       <td class="tr mono adj-net" style="border-left:2px solid var(--brd2);font-weight:700;font-size:14px;color:${netCol};">${e.net<0?'-¥'+fmt(-e.net):yen(e.net)}</td>
@@ -22134,7 +22233,12 @@ function _adjRecalc(el){
 
   const yen = v => v ? ('¥'+fmt(v)) : '0';
   const q=s=>tr.querySelector(s);
-  if(q('.adj-toku-amt')) q('.adj-toku-amt').textContent = yen(e.toku);
+  /* ★ 2026-10-09.39: 金額は押せる形（_adjAmt）なので、textContent で上書きすると
+     リンクが消えてしまう。innerHTML で作り直す。 */
+  if(q('.adj-toku-amt')){
+    const goT=`_adjGoStaff('${esc(name).replace(/'/g,"\\'")}','offset','st-tokubetsu-unit')`;
+    q('.adj-toku-amt').innerHTML = _adjAmt(yen(e.toku), goT, '台帳の特別手当（円/回）を開く');
+  }
   if(q('.adj-plus'))  q('.adj-plus').textContent  = yen(e.plus);
   if(q('.adj-minus')) q('.adj-minus').textContent = yen(e.minus);
   const nc=q('.adj-net');
