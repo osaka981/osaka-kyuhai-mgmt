@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.41</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.42</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1286,10 +1286,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
                 <th class="tr">完了</th>
                 <th class="tr">転送</th>
                 <th class="tr">夜間</th>
+                <th class="tr">大型</th>
                 <th class="tr">集荷</th>
-                <th class="tr">その他</th>
-                <th class="tr">横乗手当</th>
-                <th class="tr">特別手当</th>
+                <th class="tr">横乗り</th>
+                <th class="tr">駐車立替</th>
                 <th class="tr" style="color:#86efac">小計</th>
               </tr></thead>
               <tbody id="tb-bl-pay-detail"></tbody>
@@ -5481,7 +5481,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.41';
+const APP_VER = '2026-10-09.42';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -22452,6 +22452,39 @@ async function closeMonthAdj(){
   if(typeof _showSaveToast==='function') _showSaveToast(label+' を締めました');
 }
 
+/* ════════ 支払明細に流す「月締めで入れた分」 ════════
+   ★ 2026-10-09.42: 月締め画面は郵便局ごとに見るが、支払いは人ごとなので
+     その人の全郵便局ぶんを足して返す。二重に引かないよう、
+     ・特別手当 … 発生月（ym）がその月のもの
+     ・違約金   … 回収月（penaltyDeductYm）がその月のもの
+     だけを拾う。台帳の分割違約金（offset.penalties）は別で計算しているので触らない。 */
+function _adjPayroll(st, monStr){
+  const ym=String(monStr||'').replace(/\//g,'-').slice(0,7);
+  const out={tokubetsuCnt:0, park:0, penalty:0, penaltyRows:[], parkDays:0};
+  if(!st || !ym) return out;
+  const name=st.name;
+
+  _adjAll().forEach(a=>{
+    if(!a || a.staff!==name) return;
+    const tok=parseInt(a.tokubetsu)||0;
+    if(tok>0 && String(a.ym||'').slice(0,7)===ym) out.tokubetsuCnt += tok;
+    const pen=parseInt(a.penalty)||0;
+    if(pen>0 && String(a.penaltyDeductYm || a.ym || '').slice(0,7)===ym){
+      out.penalty += pen;
+      out.penaltyRows.push({ amt:pen, reason:a.penaltyReason||'', from:String(a.ym||'').slice(0,7), office:a.office||'' });
+    }
+  });
+
+  // 駐車料金の立替（日報の実費。郵便局へは同額を請求するので会社は通過するだけ）
+  (D.delivery||[]).forEach(r=>{
+    if(!r || r.staff!==name) return;
+    if(!String(r.date||'').replace(/\//g,'-').startsWith(ym)) return;
+    const pk=parseInt(r.parking)||0;
+    if(pk>0){ out.park+=pk; out.parkDays++; }
+  });
+  return out;
+}
+
 /* ════════ 従業員台帳に出す「月締めで入れた分」の履歴（読むだけ） ════════
    ★ 2026-10-09.41: 月締めで入れた違約金・特別手当は monthly_adj に入っていて、
      台帳の違約金欄（offset.penalties）とは別物。
@@ -22641,19 +22674,38 @@ function showPayDetail(staffName){
   const tbody = $('tb-bl-pay-detail');
   if(!tbody) return;
 
+  /* ★ 2026-10-09.42: ここは長いあいだ「完了＋転送 × 基本単価 ＋ 横乗り×3,000 ＋ 特別手当×3,000」
+     という固定計算だった。夜間・大型・集荷の単価が入らず、横乗り・特別手当も台帳の単価を
+     見ていなかったため、支払明細書（_calcStaffPayment）と額が合わなかった。
+     台帳の単価（_getEffectiveDelPrices・offset）で計算し直す。 */
+  const _off = st?.offset || {};
+  const dp   = (typeof _getEffectiveDelPrices==='function' && st) ? _getEffectiveDelPrices(st) : {};
+  const _ut  = (price, qty, key) => {
+    if(!price || !qty) return 0;
+    const tf = (dp._tax && dp._tax[key]) || 'ex';
+    return (typeof calcUnitTotal==='function') ? calcUnitTotal(price, qty, tf) : Math.floor(price*qty);
+  };
+  const yUnit = Number(_off.yokonoriUnit)||0;
+
   tbody.innerHTML = rows.map(r => {
     const kanryo   = r.kanryo    || 0;
     const tenso    = r.tenso     || 0;
     const yakan    = r.yakan     || 0;
+    const ogata    = r.ogata     || 0;
     const shukka   = r.shukka    || 0;
-    const sonota   = (r.sonota||[]).reduce((a,v)=>a+v,0);
     const yokonori = r.yokonori  || 0;
-    const tokubetsu= r.tokubetsu || 0;
+    const parking  = parseInt(r.parking)||0;
     let subtotal = 0;
     if(isMonthly){
       subtotal = 0; // 月給は日次では0表示
     } else {
-      subtotal = (kanryo + tenso) * tanka + yokonori * 3000 + tokubetsu * 3000;
+      subtotal = _ut(dp.kanryo, kanryo, 'kanryo')
+               + _ut(dp.tenso,  tenso,  'tenso')
+               + _ut(dp.night,  yakan,  'night')
+               + _ut(dp.ogata,  ogata,  'ogata')
+               + _ut(dp.shukka, shukka, 'shukka')
+               + yokonori * yUnit
+               + parking;
     }
     grandTotal += subtotal;
     return `<tr>
@@ -22661,19 +22713,43 @@ function showPayDetail(staffName){
       <td class="tr mono">${fmt(kanryo)}</td>
       <td class="tr mono">${fmt(tenso)}</td>
       <td class="tr mono" style="color:var(--blu2)">${fmt(yakan)}</td>
+      <td class="tr mono" style="color:var(--pur2)">${fmt(ogata)}</td>
       <td class="tr mono" style="color:var(--tel2)">${fmt(shukka)}</td>
-      <td class="tr mono xs">${fmt(sonota)}</td>
       <td class="tr mono">${yokonori||0}</td>
-      <td class="tr mono">${tokubetsu||0}</td>
+      <td class="tr mono" style="color:var(--grn2)">${parking?('¥'+fmt(parking)):0}</td>
       <td class="tr mono fw7" style="color:#86efac">${isMonthly?'(月給)':'¥'+fmt(subtotal)}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="text-align:center;padding:12px;color:var(--txt2)">データなし</td></tr>';
 
+  /* 月締めで入れた分（特別手当・違約金）は日報に無いので、合計の下に足す。
+     支給計は支払明細書と同じ _calcStaffPayment から取り、ずれないようにする。 */
+  const mAdj = (typeof _adjPayroll==='function' && st) ? _adjPayroll(st, monStr) : null;
+  const tUnit = Number(_off.tokubetsuUnit)||0;
+  const pay   = (typeof _calcStaffPayment==='function') ? _calcStaffPayment(staffName, monStr) : null;
+  const extra = [];
+  if(mAdj && mAdj.tokubetsuCnt>0){
+    extra.push({l:`月締め　特別手当 ${mAdj.tokubetsuCnt}回`+(tUnit?`×¥${fmt(tUnit)}`:'（単価が台帳に未設定）'),
+                v:mAdj.tokubetsuCnt*tUnit, c:'var(--amb2)'});
+  }
+  (mAdj?.penaltyRows||[]).forEach(r0=>{
+    extra.push({l:`月締め　違約金`+(r0.reason?`（${r0.reason}）`:'')+(r0.office?`　${r0.office}`:''),
+                v:-r0.amt, c:'var(--red2)'});
+  });
+
   const tf = $('tf-bl-pay-detail');
-  if(tf) tf.innerHTML = `<tr style="background:var(--bg3);font-weight:700;">
-    <td colspan="8" style="text-align:center">${isMonthly ? '月給（固定）' : '合　計'}</td>
-    <td class="tr mono" style="color:#86efac">${isMonthly ? '¥'+fmt(tanka)+'/月' : '¥'+fmt(grandTotal)}</td>
-  </tr>`;
+  if(tf) tf.innerHTML =
+    `<tr style="background:var(--bg3);font-weight:700;">
+      <td colspan="8" style="text-align:right;padding-right:10px;">${isMonthly ? '月給（固定）' : '日報の計'}</td>
+      <td class="tr mono" style="color:#86efac">${isMonthly ? '¥'+fmt(tanka)+'/月' : '¥'+fmt(grandTotal)}</td>
+    </tr>`
+    + extra.map(e=>`<tr>
+        <td colspan="8" style="text-align:right;padding-right:10px;font-size:11px;color:var(--txt2);">${esc(e.l)}</td>
+        <td class="tr mono" style="color:${e.c};">${e.v<0?('-¥'+fmt(-e.v)):('¥'+fmt(e.v))}</td>
+      </tr>`).join('')
+    + (pay ? `<tr style="background:var(--sur2);font-weight:700;">
+        <td colspan="8" style="text-align:right;padding-right:10px;">支給計（手当・控除こみ）</td>
+        <td class="tr mono" style="color:#86efac;font-size:14px;">¥${fmt(pay.total)}</td>
+      </tr>` : '');
 
   const detailEl = $('bl-pay-detail');
   const titleEl  = $('bl-pay-detail-title');
@@ -33567,8 +33643,12 @@ function _calcStaffPayment(name, monStr){
   }
 
   // ── 手当（加算） ──
+  /* ★ 2026-10-09.42: 特別手当は月末にしか決まらないので月締め画面で入れる。
+     古い日報に入っている分（実績ゼロだが念のため）と足して計算する。
+     駐車料金の立替も、ここで本人へ支払う。 */
+  const _mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr) : {tokubetsuCnt:0,park:0,penalty:0,penaltyRows:[],parkDays:0};
   const yokonoriCnt=del.reduce((a,r)=>a+(r.yokonori||0),0);
-  const tokubetsuCnt=del.reduce((a,r)=>a+(r.tokubetsu||0),0);
+  const tokubetsuCnt=del.reduce((a,r)=>a+(r.tokubetsu||0),0) + (_mAdj.tokubetsuCnt||0);
   if(off.commute>0){breakdown.push({label:'通勤手当', amount:off.commute}); total+=off.commute;}
   if(off.career>0){breakdown.push({label:'経歴手当', amount:off.career}); total+=off.career;}
   if(off.position>0){breakdown.push({label:'役職手当', amount:off.position}); total+=off.position;}
@@ -33576,11 +33656,22 @@ function _calcStaffPayment(name, monStr){
     const amt=yokonoriCnt*off.yokonoriUnit;
     breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${off.yokonoriUnit}`, amount:amt}); total+=amt;
   }
+  if(yokonoriCnt>0&&!off.yokonoriUnit){
+    breakdown.push({label:`横乗手当 ${yokonoriCnt}回（単価が台帳に未設定）`, amount:0});
+  }
   if(tokubetsuCnt>0&&off.tokubetsuUnit){
     const amt=tokubetsuCnt*off.tokubetsuUnit;
     breakdown.push({label:`特別手当 ${tokubetsuCnt}回×¥${off.tokubetsuUnit}`, amount:amt}); total+=amt;
   }
+  if(tokubetsuCnt>0&&!off.tokubetsuUnit){
+    breakdown.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0});
+  }
   if(off.teateOther>0){breakdown.push({label:'その他手当', amount:off.teateOther}); total+=off.teateOther;}
+  // 駐車料金の立替（実費。同額をそのまま郵便局へ請求する）
+  if(_mAdj.park>0){
+    breakdown.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park});
+    total+=_mAdj.park;
+  }
 
   // ── 控除（減算） ──
   // ── 燃料費(2026/05/10 改修): gasType別に処理 ──
@@ -33645,6 +33736,16 @@ function _calcStaffPayment(name, monStr){
     const label='違約金'+(p.reason?`（${p.reason}）`:'')+(times>1?` ${idx}/${times}回目`:'');
     breakdown.push({label, amount:-due});
     total -= due;
+  });
+
+  /* ★ 2026-10-09.42: 月締め画面で入れた違約金。
+     「本人から回収する月」がこの月のものだけを引く（郵便局への請求で相殺する月とは別）。 */
+  (_mAdj.penaltyRows||[]).forEach(r=>{
+    const lab='違約金'+(r.reason?`（${r.reason}）`:'')
+      + (r.from && r.from!==String(monStr||'').replace(/\//g,'-').slice(0,7) ? `　${r.from} 発生` : '')
+      + (r.office?`　${r.office}`:'');
+    breakdown.push({label:lab, amount:-r.amt});
+    total -= r.amt;
   });
 
   // ★ 2026-09-22.3: 庸車は控除で確定。種別が「なし」のときは金額が残っていても控除しない。
