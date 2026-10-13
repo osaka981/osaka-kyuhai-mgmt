@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.37</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.38</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1326,8 +1326,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div class="al al-i mt8" style="font-size:11px;">
           <span>ℹ️</span>
           <span><b>委託料（完了・夜間・定時／指定事業所集荷・集荷単価・時給）はここには出ません。</b>
-          相殺と立替だけを並べています。<br>
-          <b style="color:var(--amb2);">黄色の枠だけがこの画面で入れるもの</b>（特別手当の件数・違約金）です。ほかは日報・台帳・燃料CSVから自動で入ります。</span>
+          相殺と立替だけを、<b>郵便局ごとに</b>並べています。<br>
+          <b style="color:var(--amb2);">黄色の枠だけがこの画面で入れるもの</b>（特別手当の件数・違約金）です。ほかは日報・台帳・燃料CSVから自動で入ります。<span style="color:var(--blu2);">青い点線の文字</span>を押すと、その設定の画面が開きます。<br>
+          <b>横乗り・駐車立替</b>は日報の営業所で分けています。<b>特別手当・違約金</b>はこの画面で入れた郵便局に付きます。<b>燃料代・修理・免責・前払い・庸車</b>は人に付くものなので、<b>メイン郵便局の画面にだけ</b>出ます（サブの画面では薄く0）。</span>
         </div>
       </div>
 
@@ -5467,7 +5468,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.37';
+const APP_VER = '2026-10-09.38';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -21657,26 +21658,24 @@ function showSalesDetail(custName){
 
 
 /* ════════════════════════════════════════════════════════════
-   ★ 2026-10-09.37: 月締め（委託料以外の相殺・立替）
+   ★ 2026-10-09.38: 月締め（委託料以外の相殺・立替）
      委託料（完了・夜間・定時／指定事業所集荷・集荷単価・時給）はここには出さない。
      本人へ支払うもの（＋）と、本人から引くもの（−）だけを並べ、差引を見せる。
 
-       ＋ 横乗り（日報の件数 × 台帳の単価）
-       ＋ 特別手当（この画面で入れた件数 × 台帳の単価）
-       ＋ 駐車立替（日報の実費。郵便局へはそのまま請求する）
-       − 燃料代（燃料CSV。カード貸出あり×自己負担の人だけ）
-       − 違約金（この画面で入れた分＋台帳の違約金）
-       − 修理・免責（台帳 修理・損害代の当月分）
-       − 前払い（台帳 前払いの当月分）
-       − 庸車（台帳）
+     ■ 郵便局（営業所）ごとに見る
+       「すべて」は作らない。必ず1つの郵便局を選んで見る。
+       郵便局をまたぐ人がいるので、どちらに付けるかを決めてある：
+         ・横乗り／駐車立替 … 日報の営業所で分ける（その局で走った日のぶん）
+         ・特別手当／違約金 … この画面で入れた局に付く（局ごとに別々に入れられる）
+         ・燃料代・修理・免責・前払い・庸車 … 人に付くものなので
+           その人の「メイン郵便局」（従業員台帳の営業所）の画面にだけ出す。
+           サブで出ている人の行では0にして、メインがどこかを出す。
 
-     この画面で入れるのは特別手当の件数と違約金だけ。ほかは自動。
      保存先は D.monthlyAdj:
-       [{ ym:'2026-10', staff:'高橋 清衛', empNo:'6089',
+       [{ ym:'2026-10', staff:'高橋 清衛', empNo:'6089', office:'西成郵便局',
           tokubetsu:1, penalty:5000, penaltyReason:'誤配1件',
           penaltyBillYm:'2026-11', penaltyDeductYm:'2026-10', at:'...' }]
-     月締めの印は D.monthClose:
-       [{ ym:'2026-10', office:'西成営業所', at:'...' }]   office:'' は「すべて」
+     月締めの印は D.monthClose: [{ ym, office, at }]
    ════════════════════════════════════════════════════════════ */
 function _adjAll(){
   if(!Array.isArray(D.monthlyAdj)){
@@ -21685,8 +21684,18 @@ function _adjAll(){
   }
   return D.monthlyAdj;
 }
-function _adjFind(ym, staff){
-  return _adjAll().find(a => a && a.ym===ym && a.staff===staff) || null;
+/* 年月＋人＋郵便局で引く。
+   局を持たない古い記録は、その人のメイン局のときだけ拾う（取りこぼし防止） */
+function _adjFind(ym, staff, off){
+  const all=_adjAll(), o=String(off||'');
+  let r=all.find(a => a && a.ym===ym && a.staff===staff && String(a.office||'')===o);
+  if(r) return r;
+  const st=(D.staff||[]).find(x=>x&&x.name===staff);
+  if(st && String(st.office||'')===o){
+    r=all.find(a => a && a.ym===ym && a.staff===staff && !a.office);
+    if(r) return r;
+  }
+  return null;
 }
 function _mcAll(){
   if(!Array.isArray(D.monthClose)){
@@ -21698,36 +21707,76 @@ function _mcAll(){
 function _mcFind(ym, off){
   return _mcAll().find(m => m && m.ym===ym && String(m.office||'')===String(off||'')) || null;
 }
+/* その人のメイン郵便局（従業員台帳の営業所） */
+function _adjMainOff(st){ return String(st && st.office || ''); }
+
+/* 設定に飛ぶ ── ここで直してそのまま月締めに戻れるように */
+function _adjGoStaff(name){
+  const st=(D.staff||[]).find(x=>x&&x.name===name);
+  if(!st){ showAlert({msg:'従事員が見つかりません'}); return; }
+  if(typeof editStaff==='function') editStaff(st.id);
+  else if(typeof openFS==='function') openFS('staff', name);
+}
+function _adjGoGas(){
+  if(typeof navByS==='function') navByS('gas-mgmt');
+}
+/* 設定へ飛ぶ小さな文字 */
+function _adjFix(txt, onclick){
+  return `<span onclick="event.stopPropagation();${onclick}" title="クリックで設定を開く"
+    style="font-size:9.5px;color:var(--blu2);cursor:pointer;text-decoration:underline dotted;line-height:1.3;">${esc(txt)}</span>`;
+}
 
 /* ── 1人分の「委託料以外」をまとめる ──
    計算の仕方は _calcStaffPayment の控除部分と同じにしてある。
-   ここで出した差引が、支払明細の委託料に足し引きされる形になる。 */
-function _adjExtras(st, ym, tokuCnt){
-  const off  = (st && st.offset) || {};
+   off を渡すと、その郵便局のぶんだけを出す。 */
+function _adjExtras(st, ym, tokuCnt, off){
+  const o    = String(off||'');
+  const offs = (st && st.offset) || {};
   const name = st && st.name;
+  const isMain = (_adjMainOff(st) === o);
   const out  = { yokoCnt:0, yoko:0, tokuCnt:Math.max(0, parseInt(tokuCnt)||0), toku:0, park:0,
-                 gas:0, gasNote:'', pen:0, penNote:'', repair:0, repairNote:'',
+                 gas:0, gasNote:'', gasFix:'', pen:0, penNote:'', repair:0, repairNote:'',
                  adv:0, advNote:'', yosha:0, yoshaNote:'',
-                 days:0, plus:0, minus:0, net:0 };
+                 days:0, isMain, mainOff:_adjMainOff(st), plus:0, minus:0, net:0 };
   if(!st) return out;
 
-  // 日報から：横乗りの件数と駐車立替の実費
+  // 日報から：横乗りの件数と駐車立替の実費（この郵便局で走った日のぶんだけ）
   const days=new Set();
   (D.delivery||[]).forEach(r=>{
     if(!r || r.staff!==name) return;
     if(!String(r.date||'').replace(/\//g,'-').startsWith(ym)) return;
+    if(o && r.office!==o) return;
     days.add(r.date);
     out.yokoCnt += parseInt(r.yokonori)||0;
     out.park    += parseInt(r.parking)||0;
   });
   out.days = days.size;
 
-  out.yoko = out.yokoCnt * (Number(off.yokonoriUnit)||0);
-  out.toku = out.tokuCnt * (Number(off.tokubetsuUnit)||0);
+  out.yoko = out.yokoCnt * (Number(offs.yokonoriUnit)||0);
+  out.toku = out.tokuCnt * (Number(offs.tokubetsuUnit)||0);
+
+  /* ここから下（燃料・台帳違約金・修理・前払い・庸車）は人に付くものなので、
+     メイン郵便局の画面にだけ出す。サブで二重に引かないため。 */
+  if(!isMain){
+    out.plus  = out.yoko + out.toku + out.park;
+    out.minus = 0;
+    // サブでも、この局に付けた違約金だけは引く
+    _adjAll().forEach(a=>{
+      if(!a || a.staff!==name) return;
+      const p=parseInt(a.penalty)||0; if(p<=0) return;
+      if(String(a.office||'')!==o) return;
+      if(String(a.penaltyDeductYm || a.ym || '').slice(0,7)!==ym) return;
+      out.pen += p;
+      out.penNote += (out.penNote?' / ':'') + (a.ym===ym ? '' : (a.ym+'発生 ')) + (a.penaltyReason||'違約金');
+    });
+    out.minus = out.pen;
+    out.net   = out.plus - out.minus;
+    return out;
+  }
 
   // 燃料代（カード貸出あり × 自己負担 の人だけ引く）
   try{
-    const gp = (typeof _gasPairOf==='function') ? _gasPairOf(off) : {lend:'',burden:''};
+    const gp = (typeof _gasPairOf==='function') ? _gasPairOf(offs) : {lend:'',burden:''};
     if(gp.lend==='あり' && gp.burden==='自己負担'){
       const list=(D.gasRecords||[]).filter(g=> g && g.staffId && String(g.staffId)===String(st.id) && g.ym===ym);
       if(list.length && list.some(g=>(g.amount||0)>0)){
@@ -21737,22 +21786,25 @@ function _adjExtras(st, ym, tokuCnt){
           out.gas += (m.amount||0);
           out.gasNote += (out.gasNote?' / ':'') + (g.vendorLabel || (g.isManual?'手入力':'カード貸出'));
         });
-      } else if(Number(off.gasAmt)>0){
-        out.gas += Number(off.gasAmt)||0;
-        out.gasNote = '固定額（燃料CSV未取込）';
+      } else if(Number(offs.gasAmt)>0){
+        out.gas += Number(offs.gasAmt)||0;
+        out.gasNote = '固定額（CSV未取込）';
+        out.gasFix  = 'gas';
       } else {
         out.gasNote = '燃料CSV未取込';
+        out.gasFix  = 'gas';
       }
     } else if(gp.burden==='会社負担'){
       out.gasNote = '会社負担（引かない）';
     } else if(gp.lend!=='あり'){
       out.gasNote = 'カード貸出なし';
+      out.gasFix  = 'staff';
     }
   }catch(e){}
 
   // 違約金 ①台帳の違約金（分割にも対応） ②この画面で入れた分（回収する月がこの月のもの）
   try{
-    (off.penalties||[]).forEach(p=>{
+    (offs.penalties||[]).forEach(p=>{
       const due=(typeof _penaltyDueFor==='function') ? _penaltyDueFor(p, ym) : 0;
       if(due>0){
         out.pen += due;
@@ -21763,8 +21815,9 @@ function _adjExtras(st, ym, tokuCnt){
   _adjAll().forEach(a=>{
     if(!a || a.staff!==name) return;
     const p=parseInt(a.penalty)||0; if(p<=0) return;
-    const dym=String(a.penaltyDeductYm || a.ym || '').slice(0,7);
-    if(dym!==ym) return;
+    const ao=String(a.office||'');
+    if(ao && ao!==o) return;                       // ほかの局に付けた分はそちらで引く
+    if(String(a.penaltyDeductYm || a.ym || '').slice(0,7)!==ym) return;
     out.pen += p;
     out.penNote += (out.penNote?' / ':'') + (a.ym===ym ? '' : (a.ym+'発生 ')) + (a.penaltyReason||'違約金');
   });
@@ -21797,8 +21850,8 @@ function _adjExtras(st, ym, tokuCnt){
   // 庸車
   try{
     const cond=(typeof getActivePayCondition==='function') ? (getActivePayCondition(st, ym.replace('-','/'))||{}) : {};
-    const yt=cond.yoshaType || off.yoshaType || 'なし';
-    const ya=Number(cond.yoshaAmt || off.yoshaAmt)||0;
+    const yt=cond.yoshaType || offs.yoshaType || 'なし';
+    const ya=Number(cond.yoshaAmt || offs.yoshaAmt)||0;
     if(ya>0 && (yt==='日額' || yt==='月額')){
       out.yosha = (yt==='月額') ? ya : ya*out.days;
       out.yoshaNote = (yt==='月額') ? '月額' : (out.days+'日×¥'+fmt(ya));
@@ -21827,52 +21880,54 @@ function renderMonthAdj(){
     mt.innerHTML=_monTabs('adj-mon', ym, "renderMonthAdj()", {back:5});
   }
 
-  // 営業所のタブ（宅配拠点だけ）
-  const off=String(window._adjOff||'');
+  /* 郵便局（営業所）のタブ。「すべて」は作らない。
+     どの局の相殺かで請求先が変わるので、必ず1つ選んで見る。 */
+  const offs=[...new Set((typeof _dashDelOffices==='function' ? _dashDelOffices() : []))].filter(Boolean);
+  let off=String(window._adjOff||'');
+  if(!off || !offs.includes(off)) off = offs[0] || '';
+  window._adjOff = off;
   const ot=$('adj-off-tabs');
   if(ot){
-    const offs=[...new Set((typeof _dashDelOffices==='function' ? _dashDelOffices() : []))].filter(Boolean);
-    const mk=(v,l)=>{
+    const mk=(v)=>{
       const on=(off===v);
       return `<button type="button" onclick="setAdjOff('${esc(v).replace(/'/g,"\\'")}')"
         style="padding:7px 15px;border-radius:7px;cursor:pointer;line-height:1.1;white-space:nowrap;
                border:1px solid ${on?'var(--blu)':'var(--brd2)'};
                background:${on?'var(--blu)':'var(--sur2)'};
-               color:${on?'#fff':'var(--txt2)'};font-size:${on?'13px':'12.5px'};font-weight:700;">${esc(l)}</button>`;
+               color:${on?'#fff':'var(--txt2)'};font-size:${on?'13px':'12.5px'};font-weight:700;">${esc(v)}</button>`;
     };
-    ot.innerHTML = mk('','すべて') + offs.map(o=>mk(o,o)).join('');
+    ot.innerHTML = offs.length ? offs.map(mk).join('')
+      : '<span class="xs" style="color:var(--red2)">宅配の郵便局が拠点マスタにありません</span>';
   }
 
   const pe=$('adj-period'); if(pe) pe.textContent = ym ? ('（'+ym+(off?('・'+off):'')+'）') : '（対象月を選んでください）';
 
   // 月締めの印
-  const mc=ym ? _mcFind(ym, off) : null;
+  const mc=(ym&&off) ? _mcFind(ym, off) : null;
   const ce=$('adj-closed');
   if(ce) ce.textContent = mc ? ('✔ 締め済 '+String(mc.at||'').slice(0,10)) : '';
 
-  if(!ym){
-    tb.innerHTML='<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--txt2);">対象月を選んでください</td></tr>';
+  if(!ym || !off){
+    tb.innerHTML='<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--txt2);">対象月と郵便局を選んでください</td></tr>';
     if($('tf-adj')) $('tf-adj').innerHTML='';
     if($('tb-adj-pen')) $('tb-adj-pen').innerHTML='';
     if($('adj-kpi')) $('adj-kpi').innerHTML='';
     return;
   }
 
-  /* その月に日報のある人と、その営業所の在籍者を並べる。
+  /* この局の日報がある人と、この局をメイン／サブに持つ在籍者を並べる。
      日報が1日も無くても、違約金や前払いが当たる月があるため。 */
   const names=new Set();
   (D.delivery||[]).forEach(r=>{
     if(!r || !String(r.date||'').replace(/\//g,'-').startsWith(ym)) return;
-    if(off && r.office!==off) return;
+    if(r.office!==off) return;
     if(r.staff) names.add(r.staff);
   });
   (D.staff||[]).forEach(st=>{
     if(!st || st.status==='終了') return;
-    if(off){
-      const hit = st.office===off
-        || (typeof _getStaffDelOffices==='function' && _getStaffDelOffices(st).some(o=>o.office===off));
-      if(!hit) return;
-    }
+    const hit = st.office===off
+      || (typeof _getStaffDelOffices==='function' && _getStaffDelOffices(st).some(o=>o.office===off));
+    if(!hit) return;
     if(st.name) names.add(st.name);
   });
 
@@ -21886,27 +21941,20 @@ function renderMonthAdj(){
   const onlyMove = !!$('adj-only')?.checked;
   const yen = v => v ? ('¥'+fmt(v)) : '<span style="color:var(--txt3)">0</span>';
   const tot={yoko:0,toku:0,park:0,plus:0,gas:0,pen:0,repair:0,adv:0,yosha:0,minus:0,net:0};
-  const penRows=[];
   let shown=0;
 
   const html = sorted.map(name=>{
     const st=(D.staff||[]).find(x=>x&&x.name===name);
     if(!st) return '';
     const emp=String(st.empNo||'');
-    const a=_adjFind(ym, name) || {};
+    const a=_adjFind(ym, name, off) || {};
     const toku=parseInt(a.tokubetsu)||0;
     const pen =parseInt(a.penalty)||0;
-    const e=_adjExtras(st, ym, toku);
+    const e=_adjExtras(st, ym, toku, off);
 
-    // 合計はいつも全員ぶん（絞り込みに左右されない）
     tot.yoko+=e.yoko; tot.toku+=e.toku; tot.park+=e.park; tot.plus+=e.plus;
     tot.gas+=e.gas; tot.pen+=e.pen; tot.repair+=e.repair; tot.adv+=e.adv; tot.yosha+=e.yosha;
     tot.minus+=e.minus; tot.net+=e.net;
-
-    if(pen>0){
-      penRows.push({name, emp, pen, reason:a.penaltyReason||'',
-                    bill:a.penaltyBillYm||ym, ded:a.penaltyDeductYm||ym});
-    }
 
     const moved = (e.plus || e.minus || toku || pen);
     if(onlyMove && !moved) return '';
@@ -21915,13 +21963,20 @@ function renderMonthAdj(){
     const unitY=Number(st.offset?.yokonoriUnit)||0;
     const unitT=Number(st.offset?.tokubetsuUnit)||0;
     const sub = t => t ? `<div style="font-size:9.5px;color:var(--txt3);line-height:1.3;">${esc(t)}</div>` : '';
+    const dim = e.isMain ? '' : 'opacity:.35;';
     const netCol = e.net>0 ? 'var(--grn2)' : (e.net<0 ? 'var(--red2)' : 'var(--txt3)');
+    const go = `_adjGoStaff('${esc(name).replace(/'/g,"\\'")}')`;
+    // メイン／サブの印。サブの人は台帳ぶんがメインの画面に出ることを書いておく
+    const kind = e.isMain
+      ? `<span style="font-size:9px;color:var(--txt3);">${esc(st.office||'')}</span>`
+      : `<span style="font-size:9px;color:var(--amb2);">サブ（台帳ぶんは ${esc(e.mainOff||'メイン局')} 側）</span>`;
 
-    return `<tr data-staff="${esc(name)}" data-emp="${esc(emp)}">
+    return `<tr data-staff="${esc(name)}" data-emp="${esc(emp)}" data-main="${e.isMain?'1':'0'}">
       <td class="mono" style="color:var(--amb2);font-weight:700;">${emp?esc(emp):'<span style="color:var(--red2)">未設定</span>'}</td>
-      <td class="fw7">${staffLink(name)}${sub(st.office||'')}</td>
+      <td class="fw7">${staffLink(name)}<div>${kind}</div></td>
 
-      <td class="tr mono" style="border-left:2px solid var(--grn2);">${yen(e.yoko)}${sub(e.yokoCnt?(e.yokoCnt+'回'+(unitY?('×¥'+fmt(unitY)):'（単価未設定）')):'')}</td>
+      <td class="tr mono" style="border-left:2px solid var(--grn2);">${yen(e.yoko)}
+        ${e.yokoCnt ? (unitY ? sub(e.yokoCnt+'回×¥'+fmt(unitY)) : (e.yokoCnt+'回 '+_adjFix('単価未設定',go))) : ''}</td>
       <td class="tr" style="padding:4px 6px;">
         <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
           <input type="number" min="0" class="fi adj-toku" value="${toku||0}" oninput="_adjRecalc(this)"
@@ -21929,12 +21984,14 @@ function renderMonthAdj(){
             style="width:58px;text-align:right;font-family:'DM Mono',monospace;font-weight:700;border-color:#7a6433;padding:5px 6px;">
           <span class="mono adj-toku-amt" style="min-width:62px;text-align:right;">${yen(e.toku)}</span>
         </div>
-        ${sub(unitT?('単価 ¥'+fmt(unitT)):'単価未設定')}
+        ${unitT ? sub('単価 ¥'+fmt(unitT)) : _adjFix('単価未設定', go)}
       </td>
-      <td class="tr mono">${yen(e.park)}${sub(e.park?'局へ請求':'')}</td>
+      <td class="tr mono">${yen(e.park)}${sub(e.park?'この局へ請求':'')}</td>
       <td class="tr mono adj-plus" style="color:var(--grn2);font-weight:700;">${yen(e.plus)}</td>
 
-      <td class="tr mono" style="border-left:2px solid var(--red2);">${yen(e.gas)}${sub(e.gasNote)}</td>
+      <td class="tr mono" style="border-left:2px solid var(--red2);${dim}">${yen(e.gas)}
+        ${!e.isMain ? '' : (e.gasFix==='gas' ? _adjFix(e.gasNote,'_adjGoGas()')
+                        : e.gasFix==='staff' ? _adjFix(e.gasNote, go) : sub(e.gasNote))}</td>
       <td class="tr" style="padding:4px 6px;">
         <div style="display:flex;align-items:center;gap:5px;justify-content:flex-end;">
           <input type="number" min="0" step="100" class="fi adj-pen" value="${pen||0}" oninput="_adjRecalc(this)"
@@ -21943,16 +22000,16 @@ function renderMonthAdj(){
         </div>
         ${sub(e.pen ? ('この月に引く ¥'+fmt(e.pen)+(e.penNote?('／'+e.penNote):'')) : '')}
       </td>
-      <td class="tr mono">${yen(e.repair)}${sub(e.repairNote)}</td>
-      <td class="tr mono">${yen(e.adv)}${sub(e.advNote)}</td>
-      <td class="tr mono">${yen(e.yosha)}${sub(e.yoshaNote)}</td>
+      <td class="tr mono" style="${dim}">${yen(e.repair)}${e.isMain?sub(e.repairNote):''}</td>
+      <td class="tr mono" style="${dim}">${yen(e.adv)}${e.isMain?sub(e.advNote):''}</td>
+      <td class="tr mono" style="${dim}">${yen(e.yosha)}${e.isMain?sub(e.yoshaNote):''}</td>
       <td class="tr mono adj-minus" style="color:var(--red2);font-weight:700;">${yen(e.minus)}</td>
 
       <td class="tr mono adj-net" style="border-left:2px solid var(--brd2);font-weight:700;font-size:14px;color:${netCol};">${e.net<0?'-¥'+fmt(-e.net):yen(e.net)}</td>
     </tr>`;
   }).join('');
 
-  tb.innerHTML = html || '<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--txt2);">対象の従事員がいません</td></tr>';
+  tb.innerHTML = html || '<tr><td colspan="13" style="text-align:center;padding:18px;color:var(--txt2);">この郵便局の対象者がいません</td></tr>';
 
   if($('tf-adj')) $('tf-adj').innerHTML=`<tr style="background:var(--sur2);font-weight:700;">
     <td colspan="2">合計　${sorted.length} 人${onlyMove?('（表示 '+shown+' 人）'):''}</td>
@@ -21969,28 +22026,7 @@ function renderMonthAdj(){
     <td class="tr mono" style="border-left:2px solid var(--brd2);font-size:14px;color:${tot.net<0?'var(--red2)':'var(--grn2)'};">${tot.net<0?'-¥'+fmt(-tot.net):'¥'+fmt(tot.net)}</td>
   </tr>`;
 
-  // 違約金の内訳（入れた人だけ）
-  const pt=$('tb-adj-pen');
-  if(pt){
-    pt.innerHTML = penRows.length ? penRows.map(p=>`<tr data-staff="${esc(p.name)}">
-      <td class="fw7">${staffLink(p.name)}</td>
-      <td class="tr mono" style="color:var(--red2);font-weight:700;">¥${fmt(p.pen)}</td>
-      <td style="padding:4px 6px;">
-        <input type="text" class="fi adjp-reason" value="${esc(p.reason)}" placeholder="（必須）"
-          aria-label="${esc(p.name)} の違約金の理由"
-          style="font-size:12px;padding:6px 8px;border-color:${p.reason?'var(--brd2)':'var(--red2)'};">
-      </td>
-      <td style="padding:4px 6px;border-left:2px solid var(--brd2);">
-        <input type="month" class="fi adjp-billym" value="${esc(p.bill)}" aria-label="${esc(p.name)} の局請求で相殺する月"
-          style="font-size:11.5px;padding:5px 6px;">
-      </td>
-      <td style="padding:4px 6px;">
-        <input type="month" class="fi adjp-dedym" value="${esc(p.ded)}" aria-label="${esc(p.name)} の本人から回収する月"
-          style="font-size:11.5px;padding:5px 6px;">
-      </td>
-    </tr>`).join('')
-    : '<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--txt2);">違約金を入れた人はいません</td></tr>';
-  }
+  _adjPenRows();   // 違約金の内訳（入れた直後に出す）
 
   // 上の数字
   const kp=$('adj-kpi');
@@ -22003,13 +22039,75 @@ function renderMonthAdj(){
       k('＋ 本人へ支払う','¥'+fmt(tot.plus),'var(--grn2)','横乗り・特別手当・駐車立替') +
       k('− 本人から引く','¥'+fmt(tot.minus),'var(--red2)','燃料・違約金・修理・前払い・庸車') +
       k('差引', (tot.net<0?'-¥'+fmt(-tot.net):'¥'+fmt(tot.net)), tot.net<0?'var(--red2)':'var(--grn2)','委託料は含みません') +
-      k('局へ請求する駐車料金','¥'+fmt(tot.park),'var(--blu2)','郵便局請求書の駐車料金');
+      k(off+' へ請求する駐車料金','¥'+fmt(tot.park),'var(--blu2)','請求書の駐車料金の行');
   }
 
   if($('adj-count')) $('adj-count').textContent = sorted.length+'人';
 }
 
-// 営業所タブ
+/* ── 違約金の内訳 ──
+   上の表の入力欄を見て作るので、金額を打った時点で行が出る（保存を待たない）。
+   すでに出ている行の文字は消さないよう、名前が変わったときだけ作り直す。 */
+function _adjPenRows(force){
+  const pt=$('tb-adj-pen'); if(!pt) return;
+  const ym=($('adj-mon')?.value||'').slice(0,7);
+  const off=String(window._adjOff||'');
+  const want=[...document.querySelectorAll('#tb-adj tr[data-staff]')]
+    .map(tr=>({ name:tr.getAttribute('data-staff')||'',
+                pen:Math.max(0, parseInt(tr.querySelector('.adj-pen')?.value)||0) }))
+    .filter(x=>x.pen>0);
+
+  const have=[...pt.querySelectorAll('tr[data-staff]')].map(tr=>tr.getAttribute('data-staff'));
+  const same = !force && have.length===want.length && want.every((x,i)=>have[i]===x.name);
+  if(same){
+    // 顔ぶれが同じなら金額だけ直す（打っている理由を消さない）
+    want.forEach(x=>{
+      const tr=pt.querySelector(`tr[data-staff="${CSS.escape(x.name)}"]`);
+      const c=tr && tr.querySelector('.adjp-amt');
+      if(c) c.textContent='¥'+fmt(x.pen);
+    });
+    return;
+  }
+
+  // いま打っている文字を拾っておいて、作り直したあとに戻す
+  const keep={};
+  [...pt.querySelectorAll('tr[data-staff]')].forEach(tr=>{
+    keep[tr.getAttribute('data-staff')] = {
+      reason:tr.querySelector('.adjp-reason')?.value||'',
+      bill:tr.querySelector('.adjp-billym')?.value||'',
+      ded:tr.querySelector('.adjp-dedym')?.value||''
+    };
+  });
+
+  pt.innerHTML = want.length ? want.map(x=>{
+    const saved=_adjFind(ym, x.name, off) || {};
+    const k=keep[x.name] || {};
+    const reason=(k.reason!=null && k.reason!=='') ? k.reason : (saved.penaltyReason||'');
+    const bill  =(k.bill   || saved.penaltyBillYm   || ym);
+    const ded   =(k.ded    || saved.penaltyDeductYm || ym);
+    return `<tr data-staff="${esc(x.name)}">
+      <td class="fw7">${staffLink(x.name)}</td>
+      <td class="tr mono adjp-amt" style="color:var(--red2);font-weight:700;">¥${fmt(x.pen)}</td>
+      <td style="padding:4px 6px;">
+        <input type="text" class="fi adjp-reason" value="${esc(reason)}" placeholder="（必須）"
+          oninput="this.style.borderColor=this.value.trim()?'var(--brd2)':'var(--red2)'"
+          aria-label="${esc(x.name)} の違約金の理由"
+          style="font-size:12px;padding:6px 8px;border-color:${reason?'var(--brd2)':'var(--red2)'};">
+      </td>
+      <td style="padding:4px 6px;border-left:2px solid var(--brd2);">
+        <input type="month" class="fi adjp-billym" value="${esc(bill)}" aria-label="${esc(x.name)} の局請求で相殺する月"
+          style="font-size:11.5px;padding:5px 6px;">
+      </td>
+      <td style="padding:4px 6px;">
+        <input type="month" class="fi adjp-dedym" value="${esc(ded)}" aria-label="${esc(x.name)} の本人から回収する月"
+          style="font-size:11.5px;padding:5px 6px;">
+      </td>
+    </tr>`;
+  }).join('')
+  : '<tr><td colspan="5" style="text-align:center;padding:14px;color:var(--txt2);">違約金を入れた人はいません</td></tr>';
+}
+
+// 郵便局タブ
 function setAdjOff(v){ window._adjOff = String(v||''); renderMonthAdj(); }
 
 /* 特別手当・違約金を打ち変えたら、その行の＋計／−計／差引をその場で直す。
@@ -22019,18 +22117,19 @@ function _adjRecalc(el){
   const name=tr.getAttribute('data-staff')||'';
   const st=(D.staff||[]).find(x=>x&&x.name===name); if(!st) return;
   const ym=($('adj-mon')?.value||'').slice(0,7); if(!ym) return;
+  const off=String(window._adjOff||'');
 
   const toku=Math.max(0, parseInt(tr.querySelector('.adj-toku')?.value)||0);
   const pen =Math.max(0, parseInt(tr.querySelector('.adj-pen')?.value)||0);
 
-  // 保存前の数字で引き直すため、この人のこの月の違約金だけ差し替えて計算する
-  const saved=_adjFind(ym, name);
+  // 保存前の数字で引き直すため、この人のこの局・この月の違約金だけ差し替える
+  const saved=_adjFind(ym, name, off);
   const savedPen=parseInt(saved?.penalty)||0;
   const savedDed=String(saved?.penaltyDeductYm || saved?.ym || ym).slice(0,7);
-  const e=_adjExtras(st, ym, toku);
+  const e=_adjExtras(st, ym, toku, off);
   if(savedDed===ym) e.pen -= savedPen;      // 保存済みの分をいったん外し
   e.pen += pen;                              // いま打っている額を入れる
-  e.minus = e.gas + e.pen + e.repair + e.adv + e.yosha;
+  e.minus = e.isMain ? (e.gas + e.pen + e.repair + e.adv + e.yosha) : e.pen;
   e.net   = e.plus - e.minus;
 
   const yen = v => v ? ('¥'+fmt(v)) : '0';
@@ -22045,12 +22144,15 @@ function _adjRecalc(el){
   }
   const pi=tr.querySelector('.adj-pen');
   if(pi) pi.style.borderColor = pen>0 ? 'var(--red2)' : '#7a6433';
+
+  _adjPenRows();   // 違約金を入れたら、下の内訳に行を出す
 }
 
-/* この月の入力（特別手当・違約金）を保存する */
+/* この月・この郵便局の入力（特別手当・違約金）を保存する */
 async function saveMonthAdj(opt){
   const ym=($('adj-mon')?.value||'').slice(0,7);
-  if(!ym){ showAlert({msg:'対象月を選んでください。'}); return false; }
+  const off=String(window._adjOff||'');
+  if(!ym || !off){ showAlert({msg:'対象月と郵便局を選んでください。'}); return false; }
   const tb=$('tb-adj'); if(!tb) return false;
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
 
@@ -22071,12 +22173,12 @@ async function saveMonthAdj(opt){
     const pen=parseInt(tr.querySelector('.adj-pen')?.value)||0;
     if(pen<=0) return;
     const p=pmap[name];
-    const rs=(p ? p.reason : (_adjFind(ym,name)?.penaltyReason||'')).trim();
+    const rs=((p ? p.reason : (_adjFind(ym,name,off)?.penaltyReason||'')) || '').trim();
     if(!rs) bad.push(name);
   });
   if(bad.length){
-    showAlert({msg:'違約金の理由が空の人がいます。\n\n'+bad.join('\n')+'\n\n下の「違約金の内訳」で理由を書いてから保存してください。\n（違約金を入れた直後は、一度「保存」を押すと内訳に行が出ます）'});
-    // 内訳にまだ行が無い人のぶんは、理由なしでも金額だけ先に残しておく
+    showAlert({msg:'違約金の理由が空の人がいます。\n\n'+bad.join('\n')+'\n\n下の「違約金の内訳」で理由を書いてから保存してください。'});
+    return false;
   }
 
   const all=_adjAll();
@@ -22086,19 +22188,23 @@ async function saveMonthAdj(opt){
     const emp=tr.getAttribute('data-emp')||'';
     const toku=Math.max(0, parseInt(tr.querySelector('.adj-toku')?.value)||0);
     const pen =Math.max(0, parseInt(tr.querySelector('.adj-pen')?.value)||0);
-    const prev=_adjFind(ym, name) || {};
+    const prev=_adjFind(ym, name, off) || {};
     const p=pmap[name] || {};
-    const rs  = (p.reason!=null ? p.reason : (prev.penaltyReason||'')).trim();
+    const rs  = ((p.reason!=null ? p.reason : (prev.penaltyReason||'')) || '').trim();
     const bym = (p.bill || prev.penaltyBillYm   || '').slice(0,7);
     const dym = (p.ded  || prev.penaltyDeductYm || '').slice(0,7);
-    const idx=all.findIndex(a=>a && a.ym===ym && a.staff===name);
+    // 局まで一致する記録を探す（無ければ、局の無い古い記録をこの局のものに直す）
+    let idx=all.findIndex(a=>a && a.ym===ym && a.staff===name && String(a.office||'')===off);
+    if(idx<0 && String((D.staff||[]).find(x=>x&&x.name===name)?.office||'')===off){
+      idx=all.findIndex(a=>a && a.ym===ym && a.staff===name && !a.office);
+    }
     if(!toku && !pen && !rs){
       if(idx>=0){ all.splice(idx,1); del++; }   // すべて空 → 記録を消す
       return;
     }
     /* 違約金は郵便局への請求で相殺し、本人からも回収する。
        この2つは月がずれることがあるので、それぞれの月を持たせる。空なら対象月。 */
-    const rec={ ym, staff:name, empNo:emp, tokubetsu:toku, penalty:pen,
+    const rec={ ym, staff:name, empNo:emp, office:off, tokubetsu:toku, penalty:pen,
                 penaltyReason: pen>0 ? rs : '',
                 penaltyBillYm:   pen>0 ? (bym || ym) : '',
                 penaltyDeductYm: pen>0 ? (dym || ym) : '',
@@ -22112,17 +22218,16 @@ async function saveMonthAdj(opt){
   try{ if(typeof fbSet==='function') await fbSet('monthly_adj', all); }catch(e){ console.warn('[月締め] 保存エラー', e); }
   renderMonthAdj();
   if(!(opt && opt.quiet)){
-    const msg=ym+' を保存しました（新規'+add+'件 / 更新'+upd+'件'+(del?(' / 削除'+del+'件'):'')+'）';
+    const msg=ym+'・'+off+' を保存しました（新規'+add+'件 / 更新'+upd+'件'+(del?(' / 削除'+del+'件'):'')+'）';
     if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
   }
-  return !bad.length;
+  return true;
 }
 
 /* showConfirm はコールバック式なので、await で書けるようにしておく */
 function _adjConfirm(msg){
   return new Promise(res=>{
     try{ showConfirm(msg, ()=>res(true)); }catch(e){ res(confirm(msg)); }
-    // キャンセル時は解決しないため、画面が閉じたら false にする
     const ov=$('custom-dialog-overlay');
     if(ov){
       const t=setInterval(()=>{
@@ -22133,12 +22238,12 @@ function _adjConfirm(msg){
   });
 }
 
-/* この月を締める。保存したうえで印を付ける（あとから外せる） */
+/* この月・この郵便局を締める。保存したうえで印を付ける（あとから外せる） */
 async function closeMonthAdj(){
   const ym=($('adj-mon')?.value||'').slice(0,7);
-  if(!ym){ showAlert({msg:'対象月を選んでください。'}); return; }
   const off=String(window._adjOff||'');
-  const label=ym+(off?('・'+off):'・すべての営業所');
+  if(!ym || !off){ showAlert({msg:'対象月と郵便局を選んでください。'}); return; }
+  const label=ym+'・'+off;
 
   const already=_mcFind(ym, off);
   if(already){
