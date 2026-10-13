@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.44</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.45</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2081,6 +2081,30 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- ══ 勤務時間 (2026-09-22.6) ══ -->
+    <!-- ══ データ健診（2026-10-09.45） ══
+         台帳の設定もれで支払い・月締めが0円になるのを防ぐ点検画面。 -->
+    <div id="s-data-check" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:center;">
+          <input type="month" id="dc-mon" class="fi" style="width:auto;" onchange="renderDataCheck()">
+          <label style="font-size:11.5px;color:var(--txt2);display:flex;align-items:center;gap:5px;cursor:pointer;">
+            <input type="checkbox" id="dc-month-only" onchange="renderDataCheck()" style="width:15px;height:15px;">
+            この月に日報がある人だけ
+          </label>
+          <div style="flex:1;"></div>
+          <button class="btn b-gh btn-sm" onclick="renderDataCheck()">🔄 もう一度調べる</button>
+        </div>
+        <div class="al al-i mt8" style="font-size:11px;">
+          <span>ℹ️</span>
+          <span>台帳の設定もれを探します。<b style="color:var(--red2);">赤はいま実害が出ているもの</b>（支払いが0円で計算される等）、
+          <b style="color:var(--amb2);">黄は近いうちに効いてくるもの</b>です。氏名または「直す」を押すと台帳のその欄が開きます。</span>
+        </div>
+      </div>
+
+      <div id="dc-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
+      <div id="dc-body"></div>
+    </div>
+
     <div id="s-worktime" class="sec">
       <div class="card" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
@@ -5480,7 +5504,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.44';
+const APP_VER = '2026-10-09.45';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -8983,6 +9007,7 @@ const _TOP_TABS = {
     { s:'company',     label:'委託会社管理' },
     { s:'salary',      label:'給与計算' },
     { s:'month-adj',   label:'月締め', badge:'new' },
+    { s:'data-check',  label:'データ健診', badge:'new' },
     { s:'worktime',    label:'勤務時間' },
     { s:'pay-history', label:'給与履歴' },
     { s:'contract',    label:'契約書' },
@@ -9096,6 +9121,7 @@ function navByS(s) {
   if (s==='company')     _call('renderCompanyPage');
   if (s==='salary')      _call('renderSalary');
   if (s==='month-adj')   _call('renderMonthAdj');   // ★ 2026-10-09.34
+  if (s==='data-check')  _call('renderDataCheck'); // ★ 2026-10-09.45
   if (s==='worktime')    _call('renderWorkTime');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
@@ -39124,7 +39150,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -40457,6 +40483,7 @@ function nav(el){
   if(s==='pu-sum')       renderSum();
   if(s==='salary')       renderSalary();
   if(s==='month-adj')    { if(typeof renderMonthAdj==='function') renderMonthAdj(); }   // ★ 2026-10-09.34
+  if(s==='data-check')   { if(typeof renderDataCheck==='function') renderDataCheck(); } // ★ 2026-10-09.45
   if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
@@ -46397,6 +46424,230 @@ function _wtTargets(mon){
   return (D.staff||[]).filter(s=>s.status!=='終了' && !(s.kubun && String(s.kubun).includes('委託会社')))
     .filter(s=>_hourlyBizOf(s, mon).length>0)
     .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.45: データ健診
+     台帳の設定もれで、支払いや月締めが黙って0円になるのを防ぐ。
+     赤＝いま実害が出ているもの、黄＝近いうちに効いてくるもの。
+     氏名または「直す」で台帳のその欄が開く（月締めと同じ仕組み）。
+   ════════════════════════════════════════════════════════════ */
+function _dcIssues(st, mon, opt){
+  const out=[];
+  if(!st) return out;
+  const o   = st.offset || {};
+  const ku  = st.kubun || '';
+  const name= st.name || '';
+  const isCo= (ku==='委託会社所属' || ku==='委託ドライバー');
+  const del = (D.delivery||[]).filter(r=> r && r.staff===name
+                && String(r.date||'').replace(/\//g,'-').startsWith(mon));
+  const pu  = (D.pickup||[]).filter(r=> r && r.staff===name
+                && String(r.date||'').replace(/\//g,'-').startsWith(mon));
+  const hasRows = del.length>0 || pu.length>0;
+
+  // 社員番号
+  if(!String(st.empNo||'').trim()){
+    out.push({lv:'red', what:'社員番号がない', why:'日報アプリの突き合わせと支払明細の並びが崩れます',
+              tab:'info', field:'st-empno-disp'});
+  }
+
+  // 歩合なのに完了単価が引けない → 支払いが0円になる
+  if(st.kyuyo==='個数制（歩合）'){
+    let dp={};
+    try{ dp=(typeof _getEffectiveDelPrices==='function') ? (_getEffectiveDelPrices(st)||{}) : {}; }catch(e){}
+    if(!(Number(dp.kanryo)>0)){
+      out.push({lv: hasRows?'red':'amb',
+                what:'完了単価が入っていない',
+                why: hasRows ? ('この月の日報 '+del.length+'日分の支払いが ¥0 で計算されます')
+                             : '日報が入った月から支払いが ¥0 になります',
+                hint: isCo ? '委託会社の単価か、本人の宅配単価タブ' : '宅配単価タブ',
+                tab:'del', field:'st-pkanryo'});
+    }
+  }
+
+  // 横乗手当の単価
+  const yokoCnt = del.reduce((a,r)=>a+(parseInt(r.yokonori)||0),0);
+  if(!(Number(o.yokonoriUnit)>0)){
+    out.push({lv: yokoCnt>0 ? 'red' : 'amb',
+              what:'横乗手当の単価が未設定',
+              why: yokoCnt>0 ? ('この月に横乗り '+yokoCnt+'回あるのに ¥0 で計算されます')
+                             : '横乗りが入った月に ¥0 になります',
+              tab:'offset', field:'st-yokonori-unit'});
+  }
+  // 特別手当の単価（月締めで件数を入れている人は赤）
+  let tokCnt=0;
+  try{
+    (typeof _adjAll==='function' ? _adjAll() : []).forEach(a=>{
+      if(a && a.staff===name && String(a.ym||'').slice(0,7)===mon) tokCnt += parseInt(a.tokubetsu)||0;
+    });
+  }catch(e){}
+  if(!(Number(o.tokubetsuUnit)>0)){
+    out.push({lv: tokCnt>0 ? 'red' : 'amb',
+              what:'特別手当の単価が未設定',
+              why: tokCnt>0 ? ('月締めで '+tokCnt+'件 入れてあるのに ¥0 で計算されます')
+                            : '月締めで件数を入れても ¥0 になります',
+              tab:'offset', field:'st-tokubetsu-unit'});
+  }
+
+  // 燃料
+  const lend = o.gasCardLend || '';
+  const bur  = o.gasBurden || o.gasCostBearer || '';
+  if(!lend && !bur && !o.gasType){
+    out.push({lv:'amb', what:'燃料の設定がない',
+              why:'カードを貸しているか、費用を誰が持つかが未設定です。月締めの燃料代は ¥0 のままになります',
+              tab:'offset', field:'st-gas-card-lend'});
+  } else if(lend==='あり' && !String(o.gasCardNo||'').trim()){
+    const bad = (bur==='自己負担');
+    out.push({lv: bad?'red':'amb', what:'カード貸出ありだが車番がない',
+              why:'燃料CSVの車番と結び付かないので、取り込んでも金額が付きません',
+              tab:'offset', field:'st-gas-cardno'});
+  }
+
+  // 営業所が拠点マスタにない
+  const offName=String(st.office||'').trim();
+  if(!offName){
+    out.push({lv:'amb', what:'営業所が入っていない', why:'月締めと一覧の営業所タブに出てきません',
+              tab:'info', field:'st-off'});
+  } else {
+    const known=new Set([
+      ...((typeof _ownOfficeNames==='function') ? _ownOfficeNames() : []),
+      ...(D.locations||[]).map(l=>l&&l.name).filter(Boolean)
+    ]);
+    if(!known.has(offName)){
+      out.push({lv:'amb', what:'営業所が拠点マスタにない（'+offName+'）',
+                why:'拠点マスタに無い名前なので、営業所で絞る画面から漏れます',
+                tab:'info', field:'st-off'});
+    }
+  }
+
+  return out;
+}
+
+function renderDataCheck(){
+  const body=$('dc-body'); if(!body) return;
+  const mEl=$('dc-mon');
+  if(mEl && !mEl.value){
+    const d=new Date();
+    mEl.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const mon=(mEl?.value||'').slice(0,7);
+  const monthOnly=!!$('dc-month-only')?.checked;
+
+  // 対象者
+  let staff=(D.staff||[]).filter(s=>s && s.name && s.status!=='終了');
+  if(monthOnly){
+    const act=new Set();
+    (D.delivery||[]).forEach(r=>{ if(r && String(r.date||'').replace(/\//g,'-').startsWith(mon) && r.staff) act.add(r.staff); });
+    (D.pickup||[]).forEach(r=>{ if(r && String(r.date||'').replace(/\//g,'-').startsWith(mon) && r.staff) act.add(r.staff); });
+    staff=staff.filter(s=>act.has(s.name));
+  }
+  staff.sort((a,b)=>{
+    const ea=String(a.empNo||''), eb=String(b.empNo||'');
+    if(ea&&eb&&ea!==eb) return ea.localeCompare(eb,'ja',{numeric:true});
+    return String(a.name).localeCompare(String(b.name),'ja');
+  });
+
+  // 日報に出るのに台帳にいない名前
+  const known=new Set((D.staff||[]).map(s=>s&&s.name).filter(Boolean));
+  const ghost={};
+  const scan=(rows,label)=>{
+    (rows||[]).forEach(r=>{
+      if(!r || !r.staff) return;
+      if(!String(r.date||'').replace(/\//g,'-').startsWith(mon)) return;
+      if(known.has(r.staff)) return;
+      const k=r.staff;
+      ghost[k]=ghost[k]||{name:k, del:0, pu:0, office:r.office||''};
+      ghost[k][label]++;
+    });
+  };
+  scan(D.delivery,'del'); scan(D.pickup,'pu');
+  const ghostList=Object.values(ghost);
+
+  // 集計
+  const lines=[];
+  let red=0, amb=0;
+  staff.forEach(st=>{
+    const iss=_dcIssues(st, mon);
+    if(!iss.length) return;
+    iss.forEach(x=>{ if(x.lv==='red') red++; else amb++; });
+    lines.push({st, iss});
+  });
+  red += ghostList.length;
+
+  const okCount = staff.length - lines.length;
+  const kp=$('dc-kpi');
+  if(kp){
+    const k=(l,v,c,s)=>`<div class="card" style="padding:9px 11px;">
+      <div class="xs muted">${esc(l)}</div>
+      <div class="mono" style="font-size:19px;font-weight:700;color:${c};line-height:1.25;">${v}</div>
+      ${s?`<div style="font-size:9.5px;color:var(--txt3);">${esc(s)}</div>`:''}</div>`;
+    kp.innerHTML =
+      k('いま実害が出ている', red+'件', red?'var(--red2)':'var(--grn2)','支払いが0円になる等') +
+      k('近いうちに効く', amb+'件', amb?'var(--amb2)':'var(--grn2)','入力が入った月から') +
+      k('問題のない人', okCount+'人', 'var(--grn2)', '対象 '+staff.length+'人中') +
+      k('日報にあるが台帳にない', ghostList.length+'人', ghostList.length?'var(--red2)':'var(--grn2)','氏名のゆれ・未登録');
+  }
+
+  let html='';
+
+  if(ghostList.length){
+    html += `<div class="card mb12" style="border-color:var(--red2);">
+      <div class="ch"><div class="ct"><div class="cbar"></div>日報にあるのに台帳にいない <span class="xs muted">（${esc(mon)}）</span></div></div>
+      <div class="tw"><table>
+        <thead><tr><th>氏名</th><th>営業所</th><th class="tr" style="width:90px;">宅配</th><th class="tr" style="width:90px;">集荷</th><th>影響</th></tr></thead>
+        <tbody>${ghostList.map(g=>`<tr>
+          <td class="fw7" style="color:var(--red2);">${esc(g.name)}</td>
+          <td class="xs muted">${esc(g.office)}</td>
+          <td class="tr mono">${g.del||0}日</td>
+          <td class="tr mono">${g.pu||0}日</td>
+          <td class="xs">この人の支払いが一切出ません。氏名のゆれか、台帳への登録もれです</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  if(!lines.length && !ghostList.length){
+    html += `<div class="card"><div class="al al-ok" style="font-size:12px;">
+      <span>✅</span><span>${esc(mon)} 時点で、台帳の設定もれは見つかりませんでした（対象 ${staff.length}人）。</span></div></div>`;
+    body.innerHTML=html;
+    return;
+  }
+
+  if(lines.length){
+    const badge=lv => lv==='red'
+      ? '<span class="bdg br" style="font-size:9.5px;">実害あり</span>'
+      : '<span class="bdg ba" style="font-size:9.5px;">注意</span>';
+    html += `<div class="card">
+      <div class="ch"><div class="ct"><div class="cbar"></div>台帳の設定もれ <span class="xs muted">（${esc(mon)}）</span></div>
+        <span class="xs muted">${lines.length}人</span></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th style="width:88px;">社員番号</th>
+          <th style="width:150px;">氏名</th>
+          <th style="width:80px;">印</th>
+          <th style="width:230px;">足りないもの</th>
+          <th>どうなるか</th>
+          <th style="width:86px;">直す</th>
+        </tr></thead>
+        <tbody>${lines.map(({st,iss})=>{
+          const q=esc(st.name).replace(/'/g,"\\'");
+          return iss.map((x,i)=>`<tr>
+            ${i===0?`<td rowspan="${iss.length}" class="mono" style="color:var(--amb2);font-weight:700;vertical-align:top;">${st.empNo?esc(String(st.empNo)):'<span style="color:var(--red2)">未設定</span>'}</td>
+            <td rowspan="${iss.length}" class="fw7" style="vertical-align:top;">${staffLink(st.name)}
+              <div style="font-size:9px;color:var(--txt3);">${esc(st.office||'')}${st.kubun?('　'+esc(st.kubun)):''}</div></td>`:''}
+            <td>${badge(x.lv)}</td>
+            <td style="font-size:12px;color:${x.lv==='red'?'var(--red2)':'var(--amb2)'};font-weight:700;">${esc(x.what)}
+              ${x.hint?`<div style="font-size:9px;color:var(--txt3);font-weight:400;">${esc(x.hint)}</div>`:''}</td>
+            <td class="xs" style="color:var(--txt2);">${esc(x.why)}</td>
+            <td><button class="btn b-gh btn-sm" style="font-size:10.5px;"
+                  onclick="_adjGoStaff('${q}','${esc(x.tab)}','${esc(x.field)}')">直す</button></td>
+          </tr>`).join('');
+        }).join('')}</tbody>
+      </table></div>
+    </div>`;
+  }
+
+  body.innerHTML=html;
 }
 
 function renderWorkTime(){
