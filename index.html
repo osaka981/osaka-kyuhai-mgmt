@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.42</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.44</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5009,9 +5009,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <input type="text" id="loc-clientBranch" class="fi" placeholder="○○郵便局">
       </div>
     </div>
-    <div class="fg mb8"><label>インボイス登録番号</label>
-      <input type="text" id="loc-invoiceNo" class="fi" placeholder="T1234567890123">
-    </div>
+    <!-- ★ 2026-10-09.44: インボイス登録番号の欄を外した。
+         請求書に出るのは「自社」の登録番号で、そちらはシステム設定の自社情報から取る。
+         ここは請求先（郵便局）の欄で、どの書類にも出ていなかった。
+         保存済みの値はそのまま残す（消さない）。 -->
 
     <!-- 郵便局単価 -->
     <!-- ★ 2026-10-09.15: 税区分を拠点マスタに追加。郵便局への請求は税別が既定。 -->
@@ -5223,9 +5224,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <input type="text" id="of-clientBranch" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="○○郵便局">
         </div>
       </div>
-      <div class="fg"><label style="font-size:9px;">インボイス登録番号</label>
-        <input type="text" id="of-invoiceNo" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="T1234567890123">
-      </div>
+      <!-- ★ 2026-10-09.44: インボイス登録番号の欄を外した（自社の番号はシステム設定から） -->
     </div>
   </div>
 
@@ -5481,7 +5480,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.42';
+const APP_VER = '2026-10-09.44';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6100,6 +6099,60 @@ function _dashDelOffices(){
   return [...names].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
 }
 
+/* ════════ 営業所の選択肢（2026-10-09.44） ════════
+   営業所を選ぶ場所が、拠点マスタを見るものと旧マスタ（D.offices）を
+   そのまま読むものに分かれていて、旧マスタ直読みの画面では
+   廃止・終了した営業所が選択肢に残り、拠点マスタにしか無い局は出なかった。
+   ここに1本化する。
+
+     _offPickNames(kind)      新しく入れるとき … 現役の拠点だけ
+                              kind: ''＝全部 / 'del'＝宅配 / 'col'＝集荷
+     _offFilterNames(rows...) 絞り込むとき     … 現役 ∪ そのデータに出てくる名前
+                              （廃止局を消すと過去の日報が絞れなくなるため）
+   ──────────────────────────────────────── */
+function _offPickNames(kind){
+  const k=String(kind||'');
+  if(k==='del'){
+    // 宅配拠点。日報に出るだけの廃止・終了局は入れない（新しく入れる欄なので）
+    const dead=new Set((D.offices||[])
+      .filter(o=>o && o.name && (o.status==='廃止' || o.status==='終了' || o.active===false)).map(o=>o.name));
+    const dis=(typeof _disabledLocNames==='function') ? _disabledLocNames() : new Set();
+    const live=new Set((D.locations||[])
+      .filter(l=>l && l.name && l.active!==false).map(l=>l.name));
+    return ((typeof _dashDelOffices==='function') ? _dashDelOffices() : [])
+      .filter(n => live.has(n) || (!dead.has(n) && !dis.has(n)));
+  }
+  const base=(typeof _ownOfficeNames==='function') ? _ownOfficeNames() : [];
+  if(k!=='col') return base;
+  // 集荷拠点だけに絞る（拠点マスタ優先、旧マスタの集荷チェックも拾う）
+  const col=new Set();
+  (D.locations||[]).forEach(l=>{
+    if(l && l.name && l.active!==false && (l.typesCol || l.type==='col_office')) col.add(l.name);
+  });
+  (D.offices||[]).forEach(o=>{
+    if(!o || !o.name) return;
+    if(o.active===false || o.status==='廃止' || o.status==='終了') return;
+    if(o.typesCol===true) col.add(o.name);
+  });
+  const hit=base.filter(n=>col.has(n));
+  return hit.length ? hit : [...col].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+}
+/* 絞り込み用。渡した日報の office も足して、過去のぶんが絞れなくならないようにする */
+function _offFilterNames(){
+  const names=new Set((typeof _ownOfficeNames==='function') ? _ownOfficeNames() : []);
+  [].slice.call(arguments).forEach(rows=>{
+    (rows||[]).forEach(r=>{ if(r && r.office) names.add(r.office); });
+  });
+  return [...names].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+}
+/* 旧マスタのうち、いま使える営業所だけ（IDで持っている画面向け） */
+function _offLiveRecords(){
+  const dis=(typeof _disabledLocNames==='function') ? _disabledLocNames() : new Set();
+  return (D.offices||[]).filter(o=> o && o.name
+    && o.active!==false && !dis.has(o.name)
+    && o.status!=='廃止' && o.status!=='終了');
+}
+
 function getBillingLocations(){
   return (D.locations||[]).filter(l=>l.isBilling===true && l.active!==false)
     .sort((a,b)=>(a.order||99)-(b.order||99));
@@ -6350,7 +6403,7 @@ function setLocFilter(deptId){
 function openOfficeFromLocation(locationId){
   // resetStaffModal相当: m-officeをクリーン状態に
   ['of-code','of-name','of-addr','of-tel','of-fax','of-head',
-   'of-isBilling','of-clientCompany','of-clientBranch','of-invoiceNo',
+   'of-isBilling','of-clientCompany','of-clientBranch',
    'of-status-reason'].forEach(id=>{const e=$(id);if(!e)return; if(e.type==='checkbox')e.checked=false; else e.value='';});
   if($('of-type-del'))$('of-type-del').checked=false;
   if($('of-type-col'))$('of-type-col').checked=false;
@@ -6431,7 +6484,6 @@ function openLocModal(id){
   document.getElementById('loc-isBilling').checked = !!l?.isBilling;
   document.getElementById('loc-clientCompany').value = l?.clientCompany || (l?.type==='post_office'?'日本郵便株式会社':'');
   document.getElementById('loc-clientBranch').value = l?.clientBranch || '';
-  document.getElementById('loc-invoiceNo').value = l?.invoiceNo || '';
 
   // 単価
   const p = l?.prices || {};
@@ -6673,7 +6725,7 @@ function saveLocation(){
     isBilling = document.getElementById('loc-isBilling').checked && (type === 'post_office');
     clientCompany = isBilling ? document.getElementById('loc-clientCompany').value.trim() : '';
     clientBranch  = isBilling ? document.getElementById('loc-clientBranch').value.trim() : '';
-    invoiceNo     = isBilling ? document.getElementById('loc-invoiceNo').value.trim() : '';
+    invoiceNo     = existingLoc?.invoiceNo || '';   // ★ 2026-10-09.44: 欄を外したので既存値を引き継ぐ
     const rawPrices = {
       kanryo: parseFloat(document.getElementById('loc-price-kanryo').value) || 0,
       tenso:  parseFloat(document.getElementById('loc-price-tenso').value) || 0,
@@ -19305,8 +19357,9 @@ function renderStaff(flt){
     (D.locations||[]).forEach(l => {
       if(l.name && (l.typesDel || l.prices?.kanryo > 0)) officeOptsList.add(l.name);
     });
-    (D.offices||[]).forEach(o => { if(o.name) officeOptsList.add(o.name); });
-    if(s.office) officeOptsList.add(s.office);
+    // ★ 2026-10-09.44: 廃止・終了した営業所は候補に出さない
+    _offLiveRecords().forEach(o => { if(o.name) officeOptsList.add(o.name); });
+    if(s.office) officeOptsList.add(s.office);   // いま入っている値は残す
     const officeOpts = ['<option value="">─</option>']
       .concat([...officeOptsList].sort().map(name => `<option value="${esc(name)}" ${(s.office||'')===name?'selected':''}>${esc(name)}</option>`))
       .join('');
@@ -19342,7 +19395,8 @@ function _populateStaffBulkSelects(){
     (D.locations||[]).forEach(l => {
       if(l.name && (l.typesDel || l.prices?.kanryo > 0)) names.add(l.name);
     });
-    (D.offices||[]).forEach(o => { if(o.name) names.add(o.name); });
+    // ★ 2026-10-09.44: 廃止・終了した営業所は候補に出さない
+    _offLiveRecords().forEach(o => { if(o.name) names.add(o.name); });
     const opts = ['<option value="">─ 拠点 ─</option>']
       .concat([...names].sort().map(n => `<option value="${esc(n)}">${esc(n)}</option>`))
       .join('');
@@ -19578,8 +19632,9 @@ function openCharterModal(type='del'){
   // 営業所・従事員セレクト更新
   const offSel = $('charter-off');
   if(offSel){
-    offSel.innerHTML = '<option value="">全営業所</option>';
-    D.offices.forEach(o => offSel.innerHTML += `<option value="${o.name}">${o.name}</option>`);
+    // ★ 2026-10-09.44: 旧マスタ全件だと廃止・終了した営業所も出ていた
+    offSel.innerHTML = '<option value="">全営業所</option>'
+      + _offFilterNames(D.delivery, D.pickup).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   }
   const stSel = $('charter-staff');
   if(stSel){
@@ -20162,7 +20217,9 @@ function initPUReportFilters(){
   const mon = $('rpt-pu-mon');
   if(mon && !mon.value){ const d=new Date(); mon.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
   const offSel=$('rpt-pu-off');
-  if(offSel){ offSel.innerHTML='<option value="">全営業所</option>'; D.offices.forEach(o=>offSel.innerHTML+=`<option>${o.name}</option>`); }
+  // ★ 2026-10-09.44: 拠点マスタの現役 ∪ 集荷日報に出てくる営業所
+  if(offSel){ offSel.innerHTML='<option value="">全営業所</option>'
+    + _offFilterNames(D.pickup).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''); }
   const stSel=$('rpt-pu-staff');
   if(stSel){ stSel.innerHTML='<option value="">全従事員</option>'; D.staff.forEach(s=>stSel.innerHTML+=`<option>${s.name}</option>`); }
   const cuSel=$('rpt-pu-cust');
@@ -24995,7 +25052,8 @@ function _populateOfficeFilter(){
   const sel = document.getElementById('sm-office-filter');
   if(!sel) return;
   const cur = sel.value;
-  const offices = [...new Set((D.offices||[]).map(o=>o.name).filter(Boolean))].sort();
+  // ★ 2026-10-09.44: 拠点マスタの現役 ∪ 日報に出てくる営業所（廃止局は出さない）
+  const offices = _offFilterNames(D.delivery, D.pickup);
   sel.innerHTML = '<option value="">全営業所</option>' + offices.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
   if(cur) sel.value = cur;
 }
@@ -30145,7 +30203,11 @@ function openCompanyModal(coId){
   if($('co-invoice-name'))$('co-invoice-name').value=co?.invoiceName||'';
   const delBtn=$('co-delete-btn');if(delBtn)delBtn.style.display=co?'':'none';
   const offList=$('co-offices-list');
-  if(offList) offList.innerHTML=D.offices.map(o=>{
+  // ★ 2026-10-09.44: 廃止・終了した営業所は出さない（すでに選ばれている分は残す）
+  if(offList) offList.innerHTML=_offLiveRecords()
+    .concat((D.offices||[]).filter(o=>o && (co?.offices||[]).includes(o.id)))
+    .filter((o,i,a)=>a.findIndex(x=>x.id===o.id)===i)
+    .map(o=>{
     const checked=(co?.offices||[]).includes(o.id);
     return `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;background:var(--bg3);border:1px solid ${checked?'var(--grn)':'var(--brd)'};border-radius:5px;padding:5px 10px;font-size:11px;">
       <input type="checkbox" class="co-off-chk" data-id="${o.id}" ${checked?'checked':''} style="width:13px;height:13px;" onchange="this.closest('label').style.borderColor=this.checked?'var(--grn)':'var(--brd)'">
@@ -30663,7 +30725,8 @@ function initPayHistPage(){
 // 営業所タブ描画
 function renderPhOffTabs(){
   const el = $('ph-off-tabs'); if(!el) return;
-  const offices = ['全員', ...D.offices.map(o=>o.name)];
+  // ★ 2026-10-09.44: 廃止・終了した営業所のタブが残らないようにする
+  const offices = ['全員', ..._offFilterNames(D.delivery, D.pickup)];
   el.innerHTML = offices.map(name=>{
     const isActive = name === (_phSelOffice||'全員');
     return `<button class="otab ${isActive?'on':''}" onclick="selectPhOffice('${name.replace(/'/g,"\'")}')">
@@ -31386,7 +31449,6 @@ function editOffice(id){
   if($('of-isBilling'))     $('of-isBilling').checked     = !!relLoc?.isBilling;
   if($('of-clientCompany')) $('of-clientCompany').value   = relLoc?.clientCompany || (o.typesDel?'日本郵便株式会社':'');
   if($('of-clientBranch'))  $('of-clientBranch').value    = relLoc?.clientBranch  || o.name || '';
-  if($('of-invoiceNo'))     $('of-invoiceNo').value       = relLoc?.invoiceNo     || '';
   // 表示制御(拠点種別に応じて)
   onOfLocTypeChange();
 
@@ -31531,7 +31593,7 @@ function addOffice(){
         loc.isBilling     = !!$('of-isBilling')?.checked;
         loc.clientCompany = $('of-clientCompany')?.value.trim() || loc.clientCompany || '';
         loc.clientBranch  = $('of-clientBranch')?.value.trim()  || loc.clientBranch  || offData.name;
-        loc.invoiceNo     = $('of-invoiceNo')?.value.trim()     || '';
+        // ★ 2026-10-09.44: 欄を外したので触らない（loc.invoiceNo は既存値のまま）
       }
       /* ★ 2026-10-09.14: 営業所マスタから拠点マスタへ単価を書き戻すのをやめた。
          ここで postPrices を拠点マスタへ写していたため、営業所の画面を開いて
@@ -38955,7 +39017,9 @@ function selectDdPost(name){
 function filterPuOff(input){
   const q=(input?.value||'').trim();
   // 集荷事業(typesCol=true)の営業所のみ候補に出す
-  const colOffices=D.offices.filter(o=>o.typesCol);
+  // ★ 2026-10-09.44: 拠点マスタの集荷拠点（現役のみ）に合わせる
+  const _colNames=new Set(_offPickNames('col'));
+  const colOffices=_offLiveRecords().filter(o=>o.typesCol || _colNames.has(o.name));
   const items=colOffices.map(o=>{
     const dispNo=dispCode(o.officeCode||'');
     const match=!q||matchQuery(dispNo,q)||matchQuery(o.name,q)||matchQuery(o.officeCode||'',q);
@@ -39826,15 +39890,55 @@ function _calcPostBilling(locationIdOrName, monStr){
     subtotal += amount;
   });
 
+  /* ★ 2026-10-09.43: 請求書の「駐車料金」行。
+     郵便局の請求書では、駐車料金は消費税(10%)の下に独立した行として
+     税込のまま載る（道路通行料・その他と並ぶ）。
+     ドライバーが立て替えた実費をそのまま請求するので、ここは税を掛けない。
+     別紙「駐車場領収書明細」もこの明細から作る。 */
+  const parkingRows=[];
+  delRows.forEach(r=>{
+    const pk=parseInt(r.parking)||0;
+    if(pk>0) parkingRows.push({date:r.date||'', amount:pk, staff:r.staff||'', id:r.id});
+  });
+  parkingRows.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const parking = parkingRows.reduce((n,x)=>n+x.amount, 0);
+
+  /* 違約金の相殺。月締めで入れた違約金のうち、
+     「郵便局の請求で相殺する月（penaltyBillYm）」がこの月で、この局のものだけ。
+     本人から回収する月（penaltyDeductYm）は給与側で使う別の月。 */
+  const penaltyRows=[];
+  try{
+    (typeof _adjAll==='function' ? _adjAll() : []).forEach(a=>{
+      if(!a) return;
+      const pen=parseInt(a.penalty)||0; if(pen<=0) return;
+      if(String(a.penaltyBillYm || a.ym || '').slice(0,7) !== monStr) return;
+      const ao=String(a.office||'');
+      if(ao){ if(ao!==locName) return; }
+      else {
+        const st=(D.staff||[]).find(x=>x&&x.name===a.staff);
+        if(String(st?.office||'')!==locName) return;   // 局の無い古い記録はメイン局で拾う
+      }
+      penaltyRows.push({staff:a.staff||'', amount:pen, reason:a.penaltyReason||'', from:String(a.ym||'').slice(0,7)});
+    });
+  }catch(e){}
+  const penalty = penaltyRows.reduce((n,x)=>n+x.amount, 0);
+
+  const taxAmt = Math.floor(subtotal * 0.1);
+  const grandTotal = subtotal + taxAmt + parking - penalty;
+
   return {
     location: loc,
     locationName: locName,
     items,
     subtotal,
+    taxAmt,
+    parking, parkingRows,
+    penalty, penaltyRows,
+    grandTotal,
     workDays: agg.workDays.size,
     rawAgg: agg,
     colCompanyAgg,
-    hasData: items.length > 0,
+    hasData: items.length > 0 || parking > 0,
   };
 }
 
@@ -39848,9 +39952,12 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
   const info = (typeof _getSystemInfo==='function' ? _getSystemInfo() : {});
 
   // 税計算(税抜扱い)
+  // ★ 2026-10-09.43: 駐車料金は消費税の下の独立行（税込）。違約金はここで相殺する。
   const taxEx = bill.subtotal;
-  const taxAmt = Math.floor(taxEx * 0.1);
-  const grand = taxEx + taxAmt;
+  const taxAmt = (bill.taxAmt!=null) ? bill.taxAmt : Math.floor(taxEx * 0.1);
+  const parking = bill.parking || 0;
+  const penalty = bill.penalty || 0;
+  const grand = (bill.grandTotal!=null) ? bill.grandTotal : (taxEx + taxAmt + parking - penalty);
 
   // 宛先(郵便局の契約情報から)
   const clientCo = loc?.clientCompany || '日本郵便株式会社';
@@ -39885,7 +39992,9 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
   const version = opts.version||1;
   const versionLabel = version>1?`<span class="fb-version">(第${version}版)</span>`:'';
 
-  const noteLine = `※ 単価・金額は税抜表示となっております。お振込は税込合計 ¥${grand.toLocaleString()} にてお願い申し上げます。`;
+  const noteLine = `※ 単価・金額は税抜表示となっております。駐車料金は税込の立替実費です。`
+    + (penalty>0?` 違約金 ¥${penalty.toLocaleString()} を相殺しております。`:'')
+    + ` お振込は総合計額(税込) ¥${grand.toLocaleString()} にてお願い申し上げます。`;
 
   const html = `
   <div class="fb-paper">
@@ -39943,11 +40052,40 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
         ${itemRows}
         ${blanks}
         <tr class="total">
-          <td colspan="4" style="text-align:right;">頁 計(税抜)</td>
+          <td colspan="4" style="text-align:right;">小　計(税抜)</td>
           <td class="tot-val">${taxEx.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right;">消費税(10%)</td>
+          <td class="num">${taxAmt.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right;">駐車料金<span style="font-size:9px;color:#666;">（税込・立替実費）</span></td>
+          <td class="num">${parking.toLocaleString()}</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right;">道路通行料</td>
+          <td class="num">0</td>
+        </tr>
+        <tr>
+          <td colspan="4" style="text-align:right;">その他</td>
+          <td class="num">0</td>
+        </tr>
+        ${penalty>0?`
+        <tr>
+          <td colspan="4" style="text-align:right;">違約金 相殺</td>
+          <td class="num">-${penalty.toLocaleString()}</td>
+        </tr>`:''}
+        <tr class="total">
+          <td colspan="4" style="text-align:right;">総合計額(税込)</td>
+          <td class="tot-val">${grand.toLocaleString()}</td>
         </tr>
       </tbody>
     </table>
+    ${parking>0?`
+    <div style="font-size:9px;color:#444;margin-top:2mm;">
+      ※ 駐車料金は別紙「駐車場領収書明細」のとおりです（${(bill.parkingRows||[]).length}件・合計 ¥${parking.toLocaleString()}）。
+    </div>`:''}
 
     ${typeof _buildBankInfoBlock==='function' ? _buildBankInfoBlock('') : ''}
 
@@ -39965,6 +40103,78 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
     targetId: loc?.id,
     month: monStr,
   };
+}
+
+/* ════════ 別紙「駐車場領収書明細」 ════════
+   ★ 2026-10-09.43: 郵便局の請求書に付ける別紙。
+     日付・金額・担当者の3列で、合計が請求書の「駐車料金」行と一致する。
+     元データは宅配日報の driver 入力（form.teate.parking）。 */
+function _buildParkingDetailHTML(locationId, monStr){
+  const bill = _calcPostBilling(locationId, monStr);
+  const rows = bill.parkingRows || [];
+  if(!rows.length) return null;
+  const loc  = bill.location;
+  const info = (typeof _getSystemInfo==='function' ? _getSystemInfo() : {});
+  const today = (new Date()).toISOString().slice(0,10);
+  const total = bill.parking || 0;
+  const jpDate = d => {
+    const m=String(d||'').replace(/\//g,'-').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? (Number(m[2])+'月'+Number(m[3])+'日') : esc(String(d||''));
+  };
+  const blank = Math.max(0, 18 - rows.length);
+
+  const html = `
+  <div style="font-family:'Meiryo',sans-serif;color:#000;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6mm;">
+      <div>
+        <div style="font-size:11pt;">${esc(loc?.clientCompany||'日本郵便株式会社')}</div>
+        <div style="font-size:12pt;font-weight:700;">${esc(loc?.clientBranch||loc?.name||'')}　御中</div>
+      </div>
+      <div style="text-align:right;font-size:9pt;line-height:1.7;">
+        <div>発行日：${today}</div>
+        <div style="font-size:11pt;font-weight:700;">${esc(info.companyName||'大阪急配株式会社')}</div>
+        ${info.tel?`<div>${esc(info.tel)}</div>`:''}
+      </div>
+    </div>
+    <h1 style="text-align:center;font-size:16pt;letter-spacing:.4em;padding-left:.4em;margin:0 0 4mm;">駐車場領収書明細</h1>
+    <div style="text-align:center;font-size:10pt;margin-bottom:5mm;">
+      対象期間：${esc(String(monStr).replace('-','年'))}月分　（${esc(loc?.name||'')}）
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:10.5pt;">
+      <thead>
+        <tr style="background:#f0f0f0;">
+          <th style="border:0.75pt solid #000;padding:2mm;width:28%;">日付</th>
+          <th style="border:0.75pt solid #000;padding:2mm;width:27%;">金額</th>
+          <th style="border:0.75pt solid #000;padding:2mm;">担当者</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r=>`<tr>
+          <td style="border:0.75pt solid #000;padding:1.8mm 2mm;text-align:center;">${jpDate(r.date)}</td>
+          <td style="border:0.75pt solid #000;padding:1.8mm 2mm;text-align:right;">¥${r.amount.toLocaleString()}</td>
+          <td style="border:0.75pt solid #000;padding:1.8mm 2mm;">${esc(r.staff)}</td>
+        </tr>`).join('')}
+        ${Array(blank).fill('<tr><td style="border:0.75pt solid #000;padding:1.8mm 2mm;">&nbsp;</td><td style="border:0.75pt solid #000;"></td><td style="border:0.75pt solid #000;"></td></tr>').join('')}
+        <tr style="background:#f0f0f0;font-weight:700;">
+          <td style="border:0.75pt solid #000;padding:2.4mm 2mm;text-align:center;">合　計</td>
+          <td style="border:0.75pt solid #000;padding:2.4mm 2mm;text-align:right;font-size:12pt;">¥${total.toLocaleString()}</td>
+          <td style="border:0.75pt solid #000;padding:2.4mm 2mm;text-align:right;font-size:9pt;">${rows.length}件</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="font-size:9pt;color:#444;margin-top:4mm;line-height:1.7;">
+      ※ 上記合計額は請求書の「駐車料金」欄と一致します。<br>
+      ※ 領収書の原本は各担当者の日報に添付しております。
+    </div>
+  </div>`;
+  return {title:'駐車場領収書明細', html, total, count:rows.length,
+          target:loc?.name||String(locationId), month:monStr};
+}
+/* 一覧から別紙だけを印刷する */
+function printParkingDetail(locationId, monStr){
+  const doc = _buildParkingDetailHTML(locationId, monStr);
+  if(!doc){ showAlert({msg:'この月・この郵便局の駐車料金の立替はありません。'}); return; }
+  if(typeof _printDocWindow==='function') _printDocWindow(doc.title, doc.html);
 }
 
 // 郵便局請求書を発行(印刷+履歴保存)
@@ -40068,6 +40278,7 @@ function renderTSInv(){
         <td class="xs muted">${esc(loc.clientCompany||'日本郵便株式会社')}<br>${esc(loc.clientBranch||loc.name)}</td>
         <td class="tr dim">—</td><td class="tr dim">—</td>
         <td class="tr dim">—</td><td class="tr dim">—</td><td class="tr dim">—</td>
+        <td class="tr dim">—</td><td class="tr dim">—</td>
         <td>${hasPrice?'<span class="bdg bz">日報なし</span>':'<span class="bdg br">単価未設定</span>'}</td>
         <td></td></tr>`;
       return;
@@ -40086,14 +40297,18 @@ function renderTSInv(){
       <td class="tr mono">${fmt((bill.rawAgg&&bill.rawAgg.kanryo)||0)}</td>
       <td class="tr mono fw7" style="color:var(--tel2);">¥${fmt(ex)}</td>
       <td class="tr mono">¥${fmt(tax)}</td>
-      <td class="tr mono fw7">¥${fmt(ex+tax)}</td>
+      <td class="tr mono" style="color:var(--grn2);">${bill.parking?('¥'+fmt(bill.parking)):'<span class="dim">0</span>'}
+        ${bill.parking?`<div style="font-size:9px;color:var(--txt3);">${(bill.parkingRows||[]).length}件</div>`:''}</td>
+      <td class="tr mono" style="color:var(--red2);">${bill.penalty?('-¥'+fmt(bill.penalty)):'<span class="dim">0</span>'}</td>
+      <td class="tr mono fw7">¥${fmt(bill.grandTotal!=null?bill.grandTotal:(ex+tax))}</td>
       <td>${bill_ok
             ? (issued?`<span class="bdg bg">発行済 v${issued.version||1}</span>`:'<span class="bdg bz">未発行</span>')
             : '<span class="bdg ba">請求対象外</span>'}
           ${hasPrice?'':'<div style="margin-top:2px;"><span class="bdg br" style="font-size:9px;">単価未設定</span></div>'}</td>
       <td>${bill_ok
             ? `<button class="btn b-red btn-sm" onclick="generatePostInvoice(${loc.id},'${esc(mon)}')">発行</button>`
-            : '<span class="xs muted">—</span>'}</td>
+            : '<span class="xs muted">—</span>'}
+          ${bill.parking?`<button class="btn b-gh btn-sm" style="margin-top:3px;" onclick="printParkingDetail(${loc.id},'${esc(mon)}')">駐車明細</button>`:''}</td>
     </tr>`;
   });
 
@@ -40129,7 +40344,10 @@ function renderTSInv(){
           <th>郵便局</th><th>宛先</th>
           <th class="tr">稼働日</th><th class="tr">完了個数</th>
           <th class="tr" style="color:var(--tel2);">売上（税抜）</th>
-          <th class="tr">消費税</th><th class="tr">税込</th>
+          <th class="tr">消費税</th>
+          <th class="tr" style="color:var(--grn2);">駐車料金<div style="font-size:9px;font-weight:400;color:var(--txt3);">立替・税込</div></th>
+          <th class="tr" style="color:var(--red2);">違約金相殺</th>
+          <th class="tr">総合計（税込）</th>
           <th>状況</th><th>操作</th>
         </tr></thead>
         <tbody>${rows}</tbody>
