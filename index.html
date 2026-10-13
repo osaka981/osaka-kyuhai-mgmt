@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.46</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-13.64</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2081,6 +2081,26 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
 
     <!-- ══ 勤務時間 (2026-09-22.6) ══ -->
+    <!-- ══ 日報の未入力（2026-10-09.57） ══ -->
+    <div id="s-nyuryoku" class="sec">
+      <div class="card mb12">
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:center;">
+          <button class="btn b-gh btn-sm" onclick="setNyuDay(-1)">◀ 前の日</button>
+          <input type="date" id="nyu-date" class="fi" style="width:auto;" onchange="renderNyuryoku()">
+          <button class="btn b-gh btn-sm" onclick="setNyuDay(1)">次の日 ▶</button>
+          <button class="btn b-gh btn-sm" onclick="renderNyuryoku()">🔄 もう一度調べる</button>
+        </div>
+        <div class="al al-i mt8" style="font-size:11px;">
+          <span>ℹ️</span>
+          <span>その日に<b>出ているはずなのに日報が来ていない</b>人と顧客を出します。<br>
+          出ているはずの決め方は<b>直近4週の同じ曜日の実績</b>（2回以上）です。シフト表は別のアプリにあるため、
+          いまは実績から割り出しています。<b>休業日管理</b>で休みを登録してあるものは薄く出します。</span>
+        </div>
+      </div>
+      <div id="nyu-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
+      <div id="nyu-body"></div>
+    </div>
+
     <!-- ══ データ健診（2026-10-09.45） ══
          台帳の設定もれで支払い・月締めが0円になるのを防ぐ点検画面。 -->
     <div id="s-data-check" class="sec">
@@ -3857,6 +3877,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 集荷単価タブ -->
   <div id="cu-ptab-content-col" style="background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
+    <!-- ★ 2026-10-09.54: 単価の適用年月（帯） -->
+    <div id="cu-rate-band" style="margin-bottom:10px;"></div>
     <div id="cu-col-price-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;"><!-- ★ 2026/09/12: 品目欄は ITEMS から自動生成（renderCuPriceGrid） --></div>
     <!-- ★ 2026/09/12: 使用品目の選択（optional 品目のみ。既定では非表示） -->
     <div style="margin-top:8px;border-top:1px dashed var(--brd);padding-top:7px;">
@@ -3981,7 +4003,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="mft">
     <button class="btn confirm-btn" onclick="toggleConfirmPanel('cu')" id="cu-confirm-btn">📋 登録確認</button>
     <button class="btn b-gh" onclick="closeM('m-cust')">キャンセル</button>
-    <button class="btn b-grn" onclick="saveCust()">💾 保存</button>
+    <button class="btn b-grn" onclick="saveCustAsk()">💾 保存</button>
   </div>
 </div>
 </div>
@@ -4770,7 +4792,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <!-- 社保・税（社員・パートのみ） -->
     <div id="st-social-ins-section" style="margin-bottom:10px;border-top:2px solid var(--blu2);padding-top:10px;display:none;">
       <div class="xs fw7 mb6" style="color:var(--blu2);">🏛 社保・税（社員・パートのみ）</div>
-      <div class="xs muted mb8">月額を入力してください。等級変更時（年1〜2回）に更新します。</div>
+      <!-- ★ 2026-10-13.64: 社保・税も上の帯の適用年月に乗るようになった -->
+      <div class="xs muted mb8">月額を入力してください。等級改定や料率改定のときは、上の帯で「＋ ○年○月から変更」を押してから新しい額を入れると、その月より前の明細は当時の額で出ます。</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
         <div class="fg"><label style="font-size:9px;">健康保険（円/月）</label><input type="number" id="st-si-health" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
         <div class="fg"><label style="font-size:9px;">介護保険（円/月）</label><input type="number" id="st-si-care" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
@@ -4915,8 +4938,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div class="mft">
     <button class="btn confirm-btn" onclick="toggleConfirmPanel('st')" id="st-confirm-btn">📋 登録確認</button>
     <button class="btn b-gh" onclick="closeM('m-staff')">キャンセル</button>
-    <button class="btn b-blu" onclick="saveStaff(true)">💾 保存して続けて登録</button>
-    <button class="btn b-grn" onclick="saveStaff(false)">💾 保存して閉じる</button>
+    <button class="btn b-blu" onclick="saveStaffAsk(true)">💾 保存して続けて登録</button>
+    <button class="btn b-grn" onclick="saveStaffAsk(false)">💾 保存して閉じる</button>
   </div>
   </div><!-- end m-staff-main -->
 
@@ -5510,7 +5533,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.46';
+const APP_VER = '2026-10-13.64';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6123,6 +6146,10 @@ function _dashDelOffices(){
   (D.offices||[]).forEach(o=>{
     if(!o || !o.name) return;
     if(o.active===false || off.has(o.name)) return;
+    // ★ 2026-10-09.63: 廃止・終了した営業所を、旧マスタの宅配チェックだけで
+    //   拾っていたため、日報が1件も無い廃止局がダッシュボードに並んでいた。
+    //   日報がある局は下の行で拾われるので、過去のぶんは消えない。
+    if(o.status==='廃止' || o.status==='終了') return;
     if(o.typesDel===true) names.add(o.name);
   });
   (D.delivery||[]).forEach(r=>{ if(r && r.office) names.add(r.office); });
@@ -8712,14 +8739,16 @@ function calcResidentTaxMonthly(){
     el.textContent=y>0?'¥'+fmt(m)+'/月（年額¥'+fmt(y)+'÷12）':'−';
   }
 }
-function getResidentTaxMonthly(st){
-  const si=st?.socialIns||{};
+/* ★ 2026-10-13.64: ym を渡すと、その月に効いていた社保・税の設定で計算する。
+   渡さないときは台帳のいまの値（これまでどおり）。 */
+function getResidentTaxMonthly(st, ym){
+  const si=(ym && typeof _siAt==='function') ? _siAt(st, ym) : (st?.socialIns||{});
   if(si.resTaxType==='monthly') return si.resTaxMonthly||0;
   const y=si.resTaxYearly||0;
   return y>0?Math.ceil(y/12):0;
 }
-function getEmploymentIns(st, totalPay){
-  const si=st?.socialIns||{};
+function getEmploymentIns(st, totalPay, ym){
+  const si=(ym && typeof _siAt==='function') ? _siAt(st, ym) : (st?.socialIns||{});
   if(si.empInsType==='fixed') return si.empInsFixed||0;
   const rate=parseFloat(lsGet('sys_emp_ins_rate','0.006'))||0.006;
   return Math.round(totalPay*rate);
@@ -8837,7 +8866,7 @@ function resetStaffModal(){
   CK_LIST.map(ck=>'st-c'+ck).forEach(id=>{const e=$(id);if(e)e.value='';});
   // チャーター/違約金などの行ベースリセット
   // ★ 2026-10-09.46: 単価の適用年月をリセット
-  _stRateYm='';
+  _stRateYm=''; _stRateDirty=false;
   ['st-rate-band-del','st-rate-band-col','st-rate-band-teate'].forEach(id=>{const e=$(id); if(e) e.innerHTML='';});
   ['st-charter-list','st-penalty-list','st-customitems-list'].forEach(id=>{
     const e=$(id);if(e)e.innerHTML='';
@@ -8990,6 +9019,7 @@ const _TOP_TABS = {
   home:     { subs: [
     { s:'dashboard', label:'ダッシュボード' },
     { s:'alert',     label:'アラート', badge:'alert' },
+    { s:'nyuryoku',  label:'日報の未入力', badge:'new' },
   ]},
   post:     { subs: [
     { s:'del',        label:'日報一覧' },
@@ -9131,6 +9161,7 @@ function navByS(s) {
   if (s==='salary')      _call('renderSalary');
   if (s==='month-adj')   _call('renderMonthAdj');   // ★ 2026-10-09.34
   if (s==='data-check')  _call('renderDataCheck'); // ★ 2026-10-09.45
+  if (s==='nyuryoku')    _call('renderNyuryoku');  // ★ 2026-10-09.57
   if (s==='worktime')    _call('renderWorkTime');
   if (s==='pay-history') _call('initPayHistPage');
   if (s==='billing')     _call('renderBilling');
@@ -10264,7 +10295,10 @@ function renderSubOfficeList(){
   if(!chips||!addSel) return;
   const mainOff=$('st-off')?.value||'';
   addSel.innerHTML='<option value="">追加する郵便局を選択...</option>';
-  D.offices.forEach(o=>{
+  /* ★ 2026-10-09.63: ここも旧マスタを全件出していたため、集荷の持込先郵便局や
+     廃止した営業所が「担当郵便局」の候補に並んでいた。宅配拠点だけにする。 */
+  (typeof _offPickNames==='function' ? _offPickNames('del') : (D.offices||[]).map(o=>o&&o.name))
+   .filter(Boolean).map(n=>({name:n})).forEach(o=>{
     if(o.name!==mainOff){
       const opt=document.createElement('option');
       opt.value=o.name; opt.textContent=o.name;
@@ -10469,6 +10503,32 @@ function _findUnregisteredDrivers(){
         : '委託ドライバー',
     });
   });
+
+  /* ★ 2026-10-09.61: 氏名でも見る。
+     IDの形だけで判断していたため、計数アプリでドライバーIDに会社コード（5桁）を
+     入れて運用している人が「委託オーナー」とみなされ、ずっと検出されずにいた。
+     （実例：福留兼太郎さん＝株式会社UPのドライバー、ID 10001）
+     日報に出てくる氏名が従業員台帳に無ければ、IDの形に関わらず知らせる。 */
+  const known = new Set();
+  (D.staff||[]).forEach(s=>{ if(s && s.name) known.add(String(s.name).replace(/[\s　]/g,'')); });
+  const coNames = new Set();
+  (D.companies||[]).forEach(c=>{ if(c && c.name) coNames.add(String(c.name).replace(/[\s　]/g,'')); });
+  const seen = new Set(unregistered.map(u=>u.name && String(u.name).replace(/[\s　]/g,'')).filter(Boolean));
+  const byName = new Map();
+  [D.delivery||[], D.pickup||[], D.attendance||[]].forEach(arr=>{
+    (arr||[]).forEach(r=>{
+      if(!r) return;
+      const nm = r.staff || r.driverName || r.staffName;
+      if(!nm) return;
+      const key = String(nm).replace(/[\s　]/g,'');
+      if(!key || known.has(key) || coNames.has(key) || seen.has(key)) return;
+      if(!byName.has(key)) byName.set(key, {name:String(nm), id:String(r.driverId||r.empNo||r.staffId||''), n:0});
+      byName.get(key).n++;
+    });
+  });
+  byName.forEach(v=>{
+    unregistered.push({ id:v.id||'(IDなし)', name:v.name, type:'氏名が台帳に無い', count:v.n });
+  });
   return unregistered;
 }
 
@@ -10561,8 +10621,19 @@ function _confirmImportedDrivers(){
 
 /** ダッシュボードに未登録ドライバーアラートを表示 */
 function _renderUnregisteredDriversAlert(){
-  const el = document.getElementById('d-alerts');
-  if(!el) return;
+  /* ★ 2026-10-09.62: これまで #d-alerts に書いていたが、同じ renderDash() の中で
+     100行ほど後に $('d-alerts').innerHTML=... で丸ごと上書きされており、
+     「委託会社から新しいドライバー」も「未登録ドライバー」も画面に出ていなかった。
+     （福留兼太郎さんの未登録に誰も気づけなかったのはこれが理由）
+     上書きされない専用の入れ物を、アラート欄の手前に作って出す。 */
+  let el = document.getElementById('d-unreg-cards');
+  if(!el){
+    const host = document.getElementById('d-alerts');
+    if(!host || !host.parentNode) return;
+    el = document.createElement('div');
+    el.id = 'd-unreg-cards';
+    host.parentNode.insertBefore(el, host);
+  }
   const items = _findUnregisteredDrivers();
   let html = '';
 
@@ -10616,7 +10687,8 @@ function _renderUnregisteredDriversAlert(){
       byType[it.type].push(it);
     });
 
-    const typeOrder = ['個人直属', '役員', '委託ドライバー'];
+    // ★ 2026-10-09.61: 氏名で見つけた分も出す（これが無いと検出しても画面に出ない）
+    const typeOrder = ['個人直属', '役員', '委託ドライバー', '氏名が台帳に無い'];
     const sections = typeOrder.filter(t => byType[t]).map(t => {
       const list = byType[t];
       return `<div style="margin-top:8px;">
@@ -10626,6 +10698,7 @@ function _renderUnregisteredDriversAlert(){
             <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 8px;font-size:11px;">
               <span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
               ${it.name ? ' <span style="color:var(--txt);">'+esc(it.name)+'</span>' : ' <span style="color:var(--txt3);">(氏名不明)</span>'}
+              ${it.count ? ' <span style="color:var(--txt3);font-size:10px;">日報'+it.count+'件</span>' : ''}
             </span>
           `).join('')}
         </div>
@@ -10851,15 +10924,19 @@ function renderDash() {
   });
   $('tb-is').innerHTML = ih || '<tr><td colspan="3" style="text-align:center;padding:12px;color:var(--txt2)">データなし</td></tr>';
 
-  // 本日状況
+  /* 本日状況
+     ★ 2026-10-09.63: ここは旧マスタ（D.offices）を全件そのまま並べていたため、
+       集荷の持込先郵便局・堺営業所・廃止した営業所まで出ていた。
+       すぐ上の「郵便局別 宅配実績」は直してあったが、ここが残っていた。
+       宅配拠点だけを並べる。 */
   const td = today();
   let dh='';
-  D.offices.forEach(o=>{
-    const rs=D.delivery.filter(r=>r.date===td&&r.office===o.name);
+  _dashDelOffices().forEach(oName=>{
+    const rs=D.delivery.filter(r=>r.date===td&&r.office===oName);
     const b=rs.length===0?`<span class="bdg br">未入力</span>`:rs.some(r=>r.status==='差異あり')?`<span class="bdg ba">差異あり</span>`:`<span class="bdg bg">完了</span>`;
-    dh+=`<div class="flbc" style="padding:5px 0;border-bottom:1px solid var(--brd);font-size:11.5px;"><span>${officeLink(o.name)}</span>${b}</div>`;
+    dh+=`<div class="flbc" style="padding:5px 0;border-bottom:1px solid var(--brd);font-size:11.5px;"><span>${officeLink(oName)}</span>${b}</div>`;
   });
-  $('d-today').innerHTML = dh;
+  $('d-today').innerHTML = dh || '<div class="xs muted" style="padding:6px 0;">宅配の郵便局が拠点マスタにありません</div>';
 
   // 顧客TOP5
   const ctot={};
@@ -10896,6 +10973,8 @@ function renderDash() {
   $('d-alerts').innerHTML=als.length?als.join(''):'';
   $('d-alert').innerHTML=alHtml;
   $('nb-diff').textContent=diffCnt+unCnt;
+  // ★ 2026-10-09.62: 上書きの後にもう一度描いて、確実に残す
+  try{ _renderUnregisteredDriversAlert(); }catch(e){}
 }
 
 // ─── 宅配日報テーブル ───
@@ -15171,13 +15250,16 @@ function fmtUnitPrice(v){
 //   契約していない単価を勝手に当てるのは誤請求に直結するので、未登録は0円とする。
 // ★ 2026/09/12: 上記の経緯から品目マスタの既定単価そのものを廃止した。
 //   単価は顧客ごと(colPrices)・委託会社ごと(prices.col)にのみ持たせる。
-function getCustPrice(cu, k){
+/* ★ 2026-10-09.54: ym を渡すと、その月に効いていた単価を返す。
+   渡さないときは今までどおり顧客マスタのいまの単価（＝いちばん新しい単価）。 */
+function getCustPrice(cu, k, ym){
   if(!cu) return 0;
+  const _at = (ym && typeof _cuRateAt==='function') ? (_cuRateAt(cu, ym)||{}).col : null;
   // 新形式 colPrices
-  if(cu.colPrices){
+  if(_at || cu.colPrices){
     const ck=IK_COL_MAP[k];
     if(ck && ck!=='charter'){
-      const v = cu.colPrices[ck];
+      const v = _at ? _at[ck] : cu.colPrices[ck];
       if(v !== undefined && v !== null && v !== '') return Number(v)||0;
     }
   }
@@ -16703,6 +16785,251 @@ async function onCuZipBlur(){
   }catch(e){}
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.54: 顧客の集荷単価にも適用年月を持たせる
+     顧客の単価を直すと、過去の月の請求書まで新しい単価で再計算されていた。
+     持ち方・考え方は従事員・委託会社と同じ。
+       customer.rateHistory = [{ ym, note, col:{...} }]
+       いちばん古い行は ym:'0000-01'＝「はじめから」
+       顧客マスタの単価欄は「いちばん新しい行」と同じ（1本化）
+   ════════════════════════════════════════════════════════════ */
+let _cuRateYm = '';
+let _cuRateDirty = false;
+
+function _cuRateCust(){
+  const id=$('m-cust')?._editId;
+  return id ? (D.customers||[]).find(c=>c && String(c.id)===String(id)) : null;
+}
+function _cuRateSnapOf(cu){
+  return { col: JSON.parse(JSON.stringify((cu && (cu.colPrices||cu.prices)) || {})) };
+}
+function _cuRateList(cu){
+  if(!cu) return [];
+  if(!Array.isArray(cu.rateHistory)) cu.rateHistory=[];
+  if(!cu.rateHistory.length){
+    cu.rateHistory.push(Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _cuRateSnapOf(cu)));
+  }
+  cu.rateHistory.sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')));
+  return cu.rateHistory;
+}
+/* その月に効いている顧客の集荷単価 */
+function _cuRateAt(cu, ym){
+  const t=_rateYm(ym);
+  const list=(cu && Array.isArray(cu.rateHistory)) ? cu.rateHistory.slice()
+             .sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||''))) : [];
+  if(!list.length) return _cuRateSnapOf(cu);
+  if(!t) return list[list.length-1];
+  let hit=null;
+  list.forEach(h=>{ if(String(h.ym||'')<=t) hit=h; });
+  return hit || list[0];
+}
+/* 画面から集荷単価を集める（保存と同じ形） */
+function _cuCollectRate(){
+  const cu=_cuRateCust();
+  const prev=(cu && (cu.colPrices||{})) || {};
+  const o={...prev}; o._tax={...(prev._tax||{})};
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      const fid='cu-c'+ck;
+      if(!$(fid)) return;
+      o[ck]=(typeof itemTaxConv==='function') ? itemTaxConv(fid) : (parseFloat($(fid).value)||0);
+      if(typeof getItemTax==='function') o._tax[ck]=getItemTax(fid);
+    });
+  }
+  return { col:o };
+}
+function _cuRateLoadForm(h){
+  if(!h) return;
+  const c=h.col||{};
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      const e=$('cu-c'+ck); if(!e) return;
+      e.value=(c[ck]==null)?'':c[ck];
+      if(c._tax && c._tax[ck] && typeof setItemTax==='function'){ try{ setItemTax('cu-c'+ck, c._tax[ck]); }catch(e2){} }
+    });
+  }
+}
+function renderCuRateBand(){
+  const box=$('cu-rate-band'); if(!box) return;
+  const cu=_cuRateCust();
+  if(!cu){
+    box.innerHTML='<div class="xs" style="color:var(--txt3);padding:6px 8px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">新しく登録する顧客の単価です。保存したあと「○年○月から変更」で単価の切り替えを登録できます。</div>';
+    return;
+  }
+  const list=_cuRateList(cu);
+  if(!_cuRateYm || !list.some(h=>h.ym===_cuRateYm)) _cuRateYm=list[list.length-1].ym;
+  const cur=list.find(h=>h.ym===_cuRateYm) || list[list.length-1];
+  const isLatest=(cur.ym===list[list.length-1].ym);
+  const opts=list.slice().reverse().map(h=>
+    `<option value="${esc(h.ym)}"${h.ym===_cuRateYm?' selected':''}>${esc(_rateYmLabel(h.ym))}${h.note?('　'+esc(h.note)):''}</option>`).join('');
+  box.innerHTML=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:6px;
+      background:${isLatest?'rgba(74,122,155,.10)':'rgba(184,134,11,.12)'};
+      border:1px solid ${isLatest?'var(--blu)':'var(--amb2)'};">
+    <span style="font-size:10px;font-weight:700;color:${isLatest?'var(--blu2)':'var(--amb2)'};white-space:nowrap;">
+      ${isLatest?'📅 いまの単価':'📅 過去の単価を表示中'}</span>
+    <select class="fi" style="width:auto;font-size:11.5px;padding:3px 7px;" onchange="cuRateSwitch(this.value)">${opts}</select>
+    <input type="text" class="fi" id="cu-rate-note" value="${esc(cur.note||'')}" placeholder="変更の理由（例：料金改定）"
+      oninput="cuRateNote(this)" style="width:190px;font-size:11px;padding:3px 7px;">
+    <div style="flex:1;"></div>
+    <button type="button" class="btn b-grn btn-sm" style="font-size:10.5px;" onclick="cuRateNew()">＋ ○年○月から変更</button>
+    ${(list.length>1 && cur.ym!==RATE_BASE_YM)
+      ? `<button type="button" class="btn b-gh btn-sm" style="font-size:10.5px;" onclick="cuRateDelete('${esc(cur.ym)}')">この行を消す</button>`:''}
+    <div style="flex-basis:100%;font-size:9px;color:var(--txt2);line-height:1.5;">
+      ${isLatest
+        ? 'ここの単価を直すと、'+esc(_rateYmLabel(cur.ym))+'の分から変わります。前の月の請求書は変わりません。'
+        : '<b style="color:var(--amb2);">いま直すと '+esc(_rateYmLabel(cur.ym))+'〜 の請求が変わります。</b>'}
+    </div>
+  </div>`;
+}
+function cuRateNote(el){
+  const cu=_cuRateCust(); if(!cu || !_cuRateYm) return;
+  const h=(cu.rateHistory||[]).find(x=>x.ym===_cuRateYm);
+  if(h) h.note=el.value;
+}
+function cuRateSwitch(ym){
+  const cu=_cuRateCust(); if(!cu) return;
+  const h0=(cu.rateHistory||[]).find(x=>x.ym===_cuRateYm);
+  if(h0){ h0.col=_cuCollectRate().col; }
+  _cuRateYm=String(ym||'');
+  const h=_cuRateList(cu).find(x=>x.ym===_cuRateYm);
+  if(h) _cuRateLoadForm(h);
+  renderCuRateBand();
+}
+function cuRateNew(){
+  const cu=_cuRateCust();
+  if(!cu){ showAlert({msg:'先に一度保存してから、単価の切り替えを登録してください。'}); return; }
+  const d=new Date();
+  const def=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const v=prompt('いつの分から新しい単価にしますか。\n\n年月を 2026-11 のように入れてください。', def);
+  if(v==null) return;
+  const ym=_rateYm(v);
+  if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。2026-11 のように入れてください。'}); return; }
+  const list=_cuRateList(cu);
+  if(list.some(h=>h.ym===ym)){
+    _cuRateYm=ym; _cuRateDirty=true; renderCuRateBand();
+    if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+' の行に切り替えました。いま画面に出ている数字で保存されます。');
+    return;
+  }
+  cu.rateHistory.push({ym, note:'', col:_cuCollectRate().col});
+  cu.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  _cuRateYm=ym; _cuRateDirty=true;
+  renderCuRateBand();
+  if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+'の単価にしました。前の単価はそのまま残っています。保存を押すと確定します。');
+}
+function cuRateDelete(ym){
+  const cu=_cuRateCust(); if(!cu) return;
+  showConfirm(_rateYmLabel(ym)+' の単価を消しますか。\nこの月以降は、ひとつ前の単価が使われます。', ()=>{
+    cu.rateHistory=(cu.rateHistory||[]).filter(h=>h.ym!==ym);
+    const list=_cuRateList(cu);
+    _cuRateYm=list[list.length-1].ym;
+    _cuRateLoadForm(list[list.length-1]);
+    renderCuRateBand();
+  });
+}
+/* 保存のあと：画面の値をその行に入れ、顧客の単価欄はいちばん新しい行に揃える */
+function _cuRateCommit(cu){
+  if(!cu) return;
+  if(!Array.isArray(cu.rateHistory) || !cu.rateHistory.length){
+    cu.rateHistory=[Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _cuRateSnapOf(cu))];
+    return;
+  }
+  cu.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  const editing=_cuRateYm && cu.rateHistory.find(h=>h.ym===_cuRateYm);
+  if(editing) editing.col=_cuCollectRate().col;
+  const last=cu.rateHistory[cu.rateHistory.length-1];
+  cu.colPrices=Object.assign({}, cu.colPrices||{}, JSON.parse(JSON.stringify(last.col||{})));
+}
+/* 保存前の確認（顧客） */
+function _cuRateDiff(){
+  const cu=_cuRateCust(); if(!cu) return null;
+  const list=(cu.rateHistory||[]); if(!list.length) return null;
+  const idx=list.findIndex(h=>h.ym===_cuRateYm); if(idx<0) return null;
+  const row=list[idx], prev=(idx>0)?list[idx-1]:null, base=prev||row;
+  const now=_cuCollectRate();
+  const rows=[], touched=[];
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      if(!$('cu-c'+ck)) return;
+      const was=Number((base.col||{})[ck])||0, to=Number((now.col||{})[ck])||0, st=Number((row.col||{})[ck])||0;
+      const nm=(typeof ckLabel==='function')?ckLabel(ck):ck;
+      if(was!==to) rows.push({label:nm, was, to});
+      if(st!==to) touched.push(nm);
+    });
+  }
+  if(!_cuRateDirty && !touched.length) return null;
+  if(!rows.length) return null;
+  return { cu, ym:row.ym, isLatest:(row.ym===list[list.length-1].ym), rows,
+           note:row.note||'', hasPrev:!!prev, nextYm:_rateNextYm(row.ym) };
+}
+function _cuRateDiffHtml(d){
+  const yen=v=>'¥'+fmt(v||0);
+  return `<div style="font-size:12.5px;line-height:1.7;">
+    <div style="padding:8px 11px;border-radius:6px;margin-bottom:10px;background:rgba(74,122,155,.12);border:1px solid var(--blu);">
+      <div style="font-size:11px;color:var(--txt2);">${esc(d.cu.name)}（顧客）</div>
+      <div style="font-size:15px;font-weight:700;color:var(--blu2);margin-top:2px;">
+        ${esc(_rateYmLabel(d.ym))} ${d.hasPrev?'この単価になります':'の単価を直します'}${d.note?('　<span style="font-size:11px;color:var(--txt2);font-weight:400;">'+esc(d.note)+'</span>'):''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <thead><tr style="background:var(--sur2);">
+        <th style="text-align:left;padding:5px 8px;border:1px solid var(--brd2);">品目</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">いままで</th>
+        <th style="text-align:center;padding:5px 4px;border:1px solid var(--brd2);width:26px;"></th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">これから</th>
+      </tr></thead>
+      <tbody>${d.rows.map(r=>`<tr>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);">${esc(r.label)}</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;color:var(--txt2);">${yen(r.was)}</td>
+        <td style="padding:5px 4px;border:1px solid var(--brd2);text-align:center;color:var(--txt3);">→</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;font-weight:700;
+            color:${r.to>r.was?'var(--grn2)':'var(--red2)'};">${yen(r.to)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div style="font-size:11px;color:var(--txt2);margin-top:9px;line-height:1.6;">
+      ${esc(_rateYmLabel(d.ym))}の集荷日報から、この単価で請求します。前の月の請求書は変わりません。</div>
+    <div style="margin-top:12px;padding:9px 11px;border-radius:6px;background:var(--sur2);border:1px solid var(--brd2);">
+      <div style="font-size:11px;color:var(--txt2);font-weight:700;margin-bottom:7px;">いつからの単価にしますか</div>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;margin-bottom:5px;">
+        <input type="radio" name="cu-rate-when" value="here" checked onchange="_cuRateWhenSync()">
+        <span><b>${esc(_rateYmLabel(d.ym))}</b>　この行に入れる</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;">
+        <input type="radio" name="cu-rate-when" value="other" onchange="_cuRateWhenSync()">
+        <span>別の月から</span>
+        <input type="month" id="cu-rate-other-ym" value="${esc(d.nextYm)}" disabled style="font-size:12px;padding:3px 6px;">
+      </label>
+    </div>
+  </div>`;
+}
+function _cuRateWhenSync(){
+  const other=document.querySelector('input[name="cu-rate-when"][value="other"]');
+  const el=document.getElementById('cu-rate-other-ym');
+  if(el) el.disabled = !(other && other.checked);
+}
+async function saveCustAsk(){
+  let d=null;
+  try{ d=_cuRateDiff(); }catch(e){ console.warn('[顧客 単価確認]', e); }
+  if(d){
+    const ok=await showDialog({icon:'📅', title:'この単価で保存しますか', msg:'',
+      bodyHtml:_cuRateDiffHtml(d), okText:'この内容で保存する', okClass:'grn', cancelText:'戻る'});
+    if(!ok) return;
+    const mode=document.querySelector('input[name="cu-rate-when"]:checked')?.value||'here';
+    if(mode==='other'){
+      const ym=_rateYm(document.getElementById('cu-rate-other-ym')?.value||'');
+      if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。保存をやり直してください。'}); return; }
+      if(ym!==d.ym){
+        const cu=d.cu, list=_cuRateList(cu);
+        let row=list.find(h=>h.ym===ym);
+        if(!row){ row={ym, note:'', col:{}}; cu.rateHistory.push(row);
+                  cu.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym))); }
+        _cuRateYm=ym;
+        if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+' の単価として保存します');
+      }
+    }
+  }
+  saveCust();
+  _cuRateDirty=false;
+}
+
 async function saveCust(){
   const name=$('cu-name')?.value.trim();if(!name){alert('顧客名を入力してください');return;}
   // 顧客番号を3桁形式に正規化
@@ -16875,6 +17202,8 @@ async function saveCust(){
     status: $('cu-status')?.value||'稼働中',
     statusReason: $('cu-status-reason')?.value||'',
     colPrices,charter:charterRows,otherItems,offset,
+    /* ★ 2026-10-09.54: 単価履歴を引き継ぐ（保存でレコードを組み直すため） */
+    rateHistory:(editId ? ((D.customers.find(c=>c.id===editId)||{}).rateHistory||[]) : []),
     // ★ 2026/09/12: この顧客で使う細分化品目（masterKey の配列）
     useItems: (typeof _cuUseItems!=='undefined' ? _cuUseItems.slice() : [])
   };
@@ -16899,11 +17228,17 @@ async function saveCust(){
     // 編集
     const idx=D.customers.findIndex(c=>c.id===editId);
     if(idx>=0){D.customers[idx]={...D.customers[idx],...custData};}
-    $('m-cust')._editId=null;
   } else {
     // 新規
     D.customers.push({id:Date.now(),...custData});
   }
+  /* ★ 2026-10-09.54: 単価の適用年月を確定する。
+     画面に出していた行に単価を入れ、顧客の単価欄はいちばん新しい行に揃える。 */
+  try{
+    const _ct = editId ? D.customers.find(c=>c.id===editId) : D.customers[D.customers.length-1];
+    if(_ct && typeof _cuRateCommit==='function') _cuRateCommit(_ct);
+  }catch(e){ console.warn('[顧客 単価履歴] 保存に失敗', e); }
+  if(editId) $('m-cust')._editId=null;
   // ★ 保存時の顧客番号重複を自動除去(再発防止)。
   //   同一顧客番号のレコードが複数ある場合、情報が最も濃い1件へ欠損を補完してから残りを削除。
   //   これによりリロードや複数端末操作で重複が復活しても、次回保存時に自動で1件に収束する。
@@ -18424,6 +18759,16 @@ function editCust(id){
   });
   renderCuPriceGrid();
   renderCuOptionalPicker();
+  /* ★ 2026-10-09.54: 単価の適用年月（帯）。いちばん新しい単価を出す */
+  try{
+    _cuRateDirty=false;
+    if(typeof _cuRateList==='function'){
+      const _l=_cuRateList(c);
+      _cuRateYm=_l[_l.length-1].ym;
+      if(typeof _cuRateLoadForm==='function') _cuRateLoadForm(_l[_l.length-1]);
+    }
+    if(typeof renderCuRateBand==='function') renderCuRateBand();
+  }catch(e){ console.warn('[顧客 単価履歴]', e); }
   CK_LIST.forEach(ck=>{ const e=$('cu-c'+ck); if(e) e.value=cp[ck]||''; });
   // 税設定フラグ復元
   if(cp._tax){
@@ -18559,13 +18904,16 @@ function _calcHourlyPay(st, monStr, cond){
 //   未設定の業務は基本情報の給与形態（給与履歴を含む）から読み替える。
 // ══════════════════════════════════════════════════
 const BIZ_LABEL = {del:'宅配', col:'集荷'};
-function _hasBizPayMode(st){
-  const pm = st && st.payMode;
+function _hasBizPayMode(st, ym){
+  /* ★ 2026-10-09.55: ym を渡すと、その月に効いていた設定で判定する */
+  const pm = (ym && typeof _payModeAt==='function') ? _payModeAt(st, ym) : (st && st.payMode);
   return !!(pm && ((pm.del && pm.del.type) || (pm.col && pm.col.type)));
 }
 // 業務ごとの実効設定（未設定なら基本情報の給与形態から読み替え）
-function _effBizMode(st, biz, cond){
-  const o = (st.payMode && st.payMode[biz]) || {};
+/* ★ 2026-10-09.55: ym を渡すと、その月に効いていた業務別の給与形態を使う */
+function _effBizMode(st, biz, cond, ym){
+  const _pm = (ym && typeof _payModeAt==='function') ? _payModeAt(st, ym) : (st.payMode||{});
+  const o = (_pm && _pm[biz]) || {};
   if(o.type) return {type:o.type, rate:Number(o.rate)||0, fromBase:false, src:o};
   const kyu = (cond && cond.kyuyo) || st.kyuyo;
   const tk  = (cond && cond.tanka!=null && cond.tanka!=='') ? (Number(cond.tanka)||0) : (st.tanka||0);
@@ -18644,7 +18992,7 @@ function _calcBizPay(st, monStr, del, pu, cond){
   if(!del) del=(D.delivery||[]).filter(r=>r.staff===st.name&&_nd(r.date).startsWith(monStr));
   if(!pu)  pu =(D.pickup||[]).filter(r=>r.staff===st.name&&_nd(r.date).startsWith(monStr));
   if(!cond) cond=(typeof getActivePayCondition==='function') ? (getActivePayCondition(st, monStr.replace('-','/'))||{}) : {};
-  const modes={del:_effBizMode(st,'del',cond), col:_effBizMode(st,'col',cond)};
+  const modes={del:_effBizMode(st,'del',cond,monStr), col:_effBizMode(st,'col',cond,monStr)};
   const rows={del, col:pu};
   const breakdown=[]; let total=0; let noAtt=false;
   const kyu = cond.kyuyo || st.kyuyo;
@@ -29619,6 +29967,8 @@ function switchCoTab(t){
   });
   if(t==='rt') renderCoRouteInline();
   if(t==='col') initCoColTab();
+  // ★ 2026-10-09.53: 単価タブを開いたら適用年月の帯を描き直す
+  if(t==='del' || t==='col'){ try{ if(typeof renderCoRateBand==='function') renderCoRateBand(); }catch(e){} }
   setTimeout(()=>updateTabNavBtns('company'),30);
 }
 
@@ -30310,6 +30660,17 @@ function openCompanyModal(coId){
     if(typeof restoreCoDelColCmp==='function') restoreCoDelColCmp([], co);
     restoreCoCustRoutes([]);
   }
+  /* ★ 2026-10-09.53: 単価の適用年月（帯）。いちばん新しい単価を出す */
+  try{
+    _coRateDirty=false;
+    if(co && typeof _coRateList==='function'){
+      const _l=_coRateList(co);
+      _coRateYm=_l[_l.length-1].ym;
+      // 会社マスタの単価欄と履歴がずれていても、いちばん新しい行を正として画面に出す
+      if(typeof _coRateLoadForm==='function') _coRateLoadForm(_l[_l.length-1]);
+    } else { _coRateYm=''; }
+    if(typeof renderCoRateBand==='function') renderCoRateBand();
+  }catch(e){ console.warn('[委託会社 単価履歴]', e); }
   // 書類発行設定・印鑑画像復元
   const docs=co?.docs||{};
   ['co-doc-payslip','co-doc-invproxy','co-stamp-request'].forEach(id=>{const e=$(id);if(e)e.checked=false;});
@@ -30356,6 +30717,258 @@ function openCompanyModal(coId){
   if($('m-company')) $('m-company')._editId = _coEditId;
   if(typeof _refreshOwnerPinUI==='function') _refreshOwnerPinUI(co);
   openM('m-company');
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.53: 委託会社の単価にも適用年月を持たせる
+     委託会社所属のドライバーは、本人の単価が未設定なら会社の単価が使われる。
+     その会社の単価に履歴が無かったため、会社の単価を直すと
+     過去の月の支払いまで新しい単価で計算されていた。
+     持ち方・考え方は従事員の単価履歴（rateHistory）と同じ。
+       company.rateHistory = [{ ym, note, del:{...}, col:{...} }]
+       いちばん古い行は ym:'0000-01'＝「はじめから」
+       会社マスタの単価欄は「いちばん新しい行」と同じ（1本化）
+   ════════════════════════════════════════════════════════════ */
+let _coRateYm = '';
+let _coRateDirty = false;
+
+function _coRateStaff(){ return (D.companies||[]).find(c=>c && c.id===_coEditId) || null; }
+function _coRateSnapOf(co){
+  const pr=(co&&co.prices)||{};
+  return { del: JSON.parse(JSON.stringify(pr.del||{})),
+           col: JSON.parse(JSON.stringify(pr.col||{})) };
+}
+function _coRateList(co){
+  if(!co) return [];
+  if(!Array.isArray(co.rateHistory)) co.rateHistory=[];
+  if(!co.rateHistory.length){
+    co.rateHistory.push(Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _coRateSnapOf(co)));
+  }
+  co.rateHistory.sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')));
+  return co.rateHistory;
+}
+/* その月に効いている会社の単価 */
+function _coRateAt(co, ym){
+  const t=_rateYm(ym);
+  const list=(co && Array.isArray(co.rateHistory)) ? co.rateHistory.slice()
+             .sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||''))) : [];
+  if(!list.length) return _coRateSnapOf(co);
+  if(!t) return list[list.length-1];
+  let hit=null;
+  list.forEach(h=>{ if(String(h.ym||'')<=t) hit=h; });
+  return hit || list[0];
+}
+/* 画面から会社の単価を集める（保存と同じ形） */
+function _coCollectRate(){
+  const pr=(typeof collectCoPrices==='function') ? collectCoPrices() : {};
+  return { del: JSON.parse(JSON.stringify(pr.del||{})),
+           col: JSON.parse(JSON.stringify(pr.col||{})) };
+}
+/* 行 → 画面 */
+function _coRateLoadForm(h){
+  if(!h) return;
+  if(typeof restoreCoPrices==='function') restoreCoPrices({del:h.del||{}, col:h.col||{}}, _coRateStaff());
+}
+/* 帯を描く（宅配単価・集荷単価の両タブに同じものを出す） */
+function renderCoRateBand(){
+  const boxes=['co-rate-band-del','co-rate-band-col'].map(id=>$(id)).filter(Boolean);
+  if(!boxes.length) return;
+  const co=_coRateStaff();
+  if(!co){
+    boxes.forEach(b=>b.innerHTML='<div class="xs" style="color:var(--txt3);padding:6px 8px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">新しく登録する会社の単価です。保存したあと「○年○月から変更」で単価の切り替えを登録できます。</div>');
+    return;
+  }
+  const list=_coRateList(co);
+  if(!_coRateYm || !list.some(h=>h.ym===_coRateYm)) _coRateYm=list[list.length-1].ym;
+  const cur=list.find(h=>h.ym===_coRateYm) || list[list.length-1];
+  const isLatest=(cur.ym===list[list.length-1].ym);
+  const opts=list.slice().reverse().map(h=>
+    `<option value="${esc(h.ym)}"${h.ym===_coRateYm?' selected':''}>${esc(_rateYmLabel(h.ym))}${h.note?('　'+esc(h.note)):''}</option>`).join('');
+  const html=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:6px;margin-bottom:10px;
+      background:${isLatest?'rgba(74,122,155,.10)':'rgba(184,134,11,.12)'};
+      border:1px solid ${isLatest?'var(--blu)':'var(--amb2)'};">
+    <span style="font-size:10px;font-weight:700;color:${isLatest?'var(--blu2)':'var(--amb2)'};white-space:nowrap;">
+      ${isLatest?'📅 いまの単価':'📅 過去の単価を表示中'}</span>
+    <select class="fi" style="width:auto;font-size:11.5px;padding:3px 7px;" onchange="coRateSwitch(this.value)">${opts}</select>
+    <input type="text" class="fi co-rate-note" value="${esc(cur.note||'')}" placeholder="変更の理由（例：契約改定）"
+      oninput="coRateNote(this)" style="width:190px;font-size:11px;padding:3px 7px;">
+    <div style="flex:1;"></div>
+    <button type="button" class="btn b-grn btn-sm" style="font-size:10.5px;" onclick="coRateNew()">＋ ○年○月から変更</button>
+    ${(list.length>1 && cur.ym!==RATE_BASE_YM)
+      ? `<button type="button" class="btn b-gh btn-sm" style="font-size:10.5px;" onclick="coRateDelete('${esc(cur.ym)}')">この行を消す</button>`:''}
+    <div style="flex-basis:100%;font-size:9px;color:var(--txt2);line-height:1.5;">
+      ${isLatest
+        ? 'ここの単価を直すと、'+esc(_rateYmLabel(cur.ym))+'の分から変わります。前の月の支払いは変わりません。'
+        : '<b style="color:var(--amb2);">いま直すと '+esc(_rateYmLabel(cur.ym))+'〜 の支払いが変わります。</b>'}
+    </div>
+  </div>`;
+  boxes.forEach(b=>b.innerHTML=html);
+}
+function coRateNote(el){
+  const co=_coRateStaff(); if(!co || !_coRateYm) return;
+  const h=(co.rateHistory||[]).find(x=>x.ym===_coRateYm);
+  if(h) h.note=el.value;
+  document.querySelectorAll('.co-rate-note').forEach(x=>{ if(x!==el) x.value=el.value; });
+}
+function coRateSwitch(ym){
+  const co=_coRateStaff(); if(!co) return;
+  const h0=(co.rateHistory||[]).find(x=>x.ym===_coRateYm);
+  if(h0){ const now=_coCollectRate(); h0.del=now.del; h0.col=now.col; }
+  _coRateYm=String(ym||'');
+  const h=_coRateList(co).find(x=>x.ym===_coRateYm);
+  if(h) _coRateLoadForm(h);
+  renderCoRateBand();
+}
+function coRateNew(){
+  const co=_coRateStaff();
+  if(!co){ showAlert({msg:'先に一度保存してから、単価の切り替えを登録してください。'}); return; }
+  const d=new Date();
+  const def=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const v=prompt('いつの分から新しい単価にしますか。\n\n年月を 2026-11 のように入れてください。', def);
+  if(v==null) return;
+  const ym=_rateYm(v);
+  if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。2026-11 のように入れてください。'}); return; }
+  const list=_coRateList(co);
+  if(list.some(h=>h.ym===ym)){
+    _coRateYm=ym; _coRateDirty=true; renderCoRateBand();
+    if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+' の行に切り替えました。いま画面に出ている数字で保存されます。');
+    return;
+  }
+  const prev=_coRateAt(co, ym);
+  const prevK=(prev && prev.del) ? prev.del.kanryo : null;
+  const now=_coCollectRate();
+  co.rateHistory.push({ym, note:'', del:now.del, col:now.col});
+  co.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  _coRateYm=ym; _coRateDirty=true;
+  renderCoRateBand();
+  if(typeof _showSaveToast==='function'){
+    _showSaveToast(_rateYmLabel(ym)+'の単価にしました。'
+      +(prevK!=null?('前の単価（完了 ¥'+fmt(Number(prevK)||0)+'）はそのまま残っています'):'')+' 保存を押すと確定します。');
+  }
+}
+function coRateDelete(ym){
+  const co=_coRateStaff(); if(!co) return;
+  showConfirm(_rateYmLabel(ym)+' の単価を消しますか。\nこの月以降は、ひとつ前の単価が使われます。', ()=>{
+    co.rateHistory=(co.rateHistory||[]).filter(h=>h.ym!==ym);
+    const list=_coRateList(co);
+    _coRateYm=list[list.length-1].ym;
+    _coRateLoadForm(list[list.length-1]);
+    renderCoRateBand();
+  });
+}
+/* 保存のあと：画面の値をその行に入れ、会社の単価欄はいちばん新しい行に揃える */
+function _coRateCommit(co){
+  if(!co) return;
+  if(!Array.isArray(co.rateHistory) || !co.rateHistory.length){
+    co.rateHistory=[Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _coRateSnapOf(co))];
+    return;
+  }
+  co.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  const editing=_coRateYm && co.rateHistory.find(h=>h.ym===_coRateYm);
+  if(editing){
+    const now=_coCollectRate();
+    editing.del=now.del; editing.col=now.col;
+  }
+  const last=co.rateHistory[co.rateHistory.length-1];
+  co.prices=co.prices||{};
+  co.prices.del=Object.assign({}, co.prices.del||{}, JSON.parse(JSON.stringify(last.del||{})));
+  co.prices.col=Object.assign({}, co.prices.col||{}, JSON.parse(JSON.stringify(last.col||{})));
+}
+/* 保存前の確認（委託会社） */
+function _coRateDiff(){
+  const co=_coRateStaff(); if(!co) return null;
+  const list=(co.rateHistory||[]); if(!list.length) return null;
+  const idx=list.findIndex(h=>h.ym===_coRateYm); if(idx<0) return null;
+  const row=list[idx], prev=(idx>0)?list[idx-1]:null, base=prev||row;
+  const now=_coCollectRate();
+  const rows=[], touched=[];
+  [['del','kanryo','完了'],['del','tenso','転送'],['del','night','夜間'],
+   ['del','ogata','大型'],['del','shukka','集荷']].forEach(([g,k,l])=>{
+    const was=Number((base[g]||{})[k])||0, to=Number((now[g]||{})[k])||0, st=Number((row[g]||{})[k])||0;
+    if(was!==to) rows.push({label:l, was, to});
+    if(st!==to) touched.push(l);
+  });
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      if(!$('co-c'+ck)) return;
+      const was=Number((base.col||{})[ck])||0, to=Number((now.col||{})[ck])||0, st=Number((row.col||{})[ck])||0;
+      const nm=(typeof ckLabel==='function')?ckLabel(ck):ck;
+      if(was!==to) rows.push({label:'集荷 '+nm, was, to});
+      if(st!==to) touched.push(nm);
+    });
+  }
+  if(!_coRateDirty && !touched.length) return null;
+  if(!rows.length) return null;
+  return { co, ym:row.ym, isLatest:(row.ym===list[list.length-1].ym), rows,
+           note:row.note||'', hasPrev:!!prev, nextYm:_rateNextYm(row.ym) };
+}
+function _coRateDiffHtml(d){
+  const yen=v=>'¥'+fmt(v||0);
+  return `<div style="font-size:12.5px;line-height:1.7;">
+    <div style="padding:8px 11px;border-radius:6px;margin-bottom:10px;background:rgba(74,122,155,.12);border:1px solid var(--blu);">
+      <div style="font-size:11px;color:var(--txt2);">${esc(d.co.name)}（委託会社）</div>
+      <div style="font-size:15px;font-weight:700;color:var(--blu2);margin-top:2px;">
+        ${esc(_rateYmLabel(d.ym))} ${d.hasPrev?'この単価になります':'の単価を直します'}${d.note?('　<span style="font-size:11px;color:var(--txt2);font-weight:400;">'+esc(d.note)+'</span>'):''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <thead><tr style="background:var(--sur2);">
+        <th style="text-align:left;padding:5px 8px;border:1px solid var(--brd2);">項目</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">いままで</th>
+        <th style="text-align:center;padding:5px 4px;border:1px solid var(--brd2);width:26px;"></th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">これから</th>
+      </tr></thead>
+      <tbody>${d.rows.map(r=>`<tr>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);">${esc(r.label)}</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;color:var(--txt2);">${yen(r.was)}</td>
+        <td style="padding:5px 4px;border:1px solid var(--brd2);text-align:center;color:var(--txt3);">→</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;font-weight:700;
+            color:${r.to>r.was?'var(--grn2)':'var(--red2)'};">${yen(r.to)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    <div style="font-size:11px;color:var(--txt2);margin-top:9px;line-height:1.6;">
+      この会社に所属するドライバーのうち、本人の単価が入っていない人に効きます。</div>
+    <div style="margin-top:12px;padding:9px 11px;border-radius:6px;background:var(--sur2);border:1px solid var(--brd2);">
+      <div style="font-size:11px;color:var(--txt2);font-weight:700;margin-bottom:7px;">いつからの単価にしますか</div>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;margin-bottom:5px;">
+        <input type="radio" name="co-rate-when" value="here" checked onchange="_coRateWhenSync()">
+        <span><b>${esc(_rateYmLabel(d.ym))}</b>　この行に入れる</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;">
+        <input type="radio" name="co-rate-when" value="other" onchange="_coRateWhenSync()">
+        <span>別の月から</span>
+        <input type="month" id="co-rate-other-ym" value="${esc(d.nextYm)}" disabled style="font-size:12px;padding:3px 6px;">
+      </label>
+    </div>
+  </div>`;
+}
+function _coRateWhenSync(){
+  const other=document.querySelector('input[name="co-rate-when"][value="other"]');
+  const el=document.getElementById('co-rate-other-ym');
+  if(el) el.disabled = !(other && other.checked);
+}
+async function saveCompanyAsk(){
+  let d=null;
+  try{ d=_coRateDiff(); }catch(e){ console.warn('[委託会社 単価確認]', e); }
+  if(d){
+    const ok=await showDialog({icon:'📅', title:'この単価で保存しますか', msg:'',
+      bodyHtml:_coRateDiffHtml(d), okText:'この内容で保存する', okClass:'grn', cancelText:'戻る'});
+    if(!ok) return;
+    const mode=document.querySelector('input[name="co-rate-when"]:checked')?.value||'here';
+    if(mode==='other'){
+      const ym=_rateYm(document.getElementById('co-rate-other-ym')?.value||'');
+      if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。保存をやり直してください。'}); return; }
+      if(ym!==d.ym){
+        const co=d.co, list=_coRateList(co);
+        let row=list.find(h=>h.ym===ym);
+        if(!row){ row={ym, note:'', del:{}, col:{}}; co.rateHistory.push(row);
+                  co.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym))); }
+        _coRateYm=ym;
+        if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+' の単価として保存します');
+      }
+    }
+  }
+  saveCompany();
+  _coRateDirty=false;
 }
 
 function saveCompany(){
@@ -30409,6 +31022,10 @@ function saveCompany(){
     subOffices: (typeof getCoSubOffices==='function') ? getCoSubOffices() : [],
     status:$('co-status')?.value||'稼働中',
     statusReason:$('co-status-reason')?.value||'',
+    /* ★ 2026-10-09.53: 単価履歴を引き継ぐ。
+       ここは D.companies[idx]=newCo と丸ごと置き換えるので、
+       書かないと履歴が消える。 */
+    rateHistory:(_coEditId ? (D.companies.find(x=>x.id===_coEditId)?.rateHistory||[]) : []),
   };
   // 取引終了の場合はアーカイブ情報を設定
   if(newCo.status==='終了'){
@@ -30423,10 +31040,27 @@ function saveCompany(){
     // ドライバーの fixedPrices を会社単価で上書き(任意)
     D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===id).forEach(s=>{
       s.fixedPrices={del:prices.del, col:prices.col, charter:s.fixedPrices?.charter||[]};
+      /* ★ 2026-10-09.53: 会社の単価をドライバーに写したら、
+         その人の単価履歴のいちばん新しい行も揃える（台帳の欄＝最新の行、を崩さない） */
+      try{
+        if(Array.isArray(s.rateHistory) && s.rateHistory.length){
+          s.rateHistory.sort((x,y)=>String(x.ym).localeCompare(String(y.ym)));
+          const last=s.rateHistory[s.rateHistory.length-1];
+          last.del=JSON.parse(JSON.stringify(prices.del||{}));
+          last.col=Object.assign({}, last.col||{}, JSON.parse(JSON.stringify(prices.col||{})));
+        }
+      }catch(e){}
     });
   } else {
     D.companies.push(newCo);
   }
+  /* ★ 2026-10-09.53: 単価の適用年月を確定する。
+     画面に出していた行に単価を入れ、会社の単価欄はいちばん新しい行に揃える。 */
+  try{
+    const _ct=D.companies.find(x=>x.id===id);
+    if(_ct && typeof _coRateCommit==='function') _coRateCommit(_ct);
+  }catch(e){ console.warn('[委託会社 単価履歴] 保存に失敗', e); }
+
   lsSet(LS_KEYS.COMPANIES, D.companies);
   // Firebase 同期(全フィールド)
   if(typeof fbSet === 'function'){
@@ -33463,8 +34097,21 @@ function _rateSnapOf(st){
   return {
     del: JSON.parse(JSON.stringify(fp.del||{})),
     col: JSON.parse(JSON.stringify(fp.col||{})),
+    /* ★ 2026-10-09.55: 手当（横乗・特別のほか通勤・経歴・役職・その他）、
+       日額保証・日額手当、業務別の給与形態（時給・日額）も適用年月を持たせる。 */
     teate: { yokonoriUnit: Number(o.yokonoriUnit)||0,
-             tokubetsuUnit: Number(o.tokubetsuUnit)||0 },
+             tokubetsuUnit: Number(o.tokubetsuUnit)||0,
+             commute: Number(o.commute)||0,
+             career: Number(o.career)||0,
+             position: Number(o.position)||0,
+             teateOther: Number(o.teateOther)||0 },
+    hosho: { B: {on:!!(st&&st.hoshoB&&st.hoshoB.on), amt:Number(st&&st.hoshoB&&st.hoshoB.amt)||0, days:Number(st&&st.hoshoB&&st.hoshoB.days)||0},
+             C: {on:!!(st&&st.hoshoC&&st.hoshoC.on), amt:Number(st&&st.hoshoC&&st.hoshoC.amt)||0, days:Number(st&&st.hoshoC&&st.hoshoC.days)||0} },
+    payMode: JSON.parse(JSON.stringify((st&&st.payMode)||{})),
+    /* ★ 2026-10-13.64: 社保・税（健康保険／介護保険／厚生年金／年金基金／雇用保険／
+       所得税／住民税）も適用年月を持たせる。標準報酬月額の等級改定（年1〜2回）や
+       料率改定の月をまたいでも、過去月の給与明細が当時の額で出るようにする。 */
+    si: JSON.parse(JSON.stringify((st&&st.socialIns)||{})),
   };
 }
 /* 履歴を取り出す。空なら「はじめから」の1行を作って入れる */
@@ -33504,8 +34151,30 @@ function _teateUnitsAt(st, ym){
   const r=_rateAt(st, ym);
   const o=(st&&st.offset)||{};
   const t=(r && r.teate) ? r.teate : {};
-  return { yokonoriUnit: Number(t.yokonoriUnit!=null ? t.yokonoriUnit : o.yokonoriUnit)||0,
-           tokubetsuUnit: Number(t.tokubetsuUnit!=null ? t.tokubetsuUnit : o.tokubetsuUnit)||0 };
+  const pick=(k)=>Number(t[k]!=null ? t[k] : o[k])||0;
+  return { yokonoriUnit: pick('yokonoriUnit'), tokubetsuUnit: pick('tokubetsuUnit'),
+           commute: pick('commute'), career: pick('career'),
+           position: pick('position'), teateOther: pick('teateOther') };
+}
+/* その月に効いている日額保証・日額手当 */
+function _hoshoAt(st, ym){
+  const r=_rateAt(st, ym);
+  const h=(r && r.hosho) ? r.hosho : null;
+  if(!h) return { B: (st&&st.hoshoB)||{}, C: (st&&st.hoshoC)||{} };
+  return { B:h.B||{}, C:h.C||{} };
+}
+/* その月に効いている業務別の給与形態（宅配／集荷の時給・日額など） */
+function _payModeAt(st, ym){
+  const r=_rateAt(st, ym);
+  if(r && r.payMode && (r.payMode.del || r.payMode.col)) return r.payMode;
+  return (st && st.payMode) || {};
+}
+/* その月に効いている社保・税（★ 2026-10-13.64）
+   履歴に si が無い古い行のときは、台帳のいまの値をそのまま使う（これまでどおり動く）。 */
+function _siAt(st, ym){
+  const r=_rateAt(st, ym);
+  if(r && r.si && Object.keys(r.si).length) return r.si;
+  return (st && st.socialIns) || {};
 }
 /* その人のその月の単価が、どの行から来ているか（画面に出す用） */
 function _rateSourceLabel(st, ym){
@@ -33520,6 +34189,7 @@ function _rateSourceLabel(st, ym){
    いまどの月からの単価を見ているかを示し、過去の単価にも切り替えられる。
    「○年○月から変更」で、いまの単価を写した新しい行ができる。 */
 let _stRateYm = '';        // いま画面に出している行の ym
+let _stRateDirty = false;  // この開いているあいだに単価を変えたか（確認を出す判断に使う）
 
 function _stRateStaff(){
   const id=$('m-staff')?._editId;
@@ -33590,19 +34260,42 @@ function stRateNew(){
   if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。2026-11 のように入れてください。'}); return; }
   const list=_rateList(st);
   if(list.some(h=>h.ym===ym)){
-    showAlert({msg:_rateYmLabel(ym)+' の単価はもう登録されています。上の選び欄から選んで直してください。'});
-    _stRateYm=ym; _stRateLoadForm(list.find(h=>h.ym===ym)); renderStRateBand();
+    /* ★ 2026-10-09.49: もう同じ月の行があるときは、その行に切り替えるだけにする。
+       以前はここで保存済みの値を画面に読み直していたため、
+       「打ち忘れた分を入れてからボタンを押した」場合にその数字が消えていた。
+       画面の数字はそのまま残し、保存でその行に入るようにする。 */
+    _stRateYm=ym;
+    _stRateDirty=true;
+    renderStRateBand();
+    if(typeof _showSaveToast==='function'){
+      _showSaveToast(_rateYmLabel(ym)+' の行に切り替えました。いま画面に出ている数字で保存されます。');
+    }
     return;
   }
-  _stRateSaveForm();
-  const base=_rateAt(st, ym);        // その月の時点で効いている単価を写す
-  const row=Object.assign({ym, note:''}, JSON.parse(JSON.stringify({del:base.del||{}, col:base.col||{}, teate:base.teate||{}})));
+  /* ★ 2026-10-09.47: ここで _stRateSaveForm() を呼んでいたため、
+     「先に新しい単価を打ってからボタンを押す」と、その数字が前の行に
+     書き戻されて古い単価が消えていた（樋口さんのケース）。
+     ボタンは「いま画面に出ている数字を、その月からの単価にする」意味にする。
+     前の行は保存済みの値のまま、手を触れない。 */
+  const prev=_rateAt(st, ym);                  // その月の直前に効いていた単価（保存済み）
+  const prevK=(prev && prev.del) ? prev.del.kanryo : null;
+  const row={ ym, note:'',
+              del:  _stCollectDelPrices(),     // ＝画面の数字（新しい単価）
+              col:  _stCollectColPrices(),
+              teate:_stCollectTeate(), hosho:_stCollectHosho(),
+              payMode:(typeof _collectStPayMode==='function')?_collectStPayMode():{} };
   st.rateHistory.push(row);
   st.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
   _stRateYm=ym;
-  _stRateLoadForm(row);
-  renderStRateBand();
-  if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+'の単価を作りました。数字を直して保存してください。');
+  _stRateDirty=true;
+  renderStRateBand();                           // 画面の数字はそのまま＝新しい単価
+  const same = (prevK!=null && Number(prevK)===Number(row.del.kanryo));
+  if(typeof _showSaveToast==='function'){
+    _showSaveToast(_rateYmLabel(ym)+'の単価にしました。'
+      + (same ? '（前と同じ単価です。数字を直してから保存してください）'
+              : '前の単価（完了 ¥'+fmt(Number(prevK)||0)+'）はそのまま残っています')
+      + ' 保存を押すと確定します。');
+  }
 }
 function stRateDelete(ym){
   const st=_stRateStaff(); if(!st) return;
@@ -33621,8 +34314,10 @@ function _stRateSaveForm(){
   // note は stRateNote() で随時入っている
   h.del = _stCollectDelPrices();
   h.col = _stCollectColPrices();
-  h.teate = { yokonoriUnit: parseInt($('st-yokonori-unit')?.value)||0,
-              tokubetsuUnit: parseInt($('st-tokubetsu-unit')?.value)||0 };
+  h.teate = _stCollectTeate();
+  h.hosho = _stCollectHosho();
+  h.payMode = (typeof _collectStPayMode==='function') ? _collectStPayMode() : {};
+  h.si = _stCollectSocialIns();   // ★ 2026-10-13.64
 }
 /* 行 → 画面 */
 function _stRateLoadForm(h){
@@ -33646,8 +34341,65 @@ function _stRateLoadForm(h){
   }
   put('st-yokonori-unit', t.yokonoriUnit);
   put('st-tokubetsu-unit', t.tokubetsuUnit);
+  // ★ 2026-10-09.55: 手当・保証・業務別の給与形態も入れ替える
+  if(t.commute!=null)   put('st-commute', t.commute);
+  if(t.career!=null)    put('st-career', t.career);
+  if(t.position!=null)  put('st-position', t.position);
+  if(t.teateOther!=null)put('st-teate-other', t.teateOther);
+  if(h.hosho){
+    const hb=h.hosho.B||{}, hc=h.hosho.C||{};
+    if($('st-hosho-b-on')){ $('st-hosho-b-on').checked=!!hb.on; if(typeof toggleHoshoB==='function') toggleHoshoB(!!hb.on); }
+    if($('st-hosho-c-on')){ $('st-hosho-c-on').checked=!!hc.on; if(typeof toggleHoshoC==='function') toggleHoshoC(!!hc.on); }
+    put('st-hosho-b-amt', hb.amt); put('st-hosho-b-days', hb.days);
+    put('st-hosho-c-amt', hc.amt); put('st-hosho-c-days', hc.days);
+  }
+  if(h.payMode && typeof _restoreStPayMode==='function'){
+    try{ _restoreStPayMode({payMode:h.payMode}); }catch(e){}
+  }
+  // ★ 2026-10-13.64: 社保・税も、その月の行のものに入れ替える
+  if(h.si && Object.keys(h.si).length){
+    const s=h.si;
+    put('st-si-health', s.health);   put('st-si-care', s.care);
+    put('st-si-pension', s.pension); put('st-si-fund', s.fund);
+    if($('st-si-emp-type')){
+      $('st-si-emp-type').value = s.empInsType || 'rate';
+      if(typeof onStEmpInsTypeChange==='function'){ try{ onStEmpInsTypeChange(); }catch(e){} }
+    }
+    put('st-si-emp-fixed', s.empInsFixed);
+    put('st-tax-income', s.income);
+    if($('st-tax-res-type')){
+      $('st-tax-res-type').value = s.resTaxType || 'yearly';
+      if(typeof onStResTaxTypeChange==='function'){ try{ onStResTaxTypeChange(); }catch(e){} }
+    }
+    put('st-tax-res-yearly', s.resTaxYearly);
+    put('st-tax-res-monthly', s.resTaxMonthly);
+    if(typeof calcResidentTaxMonthly==='function'){ try{ calcResidentTaxMonthly(); }catch(e){} }
+  }
   // 集荷先別単価（拠点マスタ連動）も入れ替える
   try{ if(typeof renderStShukkaCompanies==='function'){ window._stShukkaPreset=d.shukkaCompanies||{}; renderStShukkaCompanies(); } }catch(e){}
+}
+/* 画面から手当を集める（★ 2026-10-09.55） */
+function _stCollectTeate(){
+  const n=id=>parseInt($(id)?.value)||0;
+  return { yokonoriUnit:n('st-yokonori-unit'), tokubetsuUnit:n('st-tokubetsu-unit'),
+           commute:n('st-commute'), career:n('st-career'),
+           position:n('st-position'), teateOther:n('st-teate-other') };
+}
+/* 画面から社保・税を集める（★ 2026-10-13.64） */
+function _stCollectSocialIns(){
+  const n=id=>parseInt($(id)?.value)||0;
+  return { health:n('st-si-health'), care:n('st-si-care'),
+           pension:n('st-si-pension'), fund:n('st-si-fund'),
+           empInsType:$('st-si-emp-type')?.value||'rate', empInsFixed:n('st-si-emp-fixed'),
+           income:n('st-tax-income'),
+           resTaxType:$('st-tax-res-type')?.value||'yearly',
+           resTaxYearly:n('st-tax-res-yearly'), resTaxMonthly:n('st-tax-res-monthly') };
+}
+/* 画面から日額保証・日額手当を集める */
+function _stCollectHosho(){
+  const n=id=>parseInt($(id)?.value)||0;
+  return { B:{on:!!$('st-hosho-b-on')?.checked, amt:n('st-hosho-b-amt'), days:n('st-hosho-b-days')},
+           C:{on:!!$('st-hosho-c-on')?.checked, amt:n('st-hosho-c-amt'), days:n('st-hosho-c-days')} };
 }
 /* 画面から宅配単価を集める（保存の形と同じ） */
 function _stCollectDelPrices(){
@@ -33690,8 +34442,10 @@ function _stRateCommit(st){
     editing.note = editing.note || '';
     editing.del  = _stCollectDelPrices();
     editing.col  = _stCollectColPrices();
-    editing.teate= { yokonoriUnit: parseInt($('st-yokonori-unit')?.value)||0,
-                     tokubetsuUnit: parseInt($('st-tokubetsu-unit')?.value)||0 };
+    editing.teate= _stCollectTeate();
+    editing.hosho= _stCollectHosho();
+    editing.payMode= (typeof _collectStPayMode==='function') ? _collectStPayMode() : {};
+    editing.si   = _stCollectSocialIns();   // ★ 2026-10-13.64
   }
   /* 1本化：台帳の単価欄＝いちばん新しい行。
      過去の行を直していた場合でも、台帳の欄はいちばん新しい行に戻す。 */
@@ -33700,8 +34454,206 @@ function _stRateCommit(st){
   st.fixedPrices.del = JSON.parse(JSON.stringify(last.del||{}));
   st.fixedPrices.col = Object.assign({}, st.fixedPrices.col||{}, JSON.parse(JSON.stringify(last.col||{})));
   st.offset = st.offset || {};
-  st.offset.yokonoriUnit  = Number((last.teate||{}).yokonoriUnit)||0;
-  st.offset.tokubetsuUnit = Number((last.teate||{}).tokubetsuUnit)||0;
+  const _lt=last.teate||{};
+  st.offset.yokonoriUnit  = Number(_lt.yokonoriUnit)||0;
+  st.offset.tokubetsuUnit = Number(_lt.tokubetsuUnit)||0;
+  // ★ 2026-10-09.55: 手当・保証・業務別の給与形態も、いちばん新しい行に揃える
+  if(_lt.commute!=null)    st.offset.commute    = Number(_lt.commute)||0;
+  if(_lt.career!=null)     st.offset.career     = Number(_lt.career)||0;
+  if(_lt.position!=null)   st.offset.position   = Number(_lt.position)||0;
+  if(_lt.teateOther!=null) st.offset.teateOther = Number(_lt.teateOther)||0;
+  if(last.hosho){
+    st.hoshoB = {...(st.hoshoB||{}), ...(last.hosho.B||{})};
+    st.hoshoC = {...(st.hoshoC||{}), ...(last.hosho.C||{})};
+  }
+  if(last.payMode && (last.payMode.del || last.payMode.col)){
+    st.payMode = JSON.parse(JSON.stringify(last.payMode));
+  }
+  /* ★ 2026-10-13.64: 台帳の社保・税欄＝いちばん新しい行（単価と同じ1本化）。
+     既存のキーは残したうえで上書きするので、画面に出ていない項目は消えない。 */
+  if(last.si && Object.keys(last.si).length){
+    st.socialIns = Object.assign({}, st.socialIns||{}, JSON.parse(JSON.stringify(last.si)));
+  }
+}
+
+/* ════════ 保存前の確認（単価の変更） 2026-10-09.48 ════════
+   「いつから・何が・いくらから いくらに変わるか」を見せてから保存する。
+   単価に変更がないときは何も出さず、そのまま保存する。 */
+const _ST_RATE_LABELS = [
+  ['del','kanryo','完了','円'], ['del','tenso','転送','円'], ['del','night','夜間','円'],
+  ['del','ogata','大型','円'],  ['del','shukka','集荷','円'],
+  ['del','s1','その他1','円'], ['del','s2','その他2','円'], ['del','s3','その他3','円'], ['del','s4','その他4','円'],
+  ['teate','yokonoriUnit','横乗手当','円/回'], ['teate','tokubetsuUnit','特別手当','円/回'],
+  // ★ 2026-10-09.55
+  ['teate','commute','通勤手当','円/月'], ['teate','career','経歴手当','円/月'],
+  ['teate','position','役職手当','円/月'], ['teate','teateOther','その他手当','円/月'],
+  // ★ 2026-10-13.64: 社保・税（社員・パートのみ画面に出る。個人事業主は全て0なので行は出ない）
+  ['si','health','健康保険','円/月'],  ['si','care','介護保険','円/月'],
+  ['si','pension','厚生年金','円/月'], ['si','fund','年金基金','円/月'],
+  ['si','empInsFixed','雇用保険','円/月'], ['si','income','所得税','円/月'],
+  ['si','resTaxYearly','住民税（年額）','円/年'], ['si','resTaxMonthly','住民税（月額）','円/月'],
+];
+/* 画面の数字を、ひとつ前の単価と比べる。
+   ★ 2026-10-09.48: 「2026年10月から 完了135→150」のように、
+     いつから いくらが いくらに変わるかを見せるのが目的なので、
+     比べる相手は「その月の直前に効いていた単価」にする。
+     出すかどうかは「この保存で何か変わったか」で決める（毎回は出さない）。 */
+function _stRateDiff(){
+  const st=_stRateStaff();
+  if(!st) return null;
+  const list=(st.rateHistory||[]);
+  if(!list.length) return null;
+  const idx=list.findIndex(h=>h.ym===_stRateYm);
+  if(idx<0) return null;
+  const row =list[idx];
+  const prev=(idx>0) ? list[idx-1] : null;        // ひとつ前の単価（あれば）
+  const base=prev || row;                          // 無ければ、保存されているこの行と比べる
+  const now={ del:_stCollectDelPrices(), col:_stCollectColPrices(),
+              teate:_stCollectTeate(), hosho:_stCollectHosho(),
+              payMode:(typeof _collectStPayMode==='function')?_collectStPayMode():{},
+              si:_stCollectSocialIns() };   // ★ 2026-10-13.64
+
+  /* ★ 2026-10-13.64: 社保・税は今回から履歴に入る項目なので、古い行には si が無い。
+     無い行は「台帳のいまの値」で埋めて比べる。そうしないと、この版にしてから
+     最初の保存のときだけ「健康保険 ¥0 → ¥28,000」のような変更が出てしまう。 */
+  const _si=(src)=>(src && src.si && Object.keys(src.si).length) ? src.si : ((st.socialIns)||{});
+  const pick=(src,grp,key)=> (grp==='si')
+    ? (Number(_si(src)[key])||0)
+    : (Number((src[grp]||{})[key])||0);
+  const rows=[], touched=[];
+  _ST_RATE_LABELS.forEach(([grp,key,label,unit])=>{
+    const was=pick(base,grp,key), to=pick(now,grp,key), stored=pick(row,grp,key);
+    if(was!==to) rows.push({label, was, to, unit});
+    if(stored!==to) touched.push(label);
+  });
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      if(!$('st-c'+ck)) return;
+      const was=Number((base.col||{})[ck])||0;
+      const to =Number((now.col||{})[ck])||0;
+      const stored=Number((row.col||{})[ck])||0;
+      const nm=(typeof ckLabel==='function') ? ckLabel(ck) : ck;
+      if(was!==to) rows.push({label:'集荷 '+nm, was, to, unit:'円'});
+      if(stored!==to) touched.push(nm);
+    });
+  }
+  // ★ 2026-10-09.55: 日額保証・日額手当・業務別の給与形態
+  [['B','日額保証'],['C','日額手当']].forEach(([k,l])=>{
+    const bw=(base.hosho&&base.hosho[k])||{}, nw=(now.hosho&&now.hosho[k])||{}, sw=(row.hosho&&row.hosho[k])||{};
+    const v=o=>(o.on? (Number(o.amt)||0) : 0);
+    if(v(bw)!==v(nw)) rows.push({label:l+'（円/日）', was:v(bw), to:v(nw), unit:'円/日'});
+    if(v(sw)!==v(nw)) touched.push(l);
+  });
+  [['del','宅配'],['col','集荷']].forEach(([k,l])=>{
+    const bw=(base.payMode&&base.payMode[k])||{}, nw=(now.payMode&&now.payMode[k])||{}, sw=(row.payMode&&row.payMode[k])||{};
+    if((Number(bw.rate)||0)!==(Number(nw.rate)||0) || (bw.type||'')!==(nw.type||'')){
+      rows.push({label:l+'の'+((nw.type||bw.type)||'給与形態'), was:Number(bw.rate)||0, to:Number(nw.rate)||0, unit:'円'});
+    }
+    if((Number(sw.rate)||0)!==(Number(nw.rate)||0) || (sw.type||'')!==(nw.type||'')) touched.push(l);
+  });
+  // この保存で何も変わっていないなら出さない（「○月から変更」を押した直後は出す）
+  if(!_stRateDirty && !touched.length) return null;
+  if(!rows.length) return null;
+  const isLatest = (row.ym === list[list.length-1].ym);
+  return { st, ym:row.ym, isLatest, rows, note:row.note||'', hasPrev:!!prev, nextYm:_rateNextYm(row.ym) };
+}
+/* 確認の中身を組む */
+function _stRateDiffHtml(d){
+  const yen=v=>'¥'+fmt(v||0);
+  return `<div style="font-size:12.5px;line-height:1.7;">
+    <div style="padding:8px 11px;border-radius:6px;margin-bottom:10px;
+         background:rgba(74,122,155,.12);border:1px solid var(--blu);">
+      <div style="font-size:11px;color:var(--txt2);">${esc(d.st.name)}（${esc(String(d.st.empNo||''))}・${esc(d.st.office||'')}）</div>
+      <div style="font-size:15px;font-weight:700;color:var(--blu2);margin-top:2px;">
+        ${esc(_rateYmLabel(d.ym))} ${d.hasPrev?'この単価になります':'の単価を直します'}${d.note?('　<span style="font-size:11px;color:var(--txt2);font-weight:400;">'+esc(d.note)+'</span>'):''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+      <thead><tr style="background:var(--sur2);">
+        <th style="text-align:left;padding:5px 8px;border:1px solid var(--brd2);">項目</th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">いままで</th>
+        <th style="text-align:center;padding:5px 4px;border:1px solid var(--brd2);width:26px;"></th>
+        <th style="text-align:right;padding:5px 8px;border:1px solid var(--brd2);width:92px;">これから</th>
+      </tr></thead>
+      <tbody>${d.rows.map(r=>`<tr>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);">${esc(r.label)}</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;color:var(--txt2);">${yen(r.was)}</td>
+        <td style="padding:5px 4px;border:1px solid var(--brd2);text-align:center;color:var(--txt3);">→</td>
+        <td style="padding:5px 8px;border:1px solid var(--brd2);text-align:right;font-family:'DM Mono',monospace;font-weight:700;
+            color:${r.to>r.was?'var(--grn2)':'var(--red2)'};">${yen(r.to)}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+    ${d.isLatest
+      ? `<div style="font-size:11px;color:var(--txt2);margin-top:9px;line-height:1.6;">
+           ${esc(_rateYmLabel(d.ym))}の日報から、この単価で計算します。それより前の月の支払いは変わりません。</div>`
+      : `<div style="font-size:11.5px;color:var(--amb2);font-weight:700;margin-top:9px;line-height:1.6;">
+           ⚠️ これは過去の行です。${esc(_rateYmLabel(d.ym))}〜 の支払いがさかのぼって変わります。<br>
+           <span style="font-weight:400;color:var(--txt2);">いまの単価を直したいときは「戻る」を押して、帯の選び欄をいちばん新しいものにしてください。</span></div>`}
+
+    <!-- ★ 2026-10-09.50: 打ち足した分が別の月からのこともあるので、ここで決められるようにする -->
+    <div style="margin-top:12px;padding:9px 11px;border-radius:6px;background:var(--sur2);border:1px solid var(--brd2);">
+      <div style="font-size:11px;color:var(--txt2);font-weight:700;margin-bottom:7px;">いつからの単価にしますか</div>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;margin-bottom:5px;">
+        <input type="radio" name="st-rate-when" value="here" checked onchange="_stRateWhenSync()">
+        <span><b>${esc(_rateYmLabel(d.ym))}</b>　この行に入れる</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;">
+        <input type="radio" name="st-rate-when" value="other" onchange="_stRateWhenSync()">
+        <span>別の月から</span>
+        <input type="month" id="st-rate-other-ym" value="${esc(d.nextYm)}" disabled
+          onfocus="(document.querySelector('input[name=&quot;st-rate-when&quot;][value=&quot;other&quot;]')||{}).checked=true;_stRateWhenSync();"
+          style="font-size:12px;padding:3px 6px;">
+      </label>
+      <div style="font-size:10px;color:var(--txt3);margin-top:6px;line-height:1.6;">
+        「別の月から」を選ぶと、<b>${esc(_rateYmLabel(d.ym))}の単価はいまのまま残り</b>、新しい行がその月に作られます。
+        打ち足した分だけ翌月からにしたいときに使います。
+      </div>
+    </div>
+  </div>`;
+}
+/* 「別の月から」のときだけ月の欄を使えるようにする */
+function _stRateWhenSync(){
+  const other=document.querySelector('input[name="st-rate-when"][value="other"]');
+  const el=document.getElementById('st-rate-other-ym');
+  if(el) el.disabled = !(other && other.checked);
+}
+/* その月の次の月 */
+function _rateNextYm(ym){
+  const m=String(ym||'').match(/^(\d{4})-(\d{2})$/);
+  const d=m ? new Date(Number(m[1]), Number(m[2]), 1) : new Date();
+  if(!m) d.setMonth(d.getMonth()+1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+/* 保存ボタンはここを通る。単価が変わっていれば確認を出す */
+async function saveStaffAsk(continueAdd){
+  let d=null;
+  try{ d=_stRateDiff(); }catch(e){ console.warn('[単価確認]', e); }
+  if(d){
+    const ok=await showDialog({
+      icon:'📅', title:'この単価で保存しますか', msg:'',
+      bodyHtml:_stRateDiffHtml(d),
+      okText:'この内容で保存する', okClass:'grn', cancelText:'戻る'
+    });
+    if(!ok) return;
+    /* ★ 2026-10-09.50: 「別の月から」を選んだら、いまの行はさわらずに
+       その月の行を作り、画面の数字をそちらへ入れる。 */
+    const mode=document.querySelector('input[name="st-rate-when"]:checked')?.value||'here';
+    if(mode==='other'){
+      const ym=_rateYm(document.getElementById('st-rate-other-ym')?.value||'');
+      if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。保存をやり直してください。'}); return; }
+      const st=d.st;
+      const list=_rateList(st);
+      if(ym===d.ym){ /* 同じ月を選んだ＝この行に入れる */ }
+      else {
+        let row=list.find(h=>h.ym===ym);
+        if(!row){ row={ym, note:'', del:{}, col:{}, teate:{}}; st.rateHistory.push(row);
+                  st.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym))); }
+        _stRateYm=ym;                       // 保存はこの行に入る
+        if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+' の単価として保存します');
+      }
+    }
+  }
+  saveStaff(continueAdd);
+  _stRateDirty=false;
 }
 
 /* ★ 2026-10-09.46: 第2引数に年月を渡すと、その月に効いていた単価を返す。
@@ -33716,7 +34668,9 @@ function _getEffectiveDelPrices(staff, ym){
 
   // 委託会社所属: 委託会社単価を優先、未設定項目はドライバー個別にフォールバック
   const co = (D.companies||[]).find(c=>c.id===staff.companyId);
-  const companyDel = co?.prices?.del || {};
+  /* ★ 2026-10-09.53: 委託会社の単価も、その月に効いていたものを使う */
+  const _coAt = (ym && co && typeof _coRateAt==='function') ? _coRateAt(co, ym) : null;
+  const companyDel = (_coAt && _coAt.del) ? _coAt.del : (co?.prices?.del || {});
 
   const pick = (key)=>{
     const cv = companyDel[key];
@@ -33904,7 +34858,7 @@ function _calcStaffPayment(name, monStr){
   let noAtt = false;
 
   // ── 基本給・委託料 ──
-  if(_hasBizPayMode(st)){
+  if(_hasBizPayMode(st, monStr)){
     // ★ 2026-09-22.5: 業務別の給与形態が設定されている人は業務ごとに計算して合算
     const bp=_calcBizPay(st, monStr, del, pu, cond);
     total=bp.total; noAtt=bp.noAtt;
@@ -33992,18 +34946,20 @@ function _calcStaffPayment(name, monStr){
       }
     } catch(err){ /* 未定義でも動作継続 */ }
     // 日額保証チェック
-    if(st.hoshoB?.on&&st.hoshoB.amt&&workDays>=st.hoshoB.days){
-      const hoshoTotal=st.hoshoB.amt*workDays;
+    // ★ 2026-10-09.55: 日額保証・日額手当もその月に効いていたものを使う
+    const _hs=(typeof _hoshoAt==='function') ? _hoshoAt(st, monStr) : {B:st.hoshoB||{}, C:st.hoshoC||{}};
+    if(_hs.B?.on&&_hs.B.amt&&workDays>=(_hs.B.days||0)){
+      const hoshoTotal=_hs.B.amt*workDays;
       if(hoshoTotal>total){
         breakdown.length=0;
-        breakdown.push({label:`日額保証 ${workDays}日×¥${st.hoshoB.amt}`, amount:hoshoTotal});
+        breakdown.push({label:`日額保証 ${workDays}日×¥${_hs.B.amt}`, amount:hoshoTotal});
         total=hoshoTotal;
       }
     }
     // 日額手当
-    if(st.hoshoC?.on&&st.hoshoC.amt&&workDays>=st.hoshoC.days){
-      const cAmt=st.hoshoC.amt*workDays;
-      breakdown.push({label:`日額手当 ${workDays}日×¥${st.hoshoC.amt}`, amount:cAmt});
+    if(_hs.C?.on&&_hs.C.amt&&workDays>=(_hs.C.days||0)){
+      const cAmt=_hs.C.amt*workDays;
+      breakdown.push({label:`日額手当 ${workDays}日×¥${_hs.C.amt}`, amount:cAmt});
       total+=cAmt;
     }
   } else if(kyuyo==='時間単価' || kyuyo==='時間給'){
@@ -34044,9 +35000,9 @@ function _calcStaffPayment(name, monStr){
   /* ★ 2026-10-09.46: 手当の単価もその月に効いていたものを使う */
   const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
             : {yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
-  if(off.commute>0){breakdown.push({label:'通勤手当', amount:off.commute}); total+=off.commute;}
-  if(off.career>0){breakdown.push({label:'経歴手当', amount:off.career}); total+=off.career;}
-  if(off.position>0){breakdown.push({label:'役職手当', amount:off.position}); total+=off.position;}
+  if(_tu.commute>0){breakdown.push({label:'通勤手当', amount:_tu.commute}); total+=_tu.commute;}
+  if(_tu.career>0){breakdown.push({label:'経歴手当', amount:_tu.career}); total+=_tu.career;}
+  if(_tu.position>0){breakdown.push({label:'役職手当', amount:_tu.position}); total+=_tu.position;}
   if(yokonoriCnt>0&&_tu.yokonoriUnit){
     const amt=yokonoriCnt*_tu.yokonoriUnit;
     breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${_tu.yokonoriUnit}`, amount:amt}); total+=amt;
@@ -34061,7 +35017,7 @@ function _calcStaffPayment(name, monStr){
   if(tokubetsuCnt>0&&!_tu.tokubetsuUnit){
     breakdown.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0});
   }
-  if(off.teateOther>0){breakdown.push({label:'その他手当', amount:off.teateOther}); total+=off.teateOther;}
+  if(_tu.teateOther>0){breakdown.push({label:'その他手当', amount:_tu.teateOther}); total+=_tu.teateOther;}
   // 駐車料金の立替（実費。同額をそのまま郵便局へ請求する）
   if(_mAdj.park>0){
     breakdown.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park});
@@ -34212,12 +35168,12 @@ function _calcCustBilling(custName, monStr){
       // ★ 2026/08/29: 単価は新形式 colPrices に保存される。
       //   ここが旧形式 prices しか見ておらず、単価が入っていても0円で計算されていた。
       //   getCustPrice が新旧どちらにも対応しているのでそれを使う。
-      const price=(typeof getCustPrice==='function') ? getCustPrice(cu, k) : (cu.prices?.[k]||0);
+      const price=(typeof getCustPrice==='function') ? getCustPrice(cu, k, monStr) : (cu.prices?.[k]||0);
       // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
       // ★ 2026/09/12: 税区分の読み取り先が誤っていた。保存は colPrices._tax[ck]
       //   (ck=単価キー)なのに、旧形式 prices._tax[masterKey] を見ていたため
       //   常に 'ex'(税別)にフォールバックし、税込設定が請求計算に効いていなかった。
-      const _cpx = cu.colPrices || cu.prices || {};
+      const _cpx = ((typeof _cuRateAt==='function') ? (_cuRateAt(cu, monStr)||{}).col : null) || cu.colPrices || cu.prices || {};
       const _ck  = (typeof IK_COL_MAP!=='undefined') ? IK_COL_MAP[k] : null;
       const taxFlag = (_ck && _cpx._tax && _cpx._tax[_ck])
                    || (cu.prices?._tax && cu.prices._tax[k])
@@ -34584,12 +35540,18 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const today=new Date().toISOString().slice(0,10);
   const sysInfo=_getSystemInfo();
   const off=st.offset||{};
-  const si=st.socialIns||{};
+  /* ★ 2026-10-13.64: その月に効いていた社保・税を使う。
+     標準報酬月額の等級改定や料率改定の月をまたいでも、過去月の明細が当時の額で出る。
+     履歴が無ければ台帳のいまの値（これまでどおり）。 */
+  const si=(typeof _siAt==='function') ? _siAt(st, monStr) : (st.socialIns||{});
 
-  // 和暦変換
-  const [y,m]=(monStr||'').split('/');
-  const reiwa=parseInt(y)-2018;
-  const monLabel=`令和${reiwa}年　${parseInt(m)}月分`;
+  /* 和暦変換
+     ★ 2026-10-13.64: monStr は「2026-10」のハイフン表記で渡ってくるのに、
+       ここでスラッシュで分けていたため月が取れず、明細の見出しが
+       「令和8年　NaN月分」になっていた。どちらの表記でも通るようにする。 */
+  const _mm=String(monStr||'').replace(/\//g,'-').match(/^(\d{4})-(\d{1,2})/);
+  const reiwa=_mm?(parseInt(_mm[1],10)-2018):0;
+  const monLabel=_mm?`令和${reiwa}年　${parseInt(_mm[2],10)}月分`:'';
 
   // 支給項目
   const basePay=st.tanka||0;
@@ -34606,9 +35568,9 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const care=si.care||0;
   const pension=si.pension||0;
   const fund=si.fund||0;
-  const empIns=getEmploymentIns(st, totalPay);
+  const empIns=getEmploymentIns(st, totalPay, monStr);   // ★ 2026-10-13.64
   const incomeTax=si.income||0;
-  const resTax=getResidentTaxMonthly(st);
+  const resTax=getResidentTaxMonthly(st, monStr);        // ★ 2026-10-13.64
   const totalDeduct=health+care+pension+fund+empIns+incomeTax+resTax;
 
   // 調整・差引
@@ -39457,7 +40419,7 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','nyuryoku':'📭 日報の未入力','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -40118,6 +41080,15 @@ function restoreCoDelColCmp(savedList, company){
 
 // 郵便局請求金額を集計
 // locationIdOrOfficeName: 拠点IDまたは営業所名(後方互換)
+/* ★ 2026-10-09.60: 郵便局請求書の明細金額。
+   単価が 132.4円 のように小数のものがあり、これまで端数処理をしていなかったため
+   小計・消費税・総合計に 0.4 のような端数が残り、請求書にそのまま出ていた。
+   従事員の支払いと同じ「契約書準拠：1円未満切り捨て」に揃える。 */
+function _postAmt(unit, qty){
+  if(typeof calcUnitTotal==='function') return calcUnitTotal(unit, qty, 'ex');
+  const raw=(Number(unit)||0)*(Number(qty)||0);
+  return (raw>0 && raw<1) ? 1 : Math.floor(raw);
+}
 function _calcPostBilling(locationIdOrName, monStr){
   // 拠点情報取得(ID or 名前)
   let loc = null;
@@ -40130,8 +41101,24 @@ function _calcPostBilling(locationIdOrName, monStr){
   // 拠点名ベースで集計(D.delivery.officeの値と一致する名前)
   const locName = loc?.name || String(locationIdOrName||'');
 
-  // 単価取得(新拠点マスタ優先、旧officesフォールバック)
-  let prices = loc?.prices || null;
+  /* 単価取得
+     ★ 2026-10-09.51: 拠点マスタの単価履歴（priceHistory）を使う。
+       _locPriceAt は前から用意してあったが請求計算から呼ばれておらず、
+       単価を改定すると過去の月の請求書まで新単価で再計算されていた。
+       郵便局の単価改定は月初からなので、その月の1日時点の単価を使う。 */
+  let prices = null, priceFrom = '', priceMissing = false, priceMidChange = '';
+  if(loc && Array.isArray(loc.priceHistory) && loc.priceHistory.length){
+    const at = (typeof _locPriceAt==='function') ? _locPriceAt(loc, monStr+'-01') : null;
+    if(at){
+      prices = at; priceFrom = at._from || '';
+      // 月の途中で改定が入っていないか（郵便局は月初からの想定だが、入っていたら知らせる）
+      const endAt = (typeof _locPriceAt==='function') ? _locPriceAt(loc, monStr+'-31') : null;
+      if(endAt && endAt._from && endAt._from !== priceFrom) priceMidChange = endAt._from;
+    } else {
+      priceMissing = true;          // その月より前の単価が履歴に無い
+    }
+  }
+  if(!prices) prices = loc?.prices || null;
   if(!prices){
     const oldOff = (D.offices||[]).find(o=>o.name===locName);
     prices = oldOff?.postPrices || {};
@@ -40175,31 +41162,31 @@ function _calcPostBilling(locationIdOrName, monStr){
   // 配達業務
   if(agg.kanryo > 0){
     const unit = prices.kanryo || 0;
-    const amount = agg.kanryo * unit;
+    const amount = _postAmt(unit, agg.kanryo);
     items.push({category:'del', label:'配達完了', qty:agg.kanryo, unit, amount});
     subtotal += amount;
   }
   if(agg.tenso > 0){
     const unit = prices.tenso || 0;
-    const amount = agg.tenso * unit;
+    const amount = _postAmt(unit, agg.tenso);
     items.push({category:'del', label:'転送還付', qty:agg.tenso, unit, amount});
     subtotal += amount;
   }
   if(agg.yakan > 0){
     const unit = prices.night || 0;
-    const amount = agg.yakan * unit;
+    const amount = _postAmt(unit, agg.yakan);
     items.push({category:'del', label:'夜間配達', qty:agg.yakan, unit, amount});
     subtotal += amount;
   }
   if(agg.ogata > 0){
     const unit = prices.ogata || 0;
-    const amount = agg.ogata * unit;
+    const amount = _postAmt(unit, agg.ogata);
     items.push({category:'del', label:'大型配達', qty:agg.ogata, unit, amount});
     subtotal += amount;
   }
   if(agg.mochimodoiri > 0){
     const unit = prices.mochimodoiri || 0;
-    const amount = agg.mochimodoiri * unit;
+    const amount = _postAmt(unit, agg.mochimodoiri);
     items.push({category:'del', label:'持戻り', qty:agg.mochimodoiri, unit, amount});
     subtotal += amount;
   }
@@ -40207,18 +41194,30 @@ function _calcPostBilling(locationIdOrName, monStr){
   // 集荷委託(shukka)
   if(agg.shukka > 0){
     const unit = prices.shukka || 0;
-    const amount = agg.shukka * unit;
+    const amount = _postAmt(unit, agg.shukka);
     items.push({category:'col', label:'【集荷委託】', qty:agg.shukka, unit, amount});
     subtotal += amount;
   }
 
-  // 指定事業所集荷 (colCompanies単価適用、無ければshukka単価にフォールバック)
+  /* 指定事業所集荷
+     ★ 2026-10-09.52: 集荷先別の単価も、その月に効いていたものを使う。
+       これまでは拠点マスタのいまの単価だけを見ていたため、
+       集荷先の単価を直すと過去の月の請求書まで変わっていた。
+       単価が入っていない集荷先は、これまでどおり集荷(定時)の単価を使う。 */
+  const _shiteiAt = (typeof _locShiteiPricesAt==='function')
+    ? _locShiteiPricesAt(loc, monStr+'-01') : {};
   const colCompanyList = prices.colCompanies || [];
   Object.entries(colCompanyAgg).forEach(([name, qty])=>{
     if(qty <= 0) return;
-    const cc = colCompanyList.find(x=>x.name===name);
-    const unit = (cc && cc.price!=null) ? cc.price : (prices.shukka || 0);
-    const amount = qty * unit;
+    let unit = null;
+    if(Object.prototype.hasOwnProperty.call(_shiteiAt, name) && _shiteiAt[name]!=null){
+      unit = Number(_shiteiAt[name])||0;
+    } else {
+      const cc = colCompanyList.find(x=>x.name===name);
+      if(cc && cc.price!=null) unit = Number(cc.price)||0;
+    }
+    if(unit==null) unit = prices.shukka || 0;
+    const amount = _postAmt(unit, qty);
     items.push({category:'col_company', label:`【指定事業所集荷】${name}`, qty, unit, amount});
     subtotal += amount;
   });
@@ -40256,6 +41255,7 @@ function _calcPostBilling(locationIdOrName, monStr){
   }catch(e){}
   const penalty = penaltyRows.reduce((n,x)=>n+x.amount, 0);
 
+  subtotal = Math.floor(subtotal);              // 端数が残らないように
   const taxAmt = Math.floor(subtotal * 0.1);
   const grandTotal = subtotal + taxAmt + parking - penalty;
 
@@ -40268,6 +41268,7 @@ function _calcPostBilling(locationIdOrName, monStr){
     parking, parkingRows,
     penalty, penaltyRows,
     grandTotal,
+    priceFrom, priceMissing, priceMidChange,
     workDays: agg.workDays.size,
     rawAgg: agg,
     colCompanyAgg,
@@ -40326,6 +41327,7 @@ function _buildPostInvoiceHTML(locationId, monStr, opts){
   const versionLabel = version>1?`<span class="fb-version">(第${version}版)</span>`:'';
 
   const noteLine = `※ 単価・金額は税抜表示となっております。駐車料金は税込の立替実費です。`
+    + (bill.priceFrom?` 単価は ${bill.priceFrom} 改定分を適用しております。`:'')
     + (penalty>0?` 違約金 ¥${penalty.toLocaleString()} を相殺しております。`:'')
     + ` お振込は総合計額(税込) ¥${grand.toLocaleString()} にてお願い申し上げます。`;
 
@@ -40514,6 +41516,24 @@ function printParkingDetail(locationId, monStr){
 function generatePostInvoice(locationId, monStr){
   const loc = getLocationById(locationId);
   if(!loc){ showAlert({msg:'拠点が見つかりません'}); return; }
+  /* ★ 2026-10-09.51: 単価まわりで請求額がずれる状態なら、発行の前に知らせる */
+  try{
+    const _b=_calcPostBilling(locationId, monStr);
+    if(_b && _b.priceMidChange){
+      showAlert({icon:'⚠️', title:'単価が月の途中で変わっています',
+        msg:monStr+' は月の初めと終わりで単価が違います（'+_b.priceMidChange+' 改定）。\n'
+          +'この請求書は月初の単価だけで計算しています。\n\n'
+          +'郵便局の単価改定は月初からが原則です。拠点管理の単価履歴で適用開始日をご確認ください。'});
+      return;
+    }
+    if(_b && _b.priceMissing){
+      showAlert({icon:'⚠️', title:'この月の単価が履歴にありません',
+        msg:monStr+' より前の単価が単価履歴に登録されていません。\n'
+          +'いまは拠点マスタの現在の単価で計算しています。過去の請求書と金額が変わる場合があります。\n\n'
+          +'拠点管理 → 単価履歴 に、当時の単価を適用開始日つきで登録してください。'});
+      return;
+    }
+  }catch(e){ console.warn('[郵便局請求書] 単価の確認に失敗', e); }
   const targetName = loc.name;
 
   // 既存発行履歴
@@ -40628,7 +41648,10 @@ function renderTSInv(){
       <td class="xs muted">${esc(loc.clientCompany||'日本郵便株式会社')}<br>${esc(loc.clientBranch||loc.name)}</td>
       <td class="tr mono">${fmt(bill.workDays||0)}</td>
       <td class="tr mono">${fmt((bill.rawAgg&&bill.rawAgg.kanryo)||0)}</td>
-      <td class="tr mono fw7" style="color:var(--tel2);">¥${fmt(ex)}</td>
+      <td class="tr mono fw7" style="color:var(--tel2);">¥${fmt(ex)}
+        ${bill.priceFrom?`<div style="font-size:9px;color:var(--txt3);">単価 ${esc(bill.priceFrom)}〜</div>`:''}
+        ${bill.priceMissing?`<div style="font-size:9px;color:var(--amb2);font-weight:700;">単価履歴にこの月の分なし</div>`:''}
+        ${bill.priceMidChange?`<div style="font-size:9px;color:var(--red2);font-weight:700;">月の途中で改定 ${esc(bill.priceMidChange)}</div>`:''}</td>
       <td class="tr mono">¥${fmt(tax)}</td>
       <td class="tr mono" style="color:var(--grn2);">${bill.parking?('¥'+fmt(bill.parking)):'<span class="dim">0</span>'}
         ${bill.parking?`<div style="font-size:9px;color:var(--txt3);">${(bill.parkingRows||[]).length}件</div>`:''}</td>
@@ -40791,6 +41814,7 @@ function nav(el){
   if(s==='salary')       renderSalary();
   if(s==='month-adj')    { if(typeof renderMonthAdj==='function') renderMonthAdj(); }   // ★ 2026-10-09.34
   if(s==='data-check')   { if(typeof renderDataCheck==='function') renderDataCheck(); } // ★ 2026-10-09.45
+  if(s==='nyuryoku')     { if(typeof renderNyuryoku==='function') renderNyuryoku(); }  // ★ 2026-10-09.57
   if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
@@ -42185,6 +43209,7 @@ function _editStaffImpl(id){
     if(typeof _rateList==='function'){
       const _l=_rateList(s);
       _stRateYm=_l[_l.length-1].ym;
+      _stRateDirty=false;
       renderStRateBand();
     }
   }catch(e){ console.warn('[単価履歴]', e); }
@@ -43650,6 +44675,8 @@ window.dqImportJson = function(){
       </div>
       <!-- ① 宅配単価（固定5項目） -->
       <div id="co-ptab-content-del" style="display:grid;">
+        <!-- ★ 2026-10-09.53: 単価の適用年月（帯） -->
+        <div id="co-rate-band-del" style="grid-column:1/-1;"></div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
           <span style="font-size:10px;color:var(--txt2);font-weight:700;">税区分:</span>
           <button type="button" id="co-del-tax-btn-ex" onclick="setCoTabTax('del','ex')" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">税別</button>
@@ -43679,6 +44706,8 @@ window.dqImportJson = function(){
 
       <!-- ② 集荷単価（顧客別・左に顧客タブ＋右に品目グリッド） -->
       <div id="co-ptab-content-col" style="display:none;">
+        <!-- ★ 2026-10-09.53: 単価の適用年月（帯） -->
+        <div id="co-rate-band-col" style="grid-column:1/-1;"></div>
         <!-- 上部：顧客選択＋税区分＋追加ボタン -->
         <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap;">
           <div class="fg" style="flex:1;min-width:180px;margin:0;">
@@ -43836,7 +44865,7 @@ window.dqImportJson = function(){
     <button id="co-delete-btn" class="btn btn-sm" style="background:var(--red3);color:var(--red2);border:1px solid rgba(192,57,43,.3);display:none;" onclick="deleteCompany()">🗑 削除</button>
     <button class="btn b-gh" style="font-size:13px;padding:8px 20px;" onclick="closeM('m-company')">キャンセル</button>
     <button class="btn confirm-btn" onclick="toggleConfirmPanel('co')" id="co-confirm-btn" style="font-size:13px;">📋 登録確認</button>
-    <button class="btn b-grn" style="font-size:13px;padding:8px 20px;" onclick="saveCompany()">💾 保存</button>
+    <button class="btn b-grn" style="font-size:13px;padding:8px 20px;" onclick="saveCompanyAsk()">💾 保存</button>
   </div>
   <div id="co-confirm-panel2" class="reg-confirm-panel">
     <h4>📋 登録内容確認</h4>
@@ -45651,6 +46680,23 @@ function _locPriceAt(loc, date){
   const out = {};
   PRICE_KEYS.forEach(k=>{ out[k]=Number(hit[k])||0; });
   if(loc.prices && loc.prices.colCompanies) out.colCompanies = loc.prices.colCompanies;
+  // ★ 2026-10-09.51: 税区分と「どの改定か」を持たせる（請求書と一覧に出すため）
+  if(loc.prices && loc.prices._taxType) out._taxType = loc.prices._taxType;
+  // ★ 2026-10-09.52: 指定事業所集荷の集荷先別単価。
+  //   その改定に入っていなければ、拠点マスタのいまの単価をそのまま使う。
+  out._shitei = (hit.shitei && typeof hit.shitei==='object') ? hit.shitei : null;
+  out._from = String(hit.from||'').slice(0,10);
+  return out;
+}
+/* その月に効いている「指定事業所集荷の集荷先別単価」を {集荷先名: 単価} で返す */
+function _locShiteiPricesAt(loc, date){
+  const at=(typeof _locPriceAt==='function') ? _locPriceAt(loc, date) : null;
+  if(at && at._shitei) return at._shitei;
+  const out={};
+  ((loc && loc.shukkaCompaniesShitei)||[]).forEach(c=>{
+    if(!c || !c.name) return;
+    out[c.name] = (c.price==null||c.price==='') ? null : (Number(c.price)||0);
+  });
   return out;
 }
 
@@ -45696,7 +46742,13 @@ function renderLocPriceHist(){
     const future=String(h.from)>today;
     const isCur=(h===cur);
     const idx=_locPriceHistDraft.indexOf(h);
-    const cells=PRICE_KEYS.map(k=>`<span style="margin-right:9px;"><span style="color:var(--txt3);">${lab[k]}</span> <b style="font-family:'DM Mono',monospace;">${Number(h[k])||0}</b></span>`).join('');
+    const cells=PRICE_KEYS.map(k=>`<span style="margin-right:9px;"><span style="color:var(--txt3);">${lab[k]}</span> <b style="font-family:'DM Mono',monospace;">${Number(h[k])||0}</b></span>`).join('')
+      // ★ 2026-10-09.52: 指定事業所集荷の集荷先別単価
+      + (h.shitei && Object.keys(h.shitei).length
+          ? '<span style="display:block;margin-top:3px;color:var(--tel2);">指定事業所　'
+            + Object.entries(h.shitei).map(([n,v])=>`<span style="margin-right:9px;">${esc(n)} <b style="font-family:'DM Mono',monospace;">${v==null?'（集荷単価）':v}</b></span>`).join('')
+            + '</span>'
+          : '');
     return `<div style="display:flex;align-items:center;gap:8px;background:${isCur?'rgba(60,160,90,.10)':'var(--sur2)'};border:1px solid ${future?'var(--amb)':isCur?'var(--grn)':'var(--brd2)'};border-radius:5px;padding:6px 9px;">
       <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${future?'var(--amb2)':isCur?'var(--grn2)':'var(--txt2)'};white-space:nowrap;">
         ${esc(h.from||'')}〜${future?' <span style="font-size:9.5px;">(予定)</span>':isCur?' <span style="font-size:9.5px;">(適用中)</span>':''}</span>
@@ -45738,6 +46790,15 @@ function addLocPriceHistory(){
     if(v>0) any=true;
   });
   if(!any){ alert('単価がすべて0です。「新しい単価を登録」の欄に金額を入力してください\n（上の単価をそのまま使う場合は「上の単価をコピー」を押してください）'); return; }
+  /* ★ 2026-10-09.52: 指定事業所集荷の集荷先別単価も、この改定に写しておく。
+     契約の改定は1つの日付でまとめて効くので、同じ行に入れる。 */
+  rec.shitei = {};
+  document.querySelectorAll('#loc-shukka-shitei-list .loc-shukka-row').forEach(row=>{
+    const nm=row.querySelector('.loc-shukka-name')?.value.trim()||'';
+    if(!nm) return;
+    const v=row.querySelector('.loc-shukka-price')?.value;
+    rec.shitei[nm] = (v===''||v==null) ? null : (parseFloat(v)||0);
+  });
   const dup=_locPriceHistDraft.findIndex(h=>String(h.from)===String(from));
   if(dup>=0){
     if(!confirm(`${from} からの単価は既に登録されています。上書きしますか？`)) return;
@@ -46688,7 +47749,7 @@ function _staffBizOf(st){
 function _hourlyBizOf(st, monStr){
   const cond = (typeof getActivePayCondition==='function')
     ? (getActivePayCondition(st, String(monStr||'').replace('-','/'))||{}) : {};
-  const hourly = ['del','col'].filter(b=>_effBizMode(st,b,cond).type==='時間単価');
+  const hourly = ['del','col'].filter(b=>_effBizMode(st,b,cond,monStr).type==='時間単価');
   const mine = _staffBizOf(st);
   const both = hourly.filter(b=>mine.includes(b));
   return both.length ? both : hourly;
@@ -46766,8 +47827,38 @@ function _dcIssues(st, mon, opt){
               tab:'info', field:'st-empno-disp'});
   }
 
-  // 歩合なのに完了単価が引けない → 支払いが0円になる
-  if(st.kyuyo==='個数制（歩合）'){
+  /* ★ 2026-10-09.59: いちばん確かな見つけ方 ──
+     その月に日報があるのに、実際に計算すると支払いが0円になる人を出す。
+     原因（単価なし・基本給なし・打刻なし…）を問わず全部拾える。
+     本番データで、月給なのに基本給0円の人と、時間単価で打刻が無い人が
+     この形でなければ見つからなかった。 */
+  if(hasRows){
+    let pay=null;
+    try{ pay=(typeof _calcStaffPayment==='function') ? _calcStaffPayment(name, mon) : null; }catch(e){}
+    if(pay && !(pay.total>0)){
+      const kyu=(pay.kyuyo||st.kyuyo||'');
+      let why='', tab='del', field='st-pkanryo';
+      if(pay.noAtt){
+        why='時間単価ですが、この月の打刻がありません。勤務時間の画面で入れてください';
+        tab='info'; field='st-ky';
+      } else if(kyu==='月給' || kyu==='日額'){
+        why=kyu+'ですが、基本給が入っていません';
+        tab='info'; field='st-tk';
+      } else {
+        why='単価か給与形態のどこかが入っていません';
+      }
+      out.push({lv:'red', what:'支払いが ¥0 で計算される',
+                why:'この月の日報 '+(del.length+pu.length)+'日分に対して支払いが ¥0 です。'+why,
+                hint:kyu, tab, field});
+    }
+  }
+
+  /* 歩合なのに完了単価が引けない → 支払いが0円になる
+     ★ 2026-10-09.60: 集荷だけの人（堺営業所など）に「完了単価がない」と
+       出てしまっていた。宅配をしない人には出さない。 */
+  const _doesDel = (del.length>0)
+    || ((typeof _dashDelOffices==='function') ? _dashDelOffices().includes(String(st.office||'')) : true);
+  if(st.kyuyo==='個数制（歩合）' && _doesDel){
     let dp={};
     try{ dp=(typeof _getEffectiveDelPrices==='function') ? (_getEffectiveDelPrices(st, mon)||{}) : {}; }catch(e){}
     if(!(Number(dp.kanryo)>0)){
@@ -46839,6 +47930,406 @@ function _dcIssues(st, mon, opt){
   return out;
 }
 
+/* ════════ 単価の適用年月の登録状況（データ健診） 2026-10-09.56 ════════
+   単価は4つの台帳（郵便局・顧客・従事員・委託会社）すべてで
+   「△△年○○月から」を持てるようになった。ここでは登録もれを探す。
+   郵便局だけは、履歴がその月をカバーしていないと請求書が発行できないので赤。 */
+function _dcRateRows(mon){
+  const out=[];
+  // ── 郵便局（売上側。ここが一番きつい） ──
+  (D.locations||[]).forEach(l=>{
+    if(!l || l.active===false) return;
+    if(!(l.type==='post_office' || l.typesDel)) return;
+    const hasPrice=!!(l.prices && Object.values(l.prices).some(v=>Number(v)>0));
+    if(!hasPrice) return;                       // 単価未設定の局はここでは扱わない
+    const hist=Array.isArray(l.priceHistory)?l.priceHistory:[];
+    if(!hist.length){
+      out.push({lv:'amb', kind:'郵便局', name:l.name, locId:l.id,
+        what:'単価履歴がない',
+        why:'いまは拠点マスタの単価で全期間を計算します。単価を改定すると過去の請求書まで変わります',
+        fix:'now'});
+      return;
+    }
+    const at=(typeof _locPriceAt==='function') ? _locPriceAt(l, mon+'-01') : null;
+    if(!at){
+      const first=hist.slice().sort((a,b)=>String(a.from).localeCompare(String(b.from)))[0];
+      out.push({lv:'red', kind:'郵便局', name:l.name, locId:l.id,
+        what:'この月の単価が履歴にない',
+        why:'いちばん古い履歴が '+String(first&&first.from||'')+' からです。'+mon+' の請求書は発行できません',
+        fix:'old'});
+    }
+  });
+  // ── 顧客・委託会社・従事員（履歴が無くてもいまは正しく動く） ──
+  const noHist=(list,kind,nameOf,liveOf)=>{
+    let n=0;
+    (list||[]).forEach(x=>{
+      if(!x || (liveOf && !liveOf(x))) return;
+      if(!Array.isArray(x.rateHistory) || !x.rateHistory.length) n++;
+    });
+    if(n) out.push({lv:'info', kind, name:n+'件', what:'単価履歴がない',
+      why:'いまの単価で全期間を計算します。次に単価を変えるとき「＋ ○年○月から変更」から入れれば、自動で前の単価が残ります'});
+  };
+  noHist(D.customers,'顧客',null,c=>c.status!=='終了'&&c.active!==false);
+  noHist(D.companies,'委託会社',null,c=>c.status!=='終了'&&c.active!==false);
+  noHist(D.staff,'従事員',null,s=>s.status!=='終了');
+  return out;
+}
+/* 郵便局の「いまの単価を○年○月から として履歴に登録」 */
+function dcRegisterLocPrice(locId){
+  const l=(D.locations||[]).find(x=>String(x.id)===String(locId));
+  if(!l){ showAlert({msg:'拠点が見つかりません'}); return; }
+  const hist=Array.isArray(l.priceHistory)?l.priceHistory.slice():[];
+  const first=hist.sort((a,b)=>String(a.from).localeCompare(String(b.from)))[0];
+  const def = first ? '' : '2024-04-01';
+  const v=prompt(
+    l.name+' の いまの単価を、いつからの分として登録しますか。\n\n'
+    +'日付を 2024-04-01 のように入れてください。\n'
+    +'契約の開始日を入れておけば、過去の請求書もすべてこの単価で出せます。'
+    + (first ? ('\n\n※ いまいちばん古い履歴は '+first.from+' からです。それより前の日付を入れてください。') : ''),
+    def);
+  if(v==null) return;
+  const d=String(v||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ showAlert({msg:'日付の形が違います。2024-04-01 のように入れてください。'}); return; }
+  const p=l.prices||{};
+  const rec={from:d};
+  (typeof PRICE_KEYS!=='undefined' ? PRICE_KEYS : ['kanryo','tenso','night','ogata','shukka','mochimodoiri'])
+    .forEach(k=>{ rec[k]=Number(p[k])||0; });
+  rec.shitei={};
+  (l.shukkaCompaniesShitei||[]).forEach(c=>{
+    if(!c || !c.name) return;
+    rec.shitei[c.name]=(c.price==null||c.price==='')?null:(Number(c.price)||0);
+  });
+  if(!Array.isArray(l.priceHistory)) l.priceHistory=[];
+  const dup=l.priceHistory.findIndex(h=>String(h.from)===d);
+  if(dup>=0) l.priceHistory[dup]=rec; else l.priceHistory.push(rec);
+  l.priceHistory.sort((a,b)=>String(a.from).localeCompare(String(b.from)));
+  try{
+    lsSet(LS_KEYS.LOCATIONS||'nikki_locations', D.locations);
+    if(typeof fbSet==='function') fbSet('locations', D.locations);
+  }catch(e){ console.warn('[単価履歴] 保存に失敗', e); }
+  if(typeof _showSaveToast==='function') _showSaveToast(l.name+'　'+d+' からの単価として登録しました');
+  renderDataCheck();
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.57: 日報の未入力チェック
+     その日に出ているはずなのに日報が来ていない人・顧客を出す。
+
+     「出ているはず」の決め方
+       宅配 … 直近4週の同じ曜日に2回以上その営業所で日報がある人
+       集荷 … 単価が登録してある稼働中の顧客で、
+              直近4週の同じ曜日に2回以上集荷日報があるもの
+     （シフト表は別アプリでデータが来ていないため、いまは実績から割り出す。
+       シフトを取り込めるようになったら、この判定だけ差し替えればよい）
+
+     休業（休業日管理で登録したもの）は除き、理由を出す。
+   ════════════════════════════════════════════════════════════ */
+const NYU_WEEKS = 4;      // さかのぼる週数
+const NYU_MIN   = 2;      // 何回あれば「出るはず」とみなすか
+
+function _nyuDates(dateStr, weeks){
+  const out=[];
+  const d=new Date(String(dateStr)+'T00:00:00');
+  for(let i=1;i<=weeks;i++){
+    const x=new Date(d); x.setDate(x.getDate()-7*i);
+    out.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'));
+  }
+  return out;
+}
+const _nyuD = v => String(v||'').replace(/\//g,'-').slice(0,10);
+
+/* その日が休業として登録されているか（顧客・ルート単位） */
+function _nyuOff(custName, dateStr){
+  try{
+    const list=(typeof SCHEDULE_OVERRIDES!=='undefined' && Array.isArray(SCHEDULE_OVERRIDES)) ? SCHEDULE_OVERRIDES : [];
+    const hit=list.find(o=>o && _nyuD(o.date)===dateStr && o.customerName===custName
+                           && (o.kind==='休業' || o.kind==='holiday' || o.kind==='closed'));
+    return hit ? (hit.note || '休業') : '';
+  }catch(e){ return ''; }
+}
+
+/* ════════ 未入力の人へお知らせを送る 2026-10-09.58 ════════
+   日報アプリのお知らせ（Firebase nikki/notifications）に書き込む。
+   宛先 recipients.driverIds は日報アプリの driver.id ＝ 社員番号。
+   委託会社所属の人は、会社オーナーにも届くよう companyIds にも入れる。 */
+function _notiAll(){
+  if(!Array.isArray(D.notifications)){
+    const v=lsGet('nikki_notifications', []);
+    D.notifications=Array.isArray(v)?v:[];
+  }
+  return D.notifications;
+}
+/* ★ 2026-10-09.58: fbSet はノードを丸ごと置き換えるので、
+   書く直前に共有の中身を読み直して足す。これをしないと
+   日報アプリ側で出した既存のお知らせを全部消してしまう。 */
+async function _notiLoadShared(){
+  try{
+    const { ref, get } = window._fbImports || {};
+    if(typeof fbDB==='undefined' || !fbDB || !ref || !get) return null;
+    const snap = await get(ref(fbDB, 'nikki/notifications'));
+    if(!snap.exists()) return [];
+    const v = snap.val();
+    return Array.isArray(v) ? v : (v && typeof v==='object' ? Object.values(v) : []);
+  }catch(e){ console.warn('[お知らせ] 共有の読み込みに失敗', e); return null; }
+}
+async function nyuSendNotice(){
+  const date=_nyuD($('nyu-date')?.value||'');
+  if(!date){ showAlert({msg:'日付を選んでください。'}); return; }
+  const rows=[...document.querySelectorAll('#nyu-body tr[data-miss]')]
+    .filter(tr=>{ const c=tr.querySelector('.nyu-chk'); return c && c.checked && !c.disabled; })
+    .map(tr=>({name:tr.getAttribute('data-miss')||'', emp:tr.getAttribute('data-emp')||'',
+               co:tr.getAttribute('data-co')||''}));
+  if(!rows.length){ showAlert({msg:'送る相手にチェックを入れてください。'}); return; }
+
+  const ids=[...new Set(rows.map(r=>r.emp).filter(Boolean))];
+  const coIds=[...new Set(rows.map(r=>r.co).filter(Boolean))];
+  const noEmp=rows.filter(r=>!r.emp).map(r=>r.name);
+
+  const d=new Date(date+'T00:00:00');
+  const dow='日月火水木金土'[d.getDay()];
+  const label=(d.getMonth()+1)+'月'+d.getDate()+'日('+dow+')';
+  const body=label+' の日報がまだ届いていません。\n'
+    +'お手数ですが、日報アプリから入力をお願いします。\n'
+    +'すでに提出済みの場合や、お休みだった場合はこのお知らせは無視してください。';
+
+  const ok=await showDialog({icon:'📨', title:'お知らせを送りますか', msg:'',
+    bodyHtml:`<div style="font-size:12.5px;line-height:1.7;">
+      <div style="padding:8px 11px;border-radius:6px;margin-bottom:10px;background:rgba(74,122,155,.12);border:1px solid var(--blu);">
+        <div style="font-size:11px;color:var(--txt2);">送り先 ${rows.length}人</div>
+        <div style="font-size:13px;font-weight:700;color:var(--blu2);margin-top:2px;">${esc(rows.map(r=>r.name).join('、'))}</div>
+      </div>
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;">本文</div>
+      <div style="white-space:pre-wrap;background:var(--sur2);border:1px solid var(--brd2);border-radius:6px;padding:9px 11px;font-size:12px;">${esc(body)}</div>
+      ${coIds.length?`<div style="font-size:11px;color:var(--txt2);margin-top:9px;">委託会社のオーナーにも同じお知らせが届きます。</div>`:''}
+      ${noEmp.length?`<div style="font-size:11.5px;color:var(--amb2);font-weight:700;margin-top:9px;">
+        ⚠️ 社員番号が無いため届かない人：${esc(noEmp.join('、'))}</div>`:''}
+    </div>`,
+    okText:'送る', okClass:'grn', cancelText:'やめる'});
+  if(!ok) return;
+
+  const me=(typeof _getSystemInfo==='function') ? (_getSystemInfo().companyName||'大阪急配') : '大阪急配';
+  const rec={
+    id:'noti_'+Date.now()+'_'+Math.random().toString(36).slice(2,8),
+    type:'daily_report_missing',
+    title:label+' の日報が未入力です',
+    body,
+    createdBy:'mgmt', createdByName:me+'（経営管理）',
+    createdAt:new Date().toISOString(),
+    recipients:{ driverIds:ids, companyIds:coIds, isBroadcast:false },
+    readBy:{},
+    _targetDate:date,
+  };
+  /* 共有の中身を読み直してから足す（既存のお知らせを消さないため） */
+  const shared = await _notiLoadShared();
+  if(shared===null){
+    showAlert({icon:'⚠️', title:'送れませんでした',
+      msg:'いまの共有データを読めなかったため、送信を中止しました。\n'
+        +'ほかのお知らせを消してしまう恐れがあるので書き込みません。\n\n'
+        +'通信を確認して、もう一度お試しください。'});
+    return;
+  }
+  const all = shared.slice();
+  const seen = new Set(all.map(n=>n && n.id).filter(Boolean));
+  (_notiAll()||[]).forEach(n=>{ if(n && n.id && !seen.has(n.id)){ all.push(n); seen.add(n.id); } });
+  all.push(rec);
+  D.notifications=all;
+  try{
+    lsSet('nikki_notifications', all);
+    if(typeof fbSet==='function'){
+      const okw = await fbSet('notifications', all);
+      if(okw===false) throw new Error('共有への書き込みが中止されました');
+    }
+  }catch(e){
+    console.warn('[お知らせ] 送信に失敗', e);
+    showAlert({icon:'⚠️', title:'送れませんでした', msg:'通信に失敗しました。もう一度お試しください。'});
+    return;
+  }
+  if(typeof _showSaveToast==='function') _showSaveToast(rows.length+'人へお知らせを送りました');
+  renderNyuryoku();
+}
+/* その日のお知らせを既に送ったか */
+function _nyuSentFor(date){
+  return _notiAll().filter(n=>n && n.type==='daily_report_missing' && n._targetDate===date && !n.withdrawn);
+}
+function nyuChkAll(on){
+  // 社員番号が無い人は届かないので選ばない
+  document.querySelectorAll('#nyu-body .nyu-chk').forEach(c=>{ if(!c.disabled) c.checked=!!on; });
+  _nyuChkCount();
+}
+function _nyuChkCount(){
+  const n=[...document.querySelectorAll('#nyu-body .nyu-chk')].filter(c=>c.checked).length;
+  const el=$('nyu-chk-count'); if(el) el.textContent=n?(n+'人を選択中'):'';
+  const b=$('nyu-send-btn'); if(b) b.disabled=!n;
+}
+
+function renderNyuryoku(){
+  const body=$('nyu-body'); if(!body) return;
+  const dEl=$('nyu-date');
+  if(dEl && !dEl.value) dEl.value=new Date().toISOString().slice(0,10);
+  const date=_nyuD(dEl?.value||'');
+  if(!date){ body.innerHTML='<div class="card"><div class="xs muted">日付を選んでください。</div></div>'; return; }
+  const past=_nyuDates(date, NYU_WEEKS);
+  const dow='日月火水木金土'[new Date(date+'T00:00:00').getDay()];
+
+  // ── 宅配 ──
+  const delToday=new Map();                       // 氏名 → その日の日報
+  (D.delivery||[]).forEach(r=>{ if(r && _nyuD(r.date)===date && r.staff) delToday.set(r.staff, r); });
+  const delCount={};                              // 氏名+営業所 → 直近の同じ曜日に出た回数
+  (D.delivery||[]).forEach(r=>{
+    if(!r || !r.staff) return;
+    if(!past.includes(_nyuD(r.date))) return;
+    const k=r.staff+'\u0000'+(r.office||'');
+    delCount[k]=(delCount[k]||0)+1;
+  });
+  const delMiss=[];
+  Object.entries(delCount).forEach(([k,n])=>{
+    if(n<NYU_MIN) return;
+    const [name,office]=k.split('\u0000');
+    if(delToday.has(name)) return;                // 入っている
+    const st=(D.staff||[]).find(x=>x&&x.name===name);
+    if(st && st.status==='終了') return;           // 退職
+    const co=(st && st.companyId) ? ((D.companies||[]).find(c=>c.id===st.companyId)||{}).name : '';
+    delMiss.push({name, office, n, empNo:String(st?.empNo||''), kubun:st?.kubun||'', co,
+                  coId:(st&&st.companyId)||'', known:!!st});
+  });
+  delMiss.sort((a,b)=> String(a.office).localeCompare(String(b.office),'ja')
+                    || String(a.empNo).localeCompare(String(b.empNo),'ja',{numeric:true}));
+
+  // ── 集荷 ──
+  const puToday=new Set();
+  (D.pickup||[]).forEach(r=>{ if(r && _nyuD(r.date)===date && r.customerName) puToday.add(r.customerName); });
+  const puCount={};
+  (D.pickup||[]).forEach(r=>{
+    if(!r || !r.customerName) return;
+    if(!past.includes(_nyuD(r.date))) return;
+    puCount[r.customerName]=(puCount[r.customerName]||0)+1;
+  });
+  const puMiss=[];
+  Object.entries(puCount).forEach(([name,n])=>{
+    if(n<NYU_MIN) return;
+    if(puToday.has(name)) return;
+    const cu=(D.customers||[]).find(c=>c&&c.name===name);
+    if(cu && (cu.status==='終了' || cu.active===false)) return;
+    const hasPrice=!!(cu && (cu.colPrices||cu.prices) &&
+      Object.entries(cu.colPrices||cu.prices||{}).some(([k,v])=>k!=='_tax' && Number(v)>0));
+    if(cu && !hasPrice) return;                   // 単価の登録が無い顧客は追わない
+    puMiss.push({name, n, off:_nyuOff(name, date), known:!!cu});
+  });
+  puMiss.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));
+
+  const openDel = puMiss.filter(x=>!x.off).length;
+  const kp=$('nyu-kpi');
+  if(kp){
+    const k=(l,v,c,s)=>`<div class="card" style="padding:9px 11px;">
+      <div class="xs muted">${esc(l)}</div>
+      <div class="mono" style="font-size:19px;font-weight:700;color:${c};line-height:1.25;">${v}</div>
+      ${s?`<div style="font-size:9.5px;color:var(--txt3);">${esc(s)}</div>`:''}</div>`;
+    kp.innerHTML =
+      k('宅配 未入力', delMiss.length+'人', delMiss.length?'var(--red2)':'var(--grn2)', date+'（'+dow+'）') +
+      k('集荷 未入力', openDel+'件', openDel?'var(--red2)':'var(--grn2)', '休業ぶんを除く') +
+      k('宅配 入力済み', delToday.size+'人', 'var(--grn2)', 'この日') +
+      k('集荷 入力済み', puToday.size+'件', 'var(--grn2)', 'この日');
+  }
+
+  const sent=(typeof _nyuSentFor==='function') ? _nyuSentFor(date) : [];
+  let html='';
+  if(delMiss.length){
+    html += `<div class="card mb12" style="border-color:var(--red2);">
+      <div class="ch"><div class="ct"><div class="cbar"></div>宅配日報が来ていない人 <span class="xs muted">（${esc(date)} ${dow}）</span></div>
+        <span class="xs muted">${delMiss.length}人</span></div>
+      <div class="fla gap6 mb8" style="flex-wrap:wrap;align-items:center;">
+        <label style="font-size:11.5px;color:var(--txt2);display:flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" onchange="nyuChkAll(this.checked)" style="width:15px;height:15px;"> すべて選ぶ
+        </label>
+        <span id="nyu-chk-count" class="xs" style="color:var(--blu2);font-weight:700;"></span>
+        <div style="flex:1;"></div>
+        ${sent.length?`<span class="xs" style="color:var(--grn2);">✔ この日のお知らせは送信済み（${sent.length}回）</span>`:''}
+        <button id="nyu-send-btn" class="btn b-blu btn-sm" disabled onclick="nyuSendNotice()">📨 日報アプリへお知らせを送る</button>
+      </div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th style="width:36px;"></th>
+          <th style="width:88px;">社員番号</th><th style="width:150px;">氏名</th>
+          <th style="width:140px;">営業所</th><th style="width:150px;">区分</th>
+          <th style="width:130px;">直近4週の${dow}曜</th><th>入れる</th>
+        </tr></thead>
+        <tbody>${delMiss.map(m=>`<tr data-miss="${esc(m.name)}" data-emp="${esc(m.empNo)}" data-co="${esc(String(m.coId||''))}">
+          <td><input type="checkbox" class="nyu-chk" onchange="_nyuChkCount()" style="width:15px;height:15px;"${m.empNo?'':' disabled title="社員番号が無いため送れません"'}></td>
+          <td class="mono" style="color:var(--amb2);font-weight:700;">${m.empNo?esc(m.empNo):'<span class="muted">—</span>'}</td>
+          <td class="fw7">${m.known?staffLink(m.name):esc(m.name)}</td>
+          <td class="xs muted">${esc(m.office)}</td>
+          <td class="xs">${esc(m.kubun||'')}${m.co?`<div style="font-size:9px;color:var(--txt3);">${esc(m.co)}</div>`:''}</td>
+          <td class="tr mono">${m.n}回／4回</td>
+          <td><button class="btn b-red btn-sm" style="font-size:10.5px;"
+                onclick="_nyuNewDel('${esc(m.name).replace(/'/g,"\\'")}','${esc(m.office).replace(/'/g,"\\'")}','${esc(date)}')">＋ 宅配日報</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="xs muted mt8">直近4週の同じ曜日に ${NYU_MIN} 回以上その営業所で日報がある人を「出ているはず」として見ています。
+        休みと分かっている人が出る場合は、見逃しではなくこの決め方のためです。</div>
+    </div>`;
+  }
+  if(puMiss.length){
+    html += `<div class="card mb12">
+      <div class="ch"><div class="ct"><div class="cbar"></div>集荷日報が来ていない顧客 <span class="xs muted">（${esc(date)} ${dow}）</span></div>
+        <span class="xs muted">${puMiss.length}件</span></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th style="width:220px;">顧客</th><th style="width:130px;">直近4週の${dow}曜</th>
+          <th style="width:160px;">状態</th><th>入れる</th>
+        </tr></thead>
+        <tbody>${puMiss.map(m=>`<tr${m.off?' style="opacity:.5;"':''}>
+          <td class="fw7">${esc(m.name)}</td>
+          <td class="tr mono">${m.n}回／4回</td>
+          <td class="xs">${m.off?`<span class="bdg bz">休業</span> <span class="muted">${esc(m.off)}</span>`
+                               :'<span class="bdg br">未入力</span>'}</td>
+          <td>${m.off?'<span class="xs muted">—</span>'
+                    :`<button class="btn b-red btn-sm" style="font-size:10.5px;"
+                        onclick="_nyuNewPu('${esc(m.name).replace(/'/g,"\\'")}','${esc(date)}')">＋ 集荷日報</button>`}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="xs muted mt8">単価が登録してある稼働中の顧客だけを見ています。休業日管理で休みを登録してあるものは薄く出します。</div>
+    </div>`;
+  }
+  if(!html){
+    html = `<div class="card"><div class="al al-ok" style="font-size:12px;">
+      <span>✅</span><span>${esc(date)}（${dow}）の未入力はありません。宅配 ${delToday.size}人・集荷 ${puToday.size}件が入っています。</span></div></div>`;
+  }
+  body.innerHTML=html;
+  try{ _nyuChkCount(); }catch(e){}
+}
+function setNyuDay(d){
+  const el=$('nyu-date'); if(!el) return;
+  const base=el.value ? new Date(el.value+'T00:00:00') : new Date();
+  base.setDate(base.getDate()+d);
+  el.value=base.getFullYear()+'-'+String(base.getMonth()+1).padStart(2,'0')+'-'+String(base.getDate()).padStart(2,'0');
+  renderNyuryoku();
+}
+/* その場で日報を入れる */
+function _nyuNewDel(name, office, date){
+  if(typeof openM==='function') openM('m-del');
+  setTimeout(()=>{
+    if($('dd-date')) $('dd-date').value=date;
+    const off=(D.offices||[]).find(o=>o&&o.name===office);
+    if($('dd-off')) $('dd-off').value=office;
+    if($('dd-off-input')) $('dd-off-input').value = off ? (dispCode(off.officeCode)+' '+office) : office;
+    const st=(D.staff||[]).find(x=>x&&x.name===name);
+    if($('dd-staff')) $('dd-staff').value=name;
+    if($('dd-staff-input')) $('dd-staff-input').value = st ? ((st.empNo||'')+' '+name) : name;
+    try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
+  }, 220);
+}
+function _nyuNewPu(custName, date){
+  // 集荷は「まとめ入力」が入口（日付・営業所・従事員を決めて複数顧客）
+  if(typeof openPuBulk==='function'){ openPuBulk(); }
+  else if(typeof openM==='function'){ openM('m-pu'); }
+  setTimeout(()=>{
+    if($('pu-date')) $('pu-date').value=date;
+    if($('pu-cust')) $('pu-cust').value=custName;
+    if($('pu-cust-input')) $('pu-cust-input').value=custName;
+    const bd=$('pub-date'); if(bd) bd.value=date;
+  }, 220);
+}
+
 function renderDataCheck(){
   const body=$('dc-body'); if(!body) return;
   const mEl=$('dc-mon');
@@ -46901,7 +48392,11 @@ function renderDataCheck(){
       k('いま実害が出ている', red+'件', red?'var(--red2)':'var(--grn2)','支払いが0円になる等') +
       k('近いうちに効く', amb+'件', amb?'var(--amb2)':'var(--grn2)','入力が入った月から') +
       k('問題のない人', okCount+'人', 'var(--grn2)', '対象 '+staff.length+'人中') +
-      k('日報にあるが台帳にない', ghostList.length+'人', ghostList.length?'var(--red2)':'var(--grn2)','氏名のゆれ・未登録');
+      k('日報にあるが台帳にない', ghostList.length+'人', ghostList.length?'var(--red2)':'var(--grn2)','氏名のゆれ・未登録') +
+      (()=>{ let rr=[]; try{ rr=_dcRateRows(mon)||[]; }catch(e){}
+        const red=rr.filter(x=>x.lv==='red').length, amb=rr.filter(x=>x.lv==='amb').length;
+        return k('単価の適用年月', (red+amb)+'件', red?'var(--red2)':(amb?'var(--amb2)':'var(--grn2)'),
+                 red?(red+'局は請求書を出せません'):'登録もれ'); })();
   }
 
   let html='';
@@ -46922,7 +48417,43 @@ function renderDataCheck(){
     </div>`;
   }
 
-  if(!lines.length && !ghostList.length){
+  // ★ 2026-10-09.56: 単価の適用年月の登録状況
+  let rateRows=[];
+  try{ rateRows=_dcRateRows(mon)||[]; }catch(e){ console.warn('[データ健診 単価履歴]', e); }
+  if(rateRows.length){
+    const badge=lv => lv==='red' ? '<span class="bdg br" style="font-size:9.5px;">発行できない</span>'
+                    : lv==='amb' ? '<span class="bdg ba" style="font-size:9.5px;">注意</span>'
+                    : '<span class="bdg bz" style="font-size:9.5px;">参考</span>';
+    html += `<div class="card mb12">
+      <div class="ch"><div class="ct"><div class="cbar"></div>単価の適用年月 <span class="xs muted">（${esc(mon)}）</span></div></div>
+      <div class="tw"><table>
+        <thead><tr>
+          <th style="width:100px;">台帳</th>
+          <th style="width:170px;">対象</th>
+          <th style="width:100px;">印</th>
+          <th style="width:220px;">足りないもの</th>
+          <th>どうなるか</th>
+          <th style="width:150px;">直す</th>
+        </tr></thead>
+        <tbody>${rateRows.map(r=>`<tr>
+          <td class="xs muted">${esc(r.kind)}</td>
+          <td class="fw7">${esc(r.name)}</td>
+          <td>${badge(r.lv)}</td>
+          <td style="font-size:12px;font-weight:700;color:${r.lv==='red'?'var(--red2)':r.lv==='amb'?'var(--amb2)':'var(--txt2)'};">${esc(r.what)}</td>
+          <td class="xs" style="color:var(--txt2);">${esc(r.why)}</td>
+          <td>${r.locId!=null
+              ? `<button class="btn b-grn btn-sm" style="font-size:10.5px;" onclick="dcRegisterLocPrice('${esc(String(r.locId))}')">いまの単価を登録</button>`
+              : '<span class="xs muted">次に単価を変えるときでOK</span>'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="xs muted mt8">
+        <b>郵便局だけは必ず登録してください。</b>単価履歴がその月をカバーしていないと、その月の請求書が発行できません。
+        「いまの単価を登録」を押して<b>契約の開始日</b>を入れれば、過去の分もすべてその単価で出せるようになります。
+      </div>
+    </div>`;
+  }
+
+  if(!lines.length && !ghostList.length && !rateRows.length){
     html += `<div class="card"><div class="al al-ok" style="font-size:12px;">
       <span>✅</span><span>${esc(mon)} 時点で、台帳の設定もれは見つかりませんでした（対象 ${staff.length}人）。</span></div></div>`;
     body.innerHTML=html;
