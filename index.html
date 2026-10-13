@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.39</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.40</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5468,7 +5468,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.39';
+const APP_VER = '2026-10-09.40';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -21658,7 +21658,7 @@ function showSalesDetail(custName){
 
 
 /* ════════════════════════════════════════════════════════════
-   ★ 2026-10-09.39: 月締め（委託料以外の相殺・立替）
+   ★ 2026-10-09.40: 月締め（委託料以外の相殺・立替）
      委託料（完了・夜間・定時／指定事業所集荷・集荷単価・時給）はここには出さない。
      本人へ支払うもの（＋）と、本人から引くもの（−）だけを並べ、差引を見せる。
 
@@ -21728,10 +21728,70 @@ function _adjGoStaff(name, tab, fieldId){
   }, 280);
   _adjWatchClose(snap);
 }
-function _adjGoDaily(name){
+/* ★ 2026-10-09.40: 駐車立替はその日の宅配日報を直すのが目的なので、
+     一覧ではなく「宅配日報入力」のその人・その日の画面を開く。
+     立替のある日が1日なら直行、2日以上なら日付を選ばせる。 */
+function _adjParkDays(name){
+  const ym=($('adj-mon')?.value||'').slice(0,7);
+  const off=String(window._adjOff||'');
+  const rows=(D.delivery||[]).filter(r=> r && r.staff===name
+      && String(r.date||'').replace(/\//g,'-').startsWith(ym)
+      && (!off || r.office===off));
+  const withPark=rows.filter(r=>(parseInt(r.parking)||0)>0);
+  const list=(withPark.length?withPark:rows)
+    .slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  return {list, hasPark:withPark.length>0};
+}
+function _adjGoDaily(name, ev){
+  const {list, hasPark}=_adjParkDays(name);
+  if(!list.length){
+    showAlert({msg:name+' さんのこの月・この郵便局の宅配日報がありません。'});
+    return;
+  }
+  if(list.length===1){ _adjOpenDel(list[0].id); return; }
+  _adjDayPick(name, list, hasPark, ev);
+}
+function _adjOpenDel(id){
   const snap=_adjSnapshot();
-  if(typeof openFS==='function') openFS('staff', name);   // 日報一覧が最初に出る
-  _adjWatchClose(snap, 'fs-overlay');
+  _adjClosePick();
+  if(typeof editDel==='function') editDel(id); else return;
+  _adjWatchClose(snap, 'm-del');
+}
+function _adjClosePick(){
+  const old=document.getElementById('adj-daypick');
+  if(old) old.remove();
+}
+/* 日付を選ぶ小さな札。立替のある日を上に出す */
+function _adjDayPick(name, list, hasPark, ev){
+  _adjClosePick();
+  const box=document.createElement('div');
+  box.id='adj-daypick';
+  box.style.cssText='position:fixed;z-index:9999;background:var(--sur);border:1px solid var(--brd2);'
+    +'border-radius:9px;box-shadow:0 10px 32px rgba(0,0,0,.45);padding:8px;min-width:210px;max-height:330px;overflow:auto;';
+  const head=hasPark ? '駐車立替のあった日' : 'この月の日報（立替なし）';
+  box.innerHTML='<div style="font-size:10.5px;color:var(--txt3);padding:2px 4px 6px;">'+esc(name)+' ─ '+head+'</div>'
+    + list.map(r=>{
+        const pk=parseInt(r.parking)||0;
+        return '<button type="button" onclick="_adjOpenDel(\''+esc(String(r.id)).replace(/'/g,"\\'")+'\')" '
+          +'style="display:flex;width:100%;gap:10px;align-items:center;background:var(--sur2);border:1px solid var(--brd2);'
+          +'border-radius:7px;color:var(--txt);font-size:12px;padding:7px 9px;margin-bottom:4px;cursor:pointer;text-align:left;">'
+          +'<span style="flex:1;">'+esc(String(r.date||'').replace(/-/g,'/'))+'</span>'
+          +'<span class="mono" style="color:'+(pk?'var(--grn2)':'var(--txt3)')+';font-weight:700;">'+(pk?('¥'+fmt(pk)):'0')+'</span>'
+          +'</button>';
+      }).join('')
+    + '<button type="button" onclick="_adjClosePick()" style="width:100%;background:transparent;border:1px solid var(--brd2);'
+      +'border-radius:7px;color:var(--txt2);font-size:11.5px;padding:6px 0;cursor:pointer;">閉じる</button>';
+  document.body.appendChild(box);
+  // 押した場所の近くに出す（画面からはみ出さないように寄せる）
+  const x=(ev&&ev.clientX)||window.innerWidth/2, y=(ev&&ev.clientY)||120;
+  const w=box.offsetWidth, h=box.offsetHeight;
+  box.style.left=Math.max(8, Math.min(x-w/2, window.innerWidth -w-8))+'px';
+  box.style.top =Math.max(8, Math.min(y+12,  window.innerHeight-h-8))+'px';
+  setTimeout(()=>{
+    document.addEventListener('mousedown', function _h(e){
+      if(!box.contains(e.target)){ _adjClosePick(); document.removeEventListener('mousedown',_h); }
+    });
+  }, 0);
 }
 function _adjGoGas(){
   if(typeof navByS==='function') navByS('gas-mgmt');
@@ -22063,7 +22123,7 @@ function renderMonthAdj(){
     const goR  = `_adjGoStaff('${q}','offset','st-repair-list')`;     // 修理・免責
     const goA  = `_adjGoStaff('${q}','advance','ptab-content-advance')`; // 前払い
     const goYo = `_adjGoStaff('${q}','offset','st-yosha-type')`;      // 庸車
-    const goD  = `_adjGoDaily('${q}')`;                               // 日報一覧
+    const goD  = `_adjGoDaily('${q}', event)`;                        // その日の宅配日報入力
     const go   = goY;
     // メイン／サブの印。サブの人は台帳ぶんがメインの画面に出ることを書いておく
     const kind = e.isMain
@@ -22085,7 +22145,7 @@ function renderMonthAdj(){
         </div>
         ${unitT ? sub('単価 ¥'+fmt(unitT)) : _adjFix('単価未設定', goT)}
       </td>
-      <td class="tr mono">${_adjAmt(yen(e.park), goD, 'この人の日報一覧を開く（駐車料金は日報から）')}${sub(e.park?'この局へ請求':'')}</td>
+      <td class="tr mono">${_adjAmt(yen(e.park), goD, 'その日の宅配日報入力を開く（駐車料金はそこで直す）')}${sub(e.park?'この局へ請求':'')}</td>
       <td class="tr mono adj-plus" style="color:var(--grn2);font-weight:700;">${yen(e.plus)}</td>
 
       <td class="tr mono" style="border-left:2px solid var(--red2);${dim}">${_adjAmt(yen(e.gas), goG, '台帳の燃料費（カード貸出・費用負担）を開く')}
