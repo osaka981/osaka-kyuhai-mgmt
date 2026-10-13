@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.45</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.46</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4521,6 +4521,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div><!-- end stpanel-info -->
   <div id="stpanel-info-end-marker" style="display:none;"></div>
   <div id="ptab-content-del" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- ★ 2026-10-09.46: 単価の適用年月（帯） -->
+    <div id="st-rate-band-del" class="st-rate-band" style="margin-bottom:10px;"></div>
     <!-- ★ 2026-09-22.1: 業務別の給与形態（保存のみ・計算は次の更新で切替） -->
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
       <span style="font-size:11px;font-weight:700;">宅配の給与形態</span>
@@ -4589,6 +4591,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 集荷単価 -->
   <div id="ptab-content-col" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- ★ 2026-10-09.46: 単価の適用年月（帯） -->
+    <div id="st-rate-band-col" class="st-rate-band" style="margin-bottom:10px;"></div>
     <!-- ★ 2026-09-22.1: 業務別の給与形態（保存のみ・計算は次の更新で切替） -->
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">
       <span style="font-size:11px;font-weight:700;">集荷の給与形態</span>
@@ -4702,6 +4706,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
   <!-- 相殺・手当 -->
   <div id="ptab-content-offset" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- ★ 2026-10-09.46: 単価の適用年月（帯） -->
+    <div id="st-rate-band-teate" class="st-rate-band" style="margin-bottom:10px;"></div>
     <!-- 燃料費 -->
     <div style="margin-bottom:10px;">
       <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ 燃料費</div>
@@ -5504,7 +5510,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.45';
+const APP_VER = '2026-10-09.46';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -8830,6 +8836,9 @@ function resetStaffModal(){
   // ★ 2026/09/12: ITEMS から導出
   CK_LIST.map(ck=>'st-c'+ck).forEach(id=>{const e=$(id);if(e)e.value='';});
   // チャーター/違約金などの行ベースリセット
+  // ★ 2026-10-09.46: 単価の適用年月をリセット
+  _stRateYm='';
+  ['st-rate-band-del','st-rate-band-col','st-rate-band-teate'].forEach(id=>{const e=$(id); if(e) e.innerHTML='';});
   ['st-charter-list','st-penalty-list','st-customitems-list'].forEach(id=>{
     const e=$(id);if(e)e.innerHTML='';
   });
@@ -10486,7 +10495,7 @@ function _findMissingPriceDrivers(){
     if(st.kyuyo === '月給' || st.kyuyo === '時間給') return;
 
     const missing = [];
-    const dp = (typeof _getEffectiveDelPrices==='function') ? _getEffectiveDelPrices(st) : (st.fixedPrices?.del||{});
+    const dp = (typeof _getEffectiveDelPrices==='function') ? _getEffectiveDelPrices(st, monStr) : (st.fixedPrices?.del||{});
 
     // 宅配系: 完了/転送/夜間/大型
     const delSums = { kanryo:0, tenso:0, yakan:0, ogata:0 };
@@ -15503,8 +15512,12 @@ function getDelColPayPrice(staff, companyName){
 //      1. ドライバー個別 fixedPrices.del.colCompanies
 //      2. ドライバー個別 fixedPrices.del.shukka
 //      (委託会社単価は使用しない)
-function getDelColPayEntry(staff, companyName, officeName){
+/* ★ 2026-10-09.46: ym を渡すと、その月に効いていた単価で引く */
+function getDelColPayEntry(staff, companyName, officeName, ym){
   if(!staff) return {price:0, label:'集荷', isDefault:true};
+  const _delAt = (ym && typeof _rateAt==='function')
+    ? ((_rateAt(staff, ym)||{}).del || {})
+    : (staff.fixedPrices?.del || {});
 
   const matchEntry = (list, name, office)=>{
     if(!Array.isArray(list)) return null;
@@ -15521,7 +15534,7 @@ function getDelColPayEntry(staff, companyName, officeName){
   const resolveFromDriver = ()=>{
     // 2026/05/09 NEW: 集荷先別単価(拠点マスタ連動)を最優先でチェック
     // 宅配事業内集荷は会社ごとに単価が異なるため顧客別固定
-    const shuCompanies = staff.fixedPrices?.del?.shukkaCompanies || {};
+    const shuCompanies = _delAt.shukkaCompanies || {};
     if(officeName && companyName){
       // 拠点ID解決(officeNameから拠点を逆引き)
       const loc = (D.locations||[]).find(l=>l.name===officeName && l.type==='post_office');
@@ -15534,11 +15547,11 @@ function getDelColPayEntry(staff, companyName, officeName){
       }
     }
     // 旧: 集荷個別単価 (colCompanies)
-    const dEntry = matchEntry(staff.fixedPrices?.del?.colCompanies, companyName, officeName);
+    const dEntry = matchEntry(_delAt.colCompanies, companyName, officeName);
     if(dEntry && dEntry.price != null && dEntry.price !== ''){
       return {price: Number(dEntry.price)||0, label: dEntry.label || '集荷②', isDefault:false};
     }
-    const driverShukka = staff.fixedPrices?.del?.shukka;
+    const driverShukka = _delAt.shukka;
     if(driverShukka != null && driverShukka !== '' && Number(driverShukka) > 0){
       return {price: Number(driverShukka)||0, label:'集荷', isDefault:true};
     }
@@ -15608,7 +15621,7 @@ function calcStaffDelColPayment(staffName, monStr){
   const breakdown = [];
   let total = 0;
   entries.forEach(e=>{
-    const res = getDelColPayEntry(st, e.company, e.postOffice);
+    const res = getDelColPayEntry(st, e.company, e.postOffice, ym);
     // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
     const amount = (typeof calcUnitTotal === 'function')
       ? calcUnitTotal(res.price, e.count||0, 'ex')
@@ -18583,7 +18596,7 @@ function _bizWorkMin(st, monStr, biz, modes){
 }
 // 歩合の明細（宅配）: 宅配単価×件数 ＋ 宅配事業内集荷
 function _bizCommissionDel(st, name, monStr, del){
-  const out=[]; const dp=_getEffectiveDelPrices(st);
+  const out=[]; const dp=_getEffectiveDelPrices(st, monStr);
   const sum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
   del.forEach(r=>Object.keys(sum).forEach(k=>{ sum[k]+=r[k]||0; }));
   let dc={breakdown:[]};
@@ -21997,8 +22010,13 @@ function _adjExtras(st, ym, tokuCnt, off){
   });
   out.days = days.size;
 
-  out.yoko = out.yokoCnt * (Number(offs.yokonoriUnit)||0);
-  out.toku = out.tokuCnt * (Number(offs.tokubetsuUnit)||0);
+  /* ★ 2026-10-09.46: その月に効いていた手当の単価を使う */
+  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, ym)
+            : {yokonoriUnit:offs.yokonoriUnit, tokubetsuUnit:offs.tokubetsuUnit};
+  out.yoko = out.yokoCnt * (Number(_tu.yokonoriUnit)||0);
+  out.toku = out.tokuCnt * (Number(_tu.tokubetsuUnit)||0);
+  out.unitY = Number(_tu.yokonoriUnit)||0;
+  out.unitT = Number(_tu.tokubetsuUnit)||0;
 
   /* ここから下（燃料・台帳違約金・修理・前払い・庸車）は人に付くものなので、
      メイン郵便局の画面にだけ出す。サブで二重に引かないため。 */
@@ -22205,8 +22223,8 @@ function renderMonthAdj(){
     if(onlyMove && !moved) return '';
     shown++;
 
-    const unitY=Number(st.offset?.yokonoriUnit)||0;
-    const unitT=Number(st.offset?.tokubetsuUnit)||0;
+    const unitY=Number(e.unitY)||0;   // ★ 2026-10-09.46: その月に効いていた単価
+    const unitT=Number(e.unitT)||0;
     const sub = t => t ? `<div style="font-size:9.5px;color:var(--txt3);line-height:1.3;">${esc(t)}</div>` : '';
     const dim = e.isMain ? '' : 'opacity:.35;';
     const netCol = e.net>0 ? 'var(--grn2)' : (e.net<0 ? 'var(--red2)' : 'var(--txt3)');
@@ -22677,7 +22695,7 @@ function renderBillingPay(monStr){
       m.tankaLabel = `¥${fmt(tanka)}/月`;
     } else {
       let dp = {};
-      try{ if(typeof _getEffectiveDelPrices==='function') dp = _getEffectiveDelPrices(st) || {}; }catch(e){}
+      try{ if(typeof _getEffectiveDelPrices==='function') dp = _getEffectiveDelPrices(st, monStr) || {}; }catch(e){}
       const kp = Number(dp.kanryo) || 0;
       const sub = ['tenso','night','ogata','shukka'].filter(k => Number(dp[k]) > 0).length;
       m.tankaLabel = kp
@@ -22762,13 +22780,14 @@ function showPayDetail(staffName){
      見ていなかったため、支払明細書（_calcStaffPayment）と額が合わなかった。
      台帳の単価（_getEffectiveDelPrices・offset）で計算し直す。 */
   const _off = st?.offset || {};
-  const dp   = (typeof _getEffectiveDelPrices==='function' && st) ? _getEffectiveDelPrices(st) : {};
+  const _tu0 = (typeof _teateUnitsAt==='function' && st) ? _teateUnitsAt(st, monStr) : {yokonoriUnit:0,tokubetsuUnit:0};
+  const dp   = (typeof _getEffectiveDelPrices==='function' && st) ? _getEffectiveDelPrices(st, monStr) : {};
   const _ut  = (price, qty, key) => {
     if(!price || !qty) return 0;
     const tf = (dp._tax && dp._tax[key]) || 'ex';
     return (typeof calcUnitTotal==='function') ? calcUnitTotal(price, qty, tf) : Math.floor(price*qty);
   };
-  const yUnit = Number(_off.yokonoriUnit)||0;
+  const yUnit = Number(_tu0.yokonoriUnit)||0;
 
   tbody.innerHTML = rows.map(r => {
     const kanryo   = r.kanryo    || 0;
@@ -22807,7 +22826,7 @@ function showPayDetail(staffName){
   /* 月締めで入れた分（特別手当・違約金）は日報に無いので、合計の下に足す。
      支給計は支払明細書と同じ _calcStaffPayment から取り、ずれないようにする。 */
   const mAdj = (typeof _adjPayroll==='function' && st) ? _adjPayroll(st, monStr) : null;
-  const tUnit = Number(_off.tokubetsuUnit)||0;
+  const tUnit = Number(_tu0.tokubetsuUnit)||0;
   const pay   = (typeof _calcStaffPayment==='function') ? _calcStaffPayment(staffName, monStr) : null;
   const extra = [];
   if(mAdj && mAdj.tokubetsuCnt>0){
@@ -23346,6 +23365,10 @@ function switchStTab(t){
       if(p) p.style.display=id===t?'':'none';
     }
   });
+  // ★ 2026-10-09.46: 単価タブを開いたら適用年月の帯を描き直す
+  if(t==='del' || t==='col' || t==='offset'){
+    try{ if(typeof renderStRateBand==='function') renderStRateBand(); }catch(e){}
+  }
   if(t==='route')   renderRouteList();
   if(t==='confirm') buildStConfirm();
   if(t==='advance') renderAdvanceTab();
@@ -24470,6 +24493,15 @@ function saveStaff(continueAdd=false){
     });
   }catch(e){}
   try{ _aclSyncRetired(); }catch(e){ console.warn('[acl] 退職との連動に失敗', e); }
+
+  /* ★ 2026-10-09.46: 単価の適用年月を確定する。
+     画面に出していた行に単価を入れ、台帳の単価欄はいちばん新しい行に揃える。
+     （過去の行を直していた場合でも、台帳の欄＝いまの単価、は崩さない） */
+  try{
+    const _rt = (editId ? D.staff.find(x=>String(x.id)===String(editId)) : null)
+             || D.staff[D.staff.length-1];
+    if(_rt && typeof _stRateCommit==='function') _stRateCommit(_rt);
+  }catch(e){ console.warn('[単価履歴] 保存に失敗', e); }
 
   // === Firebase保存 ===
   // ① nikki/drivers (日報アプリ用、簡略版・全社員分)
@@ -33403,11 +33435,283 @@ function _saveIssuedDoc(rec){
 // ドライバーの実効宅配単価を返す(区分による優先順位を適用)
 // 委託会社所属: 委託会社単価 → ドライバー個別 のフォールバック
 // それ以外:    ドライバー個別のみ
-function _getEffectiveDelPrices(staff){
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-09.46: 単価の適用年月（単価履歴）
+     これまで単価は台帳に1つしか持てず、10月から単価が変わった人の
+     台帳を書き換えると、9月分の支払いまで新しい単価で再計算されていた。
+     「△△年○○月から適用」を持たせて、その月に効いていた単価で計算する。
+
+     持ち方：staff.rateHistory = [{ ym:'2026-10', note:'',
+                                     del:{...}, col:{...},
+                                     teate:{yokonoriUnit, tokubetsuUnit} }]
+       ・1行がその月からの単価一式（まるごとの写し）
+       ・いちばん古い行は ym:'0000-01'＝「はじめから」
+       ・台帳の単価欄は「いちばん新しい行」と同じ（1本化）
+
+     給与形態・基本給・時給・庸車は これまでどおり payHistory（既に効いている）。
+   ════════════════════════════════════════════════════════════ */
+const RATE_BASE_YM = '0000-01';
+function _rateYm(v){ return String(v||'').replace(/\//g,'-').slice(0,7); }
+function _rateYmLabel(ym){
+  if(!ym || ym===RATE_BASE_YM) return 'はじめから';
+  const m=String(ym).match(/^(\d{4})-(\d{2})/);
+  return m ? (m[1]+'年'+Number(m[2])+'月から') : String(ym);
+}
+/* いまの台帳の単価を1行ぶんの写しにする */
+function _rateSnapOf(st){
+  const fp=(st&&st.fixedPrices)||{}, o=(st&&st.offset)||{};
+  return {
+    del: JSON.parse(JSON.stringify(fp.del||{})),
+    col: JSON.parse(JSON.stringify(fp.col||{})),
+    teate: { yokonoriUnit: Number(o.yokonoriUnit)||0,
+             tokubetsuUnit: Number(o.tokubetsuUnit)||0 },
+  };
+}
+/* 履歴を取り出す。空なら「はじめから」の1行を作って入れる */
+function _rateList(st, noSeed){
+  if(!st) return [];
+  if(!Array.isArray(st.rateHistory)) st.rateHistory=[];
+  if(!st.rateHistory.length && !noSeed){
+    st.rateHistory.push(Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _rateSnapOf(st)));
+  }
+  st.rateHistory.sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')));
+  return st.rateHistory;
+}
+/* その月に効いている1行（無ければ台帳の現在値） */
+function _rateAt(st, ym){
+  const t=_rateYm(ym);
+  const list=(st && Array.isArray(st.rateHistory)) ? st.rateHistory.slice()
+             .sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||''))) : [];
+  if(!list.length) return _rateSnapOf(st);
+  if(!t) return list[list.length-1];                 // 月の指定なし＝いまの単価
+  let hit=null;
+  list.forEach(h=>{ if(String(h.ym||'')<=t) hit=h; });
+  return hit || list[0];
+}
+/* いちばん新しい行（＝台帳の単価欄と同じもの） */
+function _rateLatest(st){
+  const list=(st && Array.isArray(st.rateHistory)) ? st.rateHistory : [];
+  if(!list.length) return null;
+  return list.slice().sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')))[list.length-1];
+}
+/* その月の集荷品目単価 */
+function _colPricesAt(st, ym){
+  const r=_rateAt(st, ym);
+  return (r && r.col) ? r.col : ((st&&st.fixedPrices&&st.fixedPrices.col)||{});
+}
+/* その月の横乗・特別手当の単価 */
+function _teateUnitsAt(st, ym){
+  const r=_rateAt(st, ym);
+  const o=(st&&st.offset)||{};
+  const t=(r && r.teate) ? r.teate : {};
+  return { yokonoriUnit: Number(t.yokonoriUnit!=null ? t.yokonoriUnit : o.yokonoriUnit)||0,
+           tokubetsuUnit: Number(t.tokubetsuUnit!=null ? t.tokubetsuUnit : o.tokubetsuUnit)||0 };
+}
+/* その人のその月の単価が、どの行から来ているか（画面に出す用） */
+function _rateSourceLabel(st, ym){
+  const list=(st && Array.isArray(st.rateHistory)) ? st.rateHistory : [];
+  if(!list.length) return '';
+  const r=_rateAt(st, ym);
+  return r ? _rateYmLabel(r.ym) : '';
+}
+
+/* ════════ 単価の適用年月（台帳の帯） 2026-10-09.46 ════════
+   宅配単価・集荷単価・控除/手当 の3タブの頭に出す。
+   いまどの月からの単価を見ているかを示し、過去の単価にも切り替えられる。
+   「○年○月から変更」で、いまの単価を写した新しい行ができる。 */
+let _stRateYm = '';        // いま画面に出している行の ym
+
+function _stRateStaff(){
+  const id=$('m-staff')?._editId;
+  return id ? (D.staff||[]).find(x=>String(x.id)===String(id)) : null;
+}
+function renderStRateBand(){
+  const st=_stRateStaff();
+  const boxes=['st-rate-band-del','st-rate-band-col','st-rate-band-teate'].map(id=>$(id)).filter(Boolean);
+  if(!boxes.length) return;
+  if(!st){
+    boxes.forEach(b=>b.innerHTML='<div class="xs" style="color:var(--txt3);padding:6px 8px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">新しく登録する人の単価です。保存したあと「○年○月から変更」で単価の切り替えを登録できます。</div>');
+    return;
+  }
+  const list=_rateList(st);
+  if(!_stRateYm || !list.some(h=>h.ym===_stRateYm)) _stRateYm=list[list.length-1].ym;
+  const cur=list.find(h=>h.ym===_stRateYm) || list[list.length-1];
+  const isLatest = (cur.ym === list[list.length-1].ym);
+
+  const opts=list.slice().reverse().map(h=>
+    `<option value="${esc(h.ym)}"${h.ym===_stRateYm?' selected':''}>${esc(_rateYmLabel(h.ym))}${h.note?('　'+esc(h.note)):''}</option>`).join('');
+
+  const html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;border-radius:6px;
+      background:${isLatest?'rgba(74,122,155,.10)':'rgba(184,134,11,.12)'};
+      border:1px solid ${isLatest?'var(--blu)':'var(--amb2)'};">
+    <span style="font-size:10px;font-weight:700;color:${isLatest?'var(--blu2)':'var(--amb2)'};white-space:nowrap;">
+      ${isLatest?'📅 いまの単価':'📅 過去の単価を表示中'}</span>
+    <select class="fi" style="width:auto;font-size:11.5px;padding:3px 7px;" onchange="stRateSwitch(this.value)">${opts}</select>
+    <input type="text" class="fi st-rate-note" value="${esc(cur.note||'')}" placeholder="変更の理由（例：契約改定）"
+      oninput="stRateNote(this)" style="width:200px;font-size:11px;padding:3px 7px;">
+    <div style="flex:1;"></div>
+    <button type="button" class="btn b-grn btn-sm" style="font-size:10.5px;" onclick="stRateNew()">＋ ○年○月から変更</button>
+    ${(list.length>1 && cur.ym!==RATE_BASE_YM)
+      ? `<button type="button" class="btn b-gh btn-sm" style="font-size:10.5px;" onclick="stRateDelete('${esc(cur.ym)}')">この行を消す</button>` : ''}
+    <div style="flex-basis:100%;font-size:9px;color:var(--txt2);line-height:1.5;">
+      ${isLatest
+        ? 'ここの単価を直すと、'+esc(_rateYmLabel(cur.ym))+'の分から変わります。前の月の支払いは変わりません。'
+        : '<b style="color:var(--amb2);">いま直すと '+esc(_rateYmLabel(cur.ym))+'〜 の支払いが変わります。</b>いまの単価を直したいときは、上の選び欄をいちばん新しいものに戻してください。'}
+    </div>
+  </div>`;
+  boxes.forEach(b=>b.innerHTML=html);
+}
+/* 変更の理由。3タブに同じ帯を出しているので、打った内容を行に入れて他の2枚も揃える */
+function stRateNote(el){
+  const st=_stRateStaff(); if(!st || !_stRateYm) return;
+  const v=el.value;
+  const h=(st.rateHistory||[]).find(x=>x.ym===_stRateYm);
+  if(h) h.note=v;
+  document.querySelectorAll('.st-rate-note').forEach(x=>{ if(x!==el) x.value=v; });
+}
+/* 選んだ行の単価を画面に入れる */
+function stRateSwitch(ym){
+  const st=_stRateStaff(); if(!st) return;
+  _stRateSaveForm();                 // いま出ている行に、画面の値を控えておく
+  _stRateYm=String(ym||'');
+  const h=_rateList(st).find(x=>x.ym===_stRateYm);
+  if(h) _stRateLoadForm(h);
+  renderStRateBand();
+}
+/* 新しい適用月を作る（いまの画面の単価を写す） */
+function stRateNew(){
+  const st=_stRateStaff();
+  if(!st){ showAlert({msg:'先に「保存して続けて登録」で一度保存してから、単価の切り替えを登録してください。'}); return; }
+  const d=new Date();
+  const def=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const v=prompt('いつの分から新しい単価にしますか。\n\n年月を 2026-11 のように入れてください。\n（その月の1日からの日報に効きます）', def);
+  if(v==null) return;
+  const ym=_rateYm(v);
+  if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。2026-11 のように入れてください。'}); return; }
+  const list=_rateList(st);
+  if(list.some(h=>h.ym===ym)){
+    showAlert({msg:_rateYmLabel(ym)+' の単価はもう登録されています。上の選び欄から選んで直してください。'});
+    _stRateYm=ym; _stRateLoadForm(list.find(h=>h.ym===ym)); renderStRateBand();
+    return;
+  }
+  _stRateSaveForm();
+  const base=_rateAt(st, ym);        // その月の時点で効いている単価を写す
+  const row=Object.assign({ym, note:''}, JSON.parse(JSON.stringify({del:base.del||{}, col:base.col||{}, teate:base.teate||{}})));
+  st.rateHistory.push(row);
+  st.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  _stRateYm=ym;
+  _stRateLoadForm(row);
+  renderStRateBand();
+  if(typeof _showSaveToast==='function') _showSaveToast(_rateYmLabel(ym)+'の単価を作りました。数字を直して保存してください。');
+}
+function stRateDelete(ym){
+  const st=_stRateStaff(); if(!st) return;
+  showConfirm(_rateYmLabel(ym)+' の単価を消しますか。\nこの月以降は、ひとつ前の単価が使われます。', ()=>{
+    st.rateHistory=(st.rateHistory||[]).filter(h=>h.ym!==ym);
+    const list=_rateList(st);
+    _stRateYm=list[list.length-1].ym;
+    _stRateLoadForm(list[list.length-1]);
+    renderStRateBand();
+  });
+}
+/* 画面 → 行 */
+function _stRateSaveForm(){
+  const st=_stRateStaff(); if(!st || !_stRateYm) return;
+  const h=(st.rateHistory||[]).find(x=>x.ym===_stRateYm); if(!h) return;
+  // note は stRateNote() で随時入っている
+  h.del = _stCollectDelPrices();
+  h.col = _stCollectColPrices();
+  h.teate = { yokonoriUnit: parseInt($('st-yokonori-unit')?.value)||0,
+              tokubetsuUnit: parseInt($('st-tokubetsu-unit')?.value)||0 };
+}
+/* 行 → 画面 */
+function _stRateLoadForm(h){
+  if(!h) return;
+  const d=h.del||{}, c=h.col||{}, t=h.teate||{};
+  const put=(id,v)=>{ const e=$(id); if(e) e.value=(v==null||v===0)?(v===0?0:''):v; };
+  put('st-pkanryo', d.kanryo); put('st-ptenso', d.tenso); put('st-pnight', d.night);
+  put('st-pogata', d.ogata);   put('st-pshukka', d.shukka);
+  put('st-ps1', d.s1); put('st-ps2', d.s2); put('st-ps3', d.s3); put('st-ps4', d.s4);
+  if(d._tax && typeof setItemTax==='function'){
+    [['kanryo','st-pkanryo'],['tenso','st-ptenso'],['night','st-pnight'],['ogata','st-pogata'],
+     ['shukka','st-pshukka'],['s1','st-ps1'],['s2','st-ps2'],['s3','st-ps3'],['s4','st-ps4']]
+      .forEach(([k,id])=>{ if(d._tax[k]) try{ setItemTax(id, d._tax[k]); }catch(e){} });
+  }
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      const e=$('st-c'+ck); if(!e) return;
+      e.value = (c[ck]==null) ? '' : c[ck];
+      if(c._tax && c._tax[ck] && typeof setItemTax==='function'){ try{ setItemTax('st-c'+ck, c._tax[ck]); }catch(e2){} }
+    });
+  }
+  put('st-yokonori-unit', t.yokonoriUnit);
+  put('st-tokubetsu-unit', t.tokubetsuUnit);
+  // 集荷先別単価（拠点マスタ連動）も入れ替える
+  try{ if(typeof renderStShukkaCompanies==='function'){ window._stShukkaPreset=d.shukkaCompanies||{}; renderStShukkaCompanies(); } }catch(e){}
+}
+/* 画面から宅配単価を集める（保存の形と同じ） */
+function _stCollectDelPrices(){
+  const n=id=>parseFloat($(id)?.value)||0;
+  const tx=id=>(typeof getItemTax==='function')?getItemTax(id):'ex';
+  const shu=(typeof collectStShukkaCompanies==='function')?collectStShukkaCompanies():{shukkaCompanies:{}};
+  return {
+    kanryo:n('st-pkanryo'), tenso:n('st-ptenso'), night:n('st-pnight'), ogata:n('st-pogata'),
+    shukka:n('st-pshukka'), s1:n('st-ps1'), s2:n('st-ps2'), s3:n('st-ps3'), s4:n('st-ps4'),
+    colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),
+    _tax:{kanryo:tx('st-pkanryo'),tenso:tx('st-ptenso'),night:tx('st-pnight'),ogata:tx('st-pogata'),
+          shukka:tx('st-pshukka'),s1:tx('st-ps1'),s2:tx('st-ps2'),s3:tx('st-ps3'),s4:tx('st-ps4')},
+    shukkaCompanies: shu.shukkaCompanies||{},
+  };
+}
+function _stCollectColPrices(){
+  const st=_stRateStaff();
+  const prev=(st && st.fixedPrices && st.fixedPrices.col) || {};
+  const o={...prev}; o._tax={...(prev._tax||{})};
+  if(typeof CK_LIST!=='undefined'){
+    CK_LIST.forEach(ck=>{
+      const e=$('st-c'+ck); if(!e) return;
+      o[ck]=parseFloat(e.value)||0;
+      if(typeof getItemTax==='function') o._tax[ck]=getItemTax('st-c'+ck);
+    });
+  }
+  return o;
+}
+/* 保存のあとに呼ぶ：画面の値を その行に入れ、いちばん新しい行を台帳の単価欄と揃える */
+function _stRateCommit(st){
+  if(!st) return;
+  if(!Array.isArray(st.rateHistory) || !st.rateHistory.length){
+    // はじめて保存する人：いまの単価を「はじめから」の1行にする
+    st.rateHistory=[Object.assign({ym:RATE_BASE_YM, note:'はじめの単価'}, _rateSnapOf(st))];
+    return;
+  }
+  st.rateHistory.sort((a,b)=>String(a.ym).localeCompare(String(b.ym)));
+  const editing = _stRateYm && st.rateHistory.find(h=>h.ym===_stRateYm);
+  if(editing){
+    editing.note = editing.note || '';
+    editing.del  = _stCollectDelPrices();
+    editing.col  = _stCollectColPrices();
+    editing.teate= { yokonoriUnit: parseInt($('st-yokonori-unit')?.value)||0,
+                     tokubetsuUnit: parseInt($('st-tokubetsu-unit')?.value)||0 };
+  }
+  /* 1本化：台帳の単価欄＝いちばん新しい行。
+     過去の行を直していた場合でも、台帳の欄はいちばん新しい行に戻す。 */
+  const last=st.rateHistory[st.rateHistory.length-1];
+  st.fixedPrices = st.fixedPrices || {};
+  st.fixedPrices.del = JSON.parse(JSON.stringify(last.del||{}));
+  st.fixedPrices.col = Object.assign({}, st.fixedPrices.col||{}, JSON.parse(JSON.stringify(last.col||{})));
+  st.offset = st.offset || {};
+  st.offset.yokonoriUnit  = Number((last.teate||{}).yokonoriUnit)||0;
+  st.offset.tokubetsuUnit = Number((last.teate||{}).tokubetsuUnit)||0;
+}
+
+/* ★ 2026-10-09.46: 第2引数に年月を渡すと、その月に効いていた単価を返す。
+   渡さないときは今までどおり台帳の現在値（＝いちばん新しい単価）。 */
+function _getEffectiveDelPrices(staff, ym){
   if(!staff) return {};
   const kubun = staff.kubun || '';
   const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
-  const driverDel = staff.fixedPrices?.del || {};
+  const _r = ym ? _rateAt(staff, ym) : null;
+  const driverDel = (_r && _r.del) ? _r.del : (staff.fixedPrices?.del || {});
   if(!isCompanyDriver) return driverDel;
 
   // 委託会社所属: 委託会社単価を優先、未設定項目はドライバー個別にフォールバック
@@ -33477,7 +33781,7 @@ function _buildDriverMonthlyByOffice(staff, monStr){
   }
 
   // ── 歩合制: 郵便局別に明細 ──
-  const dp = _getEffectiveDelPrices(staff);
+  const dp = _getEffectiveDelPrices(staff, monStr);
   const del = (D.delivery||[]).filter(r=>r.staff===name && (r.date||'').startsWith(monStr));
 
   // 郵便局別に宅配データを集約
@@ -33609,7 +33913,7 @@ function _calcStaffPayment(name, monStr){
     total=tanka;
     breakdown.push({label:'基本給（月給）', amount:total});
   } else if(kyuyo==='個数制（歩合）'){
-    const dp = _getEffectiveDelPrices(st);
+    const dp = _getEffectiveDelPrices(st, monStr);   // ★ 2026-10-09.46: その月の単価
     const delSum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
     del.forEach(r=>{
       delSum.kanryo+=r.kanryo||0; delSum.tenso+=r.tenso||0;
@@ -33641,8 +33945,8 @@ function _calcStaffPayment(name, monStr){
         total+=amt;
       }
     });
-    // 集荷：品目別
-    const cp=st.fixedPrices?.col||{};
+    // 集荷：品目別（★ 2026-10-09.46: その月に効いていた単価）
+    const cp=(typeof _colPricesAt==='function') ? _colPricesAt(st, monStr) : (st.fixedPrices?.col||{});
     const puSum={};
     pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
     // ★ 2026/09/12: fixedPrices.col は単価キー(ck: p60/pk1/cp...)で保存されているが、
@@ -33737,21 +34041,24 @@ function _calcStaffPayment(name, monStr){
   const _mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr) : {tokubetsuCnt:0,park:0,penalty:0,penaltyRows:[],parkDays:0};
   const yokonoriCnt=del.reduce((a,r)=>a+(r.yokonori||0),0);
   const tokubetsuCnt=del.reduce((a,r)=>a+(r.tokubetsu||0),0) + (_mAdj.tokubetsuCnt||0);
+  /* ★ 2026-10-09.46: 手当の単価もその月に効いていたものを使う */
+  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
+            : {yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
   if(off.commute>0){breakdown.push({label:'通勤手当', amount:off.commute}); total+=off.commute;}
   if(off.career>0){breakdown.push({label:'経歴手当', amount:off.career}); total+=off.career;}
   if(off.position>0){breakdown.push({label:'役職手当', amount:off.position}); total+=off.position;}
-  if(yokonoriCnt>0&&off.yokonoriUnit){
-    const amt=yokonoriCnt*off.yokonoriUnit;
-    breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${off.yokonoriUnit}`, amount:amt}); total+=amt;
+  if(yokonoriCnt>0&&_tu.yokonoriUnit){
+    const amt=yokonoriCnt*_tu.yokonoriUnit;
+    breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${_tu.yokonoriUnit}`, amount:amt}); total+=amt;
   }
-  if(yokonoriCnt>0&&!off.yokonoriUnit){
+  if(yokonoriCnt>0&&!_tu.yokonoriUnit){
     breakdown.push({label:`横乗手当 ${yokonoriCnt}回（単価が台帳に未設定）`, amount:0});
   }
-  if(tokubetsuCnt>0&&off.tokubetsuUnit){
-    const amt=tokubetsuCnt*off.tokubetsuUnit;
-    breakdown.push({label:`特別手当 ${tokubetsuCnt}回×¥${off.tokubetsuUnit}`, amount:amt}); total+=amt;
+  if(tokubetsuCnt>0&&_tu.tokubetsuUnit){
+    const amt=tokubetsuCnt*_tu.tokubetsuUnit;
+    breakdown.push({label:`特別手当 ${tokubetsuCnt}回×¥${_tu.tokubetsuUnit}`, amount:amt}); total+=amt;
   }
-  if(tokubetsuCnt>0&&!off.tokubetsuUnit){
+  if(tokubetsuCnt>0&&!_tu.tokubetsuUnit){
     breakdown.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0});
   }
   if(off.teateOther>0){breakdown.push({label:'その他手当', amount:off.teateOther}); total+=off.teateOther;}
@@ -41873,6 +42180,14 @@ function _editStaffImpl(id){
   }
   // ★ 2026-10-09.41: 月締めで入れた違約金・特別手当の履歴を出す（読むだけ）
   try{ if(typeof renderStAdjHistory==='function') renderStAdjHistory(s); }catch(e){}
+  // ★ 2026-10-09.46: 単価の適用年月（帯）。いちばん新しい単価を出す
+  try{
+    if(typeof _rateList==='function'){
+      const _l=_rateList(s);
+      _stRateYm=_l[_l.length-1].ym;
+      renderStRateBand();
+    }
+  }catch(e){ console.warn('[単価履歴]', e); }
   if($('st-yokonori-unit'))$('st-yokonori-unit').value=off.yokonoriUnit||'';
   if($('st-tokubetsu-unit'))$('st-tokubetsu-unit').value=off.tokubetsuUnit||'';
   if($('st-teate-other'))$('st-teate-other').value=off.teateOther||'';
@@ -46454,7 +46769,7 @@ function _dcIssues(st, mon, opt){
   // 歩合なのに完了単価が引けない → 支払いが0円になる
   if(st.kyuyo==='個数制（歩合）'){
     let dp={};
-    try{ dp=(typeof _getEffectiveDelPrices==='function') ? (_getEffectiveDelPrices(st)||{}) : {}; }catch(e){}
+    try{ dp=(typeof _getEffectiveDelPrices==='function') ? (_getEffectiveDelPrices(st, mon)||{}) : {}; }catch(e){}
     if(!(Number(dp.kanryo)>0)){
       out.push({lv: hasRows?'red':'amb',
                 what:'完了単価が入っていない',
@@ -46466,8 +46781,9 @@ function _dcIssues(st, mon, opt){
   }
 
   // 横乗手当の単価
+  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, mon) : {yokonoriUnit:o.yokonoriUnit,tokubetsuUnit:o.tokubetsuUnit};
   const yokoCnt = del.reduce((a,r)=>a+(parseInt(r.yokonori)||0),0);
-  if(!(Number(o.yokonoriUnit)>0)){
+  if(!(Number(_tu.yokonoriUnit)>0)){
     out.push({lv: yokoCnt>0 ? 'red' : 'amb',
               what:'横乗手当の単価が未設定',
               why: yokoCnt>0 ? ('この月に横乗り '+yokoCnt+'回あるのに ¥0 で計算されます')
@@ -46481,7 +46797,7 @@ function _dcIssues(st, mon, opt){
       if(a && a.staff===name && String(a.ym||'').slice(0,7)===mon) tokCnt += parseInt(a.tokubetsu)||0;
     });
   }catch(e){}
-  if(!(Number(o.tokubetsuUnit)>0)){
+  if(!(Number(_tu.tokubetsuUnit)>0)){
     out.push({lv: tokCnt>0 ? 'red' : 'amb',
               what:'特別手当の単価が未設定',
               why: tokCnt>0 ? ('月締めで '+tokCnt+'件 入れてあるのに ¥0 で計算されます')
