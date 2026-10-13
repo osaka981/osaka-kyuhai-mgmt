@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.40</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-09.41</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4775,6 +4775,19 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="xs fw7 mb6" style="color:var(--red2);">⚠️ 違約金（請求書反映）</div>
       <div id="st-penalty-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
       <button type="button" class="btn b-gh btn-sm" onclick="addPenaltyRow()">＋ 違約金追加</button>
+
+      <!-- ★ 2026-10-09.41: 月締めで入れた違約金・特別手当の履歴（読むだけ）
+           入力は月締め画面。ここに書き込むと二重に引かれるので、表示だけにする。 -->
+      <div id="st-adj-hist-wrap" style="display:none;margin-top:10px;border-top:1px dashed var(--brd);padding-top:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+          <div>
+            <div class="xs fw7" style="color:var(--amb2);">🗓 月締めで入れた分（履歴・読むだけ）</div>
+            <div style="font-size:8.5px;color:var(--txt2);margin-top:2px;">直すときは「給与・人事 → 月締め」で。ここでは直せません。</div>
+          </div>
+          <button type="button" class="btn b-gh btn-sm" onclick="_stAdjGoMonth()">🗓 月締めを開く</button>
+        </div>
+        <div id="st-adj-hist"></div>
+      </div>
     </div>
     <!-- 修理・損害代 -->
     <div style="border-top:1px solid var(--brd);padding-top:8px;">
@@ -5468,7 +5481,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-09.40';
+const APP_VER = '2026-10-09.41';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -21658,7 +21671,7 @@ function showSalesDetail(custName){
 
 
 /* ════════════════════════════════════════════════════════════
-   ★ 2026-10-09.40: 月締め（委託料以外の相殺・立替）
+   ★ 2026-10-09.41: 月締め（委託料以外の相殺・立替）
      委託料（完了・夜間・定時／指定事業所集荷・集荷単価・時給）はここには出さない。
      本人へ支払うもの（＋）と、本人から引くもの（−）だけを並べ、差引を見せる。
 
@@ -22437,6 +22450,62 @@ async function closeMonthAdj(){
   try{ if(typeof fbSet==='function') await fbSet('month_close', all); }catch(e){ console.warn('[月締め] 保存エラー', e); }
   renderMonthAdj();
   if(typeof _showSaveToast==='function') _showSaveToast(label+' を締めました');
+}
+
+/* ════════ 従業員台帳に出す「月締めで入れた分」の履歴（読むだけ） ════════
+   ★ 2026-10-09.41: 月締めで入れた違約金・特別手当は monthly_adj に入っていて、
+     台帳の違約金欄（offset.penalties）とは別物。
+     月締めの計算は「台帳の違約金 ＋ 月締めの違約金」を足して引くので、
+     ここに書き戻すと二重に引かれる。だから表示だけにしてある。 */
+function renderStAdjHistory(st){
+  const wrap=$('st-adj-hist-wrap'), box=$('st-adj-hist');
+  if(!wrap || !box) return;
+  const name = st && st.name;
+  const rows = name ? _adjAll().filter(a=> a && a.staff===name && ((parseInt(a.penalty)||0)>0 || (parseInt(a.tokubetsu)||0)>0)) : [];
+  if(!rows.length){ wrap.style.display='none'; box.innerHTML=''; return; }
+  wrap.style.display='';
+  rows.sort((a,b)=> String(b.ym||'').localeCompare(String(a.ym||'')));
+
+  const ymL = v => v ? String(v).replace('-','年')+'月' : '―';
+  const totPen = rows.reduce((n,a)=>n+(parseInt(a.penalty)||0),0);
+  const totTok = rows.reduce((n,a)=>n+(parseInt(a.tokubetsu)||0),0);
+
+  box.innerHTML = '<div class="tw" style="max-height:230px;overflow:auto;"><table style="font-size:11px;">'
+    + '<thead><tr>'
+    +   '<th style="width:86px;">発生月</th>'
+    +   '<th style="width:96px;">郵便局</th>'
+    +   '<th class="tr" style="width:84px;color:var(--red2);">違約金</th>'
+    +   '<th style="min-width:130px;">理由</th>'
+    +   '<th style="width:88px;">局請求へ</th>'
+    +   '<th style="width:88px;">本人から</th>'
+    +   '<th class="tr" style="width:76px;color:var(--amb2);">特別手当</th>'
+    + '</tr></thead><tbody>'
+    + rows.map(a=>{
+        const pen=parseInt(a.penalty)||0, tok=parseInt(a.tokubetsu)||0;
+        return '<tr>'
+          + '<td class="mono">'+esc(ymL(a.ym))+'</td>'
+          + '<td class="xs muted">'+esc(a.office||'―')+'</td>'
+          + '<td class="tr mono" style="color:'+(pen?'var(--red2)':'var(--txt3)')+';font-weight:700;">'+(pen?('¥'+fmt(pen)):'―')+'</td>'
+          + '<td class="xs">'+esc(a.penaltyReason||'')+'</td>'
+          + '<td class="xs mono">'+(pen?esc(ymL(a.penaltyBillYm||a.ym)):'―')+'</td>'
+          + '<td class="xs mono">'+(pen?esc(ymL(a.penaltyDeductYm||a.ym)):'―')+'</td>'
+          + '<td class="tr mono" style="color:'+(tok?'var(--amb2)':'var(--txt3)')+';">'+(tok?(tok+'件'):'―')+'</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody><tfoot><tr style="background:var(--sur2);font-weight:700;">'
+    +   '<td colspan="2">合計 '+rows.length+'件</td>'
+    +   '<td class="tr mono" style="color:var(--red2);">¥'+fmt(totPen)+'</td>'
+    +   '<td colspan="3"></td>'
+    +   '<td class="tr mono" style="color:var(--amb2);">'+totTok+'件</td>'
+    + '</tr></tfoot></table></div>'
+    + '<div style="font-size:9px;color:var(--txt3);margin-top:4px;line-height:1.5;">'
+    + '「局請求へ」は郵便局の請求で相殺する月、「本人から」は給与から引く月です。'
+    + 'この表の分は上の違約金欄とは別に計算されるので、同じものを上にも書かないでください。</div>';
+}
+/* 台帳から月締め画面へ */
+function _stAdjGoMonth(){
+  if(typeof closeM==='function') closeM('m-staff');
+  setTimeout(()=>{ if(typeof navByS==='function') navByS('month-adj'); }, 120);
 }
 
 // ── 支払明細（従事員） ──
@@ -41456,6 +41525,8 @@ function _editStaffImpl(id){
     $('st-penalty-list').innerHTML='';
     (off.penalties||[]).forEach(p=>addPenaltyRow(p));
   }
+  // ★ 2026-10-09.41: 月締めで入れた違約金・特別手当の履歴を出す（読むだけ）
+  try{ if(typeof renderStAdjHistory==='function') renderStAdjHistory(s); }catch(e){}
   if($('st-yokonori-unit'))$('st-yokonori-unit').value=off.yokonoriUnit||'';
   if($('st-tokubetsu-unit'))$('st-tokubetsu-unit').value=off.tokubetsuUnit||'';
   if($('st-teate-other'))$('st-teate-other').value=off.teateOther||'';
