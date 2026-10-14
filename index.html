@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.67</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.68</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2446,8 +2446,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fg" style="min-width:150px;">
             <label>区分</label>
             <select id="pd-kubun" class="fi" onchange="renderPayDaicho()">
-              <option value="gai">外注のみ（個人事業主・委託会社所属）</option>
-              <option value="all">すべて</option>
+              <!-- ★ 2026-10-14.68: 委託会社所属は対象外（支払先は会社であって本人ではない） -->
+              <option value="gai">個人事業主のみ</option>
+              <option value="all">すべて（委託会社所属を除く）</option>
               <option value="emp">社員・パートのみ</option>
             </select>
           </div>
@@ -2463,6 +2464,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-gh btn-sm" onclick="pdExportCSV()">一覧をCSV</button>
         </div>
         <div class="xs muted" style="margin-top:7px;">支払日は全員共通です。土日祝にあたる月は前営業日に繰り上げます。その月だけ違う場合は、台帳を開いてから支給日のセルを直接書き換えてください。</div>
+        <!-- ★ 2026-10-14.68 -->
+        <div class="xs muted" style="margin-top:4px;">委託会社所属のドライバーは対象外です。支払先が本人ではなく委託会社のため、会社あての支払明細書と請求書代行で完結します。</div>
       </div>
 
       <div class="card mb12">
@@ -5628,7 +5631,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-14.67';
+const APP_VER = '2026-10-14.68';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -40665,8 +40668,15 @@ function _pdStaffList(){
   const kb=$('pd-kubun')?.value||'gai';
   const off=$('pd-office')?.value||'';
   const isEmp=s=>s.kubun==='社員・役員'||s.kubun==='パート（事務）';
+  /* ★ 2026-10-14.68: 委託会社所属のドライバーは台帳の対象から外す。
+     弊社が支払うのは委託会社であって本人ではないため、本人あての台帳を出すと
+     受け取っていない額を受け取ったことにしてしまう（例：株式会社UPの坂部さん）。
+     委託会社には月次の支払明細書と請求書代行を出しており、年次の書類は要らない。
+     「すべて」を選んでも出さない。 */
+  const isCo=s=>/委託会社|会社委託/.test(String(s.kubun||''));
   return (D.staff||[]).filter(s=>{
     if(!s || !s.name) return false;
+    if(isCo(s)) return false;
     if(off && String(s.office||'')!==off) return false;
     if(kb==='emp') return isEmp(s);
     if(kb==='gai') return !isEmp(s);
