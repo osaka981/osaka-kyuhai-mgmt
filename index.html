@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-13.64</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.67</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2429,6 +2429,101 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div id="ph-hist-empty" style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--txt2);font-size:12px;">
             ← 左の一覧から従事員を選択してください
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ★ 2026-10-14.66: 支払台帳（年間・1名1枚）
+         JDLの賃金台帳を置き換えるもの。確定申告の資料としてドライバーに渡す。 -->
+    <div id="s-pay-daicho" class="sec">
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>出力の条件</div></div>
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="min-width:110px;">
+            <label>対象年</label>
+            <select id="pd-year" class="fi" onchange="renderPayDaicho()"></select>
+          </div>
+          <div class="fg" style="min-width:150px;">
+            <label>区分</label>
+            <select id="pd-kubun" class="fi" onchange="renderPayDaicho()">
+              <option value="gai">外注のみ（個人事業主・委託会社所属）</option>
+              <option value="all">すべて</option>
+              <option value="emp">社員・パートのみ</option>
+            </select>
+          </div>
+          <div class="fg" style="min-width:120px;">
+            <label>営業所</label>
+            <select id="pd-office" class="fi" onchange="renderPayDaicho()"><option value="">すべて</option></select>
+          </div>
+          <div class="fg" style="min-width:90px;">
+            <label>支払日</label>
+            <input type="number" id="pd-payday" class="fi" min="1" max="31" style="width:70px;" onchange="pdSavePayday()">
+          </div>
+          <button class="btn b-blu btn-sm" onclick="pdPrintChecked()">選んだ人をまとめて印刷</button>
+          <button class="btn b-gh btn-sm" onclick="pdExportCSV()">一覧をCSV</button>
+        </div>
+        <div class="xs muted" style="margin-top:7px;">支払日は全員共通です。土日祝にあたる月は前営業日に繰り上げます。その月だけ違う場合は、台帳を開いてから支給日のセルを直接書き換えてください。</div>
+      </div>
+
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>紙の体裁</div></div>
+        <div class="fla gap6" style="flex-wrap:wrap;gap:14px;font-size:12px;">
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <!-- ★ 2026-10-14.67: 去年までドライバーに渡していたJDLの賃金台帳と同じ言葉に
+                 そろえる方針で確定したため、既定をオンにする。外すと業務委託の言葉
+                 （支払台帳・業務委託料・稼働日数）に変わる。 -->
+            <input type="checkbox" id="pd-opt-jdl" checked onchange="renderPayDaicho()"> JDL準拠の表記にする（賃金台帳・基本給・出勤日数）</label>
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <input type="checkbox" id="pd-opt-empty" onchange="renderPayDaicho()"> 空の行も出す（社会保険・所得税など）</label>
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <input type="checkbox" id="pd-opt-koujo" checked onchange="renderPayDaicho()"> 控除を項目ごとに分けて出す</label>
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <input type="checkbox" id="pd-opt-payday" checked onchange="renderPayDaicho()"> 支給日の行を出す</label>
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <input type="checkbox" id="pd-opt-bizday" onchange="renderPayDaicho()"> 土日にあたる月は前営業日に繰り上げる</label>
+          <label class="fla" style="gap:5px;cursor:pointer;align-items:center;">
+            <input type="checkbox" id="pd-opt-note" checked onchange="renderPayDaicho()"> 下部の注記を出す</label>
+        </div>
+        <!-- ★ 2026-10-14.66: JDLの「○月分」は支払月で、中身は前月の稼働分。
+             稼働月で並べるとJDLと1か月ずれるので、既定はJDLに合わせる。 -->
+        <div class="fla gap6" style="flex-wrap:wrap;gap:14px;font-size:12px;margin-top:9px;
+             border-top:1px solid var(--brd);padding-top:9px;">
+          <div class="fg" style="min-width:220px;">
+            <label>「○月分」の意味</label>
+            <select id="pd-basis" class="fi" onchange="renderPayDaicho()">
+              <option value="pay">支払月（JDLと同じ。○月分＝前月の稼働）</option>
+              <option value="work">稼働月（○月分＝その月の稼働）</option>
+            </select>
+          </div>
+          <div class="xs muted" style="align-self:flex-end;padding-bottom:5px;">
+            既定はJDLと同じ並びです。切り替えると数字が1か月ずれます。</div>
+        </div>
+      </div>
+
+      <div id="pd-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><div class="cbar"></div>対象者</div>
+          <span id="pd-count" class="xs muted"></span>
+        </div>
+        <div class="tw">
+          <table id="tbl-pd">
+            <thead><tr>
+              <th style="width:34px;text-align:center;"><input type="checkbox" id="pd-all" onchange="pdToggleAll(this)"></th>
+              <th style="text-align:left">氏名</th>
+              <th style="text-align:left">区分</th>
+              <th style="text-align:left">営業所</th>
+              <th class="tr">稼働日数</th>
+              <th class="tr">委託料・支給</th>
+              <th class="tr">控除</th>
+              <th class="tr">差引支払額</th>
+              <th style="text-align:left">不足</th>
+              <th></th>
+            </tr></thead>
+            <tbody id="tb-pd"></tbody>
+            <tfoot id="tf-pd"></tfoot>
+          </table>
         </div>
       </div>
     </div>
@@ -5533,7 +5628,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-13.64';
+const APP_VER = '2026-10-14.67';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -5957,6 +6052,7 @@ const LS_KEYS = {
   CUSTOMER_NOTES:     'nikki_customer_notes',      // 顧客申し送りメモ
   MONTHLY_ADJ:        'nikki_monthly_adj',         // ★ 2026-10-09.33: 月末調整（特別手当・違約金）
   MONTH_CLOSE:        'nikki_month_close',         // ★ 2026-10-09.37: 月締めの印（年月×営業所）
+  PD_PAYDAY:          'nikki_pd_payday',           // ★ 2026-10-14.66: 支払台帳の支給日の例外（人×月）
   // ★ 2026/08/18: 郵便局から受領した調書データ(請求根拠)。
   //   日報(YP)とは別物。相互に上書きせず、郵便局照合タブで突き合わせる。
   POSTLOG:            'nikki_post_logs',
@@ -9049,6 +9145,7 @@ const _TOP_TABS = {
     { s:'data-check',  label:'データ健診', badge:'new' },
     { s:'worktime',    label:'勤務時間' },
     { s:'pay-history', label:'給与履歴' },
+    { s:'pay-daicho',  label:'支払台帳', badge:'new' },   // ★ 2026-10-14.66
     { s:'contract',    label:'契約書' },
     { s:'invoice-bulk',label:'請求書', badge:'new' },
     { s:'gas-mgmt',    label:'燃料代管理', badge:'new' },
@@ -10463,7 +10560,12 @@ function _findUnregisteredDrivers(){
       }
     });
   });
-  if(idsFromLogs.size === 0) return [];
+  /* ★ 2026-10-14.65: ここに if(idsFromLogs.size === 0) return []; があったため、
+     勤怠ログ（D.attendance）が読み込まれていない端末では、この行で必ず抜けてしまい、
+     下の「氏名で見る」検出まで一度も到達していなかった。
+     ドライバーIDを持っているのは勤怠ログだけで、宅配日報・集荷日報は氏名しか持たない。
+     （福留兼太郎さんが .61 で氏名検出を足したあとも出てこなかったのはこれが理由）
+     IDが1つも無くても氏名の照合は意味があるので、ここでは抜けない。 */
 
   // 既存マスタID一覧
   const registered = new Set();
@@ -40419,7 +40521,440 @@ function _autoFillFromCust(custName){
   }
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','nyuryoku':'📭 日報の未入力','pay-history':'📅 給与履歴管理',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+/* ═══════════════════════════════════════════════════════════════
+   支払台帳（年間・1名1枚）  ★ 2026-10-14.66
+   JDLの賃金台帳を置き換えるもの。確定申告の資料としてドライバーに渡す。
+   ・数字は _calcStaffPayment（月次の支払計算）をそのまま12か月ぶん積む
+   ・プラスの明細＝委託料・手当・立替、マイナスの明細＝控除
+   ・表記は「委託版」が既定。JDL準拠にも切り替えられる
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 支給日の既定（全員共通）。システム設定に持つ。 */
+function _pdPaydayDefault(){
+  const v = parseInt(lsGet('sys_pd_payday','27'), 10);
+  return (v>=1 && v<=31) ? v : 27;
+}
+function pdSavePayday(){
+  const v = parseInt($('pd-payday')?.value, 10);
+  if(!(v>=1 && v<=31)){ showAlert({msg:'支払日は1〜31で入れてください'}); return; }
+  lsSet('sys_pd_payday', String(v));
+  renderPayDaicho();
+}
+/* 支給日の例外（人×月）。{'氏名|2026-03':'2026-03-25'} */
+function _pdOverrides(){
+  try{ return JSON.parse(lsGet(LS_KEYS.PD_PAYDAY,'{}')) || {}; }catch(e){ return {}; }
+}
+function _pdSetOverride(name, ym, val){
+  const all=_pdOverrides();
+  const k=name+'|'+ym;
+  if(val) all[k]=val; else delete all[k];
+  lsSet(LS_KEYS.PD_PAYDAY, JSON.stringify(all));
+  try{ if(typeof fbSet==='function') fbSet('pd_payday', all); }catch(e){}
+}
+/* その月の支給日。
+   ★ 2026-10-14.66: JDLの賃金台帳は27日固定で印字されていたので、
+     土日の繰り上げは既定で行わない。必要なら画面のチェックで入れる。
+     祝日表は持っていないので、繰り上げても土日しか見ない。
+     その月だけ違う場合は、台帳のプレビューで支給日を押して直す（例外として保存）。 */
+function _pdPaydayOf(ym, name, bizday){
+  const ov=_pdOverrides()[name+'|'+ym];
+  if(ov) return {text:ov, manual:true};
+  const m=String(ym||'').match(/^(\d{4})-(\d{2})$/);
+  if(!m) return {text:'', manual:false};
+  const y=+m[1], mo=+m[2];
+  const last=new Date(y, mo, 0).getDate();
+  const d=Math.min(_pdPaydayDefault(), last);
+  const dt=new Date(y, mo-1, d);
+  const useBiz = (bizday!=null) ? bizday : !!$('pd-opt-bizday')?.checked;
+  if(useBiz){ while(dt.getDay()===0 || dt.getDay()===6){ dt.setDate(dt.getDate()-1); } }
+  return { text:`${dt.getMonth()+1}月${dt.getDate()}日`, manual:false };
+}
+/* 支給日をその場で直す（人×月の例外として残す） */
+function pdEditPayday(name, ym){
+  const cur=_pdPaydayOf(ym, name);
+  const v=prompt(`${name} さんの ${ym.replace('-','年')}月分 の支給日\n\n「9月25日」のように入れてください。\n既定（${_pdPaydayDefault()}日）に戻すときは空にしてください。`, cur.text||'');
+  if(v==null) return;
+  _pdSetOverride(name, ym, String(v).trim());
+  const o=document.getElementById('pd-overlay');
+  if(o){ o.remove(); pdPreview(name); }
+  renderPayDaicho();
+}
+
+/* 明細1行がどの控除項目かを見分ける */
+function _pdKoujoKey(label){
+  const s=String(label||'');
+  if(/燃料/.test(s))            return 'gas';
+  if(/違約金/.test(s))          return 'penalty';
+  if(/庸車/.test(s))            return 'yosha';
+  if(/修理|損害|免責/.test(s))  return 'repair';
+  if(/前払い/.test(s))          return 'advance';
+  return 'other';
+}
+const _PD_KOUJO = [
+  ['gas','燃料費'], ['repair','修理・損害代'], ['penalty','違約金'],
+  ['yosha','庸車代'], ['advance','前払金'], ['other','その他の控除'],
+];
+
+/* 「○月分」の列が、どの稼働月を指すか。
+   ★ 2026-10-14.66: JDLの賃金台帳は「9月分＝9月27日払い＝8月の稼働」。
+   支払月ベースのときは1か月前にずらす。 */
+function _pdBasis(){ return $('pd-basis')?.value || 'pay'; }
+function _pdWorkYm(year, col, basis){
+  const y=Number(year);
+  if(basis==='work') return `${y}-${String(col).padStart(2,'0')}`;
+  // 支払月ベース：1月分は前年12月の稼働
+  const m=col-1;
+  return (m===0) ? `${y-1}-12` : `${y}-${String(m).padStart(2,'0')}`;
+}
+
+/* 1人・1年ぶんを積む */
+function _pdCollect(name, year, basisArg){
+  const basis = basisArg || _pdBasis();
+  const months=[];
+  let anyRow=false;
+  for(let i=1;i<=12;i++){
+    const ym=_pdWorkYm(year, i, basis);
+    const payYm=`${year}-${String(i).padStart(2,'0')}`;
+    let pay=null;
+    try{ pay=_calcStaffPayment(name, ym); }catch(e){ pay=null; }
+    const row={ ym, payYm, has:false, days:0, shikyu:0, tatekae:0, net:0,
+                kou:{gas:0,repair:0,penalty:0,yosha:0,advance:0,other:0}, kouTotal:0 };
+    if(pay && Array.isArray(pay.breakdown)){
+      (pay.breakdown||[]).forEach(b=>{
+        const a=Number(b.amount)||0;
+        if(a>0){
+          if(/駐車料金\s*立替/.test(String(b.label||''))) row.tatekae += a;
+          else row.shikyu += a;
+        } else if(a<0){
+          const k=_pdKoujoKey(b.label);
+          row.kou[k] = (row.kou[k]||0) + (-a);
+          row.kouTotal += (-a);
+        }
+      });
+      row.net = Number(pay.total)||0;
+      // 稼働日数：宅配・集荷の日報に出てくる日の数
+      const dset=new Set();
+      (D.delivery||[]).forEach(r=>{ if(r && r.staff===name && String(r.date||'').startsWith(ym)) dset.add(r.date); });
+      (D.pickup  ||[]).forEach(r=>{ if(r && r.staff===name && String(r.date||'').startsWith(ym)) dset.add(r.date); });
+      row.days = dset.size;
+      row.has = (row.shikyu>0 || row.tatekae>0 || row.kouTotal>0 || row.days>0);
+    }
+    if(row.has) anyRow=true;
+    months.push(row);
+  }
+  const tot={ days:0, shikyu:0, tatekae:0, net:0, kouTotal:0,
+              kou:{gas:0,repair:0,penalty:0,yosha:0,advance:0,other:0} };
+  months.forEach(r=>{
+    if(!r.has) return;
+    tot.days+=r.days; tot.shikyu+=r.shikyu; tot.tatekae+=r.tatekae;
+    tot.net+=r.net; tot.kouTotal+=r.kouTotal;
+    Object.keys(tot.kou).forEach(k=>{ tot.kou[k]+=r.kou[k]||0; });
+  });
+  return { months, tot, any:anyRow };
+}
+
+/* 画面のチェック状態 */
+function _pdOpt(){
+  const g=id=>!!$(id)?.checked;
+  return { jdl:g('pd-opt-jdl'), empty:g('pd-opt-empty'), koujo:g('pd-opt-koujo'),
+           payday:g('pd-opt-payday'), note:g('pd-opt-note'), bizday:g('pd-opt-bizday') };
+}
+
+/* 対象者を絞る */
+function _pdStaffList(){
+  const kb=$('pd-kubun')?.value||'gai';
+  const off=$('pd-office')?.value||'';
+  const isEmp=s=>s.kubun==='社員・役員'||s.kubun==='パート（事務）';
+  return (D.staff||[]).filter(s=>{
+    if(!s || !s.name) return false;
+    if(off && String(s.office||'')!==off) return false;
+    if(kb==='emp') return isEmp(s);
+    if(kb==='gai') return !isEmp(s);
+    return true;
+  }).sort((a,b)=>String(a.office||'').localeCompare(String(b.office||''))
+                || String(a.name).localeCompare(String(b.name)));
+}
+
+function renderPayDaicho(){
+  if(!document.getElementById('s-pay-daicho')) return;
+  // 年の選択肢
+  const ysel=$('pd-year');
+  if(ysel && !ysel.options.length){
+    const ys=new Set();
+    [D.delivery||[], D.pickup||[]].forEach(arr=>(arr||[]).forEach(r=>{
+      const y=String(r&&r.date||'').slice(0,4); if(/^\d{4}$/.test(y)) ys.add(y);
+    }));
+    ys.add(String(new Date().getFullYear()));
+    [...ys].sort().reverse().forEach(y=>{
+      const o=document.createElement('option'); o.value=y; o.textContent=y+'年'; ysel.appendChild(o);
+    });
+  }
+  // 営業所の選択肢
+  const osel=$('pd-office');
+  if(osel && osel.options.length<=1){
+    const names=(typeof _offFilterNames==='function')
+      ? _offFilterNames(D.staff||[]) : [...new Set((D.staff||[]).map(s=>s&&s.office).filter(Boolean))];
+    names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; osel.appendChild(o); });
+  }
+  if($('pd-payday') && !$('pd-payday').value) $('pd-payday').value=_pdPaydayDefault();
+
+  const year=$('pd-year')?.value || String(new Date().getFullYear());
+  const list=_pdStaffList();
+
+  const rows=list.map(st=>({ st, d:_pdCollect(st.name, year) })).filter(x=>x.d.any);
+
+  const kpi=$('pd-kpi');
+  if(kpi){
+    const t=rows.reduce((a,x)=>({
+      days:a.days+x.d.tot.days, shikyu:a.shikyu+x.d.tot.shikyu+x.d.tot.tatekae,
+      kou:a.kou+x.d.tot.kouTotal, net:a.net+x.d.tot.net }), {days:0,shikyu:0,kou:0,net:0});
+    kpi.innerHTML=[
+      {l:'対象人数', v:rows.length+'名', c:''},
+      {l:'稼働日数 合計', v:fmt(t.days)+'日', c:''},
+      {l:'支払額 計', v:'¥'+fmt(t.shikyu), c:''},
+      {l:'控除 計', v:'¥'+fmt(t.kou), c:'color:#f87171'},
+      {l:'差引支払額 合計', v:'¥'+fmt(t.net), c:'color:#86efac'},
+    ].map(k=>`<div class="card" style="padding:10px;text-align:center;">
+      <div class="xs muted mb4">${k.l}</div><div class="fw7 lg" style="${k.c}">${k.v}</div></div>`).join('');
+  }
+
+  const tb=$('tb-pd'); if(!tb) return;
+  tb.innerHTML = rows.map(x=>{
+    const st=x.st, t=x.d.tot;
+    const lack=[];
+    if(!st.zip && !st.addr) lack.push('住所');
+    if(!st.birth) lack.push('生年月日');
+    const lackHtml = lack.length
+      ? `<span class="bdg" style="border-color:var(--amb2);color:var(--amb2);">${lack.join('・')}</span>`
+      : '<span class="xs muted">−</span>';
+    return `<tr>
+      <td style="text-align:center;"><input type="checkbox" class="pd-ck" data-name="${esc(st.name)}" checked></td>
+      <td class="fw7">${esc(st.name)}</td>
+      <td class="xs">${esc(st.kubun||'')}</td>
+      <td class="xs muted">${esc(st.office||'')}</td>
+      <td class="tr mono">${fmt(t.days)}日</td>
+      <td class="tr mono">¥${fmt(t.shikyu+t.tatekae)}</td>
+      <td class="tr mono" style="color:#f87171">${t.kouTotal?('¥'+fmt(t.kouTotal)):'−'}</td>
+      <td class="tr mono fw7" style="color:#86efac">¥${fmt(t.net)}</td>
+      <td>${lackHtml}</td>
+      <td><button class="btn b-gh btn-sm" style="font-size:10px;padding:3px 9px;"
+          data-name="${esc(st.name)}" onclick="pdPreview(this.dataset.name)">表示</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="10" style="text-align:center;padding:16px;color:var(--txt2)">対象年に支払のある人がいません</td></tr>';
+
+  if($('pd-count')) $('pd-count').textContent = rows.length ? `${rows.length}名` : '';
+}
+
+function pdToggleAll(el){
+  document.querySelectorAll('#tb-pd .pd-ck').forEach(c=>{ c.checked=el.checked; });
+}
+
+/* ── 用紙HTML ── */
+function _buildPayDaichoHTML(name, year, opt){
+  const st=(D.staff||[]).find(s=>s&&s.name===name);
+  if(!st) return null;
+  const o=opt||_pdOpt();
+  const d=_pdCollect(name, year);
+  const info=(typeof _getSystemInfo==='function')?_getSystemInfo():{};
+  const jdl=!!o.jdl;
+  const L={
+    ttl : jdl?'賃 金 台 帳':'支 払 台 帳',
+    days: jdl?'出勤日数':'稼働日数',
+    kihon:jdl?'基 本 給':'業務委託料',
+    sou : jdl?'総支給額':'支払額 計',
+    net : jdl?'差引支給額':'差引支払額',
+    start:jdl?'入社年月日':'契約開始日',
+  };
+  const reiwa = Number(year)-2018;
+  const kubunLabel = (st.kubun==='社員・役員'||st.kubun==='パート（事務）') ? (st.kubun||'') : '外注';
+  const yen=v=>v?fmt(v):'';
+  const MN=[];
+  for(let i=1;i<=12;i++) MN.push(i+'月分');
+  /* 2026-11-25 / 2026/11/25 / 令和4年2月4日 のどれで入っていても読める形に整える */
+  const jdate=v=>{
+    const s=String(v||'').trim();
+    if(!s) return '';
+    const m=s.replace(/\//g,'-').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    return m ? `${m[1]}年${Number(m[2])}月${Number(m[3])}日` : s;
+  };
+
+  // 行を1本作る
+  const line=(grpLabel, grpSpan, label, getter, totalText, cls)=>{
+    let h='<tr'+(cls?' class="'+cls+'"':'')+'>';
+    if(grpLabel!=null) h+=`<th class="pdg" rowspan="${grpSpan}">${esc(grpLabel)}</th>`;
+    h+=`<th class="pdl">${esc(label)}</th>`;
+    d.months.forEach((r,i)=>{
+      const v = r.has ? getter(r,i) : '';
+      h+=`<td${v===''?' class="pdz"':''}>${v===''?'−':v}</td>`;
+    });
+    h+=`<td class="pds">${totalText}</td></tr>`;
+    return h;
+  };
+
+  // 勤怠
+  const kinRows=[];
+  // 支給日は「その列の支払月」で引く（稼働月ではない）
+  if(o.payday) kinRows.push(['支給日', (r)=>{
+    const pm=r.payYm||r.ym, p=_pdPaydayOf(pm, name);
+    if(!o.editable) return p.text;
+    const style=p.manual?'color:#1d4ed8;font-weight:700;':'';
+    return `<span style="cursor:pointer;text-decoration:underline dotted;${style}"
+      title="押すとこの月だけ直せます"
+      onclick="pdEditPayday('${esc(name).replace(/'/g,"\\'")}','${pm}')">${p.text||'（未設定）'}</span>`;
+  }, '']);
+  kinRows.push([L.days, (r)=>r.days?r.days.toFixed(2):'', d.tot.days?d.tot.days.toFixed(2):'']);
+  if(o.empty){
+    ['欠勤日数','不就労時間','休日労働','時間外労働'].forEach(n=>kinRows.push([n, ()=>'', '']));
+  }
+  // 支払
+  const shiRows=[[L.kihon, (r)=>yen(r.shikyu), yen(d.tot.shikyu)]];
+  if(d.tot.tatekae>0 || o.empty) shiRows.push(['立替分（駐車料金ほか）', (r)=>yen(r.tatekae), yen(d.tot.tatekae)]);
+  if(o.empty){ ['諸手当','通勤費'].forEach(n=>shiRows.push([n, ()=>'', ''])); }
+  // 控除
+  let kouRows;
+  if(o.koujo){
+    kouRows=_PD_KOUJO
+      .filter(([k])=>o.empty || d.tot.kou[k]>0)
+      .map(([k,lab])=>[lab, (r)=>yen(r.kou[k]), yen(d.tot.kou[k])]);
+    if(o.empty){
+      ['健康保険','介護保険','厚生年金','子育て支援金','雇用保険','所得税','住民税']
+        .forEach(n=>kouRows.unshift([n, ()=>'', '']));
+    }
+  } else {
+    kouRows=[['控除額', (r)=>yen(r.kouTotal), yen(d.tot.kouTotal)]];
+  }
+  if(!kouRows.length) kouRows=[['控除額', (r)=>yen(r.kouTotal), yen(d.tot.kouTotal)]];
+
+  let body='';
+  kinRows.forEach((r,i)=>{ body+=line(i===0?'勤怠':null, kinRows.length, r[0], r[1], r[2], null); });
+  shiRows.forEach((r,i)=>{ body+=line(i===0?'支払':null, shiRows.length+1, r[0], r[1], r[2], null); });
+  body+=line(null, 0, L.sou, (r)=>yen(r.shikyu+r.tatekae), yen(d.tot.shikyu+d.tot.tatekae), 'pdsub');
+  kouRows.forEach((r,i)=>{ body+=line(i===0?'控除':null, kouRows.length+1, r[0], r[1], r[2], null); });
+  body+=line(null, 0, '控 除 計', (r)=>yen(r.kouTotal), yen(d.tot.kouTotal), 'pdsub');
+  body+=line('　', 1, L.net, (r)=>yen(r.net), yen(d.tot.net), 'pdtot');
+
+  const notes = o.note ? (jdl
+    ? `※　この台帳は令和${reiwa}年中の支払実績です。確定申告の参考資料としてお使いください。`
+    : `※　この台帳は令和${reiwa}年中に業務委託料として支払った実績です。確定申告の参考資料としてお使いください。<br>
+       ※　当社は貴殿に対し源泉徴収を行っておりません。<br>
+       ${d.tot.kou.advance>0?'※　控除額のうち「前払金」は貸付金の返済であり、必要経費には当たりません。<br>':''}
+       ※　記載金額は消費税を含んだ額です。`) : '';
+
+  const html=`
+  <div class="pdsheet">
+    <style>
+      .pdsheet{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#000;background:#fff;font-size:11px;}
+      .pdsheet .pdttl{text-align:center;font-size:19px;font-weight:700;letter-spacing:8px;margin:0 0 3px;}
+      .pdsheet .pdsub{text-align:right;font-size:10px;margin-bottom:8px;}
+      .pdsheet table.pdhd{width:100%;border-collapse:collapse;font-size:10.5px;margin-bottom:8px;}
+      .pdsheet table.pdhd td,.pdsheet table.pdhd th{border:1px solid #777;padding:3px 7px;}
+      .pdsheet table.pdhd th{background:#eef1f5;font-weight:700;white-space:nowrap;width:1%;}
+      .pdsheet table.pdlg{width:100%;border-collapse:collapse;font-size:9.5px;table-layout:fixed;}
+      .pdsheet table.pdlg th,.pdsheet table.pdlg td{border:1px solid #888;padding:2px 4px;white-space:nowrap;overflow:hidden;}
+      .pdsheet table.pdlg thead th{background:#eef1f5;text-align:center;font-weight:700;font-size:9px;}
+      .pdsheet th.pdg{background:#dfe5ec;width:15px;font-size:8.5px;padding:2px 1px;}
+      .pdsheet th.pdl{background:#f6f7f9;text-align:left;font-weight:400;width:104px;}
+      .pdsheet table.pdlg td{text-align:right;font-variant-numeric:tabular-nums;}
+      .pdsheet td.pds{background:#eef4fb;font-weight:700;}
+      .pdsheet td.pdz{color:#bbb;}
+      .pdsheet tr.pdsub th.pdl,.pdsheet tr.pdsub td{background:#f3f5f8;font-weight:700;}
+      .pdsheet tr.pdtot th.pdl,.pdsheet tr.pdtot td{background:#e8eef7;font-weight:700;font-size:10.5px;}
+      .pdsheet .pdfoot{margin-top:9px;font-size:9px;color:#333;line-height:1.75;}
+      .pdsheet .pdfrom{margin-top:12px;text-align:right;font-size:10px;line-height:1.7;}
+    </style>
+    <div class="pdttl">${L.ttl}</div>
+    <div class="pdsub">令和${reiwa}年分　　作成日 ${new Date().toLocaleDateString('ja-JP')}</div>
+    <table class="pdhd">
+      <tr>
+        <th>区分</th><td style="width:74px;">${esc(kubunLabel)}</td>
+        <th>営業所</th><td style="width:96px;">${esc(st.office||'')}</td>
+        <th>コード</th><td style="width:70px;">${esc(String(st.empNo||''))}</td>
+        <th>氏名</th>
+        <td>${st.kana?`<span style="font-size:9px;color:#555;">${esc(st.kana)}</span><br>`:''}<span style="font-size:13px;font-weight:700;">${esc(st.name)}</span></td>
+      </tr>
+      <tr>
+        <th>住所</th><td colspan="3">${st.zip?('〒'+esc(st.zip)+'　'):''}${esc(st.addr||'')}</td>
+        <th>生年月日</th><td>${esc(jdate(st.birth))}</td>
+        <th>${esc(L.start)}</th><td>${esc(jdate(st.startDate))}</td>
+      </tr>
+    </table>
+    <table class="pdlg">
+      <thead><tr><th class="pdg"></th><th class="pdl"></th>
+        ${MN.map(m=>`<th>${m}</th>`).join('')}
+        <th style="background:#dfe5ec;">合　計</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>
+    ${notes?`<div class="pdfoot">${notes}</div>`:''}
+    <div class="pdfrom">
+      <div style="font-weight:700;font-size:12px;">${esc(info.companyName||'大阪急配株式会社')}</div>
+      <div>${info.zip?('〒'+esc(info.zip)+'　'):''}${esc(info.addr||'')}${info.tel?('　TEL '+esc(info.tel)):''}</div>
+      ${info.invoiceNo?`<div>登録番号 ${esc(info.invoiceNo)}</div>`:''}
+    </div>
+  </div>`;
+  return { html, total:d.tot.net, name:st.name };
+}
+
+/* プレビュー */
+function pdPreview(name){
+  const year=$('pd-year')?.value || String(new Date().getFullYear());
+  const doc=_buildPayDaichoHTML(name, year, Object.assign(_pdOpt(), {editable:true}));
+  if(!doc){ showAlert({msg:'台帳を作れませんでした'}); return; }
+  document.getElementById('pd-overlay')?.remove();
+  const ov=document.createElement('div');
+  ov.id='pd-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(40,40,40,.72);z-index:99999;display:flex;justify-content:center;align-items:flex-start;padding:60px 16px 36px;overflow:auto;';
+  ov.innerHTML=`<div style="background:#fff;width:1120px;max-width:100%;position:relative;padding:28px 30px;border-radius:4px;box-shadow:0 0 30px rgba(0,0,0,.5);">
+    <div style="position:absolute;top:-34px;right:0;display:flex;gap:8px;">
+      <button onclick="pdPrintOne('${esc(name).replace(/'/g,"\\'")}')" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:12px;">印刷 / PDF</button>
+      <button onclick="document.getElementById('pd-overlay').remove()" style="background:#dc3545;color:#fff;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:18px;">×</button>
+    </div>
+    <div style="overflow-x:auto;">${doc.html}</div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function pdPrintOne(name){
+  const year=$('pd-year')?.value || String(new Date().getFullYear());
+  const doc=_buildPayDaichoHTML(name, year, _pdOpt());
+  if(!doc) return;
+  _pdPrint(`支払台帳 ${name} ${year}年`, doc.html);
+}
+function pdPrintChecked(){
+  const year=$('pd-year')?.value || String(new Date().getFullYear());
+  const opt=_pdOpt();
+  const names=[...document.querySelectorAll('#tb-pd .pd-ck')].filter(c=>c.checked).map(c=>c.dataset.name);
+  if(!names.length){ showAlert({msg:'印刷する人をチェックしてください'}); return; }
+  const parts=[];
+  names.forEach(n=>{ const doc=_buildPayDaichoHTML(n, year, opt); if(doc) parts.push(doc.html); });
+  if(!parts.length){ showAlert({msg:'出せる台帳がありませんでした'}); return; }
+  _pdPrint(`支払台帳 ${year}年（${parts.length}名）`,
+    parts.join('<div style="page-break-after:always;"></div>'));
+}
+function _pdPrint(title, html){
+  const w=window.open('','_blank');
+  if(!w){ showAlert({msg:'ポップアップがブロックされました。許可してからもう一度押してください。'}); return; }
+  w.document.write(`<html><head><meta charset="utf-8"><title>${esc(title)}</title>
+    <style>@page{size:A4 landscape;margin:10mm;} body{margin:0;}</style></head>
+    <body>${html}</body></html>`);
+  w.document.close();
+  setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
+}
+function pdExportCSV(){
+  const year=$('pd-year')?.value || String(new Date().getFullYear());
+  const rows=[['氏名','社員番号','区分','営業所','稼働日数','委託料・支給','立替','控除計','差引支払額']];
+  _pdStaffList().forEach(st=>{
+    const d=_pdCollect(st.name, year);
+    if(!d.any) return;
+    rows.push([st.name, st.empNo||'', st.kubun||'', st.office||'',
+      d.tot.days, d.tot.shikyu, d.tot.tatekae, d.tot.kouTotal, d.tot.net]);
+  });
+  const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`支払台帳一覧_${year}.csv`;
+  a.click();
+}
+
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','nyuryoku':'📭 日報の未入力','pay-history':'📅 給与履歴管理','pay-daicho':'📒 支払台帳',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -41815,6 +42350,7 @@ function nav(el){
   if(s==='month-adj')    { if(typeof renderMonthAdj==='function') renderMonthAdj(); }   // ★ 2026-10-09.34
   if(s==='data-check')   { if(typeof renderDataCheck==='function') renderDataCheck(); } // ★ 2026-10-09.45
   if(s==='nyuryoku')     { if(typeof renderNyuryoku==='function') renderNyuryoku(); }  // ★ 2026-10-09.57
+  if(s==='pay-daicho')   { if(typeof renderPayDaicho==='function') renderPayDaicho(); } // ★ 2026-10-14.66
   if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
