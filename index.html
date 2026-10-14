@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.68</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.69</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5631,7 +5631,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-14.68';
+const APP_VER = '2026-10-14.69';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -36493,131 +36493,15 @@ function _cmpPayNote(s){
   return p.join('・')+'を含む（暫定）';
 }
 
+/* ★ 2026-10-14.69: ここには独自の汎用明細があり、社員・役員でも社会保険料と
+   税が一切引かれていない紙が出ていた。書類発行は _buildPaySlipHTML（大文字S）を
+   使っており、同じ人・同じ月で中身の違う2種類の明細書が出る状態だった。
+   名前が大文字小文字しか違わないため気づきにくく、実際ずっと放置されていた。
+   独自の組み立てをやめ、書類発行と同じものに1本化する。
+   返り値は {title, html, amount} で、呼び出し側（showPayslipPreview）が使う
+   .html はそのまま取れる。 */
 function _buildPayslipHTML(staffName, monStr){
-  const pay = _calcStaffPayment(staffName, monStr);
-  if(!pay.staff) return null;
-  const st = pay.staff;
-  const info = _getSystemInfo();
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  const monLabel = (monStr||'').replace('-','/').replace('/','年') + '月分';
-
-  // 発行者(大阪急配)情報
-  const coName = esc(info.companyName || '大阪急配株式会社');
-  const coZip = info.zip ? `〒${esc(info.zip)}` : '〒591-8001';
-  const coAddr = info.addr ? esc(info.addr) : '大阪府堺市北区常磐町3-12-5';
-  const coTel = info.tel ? esc(info.tel) : 'TEL 072-258-9811';
-  // 会社印(companyStampImage優先)
-  const companySealUrl = (info.companyStampEnabled !== false && info.companyStampImage)
-    ? info.companyStampImage
-    : (info.companyStampUrl || '');
-
-  // 宛先(従事員)
-  const isCompany = st.kubun==='会社委託' && st.companyName;
-  const toName = isCompany ? (st.companyName||st.name) : st.name;
-  const kubunLabel = st.kubun || '';
-
-  // breakdown を支給(プラス)と控除(マイナス)に分類
-  const items = pay.breakdown || [];
-  let shikyuTotal = 0, koujoTotal = 0;
-  const rows = items.map(b => {
-    const amt = b.amount || 0;
-    if(amt >= 0) shikyuTotal += amt;
-    else koujoTotal += amt;  // マイナス値
-    return { label: b.label, amount: amt, ref: b.ref };
-  });
-  const grandTotal = pay.total;  // 差引支払額(控除後)
-
-  // 支払予定日(締日の翌月末を想定、なければ「翌月末」)
-  const payDateLabel = `${monStr.replace('-','/')}/末締 翌月末払`;
-
-  // 支払先口座(従事員のbankInfo)
-  const bk = st.bankInfo || {};
-  const bankLine = bk.name
-    ? `${esc(bk.name)} ${esc(bk.branch||'')}<br>${esc(bk.type||'普通')} ${esc(bk.no||'')}${bk.holder?`<br><span style="font-size:10px;">名義: ${esc(bk.holder)}</span>`:''}`
-    : '<span style="color:#999;">口座情報未登録</span>';
-
-  const footerNote = esc(info.payslipFooter || info.docFooterPayslip || '※ 本明細書に記載の金額は源泉徴収・インボイス処理前の総支給額です。');
-
-  // 明細行HTML
-  const itemRowsHtml = rows.map(r => {
-    const isMinus = r.amount < 0;
-    const valColor = isMinus ? 'color:#a32d2d;' : '';
-    return `<tr style="border-bottom:0.5px solid #ddd;">
-      <td style="padding:5px 8px;${valColor}">${esc(r.label)}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:'Times New Roman',monospace;${valColor}">${r.amount.toLocaleString()}</td>
-    </tr>`;
-  }).join('');
-
-  const html = `
-  <div class="ps-paper" style="font-family:'Yu Gothic','Meiryo',sans-serif;color:#000;padding:0;">
-    <h1 style="text-align:center;font-family:'MS Mincho','Yu Mincho',serif;font-size:30px;letter-spacing:0.3em;padding-left:0.3em;margin:0 0 20px;font-weight:400;">支 払 明 細 書</h1>
-
-    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:20px;align-items:start;margin-bottom:16px;">
-      <!-- 左: 宛先(従事員) -->
-      <div style="font-size:12px;line-height:1.9;">
-        <div style="font-size:15px;font-weight:700;margin-top:4px;white-space:nowrap;">${esc(toName)} <span style="font-size:12px;font-weight:400;">様</span></div>
-        ${kubunLabel?`<div style="font-size:11px;color:#555;">${esc(kubunLabel)}</div>`:''}
-        <div style="margin-top:6px;color:#555;">下記の通りお支払い申し上げます。</div>
-      </div>
-      <!-- 右: 発行情報 + 発行者(大阪急配) -->
-      <div style="font-size:12px;line-height:1.9;">
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">発行日</label><span style="background:#e8e8e8;padding:1px 8px;font-weight:700;">${todayStr}</span></div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">対象月</label><span style="font-weight:700;">${esc(monLabel)}</span></div>
-        ${(()=>{ /* ★ 2026-10-08.13: 照合の状態を刷る（渡したあとで数字が変わる事故を防ぐ） */
-          try{
-            if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs();
-            const _s=_cmpStatsForStaff(staffName, monStr);
-            const _t=_cmpPayNote(_s);
-            if(!_t) return '';
-            const _c=_s.clean ? '#1a7f4b' : '#b36b00';
-            return `<div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;">
-              <label style="color:#555;font-size:11px;">郵便局照合</label>
-              <span style="font-weight:700;color:${_c};">${esc(_t)}</span></div>`;
-          }catch(e){ return ''; }
-        })()}
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:2px;"><label style="color:#555;font-size:11px;">支払予定</label><span style="font-weight:700;">${esc(payDateLabel)}</span></div>
-        <!-- 発行者(印影を背面に透過) -->
-        <div style="margin-top:14px;line-height:1.7;position:relative;display:inline-block;text-align:right;width:100%;">
-          ${companySealUrl?`<img src="${esc(companySealUrl)}" style="position:absolute;top:50%;right:30px;transform:translateY(-50%);width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;opacity:0.65;pointer-events:none;z-index:0;">`:''}
-          <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-end;">
-            <div style="font-size:13px;font-weight:700;">${coName}</div>
-            <div style="font-size:11px;color:#555;">${coZip}</div>
-            <div style="font-size:11px;color:#555;">${coAddr}</div>
-            <div style="font-size:11px;color:#555;white-space:nowrap;">${coTel}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <table style="width:100%;font-size:12.5px;border-collapse:collapse;margin-bottom:14px;">
-      <thead>
-        <tr style="border-bottom:1px solid #000;">
-          <th style="text-align:left;padding:6px 8px;font-weight:500;background:#f5f5f5;">項目</th>
-          <th style="text-align:right;padding:6px 8px;font-weight:500;background:#f5f5f5;width:32%;">金額</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemRowsHtml}
-        <tr style="background:#fafafa;"><td style="padding:5px 10px;text-align:right;border-top:1.5px solid #000;">支給計</td><td style="padding:5px 10px;text-align:right;font-family:'Times New Roman',monospace;border-top:1.5px solid #000;">${shikyuTotal.toLocaleString()}</td></tr>
-        ${koujoTotal < 0 ? `<tr style="background:#fafafa;color:#666;"><td style="padding:5px 10px;text-align:right;">控除計</td><td style="padding:5px 10px;text-align:right;font-family:'Times New Roman',monospace;color:#a32d2d;">${koujoTotal.toLocaleString()}</td></tr>` : ''}
-        <tr style="background:#fffbe8;font-weight:700;"><td style="padding:8px 10px;text-align:right;border-top:1.5px double #000;font-size:13px;">差引支払額</td><td style="padding:8px 10px;text-align:right;font-family:'Times New Roman',serif;border-top:1.5px double #000;font-size:15px;">¥${grandTotal.toLocaleString()}</td></tr>
-      </tbody>
-    </table>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px;align-items:stretch;">
-      <div style="border:1px solid #000;display:flex;flex-direction:column;">
-        <div style="background:#f0f0f0;padding:4px 8px;border-bottom:1px solid #000;font-size:11px;font-weight:500;">振込先口座</div>
-        <div style="padding:8px 10px;font-size:10.5pt;line-height:1.6;min-height:50px;flex:1;">${bankLine}</div>
-      </div>
-      <div style="border:1px solid #000;display:flex;flex-direction:column;">
-        <div style="background:#f0f0f0;padding:4px 8px;border-bottom:1px solid #000;font-size:11px;font-weight:500;">備考</div>
-        <div style="padding:8px 10px;font-size:9.5pt;line-height:1.5;color:#555;min-height:50px;flex:1;">${footerNote}</div>
-      </div>
-    </div>
-  </div>`;
-
-  return { title:'支払明細書', html, amount:grandTotal, shikyuTotal, koujoTotal };
+  return (typeof _buildPaySlipHTML==='function') ? _buildPaySlipHTML(staffName, monStr) : null;
 }
 
 // ══════════════════════════════════════════════════
