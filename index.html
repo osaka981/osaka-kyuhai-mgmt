@@ -904,7 +904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-14.69</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-15.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1893,6 +1893,32 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         個人アカウントは、その人だけが名乗れる形です。個人の携帯で使う場合に向きますが、初回のログインだけは電波のある場所で行ってください。<br>
         パスワードは発行時にこの画面で一度だけ表示されます。保存していないので、忘れた場合は作り直しになります。
       </div>
+      <!-- ★ 2026-10-15.1: 管理者ログイン。
+           Firebaseのルールで、従事員台帳・給与・支払などを「管理者だけ」に
+           閉じるための入口。いまの経営管理は匿名で入っているため、
+           匿名のままだとルールを締めた日に自分が読めなくなる。 -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>管理者ログイン</div>
+          <span class="xs muted" id="adm-state">確認中</span></div>
+        <div class="xs muted" style="margin:6px 0 10px;">
+          従事員台帳・給与・支払・法定福利費などは、Firebaseのルールで管理者だけが読める形にします。<br>
+          その「管理者」がこのログインです。まだ発行していなければ、先に発行してください。<br>
+          パスワードは発行時に一度だけ表示されます。IDは下の一覧でいつでも確認できます。
+        </div>
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg"><label>ID</label>
+            <input type="email" id="adm-email" class="fi" style="width:230px"
+              autocomplete="username" placeholder="xxxxxxxxxxxx@work.local"></div>
+          <div class="fg"><label>パスワード</label>
+            <input type="password" id="adm-pw" class="fi" style="width:180px"
+              autocomplete="current-password"></div>
+          <button class="btn b-blu btn-sm" onclick="admLogin()">ログイン</button>
+          <button class="btn b-gh btn-sm" onclick="admLogout()">ログアウト（匿名に戻す）</button>
+          <button class="btn b-grn btn-sm" onclick="admIssue()">管理者アカウントを発行</button>
+        </div>
+        <div id="adm-msg" class="xs" style="margin-top:8px;min-height:1.2em;"></div>
+      </div>
+
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>発行済みのアカウント</div>
           <span class="xs muted">この一覧は nikki/_acl/user に保存されます</span></div>
@@ -2531,6 +2557,58 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
 
+    <!-- ★ 2026-10-14.74: 法定福利費（本人負担・会社負担の月次集計）
+         年金事務所・労働局への納付額と突き合わせるための画面。
+         給与明細には本人負担しか出ないので、会社負担はここでしか見えない。 -->
+    <div id="s-hotei" class="sec">
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>対象</div></div>
+        <div class="fla gap6" style="flex-wrap:wrap;align-items:flex-end;">
+          <div class="fg" style="min-width:130px;">
+            <label>対象月</label>
+            <input type="month" id="ht-mon" class="fi" onchange="renderHotei()">
+          </div>
+          <div class="fg" style="min-width:120px;">
+            <label>営業所</label>
+            <select id="ht-office" class="fi" onchange="renderHotei()"><option value="">すべて</option></select>
+          </div>
+          <button class="btn b-gh btn-sm" onclick="htExportCSV()">CSVで出す</button>
+        </div>
+        <div class="xs muted" style="margin-top:7px;">
+          社員・役員・パートが対象です。金額は従業員台帳の「税金・保険」と、システム設定の「控除項目」から計算しています。
+        </div>
+      </div>
+
+      <div id="ht-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;"></div>
+
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>項目別 集計（納付書との突き合わせ用）</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl" style="min-width:620px;">
+            <thead><tr>
+              <th>項目</th><th style="width:150px;">計算</th>
+              <th class="tr" style="width:120px;">本人負担</th>
+              <th class="tr" style="width:120px;">会社負担</th>
+              <th class="tr" style="width:130px;">合計</th>
+            </tr></thead>
+            <tbody id="tb-ht-item"></tbody>
+            <tfoot id="tf-ht-item"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>人別の内訳</div></div>
+        <div style="overflow-x:auto;">
+          <table class="tbl" style="min-width:860px;font-size:12px;">
+            <thead><tr id="tr-ht-head"></tr></thead>
+            <tbody id="tb-ht-staff"></tbody>
+            <tfoot id="tf-ht-staff"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- 部署管理 (Phase 2 新設) -->
     <div id="s-departments" class="sec">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
@@ -3120,6 +3198,39 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fg"><label>計算プレビュー</label><div class="xs mono" id="sys-emp-ins-preview" style="padding:6px 0;color:var(--blu2);">−</div></div>
         </div>
         <button class="btn b-grn btn-sm mt12" onclick="saveEmpInsSettings()">保存</button>
+      </div>
+
+      <!-- ★ 2026-10-14.70: 法定控除の項目マスタ -->
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>控除項目（税金・保険）</div>
+        <div class="xs muted mb8">
+          給与明細・賃金台帳に出す法定控除の項目です。子ども・子育て支援金のように後から増えた項目は、ここに足せばコードを直さずに出せます。<br>
+          燃料費・庸車両・違約金・前払金・車両修理代（会社との精算・回収）はここではなく、従業員台帳の「相殺・手当」で設定します。
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="tbl" style="min-width:860px;font-size:12px;">
+            <thead><tr>
+              <th style="width:48px;">使う</th>
+              <th style="min-width:150px;">項目名</th>
+              <th style="width:130px;">計算方法</th>
+              <th style="width:300px;">率・額</th>
+              <th style="width:120px;">対象</th>
+              <th style="width:120px;">負担</th>
+              <th style="width:64px;">並び</th>
+              <th style="width:52px;"></th>
+            </tr></thead>
+            <tbody id="tb-dd"></tbody>
+          </table>
+        </div>
+        <div class="fla gap6 mt12" style="flex-wrap:wrap;">
+          <button class="btn b-gh btn-sm" onclick="ddAddRow()">＋ 項目を追加</button>
+          <button class="btn b-grn btn-sm" onclick="ddSaveAll()">保存</button>
+          <button class="btn b-gh btn-sm" onclick="ddResetDefaults()">はじめの8項目に戻す</button>
+          <span class="xs muted" style="align-self:center;">保存するまで反映されません</span>
+        </div>
+        <div class="xs muted mt8">
+          「負担」が<b>会社のみ</b>の項目は給与明細・賃金台帳には出ません。本人の手取りに影響しないためです。会社負担は法定福利費の集計でだけ使います。
+        </div>
       </div>
 
       <div class="card mb12" style="max-width:700px;">
@@ -4149,8 +4260,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">集荷単価</button>
     <button type="button" id="ptab-other" onclick="switchStTab('other')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">その他</button>
+    <!-- ★ 2026-10-14.71: 「控除・手当」を性質で2つに分けた。
+         こちらは会社が金額を決めるもの（燃料費・庸車両・違約金・前払金・修理代・手当）。 -->
     <button type="button" id="ptab-offset" onclick="switchStTab('offset')"
-      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">控除・手当</button>
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">精算・手当</button>
+    <button type="button" id="ptab-tax" onclick="switchStTab('tax')"
+      style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">税金・保険</button>
     <button type="button" id="ptab-advance" onclick="switchStTab('advance')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">前払い</button>
     <button type="button" id="ptab-confirm" onclick="switchStTab('confirm')"
@@ -4888,39 +5003,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
     </div>
     <!-- 社保・税（社員・パートのみ） -->
-    <div id="st-social-ins-section" style="margin-bottom:10px;border-top:2px solid var(--blu2);padding-top:10px;display:none;">
-      <div class="xs fw7 mb6" style="color:var(--blu2);">🏛 社保・税（社員・パートのみ）</div>
-      <!-- ★ 2026-10-13.64: 社保・税も上の帯の適用年月に乗るようになった -->
-      <div class="xs muted mb8">月額を入力してください。等級改定や料率改定のときは、上の帯で「＋ ○年○月から変更」を押してから新しい額を入れると、その月より前の明細は当時の額で出ます。</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
-        <div class="fg"><label style="font-size:9px;">健康保険（円/月）</label><input type="number" id="st-si-health" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">介護保険（円/月）</label><input type="number" id="st-si-care" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">厚生年金（円/月）</label><input type="number" id="st-si-pension" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">年金基金（円/月）</label><input type="number" id="st-si-fund" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
-        <div class="fg">
-          <label style="font-size:9px;">雇用保険</label>
-          <select id="st-si-emp-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStEmpInsTypeChange()">
-            <option value="rate">料率自動</option><option value="fixed">月額入力</option>
-          </select>
-        </div>
-        <div class="fg" id="st-si-emp-fixed-wrap" style="display:none;"><label style="font-size:9px;">雇用保険（円/月）</label><input type="number" id="st-si-emp-fixed" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg" id="st-si-emp-rate-wrap"><label style="font-size:9px;">料率計算</label><div class="xs muted" id="st-si-emp-rate-label" style="padding:4px 0;">総支給額×料率</div></div>
-        <div class="fg"><label style="font-size:9px;">所得税（円/月）</label><input type="number" id="st-tax-income" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg">
-          <label style="font-size:9px;">住民税</label>
-          <select id="st-tax-res-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStResTaxTypeChange()">
-            <option value="yearly">年額→12分割</option><option value="monthly">月額入力</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-        <div class="fg" id="st-tax-res-yearly-wrap"><label style="font-size:9px;">住民税（円/年）</label><input type="number" id="st-tax-res-yearly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" oninput="calcResidentTaxMonthly()"></div>
-        <div class="fg" id="st-tax-res-monthly-wrap" style="display:none;"><label style="font-size:9px;">住民税（円/月）</label><input type="number" id="st-tax-res-monthly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">月額（自動計算）</label><div class="xs mono fw7" id="st-tax-res-calc" style="padding:4px 0;color:var(--blu2);">−</div></div>
-      </div>
-    </div>
     <!-- 違約金 -->
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
       <div class="xs fw7 mb6" style="color:var(--red2);">⚠️ 違約金（請求書反映）</div>
@@ -4954,6 +5036,66 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
 
   <!-- 🗺️ 集荷ルートタブ（会社委託のみ） -->
+
+  <!-- ★ 2026-10-14.71: 税金・保険タブ（法定控除）
+       「控除・手当」に実費の精算（燃料費・庸車両・違約金ほか）と法定控除が
+       同居していて長かったので、性質で分けた。金額を決めるのが
+       法律・自治体・年金事務所のものはこちら、会社が決めるものは「精算・手当」。 -->
+  <div id="ptab-content-tax" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+    <!-- 適用年月の帯（単価と同じ仕組み） -->
+    <div id="st-rate-band-tax" class="st-rate-band" style="margin-bottom:10px;"></div>
+    <div id="st-tax-nonemp" style="display:none;padding:10px 12px;border-radius:6px;background:var(--sur);border:1px solid var(--brd2);">
+      <div class="xs" style="color:var(--txt2);line-height:1.7;">この区分では法定控除はありません。<br>
+      健康保険・厚生年金・雇用保険・所得税・住民税は、区分が「社員・役員」か「パート（事務）」の人だけが対象です。<br>
+      燃料費・庸車両・違約金・前払金・車両修理代は「精算・手当」タブで設定します。</div>
+    </div>
+    <!-- 標準報酬月額（★ 2026-10-14.71 新規）-->
+    <div id="st-hyojun-wrap" style="display:none;margin-bottom:10px;">
+      <div class="xs fw7 mb6" style="color:var(--blu2);">標準報酬月額</div>
+      <div class="xs muted mb6">算定基礎届・月額変更届の結果を入れてください。会社負担の集計（子ども・子育て拠出金など）に使います。</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div class="fg"><label style="font-size:9px;">標準報酬月額（円）</label>
+          <input type="number" id="st-hyojun" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+      </div>
+    </div>
+
+    <div id="st-social-ins-section" style="margin-bottom:10px;border-top:2px solid var(--blu2);padding-top:10px;display:none;">
+      <div class="xs fw7 mb6" style="color:var(--blu2);">🏛 法定控除（社員・役員・パートのみ）</div>
+      <!-- ★ 2026-10-13.64: 社保・税も上の帯の適用年月に乗るようになった -->
+      <div class="xs muted mb8">月額を入力してください。等級改定や料率改定のときは、上の帯で「＋ ○年○月から変更」を押してから新しい額を入れると、その月より前の明細は当時の額で出ます。</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
+        <div class="fg"><label style="font-size:9px;">健康保険（円/月）</label><input type="number" id="st-si-health" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">介護保険（円/月）</label><input type="number" id="st-si-care" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">厚生年金（円/月）</label><input type="number" id="st-si-pension" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">年金基金（円/月）</label><input type="number" id="st-si-fund" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px;">
+        <div class="fg">
+          <label style="font-size:9px;">雇用保険</label>
+          <select id="st-si-emp-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStEmpInsTypeChange()">
+            <option value="rate">料率自動</option><option value="fixed">月額入力</option>
+          </select>
+        </div>
+        <div class="fg" id="st-si-emp-fixed-wrap" style="display:none;"><label style="font-size:9px;">雇用保険（円/月）</label><input type="number" id="st-si-emp-fixed" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg" id="st-si-emp-rate-wrap"><label style="font-size:9px;">料率計算</label><div class="xs muted" id="st-si-emp-rate-label" style="padding:4px 0;">総支給額×料率</div></div>
+        <div class="fg"><label style="font-size:9px;">所得税（円/月）</label><input type="number" id="st-tax-income" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg">
+          <label style="font-size:9px;">住民税</label>
+          <select id="st-tax-res-type" class="fi" style="font-size:10px;padding:3px 4px;" onchange="onStResTaxTypeChange()">
+            <option value="yearly">年額→12分割</option><option value="monthly">月額入力</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        <div class="fg" id="st-tax-res-yearly-wrap"><label style="font-size:9px;">住民税（円/年）</label><input type="number" id="st-tax-res-yearly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" oninput="calcResidentTaxMonthly()"></div>
+        <div class="fg" id="st-tax-res-monthly-wrap" style="display:none;"><label style="font-size:9px;">住民税（円/月）</label><input type="number" id="st-tax-res-monthly" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">月額（自動計算）</label><div class="xs mono fw7" id="st-tax-res-calc" style="padding:4px 0;color:var(--blu2);">−</div></div>
+      </div>
+    </div>
+    <!-- マスタで足した項目・会社負担の参考表示（★ 2026-10-14.71）-->
+    <div id="st-dd-extra"></div>
+  </div>
+
   <div id="ptab-content-route" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <div>
@@ -5631,7 +5773,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-14.69';
+const APP_VER = '2026-10-15.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -6056,6 +6198,7 @@ const LS_KEYS = {
   MONTHLY_ADJ:        'nikki_monthly_adj',         // ★ 2026-10-09.33: 月末調整（特別手当・違約金）
   MONTH_CLOSE:        'nikki_month_close',         // ★ 2026-10-09.37: 月締めの印（年月×営業所）
   PD_PAYDAY:          'nikki_pd_payday',           // ★ 2026-10-14.66: 支払台帳の支給日の例外（人×月）
+  DEDUCT_DEFS:        'nikki_deduct_defs',         // ★ 2026-10-14.70: 法定控除の項目マスタ（名前・計算方法・率）
   // ★ 2026/08/18: 郵便局から受領した調書データ(請求根拠)。
   //   日報(YP)とは別物。相互に上書きせず、郵便局照合タブで突き合わせる。
   POSTLOG:            'nikki_post_logs',
@@ -7168,7 +7311,7 @@ async function fbSet(key, value) {
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state','monthly_adj','month_close'];
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state','monthly_adj','month_close','deduct_defs'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
@@ -7358,6 +7501,11 @@ function applyFirebaseData() {
   try{
     const _mc = lsGet(LS_KEYS.MONTH_CLOSE, null);
     if(Array.isArray(_mc)) D.monthClose = _mc;
+  }catch(e){}
+  // ★ 2026-10-14.70: 法定控除の項目マスタ
+  try{
+    const _dd = lsGet(LS_KEYS.DEDUCT_DEFS, null);
+    if(Array.isArray(_dd) && _dd.length) D.deductDefs = _dd;
   }catch(e){}
   // ① 全フィールド版を優先(staff_full)
   const fbStaffFull = lsGet('nikki_staff_full', null);
@@ -8789,6 +8937,8 @@ function onStKbnChange(){
   const siArea=$('st-social-ins-section');
   const showSI=(kbn==='社員・役員'||kbn==='パート（事務）');
   if(siArea) siArea.style.display=showSI?'block':'none';
+  // ★ 2026-10-14.71: 税金・保険タブの中身（標準報酬月額・追加項目・会社負担）も切り替える
+  try{ if(typeof renderStDeductExtra==='function') renderStDeductExtra(); }catch(e){}
 
   // 部署デフォルト提案(Phase 3): まだ何もチェックされていない場合のみ
   if(typeof getStSelectedDeptIds==='function' && typeof renderStDeptCheckboxes==='function'){
@@ -8945,7 +9095,7 @@ function resetStaffModal(){
    'st-company-contact','st-company-addr',
    'st-tk','st-empno-disp',
    'st-commute','st-career','st-position',
-   'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed',
+   'st-si-health','st-si-care','st-si-pension','st-si-fund','st-si-emp-fixed','st-hyojun',
    'st-tax-income','st-tax-res-yearly','st-tax-res-monthly'
   ].forEach(id=>{const e=$(id);if(e)e.value='';});
   if($('st-dup-warn')){ $('st-dup-warn').style.display='none'; $('st-dup-warn').innerHTML=''; }
@@ -8966,7 +9116,7 @@ function resetStaffModal(){
   // チャーター/違約金などの行ベースリセット
   // ★ 2026-10-09.46: 単価の適用年月をリセット
   _stRateYm=''; _stRateDirty=false;
-  ['st-rate-band-del','st-rate-band-col','st-rate-band-teate'].forEach(id=>{const e=$(id); if(e) e.innerHTML='';});
+  ['st-rate-band-del','st-rate-band-col','st-rate-band-teate','st-rate-band-tax'].forEach(id=>{const e=$(id); if(e) e.innerHTML='';});
   ['st-charter-list','st-penalty-list','st-customitems-list'].forEach(id=>{
     const e=$(id);if(e)e.innerHTML='';
   });
@@ -9149,6 +9299,7 @@ const _TOP_TABS = {
     { s:'worktime',    label:'勤務時間' },
     { s:'pay-history', label:'給与履歴' },
     { s:'pay-daicho',  label:'支払台帳', badge:'new' },   // ★ 2026-10-14.66
+    { s:'hotei',       label:'法定福利費', badge:'new' },  // ★ 2026-10-14.74
     { s:'contract',    label:'契約書' },
     { s:'invoice-bulk',label:'請求書', badge:'new' },
     { s:'gas-mgmt',    label:'燃料代管理', badge:'new' },
@@ -9338,8 +9489,17 @@ async function initFirebase() {
         _anonTries = 0;
         try { window._fbToken = await u.getIdToken(); } catch(e) { window._fbToken = null; }
         _authDone(!!window._fbToken);
+        try { if (typeof admPaint === 'function') admPaint(); } catch(e) {}   // ★ 2026-10-15.1
       });
-      signInAnonymously(auth).catch(e => { console.warn('匿名認証に失敗:', e); _authDone(false); });
+      /* ★ 2026-10-15.1: ここで無条件に匿名ログインしていたため、管理者として
+         ログインしていても起動のたびに匿名で入り直し、権限が落ちていた。
+         onIdTokenChanged は保存されたログインを復元したあとに必ず1回呼ばれ、
+         誰も入っていなければ u=null で来る（そこで匿名に入る）。
+         ここは保険として、少し待ってもまだ誰も入っていないときだけ動かす。 */
+      setTimeout(() => {
+        if (auth.currentUser) return;
+        signInAnonymously(auth).catch(e => { console.warn('匿名認証に失敗:', e); _authDone(false); });
+      }, 1500);
       setTimeout(()=>_authDone(false), 15000);   // 保険。間に合わなくても購読側が張り直す
       setInterval(async () => { try { const u = auth.currentUser; if (u) window._fbToken = await u.getIdToken(); } catch(e){} }, 30*60*1000);
     } catch(e) { console.warn('匿名認証に失敗（続行します）:', e); }
@@ -12192,7 +12352,115 @@ async function umApplyAll(){
   }
 }
 
+/* ══ ★ 2026-10-15.1: 管理者ログイン ══
+   Firebaseのルールで、従事員台帳（staff / staff_full）・給与・支払・法定福利費などを
+   nikki/_acl/user/<uid>/adm === true のアカウントだけに閉じる。その入口。
+   いまの経営管理は匿名で入っているため、匿名のままルールを締めると
+   自分が読めなくなる。先にこのログインを用意してからルールを当てること。
+   ルールを当てるまでは今まで通り匿名でも全部動く。 */
+function _admRec(){
+  try{
+    const u = window._fbAuth && window._fbAuth.currentUser;
+    if(!u) return null;
+    return _aclUsers()[u.uid] || null;
+  }catch(e){ return null; }
+}
+function _admIsAdmin(){
+  const r = _admRec();
+  return !!(r && r.adm === true && r.active !== false);
+}
+function _admMsg(t, bad){
+  const el = document.getElementById('adm-msg'); if(!el) return;
+  el.textContent = t || '';
+  el.style.color = bad ? 'var(--red2)' : 'var(--txt2)';
+}
+function admPaint(){
+  const el = document.getElementById('adm-state'); if(!el) return;
+  const u = (window._fbAuth && window._fbAuth.currentUser) || null;
+  if(!u){ el.textContent = '未接続'; el.style.color = 'var(--txt2)'; return; }
+  if(u.isAnonymous){
+    el.textContent = '匿名で接続中（管理者ではありません）';
+    el.style.color = 'var(--amb2)';
+  }else if(_admIsAdmin()){
+    const r = _admRec();
+    el.textContent = '管理者としてログイン中　' + ((r && r.email) || '');
+    el.style.color = 'var(--tel2)';
+  }else{
+    el.textContent = 'ログイン中ですが、管理者として登録されていません';
+    el.style.color = 'var(--red2)';
+  }
+  const em = document.getElementById('adm-email');
+  if(em && !em.value && u && !u.isAnonymous && u.email) em.value = u.email;
+}
+async function admLogin(){
+  const I = window._fbImports || {};
+  const email = (document.getElementById('adm-email')?.value || '').trim();
+  const pw    = document.getElementById('adm-pw')?.value || '';
+  if(!email || !pw){ _admMsg('IDとパスワードを入れてください', true); return; }
+  if(!I.signInWithEmailAndPassword || !window._fbAuth){
+    _admMsg('通信の準備ができていません。少し待ってからもう一度お試しください', true); return;
+  }
+  _admMsg('確認中');
+  try{
+    const cred = await I.signInWithEmailAndPassword(window._fbAuth, email, pw);
+    const uid  = cred.user.uid;
+    let rec = null;
+    try{
+      const { ref, get } = I;
+      const snap = await get(ref(fbDB, 'nikki/_acl/user/' + uid));
+      if(snap.exists()) rec = snap.val();
+    }catch(e){}
+    const pwEl = document.getElementById('adm-pw'); if(pwEl) pwEl.value = '';
+    if(!rec || rec.adm !== true){
+      _admMsg('このIDは管理者として登録されていません。「管理者アカウントを発行」から作ってください', true);
+    }else if(rec.active === false){
+      _admMsg('このIDは停止されています', true);
+    }else{
+      _admMsg('管理者としてログインしました。画面を読み込み直します');
+      setTimeout(()=>location.reload(), 900);
+      return;
+    }
+  }catch(e){
+    const c = (e && e.code) || '';
+    _admMsg(
+      (c==='auth/invalid-credential'||c==='auth/wrong-password'||c==='auth/user-not-found'||c==='auth/invalid-email')
+        ? 'IDかパスワードがちがいます'
+        : ('ログインできませんでした　' + ((e && e.message) || '')), true);
+  }
+  admPaint();
+}
+async function admLogout(){
+  const I = window._fbImports || {};
+  const ok = await showDialog({ icon:'', title:'ログアウトします',
+    msg:'匿名の接続に戻ります。\n\nFirebaseのルールを締めたあとは、'
+      + '従事員台帳・給与・支払・法定福利費が読めなくなります。',
+    okText:'ログアウト', cancelText:'やめる' });
+  if(!ok) return;
+  try{ await I.signOut(window._fbAuth); }catch(e){}
+  location.reload();
+}
+async function admIssue(){
+  const already = Object.values(_aclUsers()).filter(r => r && r.adm === true && r.active !== false);
+  const ok = await showDialog({ icon:'', title:'管理者アカウントの発行',
+    msg:(already.length ? '既に ' + already.length + ' 件の管理者があります。\n\n' : '')
+      + '経営管理を開くパソコンでログインするためのアカウントを作ります。\n\n'
+      + 'IDとパスワードは、このあと一度だけ表示されます。\n'
+      + 'IDは下の一覧でいつでも確認できますが、パスワードは保存していません。\n'
+      + '控えてから閉じてください。',
+    okText:'発行する', cancelText:'キャンセル' });
+  if(!ok) return;
+  const rec = await _aclCreate({ kind:'admin', adm:true, companyId:'', companyName:'大阪急配（管理者）' }, '管理者');
+  if(!rec) return;
+  // 権限表に adm を確実に残す（_aclCreate は rec をそのまま書くので通常は不要だが念のため）
+  try{
+    const { ref, set } = window._fbImports || {};
+    if(ref && set) await set(ref(fbDB, 'nikki/_acl/user/' + rec.uid + '/adm'), true);
+  }catch(e){}
+  admPaint();
+}
+
 function renderAclList(){
+  try{ admPaint(); }catch(e){}
   const wrap=document.getElementById('acl-list');
   if(!wrap) return;
   const list=Object.values(_aclUsers()).sort((a,b)=>
@@ -12205,9 +12473,11 @@ function renderAclList(){
   }
   const rows=list.map(r=>`<tr>
     <td class="fw7">${esc(r.companyName||'（会社未設定）')}</td>
-    <td class="xs">${r.kind==='person'
-      ? '<span style="color:var(--blu2);font-weight:700">個人</span> '+esc(r.staffName||'')
-      : '<span style="color:var(--tel2);font-weight:700">会社</span> <span class="muted">端末で共用</span>'}</td>
+    <td class="xs">${r.adm===true
+      ? '<span style="color:var(--red2);font-weight:700">管理者</span> <span class="muted">経営管理を開く</span>'
+      : (r.kind==='person'
+        ? '<span style="color:var(--blu2);font-weight:700">個人</span> '+esc(r.staffName||'')
+        : '<span style="color:var(--tel2);font-weight:700">会社</span> <span class="muted">端末で共用</span>')}</td>
     <td class="xs mono" style="word-break:break-all;">${esc(r.email||'')}
       <!-- ★ 2026/09/16: Firebaseコンソールで消すときに要るので出しておく -->
       <div class="xs muted mono" style="font-size:9px;opacity:.7;">${esc(String(r.uid||''))}</div></td>
@@ -23801,7 +24071,7 @@ function renderCostAnalysis(){
 
 // 従業員台帳 タブ切り替え（上段タブ形式）
 function switchStTab(t){
-  const allTabs=['info','del','col','other','offset','advance','confirm','route','history','docs'];
+  const allTabs=['info','del','col','other','offset','tax','advance','confirm','route','history','docs'];   // ★ 2026-10-14.71
   allTabs.forEach(id=>{
     const btn=$('ptab-'+id);
     if(btn){
@@ -23819,8 +24089,12 @@ function switchStTab(t){
     }
   });
   // ★ 2026-10-09.46: 単価タブを開いたら適用年月の帯を描き直す
-  if(t==='del' || t==='col' || t==='offset'){
+  // ★ 2026-10-14.71: 税金・保険タブも同じ帯に乗る（社保・税は適用年月を持つ）
+  if(t==='del' || t==='col' || t==='offset' || t==='tax'){
     try{ if(typeof renderStRateBand==='function') renderStRateBand(); }catch(e){}
+  }
+  if(t==='tax'){
+    try{ if(typeof renderStDeductExtra==='function') renderStDeductExtra(); }catch(e){}
   }
   if(t==='route')   renderRouteList();
   if(t==='confirm') buildStConfirm();
@@ -24773,7 +25047,10 @@ function saveStaff(continueAdd=false){
       career:parseInt($('st-career')?.value)||0,
       position:parseInt($('st-position')?.value)||0,
     },
-    socialIns:{
+    /* ★ 2026-10-14.71: 画面から集める処理は _stCollectSocialIns に1本化した。
+       標準報酬月額（hyojun）とマスタで足した項目（items）もここに入る。
+       既定の項目は従来のキーのまま書くので、読む側は変えなくてよい。 */
+    socialIns:(typeof _stCollectSocialIns==='function') ? _stCollectSocialIns() : {
       health:parseInt($('st-si-health')?.value)||0,
       care:parseInt($('st-si-care')?.value)||0,
       pension:parseInt($('st-si-pension')?.value)||0,
@@ -34189,6 +34466,152 @@ function _saveIssuedDoc(rec){
 
      給与形態・基本給・時給・庸車は これまでどおり payHistory（既に効いている）。
    ════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   法定控除の項目マスタ  ★ 2026-10-14.70
+
+   健康保険・介護保険・厚生年金・雇用保険・所得税・住民税のように、
+   法律や自治体が額を決める控除の「項目そのもの」を画面から足せるようにする。
+   子ども・子育て支援金のように後から増える項目に、コードを直さず対応するため。
+
+   燃料費・庸車両・違約金・前払金・車両修理代（会社との精算・回収）は
+   性質が違う（金額を決めるのが会社側）ので、このマスタには入れない。
+
+   D.deductDefs = [{
+     id, name,            項目名
+     calc:'fixed'         人ごとに月額を入れる（健保・厚年・所得税）
+         |'rate'          率×対象額（雇用保険・子育て拠出金）
+         |'yearly'        年額を入れて12で割る（住民税）
+         |'company',      全員同じ額（会社共通）
+     base:'total'|'hyojun',   calc='rate' のときの対象額
+     side:'emp'|'co'|'both',  本人負担／会社負担／両方
+     target:'emp'|'all',      社員・役員・パートのみ／全員
+     amount,                  calc='company' のときの額
+     rateHistory:[{from:'2026-04', rate:0.006, rateCo:0.0095}],
+     order, on, builtin
+   }]
+
+   ★ 負担の扱い：給与明細・賃金台帳に出すのは side が 'emp' か 'both' の
+     本人負担ぶんだけ。'co'（会社のみ）は明細に一切出さず、法定福利費の
+     集計でだけ使う。差引支給額が狂わないようにするため。
+   ════════════════════════════════════════════════════════════ */
+const DD_BASE_YM = '0000-01';
+function _ddSeed(){
+  return [
+    {id:'health',  name:'健康保険',             calc:'fixed',  side:'both', target:'emp', order:10, on:true, builtin:true, group:'shaho'},
+    {id:'care',    name:'介護保険',             calc:'fixed',  side:'both', target:'emp', order:20, on:true, builtin:true, group:'shaho'},
+    {id:'pension', name:'厚生年金',             calc:'fixed',  side:'both', target:'emp', order:30, on:true, builtin:true, group:'shaho'},
+    {id:'fund',    name:'年金基金',             calc:'fixed',  side:'emp',  target:'emp', order:40, on:true, builtin:true, group:'shaho'},
+    /* ★ 2026-10-14.73: 名前が似ているが別の制度なので2項目に分ける。
+       ・子ども・子育て支援金 … 2026年4月から。健康保険料に上乗せされ、労使折半。
+         本人からも引かれるので明細に出る。JDLの賃金台帳で「子育て支援」として
+         健康保険・厚生年金と並んでいるのはこちら。
+       ・子ども・子育て拠出金 … 以前の児童手当拠出金。厚生年金の標準報酬月額に
+         掛かり、会社が全額負担する。本人からは引かれないので明細には出ない。
+       支援金の率は保険者からの通知（健康保険料率のお知らせ）に載っている。
+       既定は0にしてあるので、通知の率を入れてから使うこと。 */
+    {id:'kosodate_shien', name:'子ども・子育て支援金', calc:'rate', side:'both', target:'emp', order:35, on:true,
+     base:'hyojun', group:'shaho', rateHistory:[{from:'2026-04', rate:0, rateCo:0}]},
+    {id:'kosodate',name:'子ども・子育て拠出金', calc:'rate',   side:'co',   target:'emp', order:45, on:true,
+     base:'hyojun', group:'shaho', rateHistory:[{from:DD_BASE_YM, rateCo:0.0036}]},
+    {id:'empins',  name:'雇用保険',             calc:'rate',   side:'both', target:'emp', order:50, on:true, builtin:true,
+     base:'total',  group:'roudou', rateHistory:[{from:DD_BASE_YM, rate:0.006, rateCo:0.0095}]},
+    {id:'income',  name:'所得税',               calc:'fixed',  side:'emp',  target:'emp', order:60, on:true, builtin:true, group:'zei'},
+    {id:'resident',name:'住民税',               calc:'yearly', side:'emp',  target:'emp', order:70, on:true, builtin:true, group:'zei'},
+  ];
+}
+function _ddAll(){
+  if(!Array.isArray(D.deductDefs)){
+    const v = lsGet(LS_KEYS.DEDUCT_DEFS, null);
+    D.deductDefs = Array.isArray(v) && v.length ? v : _ddSeed();
+  }
+  /* ★ 2026-10-14.73: 版を上げて既定の項目が増えたとき、保存済みのマスタにも足す。
+     すでにある項目には触らないので、画面で直した名前や率は消えない。 */
+  try{
+    const have=new Set(D.deductDefs.map(d=>d&&d.id));
+    _ddSeed().forEach(s=>{ if(!have.has(s.id)) D.deductDefs.push(JSON.parse(JSON.stringify(s))); });
+  }catch(e){}
+  D.deductDefs.sort((a,b)=>(Number(a.order)||0)-(Number(b.order)||0));
+  return D.deductDefs;
+}
+/* 画面に出す順で、使う項目だけ */
+function _ddActive(target){
+  return _ddAll().filter(d=>d && d.on!==false && (!target || d.target==='all' || d.target===target));
+}
+function _ddFind(id){ return _ddAll().find(d=>d && d.id===id) || null; }
+/* その月に効いている率。rate=本人負担、rateCo=会社負担 */
+function _ddRateAt(def, ym){
+  const t=String(ym||'').replace(/\//g,'-').slice(0,7);
+  const list=(def && Array.isArray(def.rateHistory)) ? def.rateHistory.slice()
+             .sort((a,b)=>String(a.from||'').localeCompare(String(b.from||''))) : [];
+  if(!list.length) return {rate:0, rateCo:0, from:''};
+  let hit=list[0];
+  if(t) list.forEach(h=>{ if(String(h.from||'')<=t) hit=h; });
+  else hit=list[list.length-1];
+  return {rate:Number(hit.rate)||0, rateCo:Number(hit.rateCo)||0, from:hit.from||''};
+}
+async function _ddSave(){
+  const all=_ddAll();
+  lsSet(LS_KEYS.DEDUCT_DEFS, all);
+  try{ if(typeof fbSet==='function') await fbSet('deduct_defs', all); }
+  catch(e){ console.warn('[控除項目] 保存エラー', e); }
+  return true;
+}
+/* 既定の項目は従来のキーに入っている。マスタのidから拾えるようにする ★ 2026-10-14.72 */
+const DD_LEGACY = {health:'health', care:'care', pension:'pension', fund:'fund', income:'income'};
+/* その人・その月の法定控除を全部計算する ★ 2026-10-14.72
+
+   戻り値 { rows:[{id,name,emp,co,side}], empTotal, coTotal }
+     emp … 本人負担（給与から引く額）
+     co  … 会社負担（給与からは引かない。法定福利費の集計用）
+   side==='co' の項目は emp を必ず 0 にするので、差引支給額には influence しない。 */
+function _ddAmountsFor(st, monStr, totalPay){
+  const out={rows:[], empTotal:0, coTotal:0};
+  if(!st) return out;
+  const si=(typeof _siAt==='function') ? _siAt(st, monStr) : (st.socialIns||{});
+  const items=si.items||{};
+  const hyojun=Number(si.hyojun)||0;
+  let defs=[]; try{ defs=_ddActive('emp'); }catch(e){ return out; }
+
+  defs.forEach(d=>{
+    let emp=0, co=0;
+    const r=_ddRateAt(d, monStr);
+    if(d.calc==='rate'){
+      // 雇用保険は「月額を入力」に切り替えられる（従来の作りを残す）
+      if(d.id==='empins' && si.empInsType==='fixed'){
+        emp=Number(si.empInsFixed)||0;
+      } else {
+        const base = (d.base==='hyojun') ? hyojun : (Number(totalPay)||0);
+        emp=Math.round(base*(r.rate||0));
+        co =Math.round(base*(r.rateCo||0));
+      }
+    } else if(d.calc==='yearly'){
+      if(d.id==='resident'){
+        emp=(typeof getResidentTaxMonthly==='function') ? getResidentTaxMonthly(st, monStr) : 0;
+      } else {
+        const y=Number(items[d.id])||0;
+        emp=y>0?Math.ceil(y/12):0;
+      }
+    } else if(d.calc==='company'){
+      emp=Number(d.amount)||0;
+    } else { // fixed
+      const key=DD_LEGACY[d.id];
+      emp = key ? (Number(si[key])||0) : (Number(items[d.id])||0);
+    }
+    /* ★ 2026-10-14.74: 負担の振り分け
+       ・会社のみ … 本人からは引かない
+       ・本人のみ … 会社負担なし
+       ・本人と会社 … 率で出すものは率ごとに計算済み。月額を手で入れるもの
+         （健康保険・介護保険・厚生年金）は労使折半なので、会社負担は同額とみなす。
+         納付書は本人負担と会社負担の合計なので、これが無いと突き合わせできない。 */
+    if(d.side==='co'){ co=co||emp; emp=0; }
+    else if(d.side==='emp'){ co=0; }
+    else if(d.side==='both' && d.calc!=='rate'){ co=emp; }
+    out.rows.push({id:d.id, name:d.name, emp:emp, co:co, side:d.side||'emp', calc:d.calc});
+    out.empTotal+=emp; out.coTotal+=co;
+  });
+  return out;
+}
+
 const RATE_BASE_YM = '0000-01';
 function _rateYm(v){ return String(v||'').replace(/\//g,'-').slice(0,7); }
 function _rateYmLabel(ym){
@@ -34302,7 +34725,7 @@ function _stRateStaff(){
 }
 function renderStRateBand(){
   const st=_stRateStaff();
-  const boxes=['st-rate-band-del','st-rate-band-col','st-rate-band-teate'].map(id=>$(id)).filter(Boolean);
+  const boxes=['st-rate-band-del','st-rate-band-col','st-rate-band-teate','st-rate-band-tax'].map(id=>$(id)).filter(Boolean);
   if(!boxes.length) return;
   if(!st){
     boxes.forEach(b=>b.innerHTML='<div class="xs" style="color:var(--txt3);padding:6px 8px;background:var(--sur);border:1px solid var(--brd);border-radius:5px;">新しく登録する人の単価です。保存したあと「○年○月から変更」で単価の切り替えを登録できます。</div>');
@@ -34490,15 +34913,93 @@ function _stCollectTeate(){
            commute:n('st-commute'), career:n('st-career'),
            position:n('st-position'), teateOther:n('st-teate-other') };
 }
-/* 画面から社保・税を集める（★ 2026-10-13.64） */
+/* 画面から社保・税を集める（★ 2026-10-13.64）
+   ★ 2026-10-14.71: 標準報酬月額と、マスタで足した項目（items）も一緒に集める。
+     既定の7項目は従来のキーのまま書き続けるので、給与明細など読む側は変えなくてよい。 */
 function _stCollectSocialIns(){
   const n=id=>parseInt($(id)?.value)||0;
-  return { health:n('st-si-health'), care:n('st-si-care'),
+  const o = { health:n('st-si-health'), care:n('st-si-care'),
            pension:n('st-si-pension'), fund:n('st-si-fund'),
            empInsType:$('st-si-emp-type')?.value||'rate', empInsFixed:n('st-si-emp-fixed'),
            income:n('st-tax-income'),
            resTaxType:$('st-tax-res-type')?.value||'yearly',
-           resTaxYearly:n('st-tax-res-yearly'), resTaxMonthly:n('st-tax-res-monthly') };
+           resTaxYearly:n('st-tax-res-yearly'), resTaxMonthly:n('st-tax-res-monthly'),
+           hyojun:n('st-hyojun') };
+  // マスタで足した項目（既定の8項目以外）
+  const items={};
+  try{
+    _ddAll().forEach(d=>{
+      if(!d || d.builtin || d.id==='kosodate') return;
+      if(d.side==='co') return;                 // 会社負担のみは本人の台帳に金額を持たない
+      const e=$('st-dd-'+d.id);
+      if(e) items[d.id]=parseInt(e.value)||0;
+    });
+  }catch(e){}
+  o.items=items;
+  return o;
+}
+/* 税金・保険タブの「マスタで足した項目」と「会社負担の参考表示」を描く ★ 2026-10-14.71 */
+function renderStDeductExtra(){
+  const box=$('st-dd-extra'); if(!box) return;
+  const kbn=$('st-kbn')?.value||'';
+  const isEmp=(kbn==='社員・役員'||kbn==='パート（事務）');
+  const wrapH=$('st-hyojun-wrap'), none=$('st-tax-nonemp'), sec=$('st-social-ins-section');
+  if(wrapH) wrapH.style.display=isEmp?'':'none';
+  if(none)  none.style.display=isEmp?'none':'';
+  if(sec)   sec.style.display=isEmp?'block':'none';
+  if(!isEmp){ box.innerHTML=''; return; }
+
+  let defs=[]; try{ defs=_ddActive('emp'); }catch(e){ box.innerHTML=''; return; }
+  const st=(typeof _stRateStaff==='function') ? _stRateStaff() : null;
+  const si=(st&&st.socialIns)||{};
+  const items=si.items||{};
+
+  // 既定の8項目は上の欄が担当。ここは足した項目だけ
+  const extra=defs.filter(d=>!d.builtin && d.id!=='kosodate' && d.side!=='co');
+  const co   =defs.filter(d=>d.side==='co');
+
+  let html='';
+  if(extra.length){
+    html+=`<div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
+      <div class="xs fw7 mb6" style="color:var(--blu2);">追加した控除項目</div>
+      <div class="xs muted mb6">システム設定の「控除項目」で足した項目です。</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">`;
+    extra.forEach(d=>{
+      const unit = d.calc==='yearly' ? '円/年' : '円/月';
+      const val  = items[d.id]!=null ? items[d.id] : '';
+      if(d.calc==='rate'){
+        const r=_ddRateAt(d,'');
+        html+=`<div class="fg"><label style="font-size:9px;">${esc(d.name)}</label>
+          <div class="xs mono" style="padding:4px 0;color:var(--blu2);">
+            ${DD_BASE_LABEL[d.base||'total']} × ${Math.round((r.rate||0)*100000)/1000}%（自動）</div></div>`;
+      } else if(d.calc==='company'){
+        html+=`<div class="fg"><label style="font-size:9px;">${esc(d.name)}</label>
+          <div class="xs mono" style="padding:4px 0;color:var(--blu2);">¥${fmt(Number(d.amount)||0)}（全員共通）</div></div>`;
+      } else {
+        html+=`<div class="fg"><label style="font-size:9px;">${esc(d.name)}（${unit}）</label>
+          <input type="number" id="st-dd-${esc(d.id)}" class="fi" style="font-size:11px;padding:4px 6px;"
+                 placeholder="0" value="${val}"></div>`;
+      }
+    });
+    html+=`</div></div>`;
+  }
+  if(co.length){
+    html+=`<div style="margin-bottom:4px;border-top:1px solid var(--brd);padding-top:8px;">
+      <div class="xs fw7 mb6" style="color:var(--txt2);">会社負担（給与からは引かれません）</div>
+      <div class="xs muted mb6">本人の手取りには影響しません。納付額の確認用に「法定福利費」で集計します。</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">`;
+    co.forEach(d=>{
+      const r=_ddRateAt(d,'');
+      const base=Number(si.hyojun)||0;
+      const amt=(d.calc==='rate') ? Math.floor(base*(r.rateCo||0)) : (Number(d.amount)||0);
+      html+=`<div class="fg"><label style="font-size:9px;">${esc(d.name)}</label>
+        <div class="xs mono" style="padding:4px 0;color:var(--txt2);">
+          ${d.calc==='rate' ? (DD_BASE_LABEL[d.base||'total']+' × '+(Math.round((r.rateCo||0)*100000)/1000)+'%') : '固定'}
+          ${base>0&&d.calc==='rate' ? ('　→ ¥'+fmt(amt)) : ''}</div></div>`;
+    });
+    html+=`</div></div>`;
+  }
+  box.innerHTML=html;
 }
 /* 画面から日額保証・日額手当を集める */
 function _stCollectHosho(){
@@ -35668,19 +36169,33 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const absenceDeduct=st._monthlyPay?.absenceDeduct||0;
   const totalPay=basePay+overtimePay+commute+career+position+teateOther-absenceDeduct;
 
-  // 控除項目
-  const health=si.health||0;
-  const care=si.care||0;
-  const pension=si.pension||0;
-  const fund=si.fund||0;
-  const empIns=getEmploymentIns(st, totalPay, monStr);   // ★ 2026-10-13.64
-  const incomeTax=si.income||0;
-  const resTax=getResidentTaxMonthly(st, monStr);        // ★ 2026-10-13.64
-  const totalDeduct=health+care+pension+fund+empIns+incomeTax+resTax;
+  /* 控除項目
+     ★ 2026-10-14.72: 7項目の直書きをやめ、控除項目マスタから作る。
+       システム設定で足した項目（組合費など）もそのまま明細に出る。
+       「負担＝会社のみ」の項目（子ども・子育て拠出金）は emp が 0 になるので、
+       差引支給額には一切影響しない。 */
+  const _dd=(typeof _ddAmountsFor==='function') ? _ddAmountsFor(st, monStr, totalPay) : null;
+  const ddRows=_dd ? _dd.rows.filter(r=>r.side!=='co') : [];
+  const totalDeduct=_dd ? _dd.empTotal : 0;
+  // 旧データ・マスタが空のときの保険（従来の7項目で組む）
+  const _fallbackRows=[
+    {name:'健 康 保 険', emp:si.health||0}, {name:'介 護 保 険', emp:si.care||0},
+    {name:'厚 生 年 金', emp:si.pension||0}, {name:'年 金 基 金', emp:si.fund||0},
+    {name:'雇 用 保 険', emp:getEmploymentIns(st, totalPay, monStr)},
+    {name:'所 得 税',    emp:si.income||0},
+    {name:'住　民　税',  emp:getResidentTaxMonthly(st, monStr)},
+  ];
+  const _kRows = ddRows.length ? ddRows : _fallbackRows;
+  const _kTotal = ddRows.length ? totalDeduct : _fallbackRows.reduce((a,r)=>a+r.emp,0);
+  /* ★ 2026-10-14.72: 控除の行は項目数に合わせて増やす。1行に7項目まで。
+     既定の7項目のときは、これまでと同じ「1行＋控除計の行」になる。 */
+  const _kChunks=[];
+  for(let _i=0;_i<_kRows.length;_i+=7) _kChunks.push(_kRows.slice(_i,_i+7));
+  if(!_kChunks.length) _kChunks.push([]);
 
   // 調整・差引
   const adjustment=st._monthlyPay?.adjustment||0;
-  const netPay=totalPay-totalDeduct+adjustment;
+  const netPay=totalPay-_kTotal+adjustment;   // ★ 2026-10-14.72: マスタで出した本人負担の合計
 
   // 勤怠
   const del=(D.delivery||[]).filter(r=>r.staff===st.name&&(r.date||'').startsWith(monStr));
@@ -35692,6 +36207,26 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const f=v=>v?v.toLocaleString():'';
   const td=(v,cls)=>`<td class="${cls||''}" style="border:1px solid #aaa;padding:3px 6px;font-size:11px;font-family:'MS Gothic',monospace;">${v}</td>`;
   const th=(v,span)=>`<th ${span?'colspan="'+span+'"':''} style="border:1px solid #aaa;padding:3px 6px;font-size:10px;background:#f0f0f0;font-weight:normal;text-align:center;">${v}</th>`;
+
+  /* ★ 2026-10-14.72: 控除の行を控除項目マスタから組む（1行7項目・最後に控除計の行） */
+  const _kDeductRows = (()=>{
+    const pad=(n)=>{ let s=''; for(let i=0;i<n;i++) s+=th('')+td(''); return s; };
+    /* JDLの紙は項目名を均等割り付けにしている（健 康 保 険）。マスタの名前は
+       「健康保険」と素直に持たせたいので、字送りは表示側で付ける。
+       項目名の長さが変わっても列幅がそろう。 */
+    const thJ=(v)=>`<th style="border:1px solid #aaa;padding:3px 6px;font-size:10px;background:#f0f0f0;`
+      + `font-weight:normal;text-align:justify;text-align-last:justify;white-space:nowrap;">${esc(v||'')}</th>`;
+    let out='';
+    _kChunks.forEach((chunk,ci)=>{
+      const cells=chunk.map(r=>thJ(r.name)+td(f(r.emp),'tr')).join(' ');
+      out+=`<tr>`
+         + (ci===0 ? `<td rowspan="${_kChunks.length+1}" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">控<br>除<br>額</td>` : '')
+         + cells + pad(7-chunk.length)
+         + `</tr>`;
+    });
+    out+=`<tr>${pad(6)} ${th('控 除 計')} ${td('<b>'+f(_kTotal)+'</b>','tr')}</tr>`;
+    return out;
+  })();
 
   const html=`
     <div style="font-family:'MS Gothic','Hiragino Kaku Gothic','sans-serif';max-width:720px;margin:0 auto;padding:20px;">
@@ -35717,13 +36252,7 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
       </table>
 
       <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
-        <tr>
-          <td rowspan="2" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">控<br>除<br>額</td>
-          ${th('健 康 保 険')} ${td(f(health),'tr')} ${th('介 護 保 険')} ${td(f(care),'tr')} ${th('厚 生 年 金')} ${td(f(pension),'tr')} ${th('年 金 基 金')} ${td(f(fund),'tr')} ${th('雇 用 保 険')} ${td(f(empIns),'tr')} ${th('所 得 税')} ${td(f(incomeTax),'tr')} ${th('住　民　税')} ${td(f(resTax),'tr')}
-        </tr>
-        <tr>
-          ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('')} ${td('')} ${th('控 除 計')} ${td('<b>'+f(totalDeduct)+'</b>','tr')}
-        </tr>
+        ${_kDeductRows}
       </table>
 
       <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
@@ -38726,6 +39255,326 @@ function saveSystemInfo(){
   showAlert({msg:'自社情報・振込先口座を保存しました。\n他の端末にも反映されます。'});
 }
 
+/* ════════════════════════════════════════════════════════════
+   法定福利費（本人負担・会社負担の月次集計）  ★ 2026-10-14.74
+
+   給与明細に出るのは本人負担だけ。会社負担はどこにも出ていなかったので、
+   納付書（年金事務所・労働局）と突き合わせる場所を作る。
+   子ども・子育て拠出金のように会社だけが払うものは、ここでしか見えない。
+   ════════════════════════════════════════════════════════════ */
+/* 給与明細と同じやり方で総支給額を出す（雇用保険の対象額に使う） */
+function _htTotalPay(st, monStr){
+  if(!st) return 0;
+  const off=st.offset||{};
+  const basePay=Number(st.tanka)||0;
+  const mp=st._monthlyPay||{};
+  return basePay + (Number(mp.overtimePay)||0)
+       + (Number(off.commute)||0) + (Number(off.career)||0)
+       + (Number(off.position)||0) + (Number(off.teateOther)||0)
+       - (Number(mp.absenceDeduct)||0);
+}
+function _htStaffList(){
+  const off=$('ht-office')?.value||'';
+  return (D.staff||[]).filter(s=>{
+    if(!s || !s.name) return false;
+    if(s.status==='退職') return false;
+    if(!(s.kubun==='社員・役員' || s.kubun==='パート（事務）')) return false;
+    if(off && String(s.office||'')!==off) return false;
+    return true;
+  }).sort((a,b)=>String(a.office||'').localeCompare(String(b.office||''))
+                || String(a.name).localeCompare(String(b.name)));
+}
+/* その月の集計。{defs, rows:[{st, amounts, empTotal, coTotal}], byItem:{id:{emp,co}}, 合計} */
+function _htCollect(monStr){
+  const defs=_ddActive('emp');
+  const list=_htStaffList();
+  const byItem={}; defs.forEach(d=>{ byItem[d.id]={emp:0, co:0}; });
+  const rows=[];
+  let empAll=0, coAll=0;
+  list.forEach(st=>{
+    const tp=_htTotalPay(st, monStr);
+    const a=_ddAmountsFor(st, monStr, tp);
+    const map={}; a.rows.forEach(r=>{ map[r.id]=r;
+      if(byItem[r.id]){ byItem[r.id].emp+=r.emp; byItem[r.id].co+=r.co; } });
+    rows.push({st, map, empTotal:a.empTotal, coTotal:a.coTotal, totalPay:tp});
+    empAll+=a.empTotal; coAll+=a.coTotal;
+  });
+  return {defs, rows, byItem, empAll, coAll};
+}
+function renderHotei(){
+  if(!document.getElementById('s-hotei')) return;
+  const mi=$('ht-mon');
+  if(mi && !mi.value){
+    const d=new Date();
+    mi.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  const osel=$('ht-office');
+  if(osel && osel.options.length<=1){
+    const names=(typeof _offFilterNames==='function')
+      ? _offFilterNames(D.staff||[]) : [...new Set((D.staff||[]).map(s=>s&&s.office).filter(Boolean))];
+    names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; osel.appendChild(o); });
+  }
+  const mon=$('ht-mon')?.value||'';
+  const g=_htCollect(mon);
+
+  const kpi=$('ht-kpi');
+  if(kpi) kpi.innerHTML=[
+    {l:'対象人数', v:g.rows.length+'名', c:''},
+    {l:'本人負担 計', v:'¥'+fmt(g.empAll), c:''},
+    {l:'会社負担 計', v:'¥'+fmt(g.coAll), c:'color:#fbbf24'},
+    {l:'合計', v:'¥'+fmt(g.empAll+g.coAll), c:'color:#86efac'},
+  ].map(k=>`<div class="card" style="padding:10px;text-align:center;">
+    <div class="xs muted mb4">${k.l}</div><div class="fw7 lg" style="${k.c}">${k.v}</div></div>`).join('');
+
+  // 項目別
+  const calcLabel=d=>{
+    if(d.calc==='rate'){ const r=_ddRateAt(d, mon);
+      return (DD_BASE_LABEL[d.base||'total'])+' × '
+        + (Math.round((r.rate||0)*100000)/1000) + '/' + (Math.round((r.rateCo||0)*100000)/1000) + '%'; }
+    if(d.calc==='yearly') return '年額÷12';
+    if(d.calc==='company') return '全員 ¥'+fmt(Number(d.amount)||0);
+    return '人ごとに月額';
+  };
+  /* ★ 2026-10-14.74: 納付先ごとにまとめる。社会保険は年金事務所、労働保険は労働局、
+     税金は税務署・市町村と、納付書が別々に来るため。混ぜると突き合わせできない。 */
+  const HT_GROUPS=[
+    {k:'shaho',  label:'社会保険', to:'年金事務所（健康保険・厚生年金の納入告知書）'},
+    {k:'roudou', label:'労働保険', to:'労働局（年度更新・概算確定）'},
+    {k:'zei',    label:'税金',     to:'税務署（源泉所得税）・市町村（住民税）'},
+    {k:'',       label:'その他',   to:''},
+  ];
+  const tbI=$('tb-ht-item');
+  if(tbI){
+    let html='';
+    HT_GROUPS.forEach(G=>{
+      const ds=g.defs.filter(d=>{
+        const grp=(d.group||'');
+        const hit = G.k ? grp===G.k : !['shaho','roudou','zei'].includes(grp);
+        if(!hit) return false;
+        const v=g.byItem[d.id]||{}; return v.emp||v.co;
+      });
+      if(!ds.length) return;
+      let ge=0, gc=0;
+      html+=`<tr style="background:var(--sur);"><td colspan="5" style="padding:6px 8px;">
+        <span class="fw7" style="color:var(--blu2);font-size:12px;">${G.label}</span>
+        ${G.to?`<span class="xs muted" style="margin-left:8px;">${G.to}</span>`:''}</td></tr>`;
+      ds.forEach(d=>{
+        const v=g.byItem[d.id]||{emp:0,co:0}; ge+=v.emp; gc+=v.co;
+        html+=`<tr>
+          <td class="fw7" style="padding-left:18px;">${esc(d.name)}${d.side==='co'?' <span class="bdg" style="border-color:var(--amb2);color:var(--amb2);font-size:9px;">会社のみ</span>':''}</td>
+          <td class="xs muted">${calcLabel(d)}</td>
+          <td class="tr mono">${v.emp?('¥'+fmt(v.emp)):'−'}</td>
+          <td class="tr mono" style="color:var(--amb2)">${v.co?('¥'+fmt(v.co)):'−'}</td>
+          <td class="tr mono fw7">¥${fmt(v.emp+v.co)}</td>
+        </tr>`;
+      });
+      html+=`<tr style="background:var(--bg3);">
+        <td colspan="2" class="fw7" style="padding-left:18px;">${G.label} 小計</td>
+        <td class="tr mono fw7">¥${fmt(ge)}</td>
+        <td class="tr mono fw7" style="color:var(--amb2)">¥${fmt(gc)}</td>
+        <td class="tr mono fw7" style="color:#86efac">¥${fmt(ge+gc)}</td></tr>`;
+    });
+    tbI.innerHTML = html || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--txt2);">対象がありません</td></tr>';
+  }
+  const tfI=$('tf-ht-item');
+  if(tfI) tfI.innerHTML = g.rows.length ? `<tr style="background:var(--bg3);font-weight:700;">
+    <td colspan="2">合　計</td>
+    <td class="tr mono">¥${fmt(g.empAll)}</td>
+    <td class="tr mono" style="color:var(--amb2)">¥${fmt(g.coAll)}</td>
+    <td class="tr mono" style="color:#86efac">¥${fmt(g.empAll+g.coAll)}</td></tr>` : '';
+
+  // 人別
+  const shown=g.defs.filter(d=>{ const v=g.byItem[d.id]||{}; return v.emp||v.co; });
+  const trh=$('tr-ht-head');
+  if(trh) trh.innerHTML = `<th>氏名</th><th style="width:100px;">営業所</th>`
+    + `<th class="tr" style="width:100px;">標準報酬月額</th>`
+    + shown.map(d=>`<th class="tr" style="width:92px;">${esc(d.name)}</th>`).join('')
+    + `<th class="tr" style="width:100px;">本人計</th><th class="tr" style="width:100px;">会社計</th>`;
+  const tbS=$('tb-ht-staff');
+  if(tbS) tbS.innerHTML = g.rows.map(r=>{
+    const si=(typeof _siAt==='function') ? _siAt(r.st, mon) : (r.st.socialIns||{});
+    return `<tr>
+      <td class="fw7">${esc(r.st.name)}</td>
+      <td class="xs muted">${esc(r.st.office||'')}</td>
+      <td class="tr mono xs">${Number(si.hyojun)?('¥'+fmt(si.hyojun)):'<span style="color:var(--amb2)">未入力</span>'}</td>
+      ${shown.map(d=>{ const x=r.map[d.id]||{emp:0,co:0};
+        const tot=x.emp+x.co;
+        return `<td class="tr mono xs">${tot?('¥'+fmt(tot)):'−'}${x.co&&x.emp?`<div style="font-size:9px;color:var(--txt3);">本${fmt(x.emp)}/社${fmt(x.co)}</div>`:''}</td>`;
+      }).join('')}
+      <td class="tr mono fw7">¥${fmt(r.empTotal)}</td>
+      <td class="tr mono" style="color:var(--amb2)">¥${fmt(r.coTotal)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="${3+shown.length+2}" style="text-align:center;padding:16px;color:var(--txt2);">社員・役員・パートが登録されていません</td></tr>`;
+  const tfS=$('tf-ht-staff');
+  if(tfS) tfS.innerHTML = g.rows.length ? `<tr style="background:var(--bg3);font-weight:700;">
+    <td colspan="3">合　計</td>
+    ${shown.map(d=>{ const v=g.byItem[d.id]||{emp:0,co:0};
+      return `<td class="tr mono xs">¥${fmt(v.emp+v.co)}</td>`; }).join('')}
+    <td class="tr mono">¥${fmt(g.empAll)}</td>
+    <td class="tr mono" style="color:var(--amb2)">¥${fmt(g.coAll)}</td></tr>` : '';
+}
+function htExportCSV(){
+  const mon=$('ht-mon')?.value||'';
+  if(!mon){ showAlert({msg:'対象月を選んでください'}); return; }
+  const g=_htCollect(mon);
+  if(!g.rows.length){ showAlert({msg:'対象者がいません'}); return; }
+  const shown=g.defs.filter(d=>{ const v=g.byItem[d.id]||{}; return v.emp||v.co; });
+  const head=['氏名','社員番号','営業所','標準報酬月額']
+    .concat(shown.map(d=>d.name+'(本人)')).concat(shown.map(d=>d.name+'(会社)'))
+    .concat(['本人計','会社計','合計']);
+  const lines=[head.join(',')];
+  g.rows.forEach(r=>{
+    const si=(typeof _siAt==='function') ? _siAt(r.st, mon) : (r.st.socialIns||{});
+    const cells=[r.st.name, r.st.empNo||'', r.st.office||'', Number(si.hyojun)||0]
+      .concat(shown.map(d=>(r.map[d.id]||{}).emp||0))
+      .concat(shown.map(d=>(r.map[d.id]||{}).co||0))
+      .concat([r.empTotal, r.coTotal, r.empTotal+r.coTotal]);
+    lines.push(cells.map(v=>typeof v==='string' && /[",]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v).join(','));
+  });
+  const tot=['合計','','','']
+    .concat(shown.map(d=>(g.byItem[d.id]||{}).emp||0))
+    .concat(shown.map(d=>(g.byItem[d.id]||{}).co||0))
+    .concat([g.empAll, g.coAll, g.empAll+g.coAll]);
+  lines.push(tot.join(','));
+  const blob=new Blob(['﻿'+lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='法定福利費_'+mon+'.csv';
+  a.click();
+}
+
+/* ════════ 控除項目マスタの画面  ★ 2026-10-14.70 ════════ */
+const DD_CALC_LABEL = {fixed:'人ごとに月額', rate:'率×対象額', yearly:'年額÷12', company:'全員同じ額'};
+const DD_SIDE_LABEL = {emp:'本人のみ', co:'会社のみ', both:'本人と会社'};
+const DD_BASE_LABEL = {total:'総支給額', hyojun:'標準報酬月額'};
+
+function renderDeductDefs(){
+  const tb=$('tb-dd'); if(!tb) return;
+  const all=_ddAll();
+  const pct=v=>(Number(v)||0)===0 ? '' : String(Math.round((Number(v)||0)*100000)/1000);
+  tb.innerHTML = all.map((d,i)=>{
+    const r=_ddRateAt(d, '');
+    let cell='';
+    if(d.calc==='rate'){
+      cell=`<div style="display:flex;align-items:center;gap:5px;white-space:nowrap;">
+        <span class="xs muted">本人</span>
+        <input type="number" step="0.001" class="fi" style="width:64px;font-size:11px;padding:3px 5px;"
+               value="${pct(r.rate)}" onchange="ddSetRate(${i},'rate',this.value)">
+        <span class="xs muted">%</span>
+        <span class="xs muted" style="margin-left:4px;">会社</span>
+        <input type="number" step="0.001" class="fi" style="width:64px;font-size:11px;padding:3px 5px;"
+               value="${pct(r.rateCo)}" onchange="ddSetRate(${i},'rateCo',this.value)">
+        <span class="xs muted">%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px;margin-top:4px;white-space:nowrap;">
+        <select class="fi" style="width:118px;font-size:11px;padding:3px 4px;" onchange="ddSet(${i},'base',this.value)">
+          ${['total','hyojun'].map(b=>`<option value="${b}"${(d.base||'total')===b?' selected':''}>${DD_BASE_LABEL[b]}</option>`).join('')}
+        </select>
+        <button class="btn b-gh" style="font-size:10px;padding:2px 7px;" onclick="ddNewRate(${i})">＋ ○年○月から</button>
+      </div>
+      ${(d.rateHistory||[]).length>1
+        ? `<div class="xs" style="color:var(--txt3);margin-top:3px;">履歴${(d.rateHistory||[]).length}件・適用 ${r.from===DD_BASE_YM?'はじめから':esc(r.from)}</div>` : ''}`;
+    } else if(d.calc==='company'){
+      cell=`<input type="number" class="fi" style="width:110px;font-size:11px;padding:3px 5px;"
+             value="${Number(d.amount)||''}" placeholder="円/月" onchange="ddSet(${i},'amount',this.value)">`;
+    } else {
+      cell=`<span class="xs muted">${d.calc==='yearly'?'従業員台帳で年額を入力':'従業員台帳で月額を入力'}</span>`;
+    }
+    return `<tr>
+      <td style="text-align:center;"><input type="checkbox" ${d.on!==false?'checked':''} onchange="ddSet(${i},'on',this.checked)"></td>
+      <td><input type="text" class="fi" style="width:100%;font-size:12px;padding:3px 6px;"
+            value="${esc(d.name||'')}" onchange="ddSet(${i},'name',this.value)"></td>
+      <td><select class="fi" style="width:100%;font-size:11px;padding:3px 4px;" onchange="ddSet(${i},'calc',this.value)">
+            ${['fixed','rate','yearly','company'].map(c=>`<option value="${c}"${(d.calc||'fixed')===c?' selected':''}>${DD_CALC_LABEL[c]}</option>`).join('')}
+          </select></td>
+      <td>${cell}</td>
+      <td><select class="fi" style="width:100%;font-size:11px;padding:3px 4px;" onchange="ddSet(${i},'target',this.value)">
+            <option value="emp"${(d.target||'emp')==='emp'?' selected':''}>社員・パート</option>
+            <option value="all"${d.target==='all'?' selected':''}>全員</option>
+          </select></td>
+      <td><select class="fi" style="width:100%;font-size:11px;padding:3px 4px;" onchange="ddSet(${i},'side',this.value)">
+            ${['emp','co','both'].map(s=>`<option value="${s}"${(d.side||'emp')===s?' selected':''}>${DD_SIDE_LABEL[s]}</option>`).join('')}
+          </select></td>
+      <td><input type="number" class="fi" style="width:56px;font-size:11px;padding:3px 5px;"
+            value="${Number(d.order)||0}" onchange="ddSet(${i},'order',this.value)"></td>
+      <td style="text-align:center;">${d.builtin
+          ? '<span class="xs" style="color:var(--txt3);">既定</span>'
+          : `<button class="btn b-gh" style="font-size:10px;padding:2px 7px;color:var(--red2);" onclick="ddDelRow(${i})">削除</button>`}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;padding:16px;color:var(--txt2);">項目がありません</td></tr>';
+}
+function ddSet(i, key, val){
+  const all=_ddAll(); const d=all[i]; if(!d) return;
+  if(key==='order'||key==='amount') d[key]=parseInt(val)||0;
+  else if(key==='on') d.on=!!val;
+  else d[key]=val;
+  if(key==='calc'){
+    if(val==='rate' && !Array.isArray(d.rateHistory)) d.rateHistory=[{from:DD_BASE_YM, rate:0, rateCo:0}];
+    if(val==='rate' && !d.base) d.base='total';
+  }
+  renderDeductDefs();
+}
+function ddSetRate(i, which, val){
+  const all=_ddAll(); const d=all[i]; if(!d) return;
+  if(!Array.isArray(d.rateHistory) || !d.rateHistory.length) d.rateHistory=[{from:DD_BASE_YM, rate:0, rateCo:0}];
+  d.rateHistory.sort((a,b)=>String(a.from||'').localeCompare(String(b.from||'')));
+  const last=d.rateHistory[d.rateHistory.length-1];
+  last[which]=(parseFloat(val)||0)/100;   // 画面は % 、中身は小数
+  renderDeductDefs();
+}
+/* ★ 率の改定。前の率は残したまま、その月からの行を足す（単価の適用年月と同じ考え方） */
+function ddNewRate(i){
+  const all=_ddAll(); const d=all[i]; if(!d) return;
+  const now=new Date();
+  const def=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const v=prompt('いつの分から新しい率にしますか。\n\n年月を 2027-04 のように入れてください。\n（前の率はそのまま残ります）', def);
+  if(v==null) return;
+  const ym=String(v).replace(/\//g,'-').slice(0,7);
+  if(!/^\d{4}-\d{2}$/.test(ym)){ showAlert({msg:'年月の形が違います。2027-04 のように入れてください。'}); return; }
+  if(!Array.isArray(d.rateHistory)) d.rateHistory=[];
+  const cur=_ddRateAt(d, ym);
+  const hit=d.rateHistory.find(h=>h.from===ym);
+  if(hit){ showAlert({msg:ym+' の行はもうあります。表の数字を直してください。'}); return; }
+  d.rateHistory.push({from:ym, rate:cur.rate, rateCo:cur.rateCo});
+  d.rateHistory.sort((a,b)=>String(a.from||'').localeCompare(String(b.from||'')));
+  renderDeductDefs();
+  if(typeof _showSaveToast==='function') _showSaveToast(ym+' からの率を足しました。数字を直して保存してください。');
+}
+function ddAddRow(){
+  const all=_ddAll();
+  const maxOrder=all.reduce((a,d)=>Math.max(a,Number(d.order)||0),0);
+  all.push({id:'dd'+Date.now(), name:'', calc:'fixed', side:'emp', target:'emp',
+            order:maxOrder+10, on:true});
+  renderDeductDefs();
+}
+function ddDelRow(i){
+  const all=_ddAll(); const d=all[i]; if(!d) return;
+  if(d.builtin){ showAlert({msg:'既定の項目は削除できません。使わない場合は「使う」のチェックを外してください。'}); return; }
+  showConfirm('「'+(d.name||'(名前なし)')+'」を消しますか。\n従業員台帳に入っているこの項目の金額は残りますが、明細には出なくなります。', ()=>{
+    all.splice(i,1); renderDeductDefs();
+  });
+}
+async function ddSaveAll(){
+  const all=_ddAll();
+  const bad=all.find(d=>!String(d.name||'').trim());
+  if(bad){ showAlert({msg:'項目名が空の行があります。名前を入れるか、その行を削除してください。'}); return; }
+  const names={}, dup=[];
+  all.forEach(d=>{ const n=String(d.name).trim(); if(names[n]) dup.push(n); names[n]=1; });
+  if(dup.length){ showAlert({msg:'同じ項目名が2つあります：'+dup.join('・')}); return; }
+  await _ddSave();
+  renderDeductDefs();
+  if(typeof _showSaveToast==='function') _showSaveToast('控除項目を保存しました（'+all.length+'項目）。他の端末にも反映されます。');
+  else showAlert({msg:'控除項目を保存しました'});
+}
+function ddResetDefaults(){
+  showConfirm('はじめの8項目に戻しますか。\n足した項目と率の履歴は消えます。', async ()=>{
+    D.deductDefs=_ddSeed();
+    await _ddSave();
+    renderDeductDefs();
+    if(typeof _showSaveToast==='function') _showSaveToast('はじめの8項目に戻しました');
+  });
+}
+
 // 雇用保険料率 保存・読込・プレビュー
 function saveEmpInsSettings(){
   const rate = parseFloat($('sys-emp-ins-rate')?.value)||0.6;
@@ -40848,7 +41697,7 @@ function pdExportCSV(){
   a.click();
 }
 
-const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','nyuryoku':'📭 日報の未入力','pay-history':'📅 給与履歴管理','pay-daicho':'📒 支払台帳',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
+const PT={dashboard:'ダッシュボード',del:'宅配日報一覧','del-report':'📊 宅配レポート',cmp:'郵便局データ照合',pu:'集荷日報一覧','pu-report':'📊 集荷レポート','pu-sum':'品目別集計','pu-cust':'顧客・契約管理','pu-inv':'💰 請求書',import:'CSVインポート',staff:'従業員管理',company:'🏭 委託会社管理',salary:'給与計算','month-adj':'🗓 月締め（相殺・立替）','data-check':'🩺 データ健診','nyuryoku':'📭 日報の未入力','pay-history':'📅 給与履歴管理','pay-daicho':'📒 支払台帳','hotei':'🏛 法定福利費',offices:'営業所管理','ts-inv':'🔐 郵便局請求書','ts-prices':'🔐 郵便局単価管理','ts-settings':'🔐 経営設定','billing':'💰 売上・支払明細','schedule-mgmt':'📅 休業日管理','schedule-survey':'📨 休業調査'};
 
 // ══════════════════════════════════════════
 // トップシークレット認証システム
@@ -40913,7 +41762,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
+    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}},100); // ★ 2026-10-14.70
     // ★ 2026-10-08.17: 郵便局請求書は開いた時点で当月の売上を出す
     if(section==='ts-inv') setTimeout(()=>{ try{ renderTSInv(); }catch(e){ console.error('[renderTSInv]', e); } },100);
     return;
@@ -40987,7 +41836,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();},100);
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}},100); // ★ 2026-10-14.70
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
@@ -42245,6 +43094,7 @@ function nav(el){
   if(s==='data-check')   { if(typeof renderDataCheck==='function') renderDataCheck(); } // ★ 2026-10-09.45
   if(s==='nyuryoku')     { if(typeof renderNyuryoku==='function') renderNyuryoku(); }  // ★ 2026-10-09.57
   if(s==='pay-daicho')   { if(typeof renderPayDaicho==='function') renderPayDaicho(); } // ★ 2026-10-14.66
+  if(s==='hotei')        { if(typeof renderHotei==='function') renderHotei(); }       // ★ 2026-10-14.74
   if(s==='worktime')     renderWorkTime();
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
@@ -43661,6 +44511,9 @@ function _editStaffImpl(id){
   if($('st-tax-res-type'))$('st-tax-res-type').value=si.resTaxType||'yearly';
   if($('st-tax-res-yearly'))$('st-tax-res-yearly').value=si.resTaxYearly||'';
   if($('st-tax-res-monthly'))$('st-tax-res-monthly').value=si.resTaxMonthly||'';
+  // ★ 2026-10-14.71: 標準報酬月額とマスタで足した項目
+  if($('st-hyojun'))$('st-hyojun').value=si.hyojun||'';
+  try{ if(typeof renderStDeductExtra==='function') renderStDeductExtra(); }catch(e){}
   onStEmpInsTypeChange();
   onStResTaxTypeChange();
   calcResidentTaxMonthly();
