@@ -722,6 +722,17 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .sn-badge-r{font-size:var(--sz-sn-badge,9px);background:rgba(220,50,50,.85);color:#fff;border-radius:8px;padding:0 5px;min-width:16px;text-align:center;}
 .sn-badge-n{font-size:var(--sz-sn-badge,9px);background:rgba(76,175,136,.2);color:#0a7a5a;border-radius:3px;padding:0 4px;}
 .sn-badge-ts{font-size:var(--sz-sn-badge,9px);background:rgba(220,170,30,.2);color:#7a5a00;border-radius:3px;padding:0 4px;}
+/* ★ 2026-10-17.1: まとめたサブタブの中の切り替え。
+   サブタブの数を減らすために2〜3画面を1つにまとめる。画面そのものは動かさず、
+   上に細い切り替えを出して行き来できるようにする。 */
+.grp-sw{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--brd2);}
+.grp-sw button{padding:6px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;
+  color:var(--txt2);background:var(--sur);border:0.5px solid var(--brd2);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:5px;font-family:inherit;}
+.grp-sw button:hover{border-color:var(--txt2);color:var(--txt);}
+.grp-sw button.on{background:#1a2238;color:#fff;border-color:#1a2238;}
+html[data-wide="1"] .grp-sw{margin-bottom:8px;padding-bottom:7px;}
+html[data-wide="1"] .grp-sw button{padding:4px 12px;font-size:12px;}
 
 /* ★ 2026-10-08.5: 「表を広く」
    日報・照合の一覧で、見出しと集計カードが画面の半分以上を占めて
@@ -904,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-15.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5773,7 +5784,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-15.1';
+const APP_VER = '2026-10-17.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9270,14 +9281,20 @@ const _TOP_TABS = {
     { s:'alert',     label:'アラート', badge:'alert' },
     { s:'nyuryoku',  label:'日報の未入力', badge:'new' },
   ]},
+  /* ★ 2026-10-17.1: 郵便局タブの整理（7 → 5）
+     一日の流れが「日報が入る → 郵便局データと照合 → 月末に請求書」なので、
+     毎日いちばん触る照合を先頭に出す。
+     日報は一覧とレポート、郵便局マスタは一覧と単価を、それぞれ1画面にまとめた。
+     まとめた中身は group に書く。画面そのものは動かしていないので、
+     何か変なら _TOP_TABS を元に戻すだけで戻る。 */
   post:     { subs: [
-    { s:'del',        label:'日報一覧' },
-    { s:'del-report', label:'日報レポート' },
     { s:'cmp',        label:'郵便局照合', badge:'diff' },
-    { s:'shift',      label:'シフト表', badge:'new' },
-    { s:'post-list',  label:'郵便局一覧' },
-    { s:'ts-prices',  label:'郵便局単価', badge:'ts' },
+    { s:'del',        label:'日報',
+      group:[{s:'del',label:'一覧'},{s:'del-report',label:'レポート'}] },
     { s:'ts-inv',     label:'郵便局請求書', badge:'ts' },
+    { s:'post-list',  label:'郵便局マスタ',
+      group:[{s:'post-list',label:'一覧'},{s:'ts-prices',label:'単価',badge:'ts'}] },
+    { s:'shift',      label:'シフト表', badge:'new' },
   ]},
   col:      { subs: [
     { s:'pu',         label:'日報一覧' },
@@ -9328,7 +9345,12 @@ const _TOP_TABS = {
 // どのページがどのタブに属するか
 const _PAGE_TO_TAB = {};
 Object.entries(_TOP_TABS).forEach(([tab, cfg]) => {
-  cfg.subs.forEach(sub => { _PAGE_TO_TAB[sub.s] = tab; });
+  cfg.subs.forEach(sub => {
+    _PAGE_TO_TAB[sub.s] = tab;
+    /* ★ 2026-10-17.1: まとめた中の画面も同じタブに属させる。
+       これが無いと、まとめた側の画面を直接開いたときに上のタブが切り替わらない。 */
+    (sub.group || []).forEach(g => { _PAGE_TO_TAB[g.s] = tab; });
+  });
 });
 
 let _currentTopTab = 'home';
@@ -9362,18 +9384,52 @@ function renderSubNav(tab, activeS) {
     if (sub.badge === 'diff' && diffCount > 0) badge = `<span class="sn-badge-r">${diffCount}</span>`;
     else if (sub.badge === 'ts') badge = `<span class="sn-badge-ts">TS</span>`;
     else if (sub.badge === 'new') badge = `<span class="sn-badge-n">NEW</span>`;
-    // activeS指定があればそれを使う、なければ.sec.onクラスで判定
+    /* ★ 2026-10-17.1: まとめたサブタブは、中のどれが開いていても光らせる */
+    const keys = (sub.group && sub.group.length) ? sub.group.map(g=>g.s) : [sub.s];
     const isActive = activeS
-      ? sub.s === activeS
-      : document.getElementById('s-' + sub.s)?.classList.contains('on');
+      ? keys.indexOf(activeS) >= 0
+      : keys.some(k => document.getElementById('s-' + k)?.classList.contains('on'));
     return `<button class="sn-btn${isActive?' active':''}" onclick="snNav('${sub.s}')">${sub.label}${badge}</button>`;
   }).join('');
 }
 
+/* ★ 2026-10-17.1: サブタブをまとめたので、s から定義を引くときに group の中も探す。
+   戻り値 { sub:サブタブの定義, member:group の中の1つ（まとめていなければ null） } */
+function _subOf(s) {
+  for (const t of Object.values(_TOP_TABS)) {
+    for (const sub of (t.subs || [])) {
+      if (sub.s === s && !(sub.group && sub.group.length)) return { sub, member: null };
+      if (sub.group) {
+        const m = sub.group.find(g => g.s === s);
+        if (m) return { sub, member: m };
+      }
+      if (sub.s === s) return { sub, member: null };
+    }
+  }
+  return { sub: null, member: null };
+}
+/* まとめた画面の中の切り替えを、その画面のいちばん上に出す */
+function _paintGroupSwitch(s) {
+  const { sub } = _subOf(s);
+  const sec = document.getElementById('s-' + s);
+  if (!sec) return;
+  const old = sec.querySelector(':scope > .grp-sw');
+  if (!sub || !sub.group || !sub.group.length) { if (old) old.remove(); return; }
+  const html = sub.group.map(g =>
+    `<button class="${g.s===s?'on':''}" onclick="snNav('${g.s}')">${g.label}` +
+    (g.badge==='ts' ? '<span class="sn-badge-ts">TS</span>' : '') + `</button>`).join('');
+  if (old) { old.innerHTML = html; return; }
+  const bar = document.createElement('div');
+  bar.className = 'grp-sw';
+  bar.innerHTML = html;
+  sec.insertBefore(bar, sec.firstChild);
+}
+
 function snNav(s) {
   // TSページはPIN認証
-  const sub = Object.values(_TOP_TABS).flatMap(t=>t.subs).find(x=>x.s===s);
-  if (sub?.badge === 'ts') { requireTS(s, null); return; }
+  const { sub, member } = _subOf(s);
+  const badge = member ? member.badge : (sub && sub.badge);
+  if (badge === 'ts') { requireTS(s, null); return; }
   navByS(s);
   renderSubNav(_currentTopTab, s);
 }
@@ -9387,9 +9443,11 @@ function navByS(s) {
   // pg-title更新
   const pgTitle = document.getElementById('pg-title');
   if (pgTitle) {
-    const sub = Object.values(_TOP_TABS).flatMap(t=>t.subs).find(x=>x.s===s);
-    if (sub) pgTitle.textContent = sub.label;
+    /* ★ 2026-10-17.1: まとめた中の画面は「郵便局マスタ　単価」のように続けて出す */
+    const { sub, member } = _subOf(s);
+    if (sub) pgTitle.textContent = sub.label + (member && member.label!==sub.label ? '　'+member.label : '');
   }
+  try { _paintGroupSwitch(s); } catch(e) {}      // ★ 2026-10-17.1
   // 描画関数を実際の関数名で呼ぶ（ブラウザで確認済みの名前）
   const _call = (fn) => { if(typeof window[fn]==='function') window[fn](); };
   if (s==='dashboard')   _call('renderDash');
@@ -43121,8 +43179,10 @@ function nav(el){
   // サブタブのactiveを更新
   setTimeout(()=>{
     const subs=_TOP_TABS?.[_currentTopTab]?.subs||[];
-    const idx=subs.findIndex(x=>x.s===s);
+    /* ★ 2026-10-17.1: まとめた中の画面でも、まとめた側のボタンを光らせる */
+    const idx=subs.findIndex(x=> x.s===s || (x.group||[]).some(g=>g.s===s));
     document.querySelectorAll('.sn-btn').forEach((btn,i)=>btn.classList.toggle('active',i===idx));
+    try{ _paintGroupSwitch(s); }catch(e){}
     // トップタブのactiveも更新
     document.querySelectorAll('.tn-tab').forEach(t=>t.classList.remove('active'));
     const tnTab=document.getElementById('tntab-'+_currentTopTab);
