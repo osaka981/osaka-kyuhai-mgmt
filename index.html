@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.12</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.13</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1959,6 +1959,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="aclLvBackfill()">未設定に既定の権限を入れる</button>
+          <!-- ★ 2026-10-17.13: 内勤の見え方を自分で確かめるための切り替え -->
+          <button class="btn b-gh btn-sm" id="perm-prev-btn" onclick="permPreviewToggle()">内勤の見え方で確認</button>
         </div>
         <div id="acl-lv-msg" class="xs" style="margin-top:8px;min-height:1.2em;"></div>
       </div>
@@ -5822,7 +5824,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.12';
+const APP_VER = '2026-10-17.13';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -9602,6 +9604,67 @@ const _TOP_TABS = {
   ]},
 };
 
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-17.13: 役員だけに出すサブタブ
+
+   10/17に決めた権限表のとおり。ここに並んでいる画面は内勤に出しません。
+   並んでいないものは内勤にも出します。
+
+   まとめたサブタブ（group）の中の1つだけを隠す場合も、
+   group のメンバーは s を持っているので同じようにここへ書けます。
+   例：郵便局マスタは「一覧」を内勤にも出し、「単価」だけ隠す。
+
+   ※ これは画面に出すかどうかだけの話です。
+     データを読めるかどうかはFirebaseのルールが決めています（10/17に適用済み）。
+     給与・支払の結果は内勤には読めません。
+     台帳の単価は、画面に出さないだけで技術的には読めます。
+     そこまで塞ぐなら単価を別ノードに切り出すことになりますが、
+     内勤は自社の従業員なので、いまは画面で分ける形にしています。
+   ══════════════════════════════════════════════════════════ */
+const PERM_EXEC_ONLY = [
+  // 郵便局
+  'ts-inv',                                  // 郵便局請求書
+  'ts-prices',                               // 郵便局マスタ → 単価
+  // 給与・人事
+  'month-adj',                               // 月締め → 月締め（勤務時間・燃料代は内勤も可）
+  'salary',                                  // 給与計算
+  'pay-history','pay-daicho','hotei',        // 帳票
+  'contract','invoice-bulk',                 // 書類
+  'data-check',                              // データ健診
+  // 集計・分析
+  'billing',                                 // 売上・支払明細
+  'monthly-summary','cost-analysis',         // 月次サマリー
+  // 管理
+  'locations',                               // マスタ → 拠点（郵便局の単価が入る）
+  'staffmerge',                              // 取り込み → 台帳の統合
+  'invoice-bulk-admin',                      // 請求書（全体）
+  'ts-settings',                             // システム設定
+];
+/* 見た目の確認用。ログインアカウント画面から内勤の見え方に切り替えられる。
+   見た目だけで、読めるデータは変わりません（ルールが決めています）。 */
+let _permPreview = '';
+function permViewLv(){ return _permPreview || aclMyLv(); }
+function permIsExecView(){ return permViewLv() === 'exec'; }
+function permCanSee(s){
+  if(permIsExecView()) return true;
+  return PERM_EXEC_ONLY.indexOf(String(s)) < 0;
+}
+/* そのサブタブを出すか。まとめたものは、中に1つでも出せるものがあれば出す。 */
+function permSubVisible(sub){
+  if(!sub) return false;
+  if(sub.group && sub.group.length) return sub.group.some(g => permCanSee(g.s));
+  return permCanSee(sub.s);
+}
+/* そのサブタブで最初に開ける画面の s。全部隠れていれば空。 */
+function permFirstOf(sub){
+  if(!sub) return '';
+  if(sub.group && sub.group.length){
+    const m = sub.group.find(g => permCanSee(g.s));
+    return m ? m.s : '';
+  }
+  return permCanSee(sub.s) ? sub.s : '';
+}
+
 // どのページがどのタブに属するか
 const _PAGE_TO_TAB = {};
 Object.entries(_TOP_TABS).forEach(([tab, cfg]) => {
@@ -9637,7 +9700,8 @@ function switchTopTab(tab, skipNav) {
 function renderSubNav(tab, activeS) {
   const wrap = document.getElementById('sub-nav');
   if (!wrap) return;
-  const subs = _TOP_TABS[tab]?.subs || [];
+  /* ★ 2026-10-17.13: 権限で出すものを絞る */
+  const subs = (_TOP_TABS[tab]?.subs || []).filter(permSubVisible);
   const diffCount = parseInt($('nb-diff')?.textContent || '0');
   wrap.innerHTML = subs.map(sub => {
     let badge = '';
@@ -9649,7 +9713,9 @@ function renderSubNav(tab, activeS) {
     const isActive = activeS
       ? keys.indexOf(activeS) >= 0
       : keys.some(k => document.getElementById('s-' + k)?.classList.contains('on'));
-    return `<button class="sn-btn${isActive?' active':''}" onclick="snNav('${sub.s}')">${sub.label}${badge}</button>`;
+    /* ★ 2026-10-17.13: 押したときは、その人に出せる最初の画面を開く */
+    const go = permFirstOf(sub) || sub.s;
+    return `<button class="sn-btn${isActive?' active':''}" onclick="snNav('${go}')">${sub.label}${badge}</button>`;
   }).join('');
 }
 
@@ -9675,7 +9741,10 @@ function _paintGroupSwitch(s) {
   if (!sec) return;
   const old = sec.querySelector(':scope > .grp-sw');
   if (!sub || !sub.group || !sub.group.length) { if (old) old.remove(); return; }
-  const html = sub.group.map(g =>
+  /* ★ 2026-10-17.13: 権限で出せるものだけ並べる。1つだけになったらバーごと出さない */
+  const mem = sub.group.filter(g => permCanSee(g.s));
+  if (mem.length <= 1) { if (old) old.remove(); return; }
+  const html = mem.map(g =>
     `<button class="${g.s===s?'on':''}" onclick="snNav('${g.s}')">${g.label}` +
     (g.badge==='ts' ? '<span class="sn-badge-ts">TS</span>' : '') + `</button>`).join('');
   if (old) { old.innerHTML = html; return; }
@@ -9688,6 +9757,17 @@ function _paintGroupSwitch(s) {
 function snNav(s) {
   // TSページはPIN認証
   const { sub, member } = _subOf(s);
+  /* ★ 2026-10-17.13: 権限で出していない画面は開かない。
+     ブックマークや古いリンクから直接来た場合も、ここで止まる。
+     同じサブタブの中に出せるものがあればそちらを開き、
+     無ければ何もしない（画面はそのまま）。 */
+  if (!permCanSee(s)) {
+    const alt = permFirstOf(sub);
+    if (alt && alt !== s) { snNav(alt); return; }
+    try{ showAlert({ title:'この画面は開けません',
+      msg:'この画面は役員の権限が要ります。\n必要であれば権限を変えてもらってください。' }); }catch(e){}
+    return;
+  }
   const badge = member ? member.badge : (sub && sub.badge);
   if (badge === 'ts') { requireTS(s, null); return; }
   navByS(s);
@@ -12389,6 +12469,34 @@ async function aclLvBackfill(){
   say(ok + '件に入れました' + (ng ? '　／　' + ng + '件は書けませんでした' : ''), !!ng);
   renderAclList();
 }
+/* ★ 2026-10-17.13: 内勤の見え方に切り替える。見た目だけで、読めるデータは変わらない。
+   データを読めるかどうかはFirebaseのルールが決めているので、
+   ここを内勤にしてもTakaさん自身は今までどおり全部読めます。
+   あくまで「松岡さんにはどう見えるか」を確かめるためのものです。 */
+function permPreviewToggle(){
+  _permPreview = _permPreview ? '' : 'office';
+  const b = document.getElementById('perm-prev-btn');
+  if(b){
+    b.textContent = _permPreview ? '役員の見え方に戻す' : '内勤の見え方で確認';
+    b.style.borderColor = _permPreview ? 'var(--amb2)' : '';
+    b.style.color       = _permPreview ? 'var(--amb2)' : '';
+  }
+  const el = document.getElementById('acl-lv-msg');
+  if(el){
+    el.textContent = _permPreview
+      ? '内勤の見え方にしています。上のタブから各画面を見てください。見た目だけで、読めるデータは変わりません。'
+      : '';
+    el.style.color = 'var(--amb2)';
+  }
+  /* いま開いている画面が内勤に出せないものなら、出せるところへ移す */
+  try{
+    const cur = document.querySelector('.sec.on');
+    const s = cur ? String(cur.id||'').replace(/^s-/,'') : '';
+    if(s && !permCanSee(s)){ snNav('dashboard'); }
+    else { renderSubNav(_currentTopTab, s||null); if(s) _paintGroupSwitch(s); }
+  }catch(e){}
+}
+
 /* 一覧の上に内訳を出す */
 function aclLvPaint(){
   const st = document.getElementById('acl-lv-state');
@@ -43684,7 +43792,8 @@ function nav(el){
   if(typeof renderSubNav==='function') renderSubNav(_currentTopTab, s);
   // サブタブのactiveを更新
   setTimeout(()=>{
-    const subs=_TOP_TABS?.[_currentTopTab]?.subs||[];
+    /* ★ 2026-10-17.13: 並んでいるボタンは権限で絞ったものなので、同じ絞り方で数える */
+    const subs=(_TOP_TABS?.[_currentTopTab]?.subs||[]).filter(permSubVisible);
     /* ★ 2026-10-17.1: まとめた中の画面でも、まとめた側のボタンを光らせる */
     const idx=subs.findIndex(x=> x.s===s || (x.group||[]).some(g=>g.s===s));
     document.querySelectorAll('.sn-btn').forEach((btn,i)=>btn.classList.toggle('active',i===idx));
