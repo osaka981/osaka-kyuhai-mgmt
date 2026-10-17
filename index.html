@@ -909,13 +909,53 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   </div>
 </nav>
 
+<!-- ══════════════════════════════════════════════════════════
+     ★ 2026-10-17.15: 起動時ログイン
+
+     経営管理は、ログインしていないと中が見えない形にした。
+     いままでは匿名でつながっていたので、URLを知っていれば誰でも開けた。
+     （10/17にルールを締めたので中身のデータは出なくなったが、
+       画面の作りや項目名は見えていた）
+
+     この画面はHTMLに最初から出しておく。JavaScriptが動く前に
+     中身がちらっと見えるのを防ぐため。確認が取れたときだけ消す。
+
+     ★ 入れなくなったときの戻し方（アプリからは直せない）
+       1. Firebaseコンソール → Authentication でユーザーを追加
+       2. そのUIDをコピー
+       3. Realtime Database の nikki/_acl/user/<UID> に
+          lv: "exec"（文字列）、active: true（真偽値）、email を手で入れる
+       コンソールはルールの対象外なので、コンソールに入れれば必ず戻せる。
+     ══════════════════════════════════════════════════════════ -->
+<div id="login-gate" style="position:fixed;inset:0;z-index:99999;display:flex;
+     align-items:center;justify-content:center;background:#0f1420;">
+  <div style="width:min(92vw,400px);background:var(--sur);border:1px solid var(--brd2);
+       border-radius:10px;padding:26px 24px;">
+    <div style="font-size:10px;letter-spacing:.18em;color:var(--txt2);">OSAKA KYUHAI CO.,LTD.</div>
+    <div style="font-size:21px;font-weight:700;margin:2px 0 2px;">大阪急配　経営管理</div>
+    <div class="xs muted" style="margin-bottom:18px;">IDとパスワードを入れてください</div>
+    <div class="fg"><label>ID</label>
+      <input id="gate-id" class="fi" type="text" autocomplete="username"
+        placeholder="xxxxx@work.local" onkeydown="if(event.key==='Enter')gateLogin()"></div>
+    <div class="fg" style="margin-top:10px;"><label>パスワード</label>
+      <input id="gate-pw" class="fi" type="password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')gateLogin()"></div>
+    <button class="btn b-blu" id="gate-btn" style="width:100%;margin-top:16px;padding:10px;"
+      onclick="gateLogin()">入る</button>
+    <div id="gate-msg" class="xs" style="margin-top:12px;min-height:2.6em;line-height:1.6;"></div>
+    <div class="xs muted" style="margin-top:6px;border-top:1px solid var(--brd2);padding-top:10px;">
+      日報アプリと計数アプリは、このログインとは別です。<br>
+      パスワードが分からなくなったら、作り直しになります。
+    </div>
+  </div>
+</div>
 <div id="main">
 <div id="top-nav">
   <div class="tn-logo">
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.14</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.15</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -927,6 +967,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div class="tn-tab" id="tntab-admin" onclick="switchTopTab('admin')">管理</div>
   </div>
   <div class="tn-right">
+    <!-- ★ 2026-10-17.15: 誰で入っているかと、ログアウト -->
+    <span id="who-badge" style="font-size:10px;color:rgba(255,255,255,.72);white-space:nowrap;"></span>
+    <button onclick="gateLogout()" title="ログアウト"
+      style="background:transparent;color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.22);
+             font-weight:700;padding:4px 9px;border-radius:5px;font-size:10px;cursor:pointer;">ログアウト</button>
     <span id="fb-status-badge-top" style="font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;background:rgba(22,160,133,.1);border:1px solid rgba(22,160,133,.2);color:var(--txt2);"></span>
     <span class="tb-dt" id="today-s-top" style="font-size:13px;color:rgba(255,255,255,.65);font-family:'DM Mono',monospace;letter-spacing:.5px;"></span>
     <button onclick="manualSync()" style="background:#30c3e4;color:#fff;border:none;font-weight:700;padding:5px 12px;border-radius:5px;font-size:11px;cursor:pointer;">更新</button>
@@ -5828,7 +5873,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.14';
+const APP_VER = '2026-10-17.15';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -9888,11 +9933,122 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 100);
 });
 
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-17.15: 起動時ログインの中身
+
+   入れるのは役員と内勤だけ。外部（ドライバー・委託会社）と、
+   権限表に載っていないアカウントは入れない。
+   停止したアカウントも入れない。
+
+   入れなくなったときは Firebaseコンソールから戻す。手順は
+   画面上部の login-gate のコメントに書いてある。
+   ══════════════════════════════════════════════════════════ */
+function gateShow(msg, bad){
+  const g = document.getElementById('login-gate');
+  if(g) g.style.display = 'flex';
+  const m = document.getElementById('gate-msg');
+  if(m && msg !== undefined){ m.textContent = msg || ''; m.style.color = bad ? 'var(--red2)' : 'var(--txt2)'; }
+  const b = document.getElementById('gate-btn');
+  if(b){ b.disabled = false; b.textContent = '入る'; }
+}
+function gateHide(){
+  const g = document.getElementById('login-gate');
+  if(g) g.style.display = 'none';
+  const m = document.getElementById('gate-msg');
+  if(m) m.textContent = '';                 // 前回の理由が残らないように消す
+  const pw = document.getElementById('gate-pw');
+  if(pw) pw.value = '';
+}
+/* いま入っている人が中へ入れるかを確かめる。
+   入れないときはログアウトして、理由を出してログイン画面に戻す。 */
+async function gateVerify(u){
+  const { ref, get, signOut } = window._fbImports || {};
+  if(!u || !fbDB || !ref || !get){ gateShow('通信の準備ができていません。少し待ってから開き直してください', true); return false; }
+  let rec = null;
+  try{
+    const snap = await get(ref(fbDB, 'nikki/_acl/user/' + u.uid));
+    rec = snap.exists() ? snap.val() : null;
+  }catch(e){
+    gateShow('確認できませんでした。通信を確かめて開き直してください\n' + ((e && e.message) || ''), true);
+    return false;
+  }
+  const bye = async (why) => {
+    try{ if(signOut) await signOut(window._fbAuth); }catch(e){}
+    gateShow(why, true);
+    return false;
+  };
+  if(!rec)              return await bye('このIDは経営管理に登録されていません');
+  if(rec.active === false) return await bye('このIDは停止されています');
+  const lv = (rec.adm === true) ? 'exec' : String(rec.lv || '');
+  if(lv !== 'exec' && lv !== 'office'){
+    return await bye('このアカウントでは経営管理を開けません。\n日報アプリと計数アプリをお使いください。');
+  }
+  /* 権限表の自分の行を端末にも持たせる。
+     これが無いと、一覧が届くまで aclMyLv() が外部を返してしまう。 */
+  try{
+    const map = _aclUsers();
+    map[u.uid] = Object.assign({}, map[u.uid] || {}, rec, { uid: u.uid });
+    _aclSaveLocal(map);
+  }catch(e){}
+  gateHide();
+  try{ gatePaintWho(); }catch(e){}
+  try{ permPaintExecOnly(); }catch(e){}
+  try{ renderSubNav(_currentTopTab, null); }catch(e){}
+  return true;
+}
+async function gateLogin(){
+  const I = window._fbImports || {};
+  const email = (document.getElementById('gate-id')?.value || '').trim();
+  const pw    = document.getElementById('gate-pw')?.value || '';
+  const b     = document.getElementById('gate-btn');
+  if(!email || !pw){ gateShow('IDとパスワードを入れてください', true); return; }
+  if(!I.signInWithEmailAndPassword || !window._fbAuth){
+    gateShow('通信の準備ができていません。少し待ってからもう一度お試しください', true); return;
+  }
+  if(b){ b.disabled = true; b.textContent = '確認中'; }
+  const m = document.getElementById('gate-msg');
+  if(m){ m.textContent = '確認中'; m.style.color = 'var(--txt2)'; }
+  try{
+    await I.signInWithEmailAndPassword(window._fbAuth, email, pw);
+    const pwEl = document.getElementById('gate-pw'); if(pwEl) pwEl.value = '';
+    /* 入れるかどうかは onIdTokenChanged から gateVerify が確かめる */
+  }catch(e){
+    const c = (e && e.code) || '';
+    gateShow(
+      (c==='auth/invalid-credential'||c==='auth/wrong-password'||c==='auth/user-not-found'||c==='auth/invalid-email')
+        ? 'IDかパスワードがちがいます'
+        : ('入れませんでした　' + ((e && e.message) || '')), true);
+  }
+}
+/* 誰で入っているかをヘッダーに出す */
+function gatePaintWho(){
+  const el = document.getElementById('who-badge');
+  if(!el) return;
+  let name = '', lv = '';
+  try{
+    const u = window._fbAuth && window._fbAuth.currentUser;
+    const r = u ? _aclUsers()[u.uid] : null;
+    name = (r && (r.staffName || r.companyName)) || (u && u.email) || '';
+    lv = r ? _aclLvDef(_aclLvOf(r)).label : '';
+  }catch(e){}
+  el.textContent = name ? (name + (lv ? '（' + lv + '）' : '')) : '';
+}
+async function gateLogout(){
+  const ok = await showDialog({ icon:'', title:'ログアウトします',
+    msg:'もう一度使うときは、IDとパスワードを入れ直してください。',
+    okText:'ログアウト', cancelText:'やめる' });
+  if(!ok) return;
+  try{ await window._fbImports.signOut(window._fbAuth); }catch(e){}
+  location.reload();
+}
+
 async function initFirebase() {
   try {
     const { initializeApp, getDatabase } = window._fbImports || {};
     if (!initializeApp) { showFbStatus(false); return; }
     const app = initializeApp(FB_CONFIG, 'kyuhai-mgmt');
+    /* ★ 2026-10-17.15: ログインの確認でデータベースを読むので、先に用意しておく */
+    fbDB = getDatabase(app);
     // ★ 2026/09/03: 匿名認証。ルールを「認証済みのみ」に締めるための準備。
     try {
       const { getAuth, signInAnonymously, onIdTokenChanged } = window._fbImports;
@@ -9906,32 +10062,26 @@ async function initFirebase() {
       let _authRes = null;
       window._fbAuthReady = new Promise(r => { _authRes = r; });
       const _authDone = ok => { if(_authRes){ const f=_authRes; _authRes=null; f(ok); } };
-      let _anonTries = 0;
+      /* ★ 2026-10-17.15: 匿名ログインをやめ、ログインした人だけ中へ入れる。
+         以前はここで匿名ログインしていたので、URLを知っていれば誰でも開けた。
+         いまは onIdTokenChanged で誰も入っていなければログイン画面のまま止める。
+         保存されたログインがあれば、ここで復元されてそのまま入れる。 */
       onIdTokenChanged(auth, async u => {
         if (!u) {
           window._fbToken = null;
-          if (_anonTries++ < 3) { try { await signInAnonymously(auth); } catch(e) { _authDone(false); } }
-          else _authDone(false);
+          _authDone(false);
+          try { gateShow(''); } catch(e) {}
           return;
         }
-        _anonTries = 0;
         try { window._fbToken = await u.getIdToken(); } catch(e) { window._fbToken = null; }
         _authDone(!!window._fbToken);
         try { if (typeof admPaint === 'function') admPaint(); } catch(e) {}   // ★ 2026-10-15.1
+        /* 入れる人かどうかを確かめる。だめならログアウトしてログイン画面へ戻す。 */
+        try { await gateVerify(u); } catch(e) { console.warn('[入口] 確認に失敗', e); }
       });
-      /* ★ 2026-10-15.1: ここで無条件に匿名ログインしていたため、管理者として
-         ログインしていても起動のたびに匿名で入り直し、権限が落ちていた。
-         onIdTokenChanged は保存されたログインを復元したあとに必ず1回呼ばれ、
-         誰も入っていなければ u=null で来る（そこで匿名に入る）。
-         ここは保険として、少し待ってもまだ誰も入っていないときだけ動かす。 */
-      setTimeout(() => {
-        if (auth.currentUser) return;
-        signInAnonymously(auth).catch(e => { console.warn('匿名認証に失敗:', e); _authDone(false); });
-      }, 1500);
       setTimeout(()=>_authDone(false), 15000);   // 保険。間に合わなくても購読側が張り直す
       setInterval(async () => { try { const u = auth.currentUser; if (u) window._fbToken = await u.getIdToken(); } catch(e){} }, 30*60*1000);
-    } catch(e) { console.warn('匿名認証に失敗（続行します）:', e); }
-    fbDB = getDatabase(app);
+    } catch(e) { console.warn('ログインの準備に失敗（続行します）:', e); }
     fbOnline = true;
     try { await (window._fbAuthReady || Promise.resolve(true)); } catch(e) {}
     await syncFromFirebase();
