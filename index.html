@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.11</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.12</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5822,7 +5822,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.11';
+const APP_VER = '2026-10-17.12';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12149,7 +12149,19 @@ function aclIsOfficeOrAbove(){ const v = aclMyLv(); return v === 'exec' || v ===
 function _aclUsers(){
   try{
     const v = JSON.parse(localStorage.getItem(ACL_LS) || '{}');
-    return (v && typeof v === 'object') ? v : {};
+    if(!v || typeof v !== 'object') return {};
+    /* ★ 2026-10-17.12: レコードの中に uid が無いものを補う。
+
+       アプリから発行したアカウントは中に uid を持っているが、
+       Firebaseコンソールで手作りしたもの（10/15の管理者アカウント）は
+       キーがUIDなだけで、中には入っていない。
+       このため管理者の行だけ、権限の既定値を入れる処理も
+       「停止する」「削除」も素通りしていた（押しても何も起きない）。
+       キーが必ずUIDなので、ここで補えば全部の処理がそろって動く。 */
+    Object.keys(v).forEach(k => {
+      if(v[k] && typeof v[k] === 'object' && !v[k].uid) v[k].uid = k;
+    });
+    return v;
   }catch(e){ return {}; }
 }
 function _aclSaveLocal(map){
