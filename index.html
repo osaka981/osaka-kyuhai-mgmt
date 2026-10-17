@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.18</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.19</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5874,7 +5874,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.18';
+const APP_VER = '2026-10-17.19';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -31785,8 +31785,22 @@ function collectCoPrices(){
   const tdel=$('co-del-tax-type')?.value||'ex';
   const tcol=$('co-col-tax')?.value||'ex';
   const toth=$('co-oth-tax-type')?.value||'ex';
-  const tcd=v=>taxConv(v,tdel);
-  const tcc=v=>taxConv(v,tcol);
+  /* ★ 2026-10-17.19: 入力した数字をそのまま持つ。÷1.1 の変換はしない。
+
+     これまでは税込で入れると ÷1.1 して税別の整数で保存していた。
+     ところが単価が小さいほど丸めの誤差が効く。
+       税込181円 → 165 → 戻すと181.5円（+0.3%）
+       税込 10円 →   9 → 戻すと  9.9円（−1.0%）
+     夜間が月1,000件なら、10,000円のはずが9,900円になる。
+
+     従業員台帳はもともと入力値をそのまま持つ作りで、支払計算も
+     その数字をそのまま掛けている。委託会社と営業所をそれに合わせる。
+     税込か税別かは _taxType / _tax に記録して、請求書や明細を出すときに使う。
+
+     変換しなくなったので、開き直したときに税区分を復元しても
+     二重変換は起きない（.18 で入れた「必ず税別に戻す」は不要になった）。 */
+  const tcd=v=>parseInt(v)||0;
+  const tcc=v=>parseInt(v)||0;
   return {
     del:{
       kanryo:tcd($('co-pkanryo')?.value), tenso:tcd($('co-ptenso')?.value),
@@ -31823,8 +31837,9 @@ function restoreCoPrices(prices, company){
      顧客の集荷単価は開くたびに税別へ戻す作り（resetCuTax）なので
      この問題が起きていない。委託会社と営業所をそれに合わせる。
 
-     税込で入れたいときは、そのつど税込ボタンを押してから入力する。 */
-  setCoPriceTax('ex');
+     ★ 2026-10-17.19: 変換をやめたので、保存時の税区分をそのまま戻してよい。
+     欄の数字も税区分も、入れたときのまま往復する。 */
+  setCoPriceTax(prices.del?._taxType || prices.col?._taxType || 'ex');
   const d=prices.del||{};
   const c=prices.col||{};
   if($('co-pkanryo'))$('co-pkanryo').value=d.kanryo||'';
@@ -33368,9 +33383,8 @@ function editOffice(id){
   if(o.postPrices&&isTSAuthenticated()){
     const p=o.postPrices;
     ['60','80','100','120','140','160'].forEach(sz=>{const e=$('of-p'+sz);if(e)e.value=p['p'+sz]||0;});
-    /* ★ 2026-10-17.18: 委託会社と同じ理由で、開き直したら必ず税別に戻す。
-       保存時の税区分を復元すると、税別の数字を税込とみなして二度÷1.1する。 */
-    setOfTax('ex');
+    /* ★ 2026-10-17.19: 変換をやめたので、保存時の税区分をそのまま戻す。 */
+    setOfTax(p._taxType||'ex');
     if($('of-pkanryo'))$('of-pkanryo').value=p.kanryo||'';
     if($('of-pnight'))$('of-pnight').value=p.night||'';
     if($('of-pogata'))$('of-pogata').value=p.ogata||'';
@@ -33448,7 +33462,8 @@ function addOffice(){
 
   // 郵便局単価
   const ofTaxType=$('of-tax-type')?.value||'ex';
-  const ofTc=v=>taxConv(v,ofTaxType);
+  /* ★ 2026-10-17.19: 委託会社と同じ。入力した数字をそのまま持つ（÷1.1しない）。 */
+  const ofTc=v=>parseInt(v)||0;
   const postPrices = isTSAuthenticated() ? {
     p60:ofTc($('of-p60')?.value), p80:ofTc($('of-p80')?.value),
     p100:ofTc($('of-p100')?.value), p120:ofTc($('of-p120')?.value),
