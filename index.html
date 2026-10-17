@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.19</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.20</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5874,7 +5874,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.19';
+const APP_VER = '2026-10-17.20';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -36338,6 +36338,54 @@ function _buildDriverMonthlyByOffice(staff, monStr){
     }
   });
 
+  /* ★ 2026-10-17.20: 時間単価・日額のドライバーを会社あての明細に出す。
+     ここまでの集計は「月給」と「歩合（単価×件数）」しか見ていないため、
+     委託会社所属でも時給や日額で払う人（例：株式会社久留米の元田さん・山口さん）は
+     金額が1円も出ていなかった。
+     単価は会社ではなく本人（従業員台帳→宅配単価／集荷単価タブ→給与形態）に持たせる。
+     歩合の集計には手を触れず、別枠として足すだけにしてある。 */
+  try{
+    const _pm = (typeof _payModeAt==='function')
+      ? (_payModeAt(staff, monStr) || {})
+      : (staff.payMode || {});
+    const _modes = {del:{type:(_pm.del||{}).type||''}, col:{type:(_pm.col||{}).type||''}};
+    const _extra = [];
+    ['del','col'].forEach(biz=>{
+      const o = _pm[biz] || {};
+      const rate = Number(o.rate) || 0;
+      if(!rate) return;
+      const L = (biz==='del') ? '宅配' : '集荷';
+      if(o.type==='時間単価'){
+        const wm = (typeof _bizWorkMin==='function') ? _bizWorkMin(staff, monStr, biz, _modes) : 0;
+        if(wm > 0){
+          const h = Math.floor(wm/60), mm = wm % 60;
+          _extra.push({
+            label: `${L} 時間単価 ${h}時間${mm?mm+'分':''}（休憩控除・丸め後）`,
+            count: Math.round(wm/60*100)/100, unitPrice: rate,
+            amount: Math.round(rate*wm/60)
+          });
+        }
+      } else if(o.type==='日額' || o.type==='定額'){
+        const rows = (biz==='del' ? (D.delivery||[]) : (D.pickup||[]))
+          .filter(r=>r.staff===name && String(r.date||'').replace(/\//g,'-').startsWith(monStr));
+        const n = (o.type==='日額')
+          ? new Set(rows.map(r=>String(r.date||'').replace(/\//g,'-'))).size
+          : rows.length;
+        if(n > 0){
+          _extra.push({
+            label: `${L} ${o.type}`,
+            count: n, unitPrice: rate, amount: rate*n
+          });
+        }
+      }
+    });
+    if(_extra.length){
+      const t = _extra.reduce((a,x)=>a+x.amount, 0);
+      node.offices.push({postOffice:'(時間単価・日額)', total:t, items:_extra});
+      node.total += t;
+    }
+  }catch(e){ console.warn('[会社あて明細] 時間単価・日額の計算で問題', e); }
+
   return node;
 }
 
@@ -46863,6 +46911,12 @@ window.dqImportJson = function(){
       <div id="co-ptab-content-del" style="display:grid;">
         <!-- ★ 2026-10-09.53: 単価の適用年月（帯） -->
         <div id="co-rate-band-del" style="grid-column:1/-1;"></div>
+        <!-- ★ 2026-10-17.20: 時給はここでは持たない。探して止まるのを防ぐための案内。 -->
+        <div style="grid-column:1/-1;font-size:10px;color:var(--txt2);background:var(--sur);border:1px solid var(--brd);border-radius:5px;padding:7px 9px;margin-bottom:8px;line-height:1.6;">
+          時給（時間単価）・日額はここでは持ちません。人によって額が違うため、従業員台帳のご本人を開いて
+          「宅配単価」または「集荷単価」タブ →「給与形態」で<b>時間単価</b>を選び、金額を入れてください。<br>
+          会社あての支払明細書には「(時間単価・日額)」の枠で出ます。時間単価の方は勤務時間の打刻が必要です。
+        </div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
           <span style="font-size:10px;color:var(--txt2);font-weight:700;">税区分:</span>
           <button type="button" id="co-del-tax-btn-ex" onclick="setCoTabTax('del','ex')" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">税別</button>
