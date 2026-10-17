@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.7</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5800,7 +5800,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.6';
+const APP_VER = '2026-10-17.7';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7294,22 +7294,62 @@ const _FB_GUARDED = ['yp_logs','col_logs','pickup','delivery','att_logs','jet_sc
 
 /* ══════════════════════════════════════════════════════════
    ★ 2026-10-17.6: 名前だけの写し（nikki/pub/...）
+   ★ 2026-10-17.7: 日報アプリが要る設定項目を足した（金額・個人情報は入れない）
+
    どの台帳も1件の中に、名前と一緒に単価・口座・生年月日が入っている。
    Firebaseのルールは1件の中の一部だけを隠せないので、
    外（ドライバー・委託会社）に名前を見せるには、名前だけの写しが要る。
 
-   写すのは「誰か・どこか」が分かる最小限だけ。
-   単価・口座・生年月日・電話・住所・PINは一切写さない。
+   写すのは「誰か・どこか」と「入力画面を組むのに要る設定」だけ。
+   金額・口座・生年月日・電話・住所・担当者名・インボイス番号は一切写さない。
 
-     nikki/pub/staff      社員番号・氏名・営業所・所属会社
-     nikki/pub/customers  顧客名・顧客番号
-     nikki/pub/companies  会社名・会社コード
-     nikki/pub/locations  拠点名・種別
+     nikki/pub/staff      社員番号・氏名・営業所・所属会社・在籍状態
+     nikki/pub/customers  顧客名・顧客番号・取引状態・担当局・開始日
+                          品目の出し分け（useItems / otherItems）
+                          集荷の時間帯（visitFrom / visitTo / visitNote）
+                          単価の有無だけ（hasColPrice。金額は写さない）
+     nikki/pub/companies  会社名・会社コード・取引状態・有効
+                          オーナーログイン用の番号と初期PINの合図
+                          扱える顧客のID一覧（custIds。金額は写さない）
+     nikki/pub/locations  拠点名・コード・種別・有効
+
+   足した理由（.7）：日報アプリは今 nikki/customers と nikki/companies を
+   そのまま読んでいる。中には顧客の住所・担当者名・単価、委託会社の口座・
+   インボイス番号まで入っているので、ドライバー全員の端末に流れている。
+   読み先を写しに替えるには、写しの側に「入力画面に要るぶん」が無いと
+   日報が動かなくなる。そこで金額だけ落として設定は残した。
 
    台帳を保存すると自動で書き出される（fbSet の中から呼ぶ）。
    ══════════════════════════════════════════════════════════ */
 const _PUB_FROM = { staff_full:'staff', customers:'customers', companies:'companies', locations:'locations' };
 const _pubS = v => String(v==null ? '' : v).trim();
+const _pubArr = v => Array.isArray(v) ? v : [];
+/* 単価が1つでも入っているか。金額そのものは写さず、入っているかどうかだけ渡す。
+   日報アプリは「単価のある顧客＝集荷の担当顧客」という判定にしか使っていない。 */
+function _pubHasPrice(o) {
+  try {
+    if (!o || typeof o !== 'object') return false;
+    return Object.keys(o).some(k => k.charAt(0) !== '_' && Number(o[k]) > 0);
+  } catch(e) { return false; }
+}
+/* その委託会社が扱える顧客のIDだけを集める。
+   単価設定（prices.custRoutes）と集荷ルート（colRoutes）の両方から顧客IDを拾い、
+   金額・日額・ルート名は落とす。日報アプリはこのIDの一覧で顧客を絞っている。 */
+function _pubCustIds(c) {
+  const s = new Set();
+  try {
+    _pubArr(c && c.prices && c.prices.custRoutes).forEach(e => {
+      if (e && e.custId != null) s.add(String(e.custId));
+    });
+    _pubArr(c && c.colRoutes).forEach(r => {
+      _pubArr(r && r.customers).forEach(x => {
+        const id = (x && typeof x === 'object') ? (x.custId != null ? x.custId : x.id) : x;
+        if (id != null && id !== '') s.add(String(id));
+      });
+    });
+  } catch(e) {}
+  return Array.from(s);
+}
 function _pubRow(kind, r) {
   if (!r || typeof r !== 'object') return null;
   const id = _pubS(r.id);
@@ -7318,9 +7358,22 @@ function _pubRow(kind, r) {
                                      office:_pubS(r.office), companyId:_pubS(r.companyId),
                                      status:_pubS(r.status) };
   if (kind === 'customers') return { id, custNo:_pubS(r.custNo), name:_pubS(r.name),
-                                     status:_pubS(r.status) };
+                                     status:_pubS(r.status),
+                                     /* 入力画面を組むのに必要な設定。個人情報も金額も入らない。 */
+                                     region:_pubS(r.region), start:_pubS(r.start),
+                                     useItems:_pubArr(r.useItems), otherItems:_pubArr(r.otherItems),
+                                     visitFrom:_pubS(r.visitFrom), visitTo:_pubS(r.visitTo),
+                                     visitNote:_pubS(r.visitNote),
+                                     /* 単価の金額は写さない。有無だけ。 */
+                                     hasColPrice:_pubHasPrice(r.colPrices) };
   if (kind === 'companies') return { id, companyCode:_pubS(r.companyCode), name:_pubS(r.name),
-                                     status:_pubS(r.status), active:r.active!==false };
+                                     status:_pubS(r.status), active:r.active!==false,
+                                     /* オーナーログインの照合に必要。番号と合図だけ。 */
+                                     ownerLoginId:_pubS(r.ownerLoginId),
+                                     ownerInitialPinHash:_pubS(r.ownerInitialPinHash),
+                                     ownerPinInitialized:r.ownerPinInitialized===true,
+                                     /* 扱える顧客のIDだけ。単価の金額は写さない。 */
+                                     custIds:_pubCustIds(r) };
   if (kind === 'locations') return { id, code:_pubS(r.code), name:_pubS(r.name),
                                      type:_pubS(r.type), active:r.active!==false };
   return null;
