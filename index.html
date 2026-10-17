@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5784,7 +5784,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.4';
+const APP_VER = '2026-10-17.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9276,9 +9276,11 @@ function updateTabNavBtns(key){
 
 // タブ構成
 const _TOP_TABS = {
+  /* ★ 2026-10-17.5: アラートのサブタブを外した。
+     対応する画面（s-alert）がどこにも無く、押すと中身が何も出ない状態だった。
+     アラートの中身はダッシュボードの一番上に出ているので、無くても困らない。 */
   home:     { subs: [
     { s:'dashboard', label:'ダッシュボード' },
-    { s:'alert',     label:'アラート', badge:'alert' },
     { s:'nyuryoku',  label:'日報の未入力', badge:'new' },
   ]},
   /* ★ 2026-10-17.1: 郵便局タブの整理（7 → 5）
