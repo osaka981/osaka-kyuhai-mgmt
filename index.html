@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.6</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1928,6 +1928,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-grn btn-sm" onclick="admIssue()">管理者アカウントを発行</button>
         </div>
         <div id="adm-msg" class="xs" style="margin-top:8px;min-height:1.2em;"></div>
+      </div>
+
+      <!-- ★ 2026-10-17.6: 名前だけの写し -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>名前だけの写し</div>
+          <span class="xs muted" id="pub-state"></span></div>
+        <div class="xs muted" style="margin:6px 0 10px;">
+          台帳の1件には、名前と一緒に単価・口座・生年月日が入っています。そのままでは日報アプリや計数アプリへ渡せません。<br>
+          名前と番号だけを <span class="mono">nikki/pub/</span> へ写し、外に見せるのはそちらにします。<br>
+          台帳を保存すると自動で書き出されます。下のボタンは、いまある台帳をまとめて写すためのものです。
+        </div>
+        <div class="fla gap6">
+          <button class="btn b-blu btn-sm" onclick="pubSyncAll()">いまの台帳をまとめて写す</button>
+          <button class="btn b-gh btn-sm" onclick="pubCheck()">写しの中身を確認</button>
+        </div>
+        <div id="pub-msg" class="xs" style="margin-top:8px;min-height:1.2em;"></div>
       </div>
 
       <div class="card">
@@ -5784,7 +5800,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.5';
+const APP_VER = '2026-10-17.6';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -7276,6 +7292,96 @@ function _fbSanitize(v){
    日報の本体にあたるノードは、端末への保存が失敗していたら書き込まない。 */
 const _FB_GUARDED = ['yp_logs','col_logs','pickup','delivery','att_logs','jet_scan'];
 
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-17.6: 名前だけの写し（nikki/pub/...）
+   どの台帳も1件の中に、名前と一緒に単価・口座・生年月日が入っている。
+   Firebaseのルールは1件の中の一部だけを隠せないので、
+   外（ドライバー・委託会社）に名前を見せるには、名前だけの写しが要る。
+
+   写すのは「誰か・どこか」が分かる最小限だけ。
+   単価・口座・生年月日・電話・住所・PINは一切写さない。
+
+     nikki/pub/staff      社員番号・氏名・営業所・所属会社
+     nikki/pub/customers  顧客名・顧客番号
+     nikki/pub/companies  会社名・会社コード
+     nikki/pub/locations  拠点名・種別
+
+   台帳を保存すると自動で書き出される（fbSet の中から呼ぶ）。
+   ══════════════════════════════════════════════════════════ */
+const _PUB_FROM = { staff_full:'staff', customers:'customers', companies:'companies', locations:'locations' };
+const _pubS = v => String(v==null ? '' : v).trim();
+function _pubRow(kind, r) {
+  if (!r || typeof r !== 'object') return null;
+  const id = _pubS(r.id);
+  if (!id) return null;
+  if (kind === 'staff')     return { id, empNo:_pubS(r.empNo), name:_pubS(r.name),
+                                     office:_pubS(r.office), companyId:_pubS(r.companyId),
+                                     status:_pubS(r.status) };
+  if (kind === 'customers') return { id, custNo:_pubS(r.custNo), name:_pubS(r.name),
+                                     status:_pubS(r.status) };
+  if (kind === 'companies') return { id, companyCode:_pubS(r.companyCode), name:_pubS(r.name),
+                                     status:_pubS(r.status), active:r.active!==false };
+  if (kind === 'locations') return { id, code:_pubS(r.code), name:_pubS(r.name),
+                                     type:_pubS(r.type), active:r.active!==false };
+  return null;
+}
+async function _pubMirror(key, value) {
+  const kind = _PUB_FROM[key];
+  if (!kind || !fbDB) return;
+  const list = Array.isArray(value) ? value : (value && typeof value==='object' ? Object.values(value) : []);
+  const out = {};
+  list.forEach(r => { const p = _pubRow(kind, r); if (p) out[p.id] = p; });
+  const { ref, set } = window._fbImports || {};
+  if (!ref || !set) return;
+  /* 1件も作れなかったときは書かない。読み込み前の空の配列で
+     写しを消してしまうのを防ぐ。 */
+  if (!Object.keys(out).length) { console.warn('[写し] 中身が空なので書きません:', key); return; }
+  await set(ref(fbDB, 'nikki/pub/' + kind), out);
+  console.log('[写し] nikki/pub/' + kind, Object.keys(out).length + '件');
+}
+
+/* いまある台帳をまとめて写す。初回だけ押せば、あとは保存のたびに自動で更新される。 */
+async function pubSyncAll() {
+  const el = document.getElementById('pub-msg');
+  const say = (t, bad) => { if(el){ el.innerHTML = t; el.style.color = bad ? 'var(--red2)' : 'var(--txt2)'; } };
+  if (!fbDB) { say('通信の準備ができていません', true); return; }
+  const jobs = [
+    ['staff_full', D.staff,     '従業員'],
+    ['customers',  D.customers, '顧客'],
+    ['companies',  D.companies, '委託会社'],
+    ['locations',  D.locations, '拠点'],
+  ];
+  const done = [];
+  say('書き出しています…');
+  for (const [key, list, label] of jobs) {
+    const arr = Array.isArray(list) ? list : [];
+    if (!arr.length) { done.push(label + ' 0件（とばしました）'); continue; }
+    try { await _pubMirror(key, arr); done.push(label + ' ' + arr.length + '件'); }
+    catch(e) { done.push(label + ' 失敗（' + ((e&&e.message)||'') + '）'); }
+  }
+  say('書き出しました　' + done.join('　／　'));
+  pubCheck();
+}
+/* 写しに何が入っているかを読んで出す。中身を目で確かめるため。 */
+async function pubCheck() {
+  const el = document.getElementById('pub-msg'), st = document.getElementById('pub-state');
+  const { ref, get } = window._fbImports || {};
+  if (!fbDB || !ref || !get) return;
+  try {
+    const snap = await get(ref(fbDB, 'nikki/pub'));
+    if (!snap.exists()) { if(st) st.textContent = 'まだ写していません'; return; }
+    const v = snap.val() || {};
+    const n = k => Object.keys(v[k] || {}).length;
+    if (st) st.textContent = '従業員 ' + n('staff') + '　顧客 ' + n('customers')
+      + '　委託会社 ' + n('companies') + '　拠点 ' + n('locations');
+    const one = Object.values(v.staff || {})[0];
+    if (el && one) el.innerHTML = '写しの1件はこの形です　<span class="mono">'
+      + esc(JSON.stringify(one)) + '</span>';
+  } catch(e) {
+    if (st) st.textContent = '確認できませんでした';
+  }
+}
+
 async function fbSet(key, value) {
   // ★ 2026/06/16: undefined混入によるFirebase保存エラー対策
   //   (例: pinChangedAt が undefined のまま staff_full に入り
@@ -7298,6 +7404,13 @@ async function fbSet(key, value) {
     // 書込前にフラグを立て、リスナーが自分の書込結果で逆同期するのを防ぐ
     window._fbWritingGuard[key] = Date.now();
     await set(ref(fbDB, 'nikki/' + key), clean);
+    /* ★ 2026-10-17.6: 名前だけの写しも一緒に書き出す。
+       台帳の1件には単価・口座・生年月日が同居しているので、そのままでは
+       日報アプリや計数アプリへ渡せない（渡すと48人分の個人情報が端末に落ちる）。
+       名前と番号だけを別の場所に写し、外に見せるのはそちらにする。
+       いまは誰も読んでいないので、入れても動きは変わらない。 */
+    try { await _pubMirror(key, clean); }
+    catch(e) { console.warn('[写し] 書き出せませんでした:', key, e); }
     // 書込完了後も2秒間は逆同期をブロック(伝播・echo対策)
     setTimeout(()=>{
       if(window._fbWritingGuard[key] && Date.now() - window._fbWritingGuard[key] >= 1900){
@@ -12541,6 +12654,7 @@ async function admIssue(){
 
 function renderAclList(){
   try{ admPaint(); }catch(e){}
+  try{ pubCheck(); }catch(e){}
   const wrap=document.getElementById('acl-list');
   if(!wrap) return;
   const list=Object.values(_aclUsers()).sort((a,b)=>
