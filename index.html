@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5784,7 +5784,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.1';
+const APP_VER = '2026-10-17.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 // ── HTML エスケープ ──
@@ -9296,48 +9296,63 @@ const _TOP_TABS = {
       group:[{s:'post-list',label:'一覧'},{s:'ts-prices',label:'単価',badge:'ts'}] },
     { s:'shift',      label:'シフト表', badge:'new' },
   ]},
+  /* ★ 2026-10-17.1: 集荷タブの整理（9 → 5）
+     郵便局タブと並びをそろえる。照合・日報・請求書が先頭3つで、
+     親タブを行き来しても同じ場所に同じものがある。
+     あとは集荷だけの顧客管理と休業。 */
   col:      { subs: [
-    { s:'pu',         label:'日報一覧' },
-    { s:'pu-report',  label:'日報レポート' },
-    { s:'pu-sum',     label:'品目別集計' },
-    { s:'pu-cust',    label:'顧客・契約管理' },
+    { s:'pu-count',   label:'照合', badge:'new',
+      group:[{s:'pu-count',label:'計数照合'},{s:'pu-cmp',label:'集荷照合'}] },
+    { s:'pu',         label:'日報',
+      group:[{s:'pu',label:'一覧'},{s:'pu-report',label:'レポート'},{s:'pu-sum',label:'品目別集計'}] },
     { s:'pu-inv',     label:'請求書' },
-    { s:'pu-count',   label:'計数照合', badge:'new' },
-    { s:'pu-cmp',     label:'集荷照合', badge:'new' },
-    { s:'schedule-mgmt',   label:'休業日管理' },
-    { s:'schedule-survey', label:'休業調査', badge:'survey' },
+    { s:'pu-cust',    label:'顧客・契約管理' },
+    { s:'schedule-mgmt', label:'休業',
+      group:[{s:'schedule-mgmt',label:'休業日'},{s:'schedule-survey',label:'休業調査',badge:'survey'}] },
   ]},
+  /* ★ 2026-10-17.2: 給与・人事タブの整理（12 → 7）
+     月末の作業順が「勤務時間を入れる → 燃料代を入れる → 月締め → 給与計算 → 帳票を出す」
+     なので、その順に並べる。台帳（従業員・委託会社）は普段あまり触らないので後ろへ。
+     帳票（給与履歴・支払台帳・法定福利費）は全部「出す」もの、
+     書類（契約書・請求書）も同じ性質なので、それぞれ1画面にまとめた。 */
   hr:       { subs: [
+    { s:'worktime',    label:'月締め', badge:'new',
+      group:[{s:'worktime',label:'勤務時間'},{s:'gas-mgmt',label:'燃料代'},{s:'month-adj',label:'月締め'}] },
+    { s:'salary',      label:'給与計算' },
     { s:'staff',       label:'従業員管理' },
     { s:'company',     label:'委託会社管理' },
-    { s:'salary',      label:'給与計算' },
-    { s:'month-adj',   label:'月締め', badge:'new' },
+    { s:'pay-history', label:'帳票',
+      group:[{s:'pay-history',label:'給与履歴'},{s:'pay-daicho',label:'支払台帳'},{s:'hotei',label:'法定福利費'}] },
+    { s:'contract',    label:'書類',
+      group:[{s:'contract',label:'契約書'},{s:'invoice-bulk',label:'請求書'}] },
     { s:'data-check',  label:'データ健診', badge:'new' },
-    { s:'worktime',    label:'勤務時間' },
-    { s:'pay-history', label:'給与履歴' },
-    { s:'pay-daicho',  label:'支払台帳', badge:'new' },   // ★ 2026-10-14.66
-    { s:'hotei',       label:'法定福利費', badge:'new' },  // ★ 2026-10-14.74
-    { s:'contract',    label:'契約書' },
-    { s:'invoice-bulk',label:'請求書', badge:'new' },
-    { s:'gas-mgmt',    label:'燃料代管理', badge:'new' },
   ]},
+  /* ★ 2026-10-17.4: 集計・分析の整理（5 → 4）
+     月次サマリーと外注費分析はどちらも月の数字を見るものなので1画面に。
+     数量照合は内勤も触れる画面なので、分けたまま残す
+     （まとめると内勤から見て中身が1つだけになり、名前と合わなくなる）。 */
   analysis: { subs: [
     { s:'billing', label:'売上・支払明細' },
+    { s:'monthly-summary', label:'月次サマリー',
+      group:[{s:'monthly-summary',label:'月次'},{s:'cost-analysis',label:'外注費'}] },
     { s:'payment-mgmt', label:'入金管理', badge:'new' },
-    { s:'monthly-summary', label:'月次サマリー' },
-    { s:'cost-analysis', label:'外注費分析' },
     { s:'reconcile', label:'数量照合' },
   ]},
+  /* ★ 2026-10-17.4: 管理の整理（10 → 7）
+     部署と拠点は同じマスタの仲間。CSVインポート・フリート突き合わせ・台帳の統合は
+     どれも「外から持ってきて結びつける」作業なので1画面にまとめた。
+     請求書は給与・人事のものと中身が違う（こちらは顧客＋個人＋会社の全部）ため、
+     消さずに名前を変えて残す。 */
   admin:    { subs: [
-    { s:'departments', label:'部署管理' },
-    { s:'locations',   label:'拠点管理' },
-    { s:'import',      label:'CSVインポート' },
-    { s:'archive',     label:'アーカイブ' },
-    { s:'invoice-bulk-admin',label:'請求書', badge:'new' },
-    { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
+    { s:'departments', label:'マスタ',
+      group:[{s:'departments',label:'部署'},{s:'locations',label:'拠点'}] },
+    { s:'import',      label:'取り込み・突き合わせ',
+      group:[{s:'import',label:'CSVインポート'},{s:'uidmatch',label:'フリート突き合わせ'},
+             {s:'staffmerge',label:'台帳の統合'}] },
     { s:'acl',         label:'ログインアカウント', badge:'new' },
-    { s:'uidmatch',    label:'フリート突き合わせ', badge:'new' },
-    { s:'staffmerge',  label:'台帳の統合', badge:'new' },
+    { s:'dist-quote',  label:'距離料金&見積', badge:'new' },
+    { s:'invoice-bulk-admin',label:'請求書（全体）', badge:'new' },
+    { s:'archive',     label:'アーカイブ' },
     { s:'ts-settings', label:'システム設定', badge:'ts' },
   ]},
 };
@@ -9490,6 +9505,11 @@ function navByS(s) {
   }
   if (s==='invoice-bulk') { _ivBulkState.context='hr'; if(!_ivBulkTabAllowed(_ivBulkState.tab)) _ivBulkState.tab='personal'; _call('renderInvoiceBulk'); }
   if (s==='invoice-bulk-admin') { _ivBulkState.context='all'; _call('renderInvoiceBulk'); }
+  /* ★ 2026-10-17.3: 描画で画面の中身を作り直す画面（請求書など）があるため、
+     まとめた中の切り替えは描画のあとにもう一度置き直す。
+     上でも一度呼んでいるのは、描画の中で位置を見ている画面があるため。 */
+  try { _paintGroupSwitch(s); } catch(e) {}
+  setTimeout(()=>{ try { _paintGroupSwitch(s); } catch(e) {} }, 80);
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
