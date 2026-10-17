@@ -931,22 +931,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
      align-items:center;justify-content:center;background:#0f1420;">
   <div style="width:min(92vw,400px);background:var(--sur);border:1px solid var(--brd2);
        border-radius:10px;padding:26px 24px;">
-    <div style="font-size:10px;letter-spacing:.18em;color:var(--txt2);">OSAKA KYUHAI CO.,LTD.</div>
-    <div style="font-size:21px;font-weight:700;margin:2px 0 2px;">大阪急配　経営管理</div>
-    <div class="xs muted" style="margin-bottom:18px;">IDとパスワードを入れてください</div>
+    <!-- ★ 2026-10-17.17: 見出しと案内を中央に。入力欄のラベルは左のまま（中央だと読みにくい） -->
+    <div style="text-align:center;">
+      <div style="font-size:10px;letter-spacing:.18em;color:var(--txt2);">OSAKA KYUHAI CO.,LTD.</div>
+      <div style="font-size:21px;font-weight:700;margin:2px 0 2px;">大阪急配　経営管理</div>
+      <div class="xs muted" style="margin-bottom:18px;">IDとパスワードを入れてください<br>
+        IDの <span class="mono">@work.local</span> は省略できます</div>
+    </div>
     <div class="fg"><label>ID</label>
       <input id="gate-id" class="fi" type="text" autocomplete="username"
-        placeholder="xxxxx@work.local" onkeydown="if(event.key==='Enter')gateLogin()"></div>
+        onkeydown="if(event.key==='Enter')gateLogin()"></div>
     <div class="fg" style="margin-top:10px;"><label>パスワード</label>
       <input id="gate-pw" class="fi" type="password" autocomplete="current-password"
         onkeydown="if(event.key==='Enter')gateLogin()"></div>
-    <button class="btn b-blu" id="gate-btn" style="width:100%;margin-top:16px;padding:10px;"
-      onclick="gateLogin()">入る</button>
-    <div id="gate-msg" class="xs" style="margin-top:12px;min-height:2.6em;line-height:1.6;"></div>
-    <div class="xs muted" style="margin-top:6px;border-top:1px solid var(--brd2);padding-top:10px;">
-      日報アプリと計数アプリは、このログインとは別です。<br>
-      パスワードが分からなくなったら、作り直しになります。
-    </div>
+    <button class="btn b-blu" id="gate-btn"
+      style="width:100%;margin-top:16px;padding:10px;display:flex;align-items:center;justify-content:center;"
+      onclick="gateLogin()">ログイン</button>
+    <div id="gate-msg" class="xs" style="margin-top:12px;min-height:2.6em;line-height:1.6;text-align:center;"></div>
   </div>
 </div>
 <div id="main">
@@ -955,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.15</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.17</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5873,7 +5874,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.15';
+const APP_VER = '2026-10-17.17';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -9949,7 +9950,7 @@ function gateShow(msg, bad){
   const m = document.getElementById('gate-msg');
   if(m && msg !== undefined){ m.textContent = msg || ''; m.style.color = bad ? 'var(--red2)' : 'var(--txt2)'; }
   const b = document.getElementById('gate-btn');
-  if(b){ b.disabled = false; b.textContent = '入る'; }
+  if(b){ b.disabled = false; b.textContent = 'ログイン'; }
 }
 function gateHide(){
   const g = document.getElementById('login-gate');
@@ -9998,10 +9999,13 @@ async function gateVerify(u){
 }
 async function gateLogin(){
   const I = window._fbImports || {};
-  const email = (document.getElementById('gate-id')?.value || '').trim();
+  const raw   = (document.getElementById('gate-id')?.value || '').trim();
   const pw    = document.getElementById('gate-pw')?.value || '';
   const b     = document.getElementById('gate-btn');
-  if(!email || !pw){ gateShow('IDとパスワードを入れてください', true); return; }
+  if(!raw || !pw){ gateShow('IDとパスワードを入れてください', true); return; }
+  /* ★ 2026-10-17.16: @以下は省略できる。経営管理のIDは全部 @work.local なので、
+     打つ手間を減らす。@ を自分で付けて入れた場合はそのまま使う。 */
+  const email = _aclFullId(raw);
   if(!I.signInWithEmailAndPassword || !window._fbAuth){
     gateShow('通信の準備ができていません。少し待ってからもう一度お試しください', true); return;
   }
@@ -12422,6 +12426,16 @@ function _aclUsers(){
 function _aclSaveLocal(map){
   try{ localStorage.setItem(ACL_LS, JSON.stringify(map)); }catch(e){}
 }
+/* ★ 2026-10-17.16: 入れられたIDを正式な形にする。
+   経営管理のIDは全部 @work.local なので、@ が無ければ付ける。
+   大文字で打たれても小文字にそろえる（Firebaseのメールは大小を区別しないが、
+   権限表との照合で食い違わないようにするため）。 */
+function _aclFullId(v){
+  const t = String(v == null ? '' : v).trim().toLowerCase();
+  if(!t) return '';
+  return (t.indexOf('@') >= 0) ? t : (t + '@' + ACL_MAIL_DOMAIN);
+}
+
 function _aclPw(){
   const cs='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const a=new Uint8Array(12); crypto.getRandomValues(a);
@@ -13223,9 +13237,10 @@ function admPaint(){
 }
 async function admLogin(){
   const I = window._fbImports || {};
-  const email = (document.getElementById('adm-email')?.value || '').trim();
+  const raw   = (document.getElementById('adm-email')?.value || '').trim();
   const pw    = document.getElementById('adm-pw')?.value || '';
-  if(!email || !pw){ _admMsg('IDとパスワードを入れてください', true); return; }
+  if(!raw || !pw){ _admMsg('IDとパスワードを入れてください', true); return; }
+  const email = _aclFullId(raw);   // ★ 2026-10-17.16: @以下は省略できる
   if(!I.signInWithEmailAndPassword || !window._fbAuth){
     _admMsg('通信の準備ができていません。少し待ってからもう一度お試しください', true); return;
   }
