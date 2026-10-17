@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.17</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.18</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5874,7 +5874,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.17';
+const APP_VER = '2026-10-17.18';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -31810,8 +31810,21 @@ function collectCoPrices(){
 // 委託会社単価をフォームに復元
 function restoreCoPrices(prices, company){
   if(!prices)return;
-  const tt=(prices.del?._taxType||prices.col?._taxType||'ex');
-  setCoPriceTax(tt);
+  /* ★ 2026-10-17.18: 開き直したときは必ず「税別」に戻す。
+
+     単価は内部では税別で持っている（インボイス制度では税別で積み上げて
+     最後に消費税を足すため）。ところがここで保存時の税区分（税込）を
+     復元していたので、欄には税別の数字、ボタンは税込、という食い違いが
+     起きていた。その状態で保存を押すと、税別の数字をもう一度÷1.1する。
+
+       税込181で登録 → 165で保存 → 開いて保存 → 150 → 136 → 124
+
+     開いて保存するだけで委託料が1割ずつ下がっていた。
+     顧客の集荷単価は開くたびに税別へ戻す作り（resetCuTax）なので
+     この問題が起きていない。委託会社と営業所をそれに合わせる。
+
+     税込で入れたいときは、そのつど税込ボタンを押してから入力する。 */
+  setCoPriceTax('ex');
   const d=prices.del||{};
   const c=prices.col||{};
   if($('co-pkanryo'))$('co-pkanryo').value=d.kanryo||'';
@@ -33355,7 +33368,9 @@ function editOffice(id){
   if(o.postPrices&&isTSAuthenticated()){
     const p=o.postPrices;
     ['60','80','100','120','140','160'].forEach(sz=>{const e=$('of-p'+sz);if(e)e.value=p['p'+sz]||0;});
-    setOfTax(p._taxType||'ex');
+    /* ★ 2026-10-17.18: 委託会社と同じ理由で、開き直したら必ず税別に戻す。
+       保存時の税区分を復元すると、税別の数字を税込とみなして二度÷1.1する。 */
+    setOfTax('ex');
     if($('of-pkanryo'))$('of-pkanryo').value=p.kanryo||'';
     if($('of-pnight'))$('of-pnight').value=p.night||'';
     if($('of-pogata'))$('of-pogata').value=p.ogata||'';
