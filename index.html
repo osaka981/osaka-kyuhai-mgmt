@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.13</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.14</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1893,9 +1893,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <button class="btn b-grn btn-sm" onclick="aclIssueCompany()">＋ 会社アカウントを発行</button>
           <button class="btn b-blu btn-sm" onclick="aclIssuePerson()">＋ 個人アカウントを発行</button>
           <!-- ★ 2026/09/15: 第2段階の準備。既存データに会社IDを付ける -->
-          <button class="btn b-gh btn-sm" onclick="aclBackfillCompanyId()">既存データに会社IDを付ける</button>
+          <button class="btn b-gh btn-sm perm-exec" onclick="aclBackfillCompanyId()">既存データに会社IDを付ける</button>
           <!-- ★ 2026/09/16: 2〜5月に投入されたテスト日報の整理 -->
-          <button class="btn b-gh btn-sm" style="border-color:var(--amb2);color:var(--amb2);"
+          <button class="btn b-gh btn-sm perm-exec" style="border-color:var(--amb2);color:var(--amb2);"
             onclick="cleanupTestData()">テストデータを整理</button>
         </div>
       </div>
@@ -1904,11 +1904,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         個人アカウントは、その人だけが名乗れる形です。個人の携帯で使う場合に向きますが、初回のログインだけは電波のある場所で行ってください。<br>
         パスワードは発行時にこの画面で一度だけ表示されます。保存していないので、忘れた場合は作り直しになります。
       </div>
+      <!-- ★ 2026-10-17.14: perm-exec を付けた要素は内勤に出さない -->
       <!-- ★ 2026-10-15.1: 管理者ログイン。
            Firebaseのルールで、従事員台帳・給与・支払などを「管理者だけ」に
            閉じるための入口。いまの経営管理は匿名で入っているため、
            匿名のままだとルールを締めた日に自分が読めなくなる。 -->
-      <div class="card mb12">
+      <div class="card mb12 perm-exec">
         <div class="ch"><div class="ct"><div class="cbar"></div>管理者ログイン</div>
           <span class="xs muted" id="adm-state">確認中</span></div>
         <div class="xs muted" style="margin:6px 0 10px;">
@@ -1958,8 +1959,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           画面の出し分けとFirebaseのルールは、配り終えてから一度に当てます。
         </div>
         <div class="fla gap6">
-          <button class="btn b-gh btn-sm" onclick="aclLvBackfill()">未設定に既定の権限を入れる</button>
-          <!-- ★ 2026-10-17.13: 内勤の見え方を自分で確かめるための切り替え -->
+          <button class="btn b-gh btn-sm perm-exec" onclick="aclLvBackfill()">未設定に既定の権限を入れる</button>
+          <!-- ★ 2026-10-17.13: 内勤の見え方を自分で確かめるための切り替え。
+               ★ 2026-10-17.14: これは perm-exec を付けない。付けると内勤表示中に
+               このボタンごと消えて、役員の見え方に戻せなくなる。
+               本当に役員の人にだけ出すかどうかは permPaintExecOnly が別で見る。 -->
           <button class="btn b-gh btn-sm" id="perm-prev-btn" onclick="permPreviewToggle()">内勤の見え方で確認</button>
         </div>
         <div id="acl-lv-msg" class="xs" style="margin-top:8px;min-height:1.2em;"></div>
@@ -4305,9 +4309,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div style="display:flex;gap:2px;padding:8px 8px 0;flex-shrink:0;background:var(--bg3);border-bottom:3px solid #5c6bc0;width:100%;position:sticky;top:0;z-index:10;">
     <button type="button" id="ptab-info" onclick="switchStTab('info')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:#5c6bc0;color:#fff;">基本情報</button>
-    <button type="button" id="ptab-del" onclick="switchStTab('del')"
+    <button type="button" class="perm-exec" id="ptab-del" onclick="switchStTab('del')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">宅配単価</button>
-    <button type="button" id="ptab-col" onclick="switchStTab('col')"
+    <button type="button" class="perm-exec" id="ptab-col" onclick="switchStTab('col')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">集荷単価</button>
     <button type="button" id="ptab-other" onclick="switchStTab('other')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">その他</button>
@@ -4315,7 +4319,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
          こちらは会社が金額を決めるもの（燃料費・庸車両・違約金・前払金・修理代・手当）。 -->
     <button type="button" id="ptab-offset" onclick="switchStTab('offset')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">精算・手当</button>
-    <button type="button" id="ptab-tax" onclick="switchStTab('tax')"
+    <button type="button" class="perm-exec" id="ptab-tax" onclick="switchStTab('tax')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">税金・保険</button>
     <button type="button" id="ptab-advance" onclick="switchStTab('advance')"
       style="flex:1;padding:13px 4px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;font-weight:700;background:transparent;color:var(--txt2);">前払い</button>
@@ -5824,7 +5828,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.13';
+const APP_VER = '2026-10-17.14';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -9655,6 +9659,26 @@ function permSubVisible(sub){
   if(sub.group && sub.group.length) return sub.group.some(g => permCanSee(g.s));
   return permCanSee(sub.s);
 }
+/* ★ 2026-10-17.14: 画面の中の、役員だけに出すもの。
+   HTMLに class="perm-exec" を付けた要素を、内勤の見え方のときだけ隠す。
+   サブタブ単位では分けられない「画面の中のカード・ボタン・タブ」用。
+
+   「内勤の見え方で確認」のボタンだけは別扱いにする。
+   これに perm-exec を付けると、内勤表示にした瞬間このボタンごと消えて
+   役員の見え方に戻せなくなるため。本当に役員の人にだけ出す。 */
+function permPaintExecOnly(){
+  const show = permIsExecView();
+  try{
+    document.querySelectorAll('.perm-exec').forEach(el => {
+      el.style.display = show ? '' : 'none';
+    });
+  }catch(e){}
+  try{
+    const pv = document.getElementById('perm-prev-btn');
+    if(pv) pv.style.display = (aclMyLv() === 'exec') ? '' : 'none';
+  }catch(e){}
+}
+
 /* そのサブタブで最初に開ける画面の s。全部隠れていれば空。 */
 function permFirstOf(sub){
   if(!sub) return '';
@@ -9834,7 +9858,8 @@ function navByS(s) {
      まとめた中の切り替えは描画のあとにもう一度置き直す。
      上でも一度呼んでいるのは、描画の中で位置を見ている画面があるため。 */
   try { _paintGroupSwitch(s); } catch(e) {}
-  setTimeout(()=>{ try { _paintGroupSwitch(s); } catch(e) {} }, 80);
+  try { permPaintExecOnly(); } catch(e) {}
+  setTimeout(()=>{ try { _paintGroupSwitch(s); permPaintExecOnly(); } catch(e) {} }, 80);
 }
 
 // 既存のnav()関数をラップ（data-s属性を持つ.ni要素からの遷移を処理）
@@ -12495,6 +12520,8 @@ function permPreviewToggle(){
     if(s && !permCanSee(s)){ snNav('dashboard'); }
     else { renderSubNav(_currentTopTab, s||null); if(s) _paintGroupSwitch(s); }
   }catch(e){}
+  try{ permPaintExecOnly(); }catch(e){}
+  try{ if(document.getElementById('s-acl')?.classList.contains('on')) renderAclList(); }catch(e){}
 }
 
 /* 一覧の上に内訳を出す */
@@ -13118,6 +13145,7 @@ function renderAclList(){
   try{ admPaint(); }catch(e){}
   try{ pubCheck(); }catch(e){}
   try{ aclLvPaint(); }catch(e){}
+  try{ permPaintExecOnly(); }catch(e){}
   const wrap=document.getElementById('acl-list');
   if(!wrap) return;
   const list=Object.values(_aclUsers()).sort((a,b)=>
@@ -13138,21 +13166,26 @@ function renderAclList(){
     <td class="xs mono" style="word-break:break-all;">${esc(r.email||'')}
       <!-- ★ 2026/09/16: Firebaseコンソールで消すときに要るので出しておく -->
       <div class="xs muted mono" style="font-size:9px;opacity:.7;">${esc(String(r.uid||''))}</div></td>
-    <!-- ★ 2026-10-17.9: 権限レベル。未設定は外部として出る（勝手に強くしない） -->
-    <td class="xs" style="white-space:nowrap;">
-      <select class="fi" style="font-size:11px;padding:2px 4px;height:auto;min-width:74px;"
-        onchange="aclSetLv('${esc(String(r.uid))}', this.value)">${
-        ACL_LV.map(x=>`<option value="${x.v}"${_aclLvOf(r)===x.v?' selected':''}>${esc(x.label)}</option>`).join('')
-      }</select>${r.lv ? '' : '<div class="xs muted" style="font-size:9px;">未設定</div>'}</td>
+    <!-- ★ 2026-10-17.9: 権限レベル。未設定は外部として出る（勝手に強くしない）
+         ★ 2026-10-17.14: 権限を変えられるのは役員だけ。内勤には文字で出す。 -->
+    <td class="xs" style="white-space:nowrap;">${permIsExecView()
+      ? `<select class="fi" style="font-size:11px;padding:2px 4px;height:auto;min-width:74px;"
+          onchange="aclSetLv('${esc(String(r.uid))}', this.value)">${
+          ACL_LV.map(x=>`<option value="${x.v}"${_aclLvOf(r)===x.v?' selected':''}>${esc(x.label)}</option>`).join('')
+        }</select>${r.lv ? '' : '<div class="xs muted" style="font-size:9px;">未設定</div>'}`
+      : `<span style="color:${_aclLvDef(_aclLvOf(r)).color};font-weight:700;">${esc(_aclLvDef(_aclLvOf(r)).label)}</span>`}</td>
     <td class="xs">${r.active===false
       ? '<span style="color:var(--red2);font-weight:700">停止中</span>'
       : '<span style="color:var(--tel2)">有効</span>'}</td>
     <td class="xs muted mono">${r.createdAt?new Date(r.createdAt).toLocaleDateString('ja-JP'):''}</td>
-    <td style="white-space:nowrap;">
-      <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
-        onclick="aclToggleActive('${esc(String(r.uid))}')">${r.active===false?'停止を解除':'停止する'}</button>
-      <button class="btn b-red btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
-        onclick="aclDelete('${esc(String(r.uid))}')">削除</button>
+    <!-- ★ 2026-10-17.14: 役員のアカウントは、内勤から停止も削除もできない。
+         会社アカウントと個人アカウントは内勤も扱える（10/17に決めたとおり）。 -->
+    <td style="white-space:nowrap;">${(permIsExecView() || _aclLvOf(r) !== 'exec')
+      ? `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 7px;"
+           onclick="aclToggleActive('${esc(String(r.uid))}')">${r.active===false?'停止を解除':'停止する'}</button>
+         <button class="btn b-red btn-sm" style="font-size:10px;padding:2px 7px;margin-left:4px;"
+           onclick="aclDelete('${esc(String(r.uid))}')">削除</button>`
+      : '<span class="xs muted">役員のため操作できません</span>'}
     </td>
   </tr>`).join('');
   wrap.innerHTML=`<div class="tw"><table>
@@ -46399,7 +46432,7 @@ window.dqImportJson = function(){
       <div style="font-size:12px;font-weight:700;">🏭 基本情報</div>
       <div style="font-size:9px;opacity:.8;margin-top:1px;">会社名・TEL・住所</div>
     </button>
-    <button type="button" class="co-tab" data-tab="price" onclick="switchCoModalTab('price')"
+    <button type="button" class="co-tab perm-exec" data-tab="price" onclick="switchCoModalTab('price')"
       style="flex:1;padding:10px 6px;text-align:center;min-width:0;border:none;border-radius:6px 6px 0 0;background:transparent;color:var(--txt2);cursor:pointer;">
       <div style="font-size:12px;font-weight:700;">💴 単価設定</div>
       <div style="font-size:9px;margin-top:1px;">宅配/集荷/その他/ルート</div>
