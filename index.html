@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.9</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.10</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2361,10 +2361,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div>
             <div style="font-size:10.5px;color:var(--txt2);margin-bottom:3px;font-weight:600;">② 区分</div>
             <select id="staff-bulk-kubun" style="width:100%;padding:5px 8px;font-size:12px;border:1px solid var(--brd);border-radius:4px;background:#fff;">
+              <!-- ★ 2026-10-17.10: 編集ダイアログと同じ選択肢にそろえた。
+                   以前は「社員／個人事業主」で、選ぶと給与計算が認識しない値が入った。 -->
               <option value="">─ 変更しない ─</option>
-              <option value="社員">社員</option>
-              <option value="個人事業主">個人事業主</option>
+              <option value="社員・役員">社員・役員</option>
+              <option value="パート（事務）">パート（事務）</option>
+              <option value="個人事業主（歩合）">個人事業主（歩合）</option>
+              <option value="個人事業主（時間単価）">個人事業主（時間単価）</option>
+              <option value="個人事業主（日額）">個人事業主（日額）</option>
               <option value="委託会社所属">委託会社所属</option>
+              <option value="スポット（単発）">スポット（単発）</option>
             </select>
           </div>
           <div>
@@ -5816,8 +5822,36 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.9';
+const APP_VER = '2026-10-17.10';
 console.log('[経営管理] APP_VER', APP_VER);
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-17.10: 従事員の区分（kubun）の選択肢をここ1か所にまとめる。
+
+   区分を変える場所が3つあり、中身が食い違っていた。
+     ・従業員の編集ダイアログ … 正しい7つ
+     ・従業員一覧のインライン編集 … 社員／個人事業主／委託会社所属 の3つ
+     ・一覧の一括適用 … 同じく3つ
+   後ろの2つで「社員」を選ぶと kubun に '社員' が入るが、給与計算が
+   見ているのは '社員・役員' なので一致せず、その人は外注扱いになって
+   健康保険・厚生年金・雇用保険・所得税・住民税の計算から外れていた。
+   画面上はそれらしく動くので、気づくのは給与を締めたあと。
+
+   実データ（48名）に '社員' や '個人事業主' を持つ人はまだ居ないので、
+   誰も踏んでいないうちに入口を塞ぐ。計算式には触らない。
+   ══════════════════════════════════════════════════════════ */
+const KUBUN_LIST = [
+  '社員・役員',
+  'パート（事務）',
+  '個人事業主（歩合）',
+  '個人事業主（時間単価）',
+  '個人事業主（日額）',
+  '委託会社所属',
+  'スポット（単発）',
+];
+/* 委託会社に属さない区分。区分を変えたときに委託会社名を消す判定に使う。 */
+const KUBUN_INHOUSE = k =>
+  k === '社員・役員' || k === 'パート（事務）' || String(k||'').indexOf('個人事業主') === 0;
 
 // ── HTML エスケープ ──
 function esc(s){
@@ -20532,8 +20566,15 @@ function renderStaff(flt){
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
 
     // インライン編集: 区分select
-    const kubunOpts = ['', '社員', '個人事業主', '委託会社所属'].map(k => 
-      `<option value="${k}" ${(s.kubun||'')===k?'selected':''}>${k||'─'}</option>`
+    /* ★ 2026-10-17.10: 選択肢は KUBUN_LIST にそろえる（編集ダイアログと同じ）。
+       台帳に古い値や空が残っている人は、その値も選択肢に足して出す。
+       そうしないと別の区分が選ばれているように見えてしまう。 */
+    const _kbCur = s.kubun || '';
+    const _kbAll = KUBUN_LIST.indexOf(_kbCur) >= 0 || !_kbCur
+      ? [''].concat(KUBUN_LIST)
+      : [''].concat(KUBUN_LIST, [_kbCur]);
+    const kubunOpts = _kbAll.map(k =>
+      `<option value="${esc(k)}" ${_kbCur===k?'selected':''}>${esc(k)||'─'}</option>`
     ).join('');
     const kubunSelect = `<select class="staff-inline-sel" data-field="kubun" data-id="${s.id}" onchange="_updateStaffField('${s.id}','kubun',this.value)" onclick="event.stopPropagation()" style="padding:2px 4px;font-size:10.5px;border:1px solid var(--brd);border-radius:3px;background:transparent;max-width:110px;">${kubunOpts}</select>`;
 
@@ -20698,8 +20739,10 @@ async function _applyStaffBulkSet(){
     if(office) D.staff[idx].office = office;
     if(kubun){
       D.staff[idx].kubun = kubun;
-      // 社員・個人事業主の場合は委託会社をクリア
-      if(kubun === '社員' || kubun === '個人事業主'){
+      /* ★ 2026-10-17.10: 委託会社に属さない区分なら委託会社名を消す。
+         以前は '社員' / '個人事業主' を見ていたが、台帳に入る実際の値は
+         '社員・役員' / '個人事業主（歩合）' などなので一度も一致していなかった。 */
+      if(KUBUN_INHOUSE(kubun)){
         D.staff[idx].companyName = '';
       }
     }
