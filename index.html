@@ -915,7 +915,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.10</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.11</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5822,7 +5822,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.10';
+const APP_VER = '2026-10-17.11';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12169,26 +12169,95 @@ function _aclCompanies(){
   return (D.companies||[]).filter(c=>c && c.status!=='終了' && c.active!==false);
 }
 
+/* ★ 2026-10-17.11: 発行するIDとパスワードを自分で決めるための入力欄。
+   自動生成のIDは覚えられないので、内勤のように毎日使う人には向かない。
+   空のままなら今までどおり自動で作る。 */
+function _aclIdPwFields(){
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px;">
+      <div class="fg"><label>ID（空なら自動）</label>
+        <div class="fla gap6" style="align-items:center;">
+          <input id="acl-add-id" class="fi" type="text" placeholder="matsuoka" autocomplete="off"
+            style="flex:1;min-width:0;">
+          <span class="xs muted mono" style="white-space:nowrap;">@${esc(ACL_MAIL_DOMAIN)}</span>
+        </div></div>
+      <div class="fg"><label>パスワード（空なら自動）</label>
+        <input id="acl-add-pw" class="fi" type="text" placeholder="8文字以上" autocomplete="off"></div>
+    </div>
+    <div class="xs muted" style="margin-top:4px;">
+      IDに使えるのは半角の英数字と . _ - です。大文字は小文字になります。<br>
+      分かりやすいIDにすると、IDは人に推測できる状態になります。パスワードは名前や会社名をそのまま使わないでください。
+    </div>`;
+}
+/* 入力されたIDとパスワードを確かめて、使える形にして返す。
+   返り値 null は「やめる」。{} は「自動で作る」。 */
+async function _aclReadIdPw(){
+  const rawId = (document.getElementById('acl-add-id')?.value || '').trim();
+  const pw    = (document.getElementById('acl-add-pw')?.value || '');
+  const out = {};
+  if(rawId){
+    const id = rawId.toLowerCase();
+    if(!/^[a-z0-9][a-z0-9._-]{1,30}$/.test(id)){
+      showAlert({icon:'⚠️', title:'IDが使えません',
+        msg:'IDは半角の英数字と . _ - だけ、2文字以上31文字以下にしてください。\n先頭は英数字です。'});
+      return null;
+    }
+    const taken = Object.values(_aclUsers()).some(r =>
+      r && String(r.email||'').toLowerCase() === id + '@' + ACL_MAIL_DOMAIN);
+    if(taken){
+      showAlert({icon:'⚠️', title:'そのIDは使われています',
+        msg:id + '@' + ACL_MAIL_DOMAIN + ' は、すでに発行済みのアカウントがあります。\n別のIDにしてください。'});
+      return null;
+    }
+    out.email = id + '@' + ACL_MAIL_DOMAIN;
+  }
+  if(pw){
+    if(pw.length < 6){
+      showAlert({icon:'⚠️', title:'パスワードが短すぎます',
+        msg:'パスワードは6文字以上にしてください（Firebaseの決まりです）。'});
+      return null;
+    }
+    if(pw.length < 8){
+      const ok = await showDialog({ icon:'', title:'パスワードが短めです',
+        msg:'このアカウントは顧客台帳・従業員台帳・単価を触れます。\n'
+          + '8文字以上をおすすめしますが、このまま発行しますか。',
+        okText:'このまま発行', cancelText:'入れ直す' });
+      if(!ok) return null;
+    }
+    out.pw = pw;
+  }
+  return out;
+}
+
 /* アカウントを1件つくる。
    Firebase Auth の作成と権限表への登録がそろって初めて成功とする。
-   途中で失敗したら、作りかけのアカウントを消して元に戻す。 */
-async function _aclCreate(rec, label){
+   途中で失敗したら、作りかけのアカウントを消して元に戻す。
+   ★ 2026-10-17.11: opt で ID（メール）とパスワードを指定できる。空なら自動生成。 */
+async function _aclCreate(rec, label, opt){
   const I = window._fbImports || {};
   if(!I.createUserWithEmailAndPassword){
     showAlert({icon:'⚠️', title:'発行できません', msg:'Firebase SDK のログイン機能が読み込まれていません'});
     return null;
   }
-  const pw = _aclPw();
-  const email = _aclSlug() + '@' + ACL_MAIL_DOMAIN;
+  const o = opt || {};
+  const pw = o.pw || _aclPw();
+  const email = o.email || (_aclSlug() + '@' + ACL_MAIL_DOMAIN);
   let uid = null, auth2 = null;
   try{
     auth2 = await _secondaryAuth();
     const cred = await I.createUserWithEmailAndPassword(auth2, email, pw);
     uid = cred.user.uid;
   }catch(e){
+    /* ★ 2026-10-17.11: 指定したIDが既にFirebase側にある場合をはっきり伝える。
+       権限表から消したあとでも、Firebaseの認証には残っていることがある。 */
+    const code = (e && e.code) || '';
     showAlert({icon:'⚠️', title:'発行できませんでした',
-      msg:'ログインアカウントを作成できませんでした。\n\n'+(e && e.message ? e.message : '')
-        +'\n\nFirebaseの認証で「メール／パスワード」が有効になっているか確認してください。'});
+      msg: code === 'auth/email-already-in-use'
+        ? ('ID「' + email + '」は、すでにFirebaseの認証に登録されています。\n'
+           + '別のIDにするか、Firebaseコンソールの Authentication で古いほうを削除してください。')
+        : (code === 'auth/weak-password'
+          ? 'パスワードが弱すぎると断られました。別のパスワードにしてください。'
+          : 'ログインアカウントを作成できませんでした。\n\n'+(e && e.message ? e.message : '')
+            +'\n\nFirebaseの認証で「メール／パスワード」が有効になっているか確認してください。')});
     return null;
   }
   const full = Object.assign({}, rec, { uid, email, createdAt: Date.now(), active: true });
@@ -12224,16 +12293,20 @@ async function aclIssueCompany(){
     bodyHtml:`<div class="fg"><label>委託会社</label>
       <select id="acl-add-co" class="fi">${opts}</select></div>
       <div class="xs muted">その会社の端末で使います。誰が使っても、この会社のデータだけが見えます。<br>
-      個人はアプリ内で切り替えるので、オフラインでも交代できます。</div>`,
+      個人はアプリ内で切り替えるので、オフラインでも交代できます。</div>`
+      + _aclIdPwFields(),
     okText:'発行する', cancelText:'キャンセル'
   });
   if(!ok) return;
   const id = document.getElementById('acl-add-co')?.value;
   const co = cands.find(c=>String(c.id)===String(id));
   if(!co) return;
+  const idpw = await _aclReadIdPw();
+  if(!idpw) return;
   /* 会社アカウントは必ず外部。端末を誰が使うか分からないので、
      ここに役員や内勤を割り当てられる形にはしない。 */
-  await _aclCreate({ kind:'company', lv:'ext', companyId:String(co.id), companyName:co.name||'' }, co.name||'');
+  await _aclCreate({ kind:'company', lv:'ext', companyId:String(co.id), companyName:co.name||'' },
+    co.name||'', idpw);
 }
 
 async function aclIssuePerson(){
@@ -12255,7 +12328,8 @@ async function aclIssuePerson(){
       <select id="acl-add-lv" class="fi">${lvOpts}</select></div>
       <div class="xs muted">その人の携帯で使います。初回のログインだけ電波のある場所で行ってください。<br>
       一度ログインすれば、以後はオフラインでも起動できます。<br>
-      権限はあとからこの画面で変えられます。ドライバーは「外部」のままで構いません。</div>`,
+      権限はあとからこの画面で変えられます。ドライバーは「外部」のままで構いません。</div>`
+      + _aclIdPwFields(),
     okText:'発行する', cancelText:'キャンセル'
   });
   if(!ok) return;
@@ -12264,6 +12338,8 @@ async function aclIssuePerson(){
   if(!st) return;
   let lv = document.getElementById('acl-add-lv')?.value || 'ext';
   if(!ACL_LV.some(x=>x.v===lv)) lv = 'ext';
+  const idpw = await _aclReadIdPw();
+  if(!idpw) return;
   const co = (D.companies||[]).find(c=>String(c.id)===String(st.companyId));
   await _aclCreate({
     kind:'person',
@@ -12272,7 +12348,7 @@ async function aclIssuePerson(){
     companyName: co ? (co.name||'') : '自社',
     staffUid: String(st.uid || st.id || ''),
     staffName: st.name || ''
-  }, (st.name||'') + (co ? '（'+(co.name||'')+'）' : ''));
+  }, (st.name||'') + (co ? '（'+(co.name||'')+'）' : ''), idpw);
 }
 
 /* ★ 2026-10-17.9: lv が入っていないアカウントに既定値を書き込む。
@@ -12903,9 +12979,12 @@ async function admIssue(){
       + 'IDとパスワードは、このあと一度だけ表示されます。\n'
       + 'IDは下の一覧でいつでも確認できますが、パスワードは保存していません。\n'
       + '控えてから閉じてください。',
+    bodyHtml: _aclIdPwFields(),
     okText:'発行する', cancelText:'キャンセル' });
   if(!ok) return;
-  const rec = await _aclCreate({ kind:'admin', adm:true, lv:'exec', companyId:'', companyName:'大阪急配（管理者）' }, '管理者');
+  const idpw = await _aclReadIdPw();
+  if(!idpw) return;
+  const rec = await _aclCreate({ kind:'admin', adm:true, lv:'exec', companyId:'', companyName:'大阪急配（管理者）' }, '管理者', idpw);
   if(!rec) return;
   // 権限表に adm を確実に残す（_aclCreate は rec をそのまま書くので通常は不要だが念のため）
   try{
