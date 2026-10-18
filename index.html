@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-17.20</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5874,7 +5874,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-17.20';
+const APP_VER = '2026-10-19.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16919,11 +16919,16 @@ function getDelColPayEntry(staff, companyName, officeName, ym){
   const kubun = staff.kubun || '';
   const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
 
-  // 優先順位: ドライバー個別 → 委託会社例外 → 拠点マスタ標準 → 0
-  // (より具体的な設定が優先される)
+  /* ★ 2026-10-19.1: 委託会社所属は「委託会社の単価が先」に統一した。
+     完了・転送・夜間・大型・その他は _getEffectiveDelPrices で会社が優先なのに、
+     この集荷だけドライバー個別が優先という逆の並びになっていた。
+     （この関数の冒頭のコメントは以前から会社優先と書いてあり、動きだけが食い違っていた）
+     支払先は委託会社なので、会社に入れた1本の単価で全員そろうのが正しい。
+     ドライバー個別の単価は、会社側が空か0の項目だけの控えとして残る。
+     時間単価・日額は payMode という別の経路で本人を直接見るので、ここは通らない。 */
   if(isCompanyDriver){
-    // 委託会社所属: ドライバー個別 > 委託会社単価 > 拠点マスタ > 0
-    return resolveFromDriver() || resolveFromCompany() || resolveFromLocation() || {price:0, label:'集荷', isDefault:true};
+    // 委託会社所属: 委託会社単価 > ドライバー個別 > 拠点マスタ > 0
+    return resolveFromCompany() || resolveFromDriver() || resolveFromLocation() || {price:0, label:'集荷', isDefault:true};
   } else {
     // 個人事業主・社員・パート: ドライバー個別 > 拠点マスタ > 0
     return resolveFromDriver() || resolveFromLocation() || {price:0, label:'集荷', isDefault:true};
