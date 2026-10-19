@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5904,7 +5904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.3';
+const APP_VER = '2026-10-19.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41540,6 +41540,44 @@ function _rcPick(headers, alias){
 }
 function _rcShow(v){ return (v==null||v===''||Number(v)===0) ? '—' : Number(v).toLocaleString(); }
 let _ratePlan = [];   /* ★ 2026-10-19.3: 適用待ちの計画 */
+let _rateNew  = [];   /* ★ 2026-10-19.4: 台帳に無かった方（登録画面へ渡す） */
+
+/* ★ 2026-10-19.4: CSVの1行を、従業員の新規登録画面に入れた状態で開く。
+   氏名と単価だけを入れる。区分・営業所・委託会社は画面で選んでもらう。
+   姓名が分かれた欄なので、同名の人がいれば既存の重複チェックが警告を出す。 */
+function openStaffFromRateCSV(i){
+  const m=_rateNew[i]; if(!m){ alert('データが見つかりません。CSVを読み込み直してください。'); return; }
+  if(typeof openNewStaff!=='function'){ alert('登録画面を開けませんでした。'); return; }
+  openNewStaff();
+  setTimeout(()=>{
+    const sei=$('st-sei'), mei=$('st-mei');
+    if(sei) sei.value=m.sei||'';
+    if(mei) mei.value=m.mei||'';
+    try{ if(typeof syncStName==='function') syncStName(); }catch(e){}
+    try{ if(typeof _checkStaffDuplicate==='function') _checkStaffDuplicate(); }catch(e){}
+
+    // 宅配単価
+    const map={kanryo:'st-pkanryo', tenso:'st-ptenso', night:'st-pnight', ogata:'st-pogata',
+               shukka:'st-pshukka', s1:'st-ps1', s2:'st-ps2', s3:'st-ps3', s4:'st-ps4'};
+    Object.keys(m.del||{}).forEach(k=>{
+      const el=$(map[k]); if(el) el.value=m.del[k];
+      const t=(m.tax||{})[k];
+      if(t && typeof setItemTax==='function'){ try{ setItemTax(map[k], t); }catch(e){} }
+    });
+    // 給与形態
+    ['del','col'].forEach(b=>{
+      const o=(m.pm||{})[b]; if(!o) return;
+      const sel=$('st-pm-'+b+'-type'); if(sel) sel.value=o.type||'';
+      const r=$('st-pm-'+b+'-rate'); if(r) r.value=o.rate||'';
+      try{ if(typeof onStPayModeChange==='function') onStPayModeChange(b); }catch(e){}
+    });
+    // 単価が入っているほうのタブを開く
+    const toCol = (m.pm && m.pm.col && m.pm.col.type) && !Object.keys(m.del||{}).length;
+    try{ if(typeof switchStTab==='function') switchStTab(toCol?'col':(Object.keys(m.del||{}).length?'del':'info')); }catch(e){}
+    console.log('[単価CSV] 登録画面へ', m.name, m.del, m.pm);
+  }, 220);
+}
+window.openStaffFromRateCSV = openStaffFromRateCSV;
 
 function importRateCSV(txt, fn){
   const el=$('res-r'); if(!el) return;
@@ -41566,7 +41604,29 @@ function importRateCSV(txt, fn){
     const nm=String(r[hName]||'').trim();
     if(!nm) return;
     const st=byName[_rcNorm(nm)];
-    if(!st){ miss.push({line:i+2, name:nm}); return; }
+
+    /* ★ 2026-10-19.4: 台帳に無い方は、登録画面へ渡せるようCSVの中身も控えておく */
+    if(!st){
+      const d={}, tx={}, pm={};
+      const _t=hTax ? String(r[hTax]||'').trim() : '';
+      const _tv=_t==='税込'?'in':(_t==='税別'?'ex':'');
+      RATE_CSV_COLS.forEach(c=>{
+        let v=null;
+        if(hCol[c.k]!=null) v=_rcNum(r[hCol[c.k]]);
+        else if(hBoth && (c.k==='kanryo'||c.k==='tenso')) v=_rcNum(r[hBoth]);
+        if(v!=null){ d[c.k]=v; if(_tv) tx[c.k]=_tv; }
+      });
+      hPm.forEach(p=>{
+        const t=p.ht ? String(r[p.ht]||'').trim() : '';
+        const rr=p.hr ? _rcNum(r[p.hr]) : null;
+        if(t || rr!=null) pm[p.biz]={type:t, rate:(rr!=null?rr:0)};
+      });
+      const parts=nm.split(/[\s　]+/);
+      miss.push({line:i+2, name:nm, sei:parts[0]||nm, mei:parts.slice(1).join('') ,
+                 del:d, tax:tx, pm:pm});
+      return;
+    }
+
     const cur=(st.fixedPrices && st.fixedPrices.del) || {};
     const curTax=(cur._taxType)||{};
     const ym=hYm ? String(r[hYm]||'').trim() : '';
@@ -41630,11 +41690,36 @@ function importRateCSV(txt, fn){
     </tr>`;
   }).join('');
 
+  /* ★ 2026-10-19.4: 台帳に無い方は、1人ずつ登録画面へ送れるようにする */
+  _rateNew = miss;
   const missHtml = miss.length ? `
     <div class="al al-w mt8"><span>⚠️</span><span>
-      台帳に見つからなかった方が ${miss.length} 行あります。新規登録はしないため、この行は飛ばされます。<br>
-      <span class="xs">${miss.map(m=>`${m.line}行目: ${esc(m.name)}`).join(' / ')}</span>
-    </span></div>` : '';
+      台帳に見つからなかった方が <b>${miss.length}名</b> います。
+      下の「登録する」を押すと、<b>氏名と単価を入れた状態で従業員の登録画面が開きます。</b><br>
+      区分・営業所・委託会社を選んで保存してください。似た名前の方がいる場合は画面上で警告が出ます。
+    </span></div>
+    <div class="mt8" style="max-height:300px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>行</th><th>氏名</th><th>CSVの単価</th><th style="width:110px;"></th></tr></thead>
+        <tbody>${miss.map((m,i)=>{
+          const d=m.del||{}, pm=m.pm||{};
+          const bits=[];
+          if(d.kanryo) bits.push('完了'+Number(d.kanryo).toLocaleString());
+          if(d.night)  bits.push('夜間'+Number(d.night).toLocaleString());
+          if(d.ogata)  bits.push('大型'+Number(d.ogata).toLocaleString());
+          if(d.shukka) bits.push('集荷'+Number(d.shukka).toLocaleString());
+          ['s1','s2','s3','s4'].forEach((k,n)=>{ if(d[k]) bits.push('その他'+(n+1)+' '+Number(d[k]).toLocaleString()); });
+          ['del','col'].forEach(b=>{ const o=pm[b]; if(o&&o.type) bits.push((b==='del'?'宅配':'集荷')+' '+o.type+(o.rate?' '+Number(o.rate).toLocaleString()+'円':'')); });
+          return `<tr>
+            <td class="xs muted">${m.line}</td>
+            <td style="white-space:nowrap;font-weight:600;">${esc(m.name)}</td>
+            <td class="xs" style="color:var(--txt2);">${bits.join(' ／ ')||'—'}</td>
+            <td><button class="btn b-grn btn-sm" style="font-size:11px;padding:3px 10px;"
+                  onclick="openStaffFromRateCSV(${i})">登録する</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>` : '';
 
   el.innerHTML = `
     <div class="al al-ok"><span>✅</span><span>
