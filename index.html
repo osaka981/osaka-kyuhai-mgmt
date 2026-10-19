@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.2</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2326,8 +2326,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card mb12">
         <div class="ch"><div class="ct"><div class="cbar"></div>従事員の単価 取込</div></div>
         <div class="al al-w mb8"><span>⚠️</span><span>
-          <b>この版では読み込んで差分を見せるだけで、台帳には書き込みません。</b>
-          中身が正しいことを確認してから、次の版で適用できるようにします。
+          読み込むとまず<b>差分の一覧</b>が出ます。中身を確かめて「台帳に入れる」を押すまで、書き込みはしません。<br>
+          <b>過去の月のCSVは、単価履歴に足すだけでいまの単価は変えません。</b>
         </span></div>
         <div class="xs muted mb8" style="line-height:1.7;">
           既にいる方の単価だけを更新します。<b>新しい方の登録はしません</b>（従業員管理の画面から登録してください）。<br>
@@ -5904,7 +5904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.2';
+const APP_VER = '2026-10-19.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41539,6 +41539,7 @@ function _rcPick(headers, alias){
   return null;
 }
 function _rcShow(v){ return (v==null||v===''||Number(v)===0) ? '—' : Number(v).toLocaleString(); }
+let _ratePlan = [];   /* ★ 2026-10-19.3: 適用待ちの計画 */
 
 function importRateCSV(txt, fn){
   const el=$('res-r'); if(!el) return;
@@ -41580,7 +41581,7 @@ function importRateCSV(txt, fn){
       const now=_rcNum(cur[c.k]);
       const nowTax=curTax[c.k]||'';
       const changed = (now!==raw) || (taxVal && nowTax!==taxVal);
-      const rec={name:st.name, ym, item:c.label, now, next:raw,
+      const rec={name:st.name, ym, item:c.label, key:c.k, now, next:raw,
                  nowTax, nextTax:taxVal, isNew:(now==null||now===0)};
       (changed?diffs:same).push(rec);
     });
@@ -41593,12 +41594,25 @@ function importRateCSV(txt, fn){
       const o=((st.payMode||{})[p.biz])||{};
       const changed = (t && t!==(o.type||'')) || (rate!=null && rate!==(_rcNum(o.rate)));
       const rec={name:st.name, ym, item:p.label+'の給与形態',
+                 pmBiz:p.biz, pmType:(t||o.type||''), pmRate:(rate!=null?rate:(_rcNum(o.rate)||0)),
                  now:(o.type? o.type+(o.rate?' '+Number(o.rate).toLocaleString()+'円':'') : null),
                  next:(t||o.type||'')+(rate!=null?' '+rate.toLocaleString()+'円':''),
                  isText:true, isNew:!o.type};
       (changed?diffs:same).push(rec);
     });
   });
+
+  /* ★ 2026-10-19.3: 適用のための計画を作る（押されるまで書かない） */
+  _ratePlan = [];
+  {
+    const byPerson={};
+    diffs.forEach(d=>{
+      const p = byPerson[d.name] || (byPerson[d.name]={name:d.name, ym:d.ym||'', del:{}, tax:{}, pm:{}});
+      if(d.pmBiz){ p.pm[d.pmBiz]={type:d.pmType, rate:d.pmRate}; return; }
+      if(d.key){ p.del[d.key]=d.next; if(d.nextTax) p.tax[d.key]=d.nextTax; }
+    });
+    _ratePlan = Object.values(byPerson);
+  }
 
   const hit=new Set(diffs.concat(same).map(d=>d.name)).size;
   const rowsHtml = diffs.map(d=>{
@@ -41637,12 +41651,92 @@ function importRateCSV(txt, fn){
           <tbody>${rowsHtml}</tbody>
         </table>
       </div>` : `<div class="al mt8"><span>ℹ️</span><span>台帳と違うところはありませんでした。</span></div>`}
-    <div class="al al-w mt8"><span>⚠️</span><span>
-      <b>この版では書き込みません。</b>上の内容でよければ、次の版で「適用」を付けます。
-    </span></div>`;
+    ${_ratePlan.length ? `
+      <div class="card mt8" style="background:var(--bg3);">
+        ${_ratePlan.some(p=>p.ym) ? `
+          <div class="al al-w mb8"><span>⚠️</span><span>
+            過去の月のCSVです。<b>単価履歴に足すだけで、いまの単価は変えません。</b><br>
+            いまの台帳に入っている単価が<b>いつから</b>のものかを入れてください。
+            その月の履歴として残すので、今の単価が過去の月に巻き戻ることがありません。
+          </span></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+            <span style="font-size:12px;font-weight:700;">いまの台帳の単価は</span>
+            <input type="month" id="rc-cur-ym" class="fi" style="width:150px;font-size:12px;padding:4px 6px;" value="2026-10">
+            <span style="font-size:12px;">から</span>
+          </div>` : `
+          <div class="al mb8"><span>ℹ️</span><span>適用年月の指定がないため、いまの単価を直接書き換えます。</span></div>`}
+        <button class="btn b-grn" style="font-weight:700;" onclick="applyRateCSV()">この内容で台帳に入れる（${_ratePlan.length}名）</button>
+        <div class="xs muted mt8">単価と給与形態だけを書き換えます。口座・生年月日・部署などには触れません。</div>
+      </div>` : ''}`;
   console.log('[単価CSV] 行', rows.length, '一致', hit, '差分', diffs.length, '同じ', same.length, '不明', miss.length);
 }
 window.importRateCSV = importRateCSV;
+
+/* ★ 2026-10-19.3: 計画を台帳へ書き込む */
+async function applyRateCSV(){
+  if(!_ratePlan.length){ alert('入れるものがありません。'); return; }
+  const curYm = _rateYm($('rc-cur-ym') ? $('rc-cur-ym').value : '');
+  const hasYm = _ratePlan.some(p=>p.ym);
+  if(hasYm && !curYm){ alert('いまの単価が何月からかを入れてください。'); return; }
+
+  const ok = await showDialog({
+    icon:'💴', title:'単価を台帳に入れる',
+    msg:`${_ratePlan.length}名の単価を入れます。\n\n`
+      + (hasYm
+         ? `・CSVの月の履歴として足します\n・いまの単価は ${curYm} からの履歴として残します\n・台帳の単価欄そのものは変わりません\n`
+         : `・台帳の単価欄を直接書き換えます\n`)
+      + `\n単価と給与形態だけを書き換えます。口座・生年月日などには触れません。`,
+    okText:'入れる', cancelText:'やめる'
+  });
+  if(!ok) return;
+
+  let n=0;
+  _ratePlan.forEach(p=>{
+    const st=(D.staff||[]).find(s=>_rcNorm(s.name)===_rcNorm(p.name));
+    if(!st) return;
+    st.fixedPrices = st.fixedPrices || {};
+
+    if(p.ym){
+      // ── 履歴に足す。いまの単価欄は触らない ──
+      if(!Array.isArray(st.rateHistory)) st.rateHistory=[];
+      // 履歴がまだ無い人は、いまの単価を curYm の行として先に残す（過去に巻き戻らないように）
+      if(!st.rateHistory.length){
+        const snap=_rateSnapOf(st);
+        const hasAny=Object.keys(snap.del||{}).some(k=>k[0]!=='_' && Number(snap.del[k])>0);
+        if(hasAny) st.rateHistory.push({...snap, ym:curYm, note:'CSV取込時に、いまの単価を残したもの'});
+      }
+      let row=st.rateHistory.find(h=>_rateYm(h.ym)===_rateYm(p.ym));
+      if(!row){ row={..._rateSnapOf(st), ym:_rateYm(p.ym), note:'単価CSVから'}; st.rateHistory.push(row); }
+      row.del = {...(row.del||{})};
+      Object.keys(p.del).forEach(k=>{ row.del[k]=p.del[k]; });
+      if(Object.keys(p.tax).length){ row.del._taxType={...(row.del._taxType||{}), ...p.tax}; }
+      if(Object.keys(p.pm).length){ row.payMode={...(row.payMode||{}), ...p.pm}; }
+      st.rateHistory.sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')));
+    } else {
+      // ── 適用年月の指定なし。いまの単価欄を書き換える ──
+      st.fixedPrices.del = {...(st.fixedPrices.del||{})};
+      Object.keys(p.del).forEach(k=>{ st.fixedPrices.del[k]=p.del[k]; });
+      if(Object.keys(p.tax).length){
+        st.fixedPrices.del._taxType={...(st.fixedPrices.del._taxType||{}), ...p.tax};
+      }
+      if(Object.keys(p.pm).length){ st.payMode={...(st.payMode||{}), ...p.pm}; }
+    }
+    n++;
+  });
+
+  try{ lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff); }catch(e){}
+  try{ if(typeof fbSet==='function') await fbSet('staff_full', D.staff); }catch(e){ console.warn('[単価CSV] 保存に失敗', e); }
+  try{ if(typeof renderStaff==='function') renderStaff(); }catch(e){}
+
+  const el=$('res-r');
+  if(el) el.innerHTML = `<div class="al al-ok"><span>✅</span><span>
+    ${n}名の単価を台帳に入れました。${hasYm?`CSVの月の履歴として足し、いまの単価は ${curYm} からの履歴として残しています。`:'台帳の単価欄を書き換えました。'}<br>
+    <b>日報アプリと計数アプリに反映するには、管理タブの「いまの台帳をまとめて写す」を押してください。</b>
+  </span></div>`;
+  _ratePlan=[];
+  console.log('[単価CSV] 適用', n, '名');
+}
+window.applyRateCSV = applyRateCSV;
 
 // CSV重複確認用一時データ
 let _csvPendingNew = [];    // 新規データ（重複なし）
