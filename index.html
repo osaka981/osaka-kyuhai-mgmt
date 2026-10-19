@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.1</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5925,7 +5925,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.6';
+const APP_VER = '2026-10-20.1';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -7937,22 +7937,54 @@ function applyFirebaseData() {
     // staff_full は全フィールドを含むので、そのまま D.staff に反映
     D.staff = fbStaffFull;
   } else {
-    // ② 簡略版(drivers)へのフォールバック(後方互換)
+    /* ② 簡略版(drivers)へのフォールバック(後方互換)
+       ══════════════════════════════════════════════════════════
+       ★ 2026-10-20.1: ここは台帳を壊しかねない作りになっていた。
+
+       これまでは、台帳に既に居る人でも drivers に同じ名前があれば
+       いったん外して、簡略版から作り直していた。
+         const merged = [...D.staff.filter(s => !fbNames.includes(s.name)), ...newStaff];
+       簡略版の drivers は氏名・営業所くらいしか持っていないので、
+       作り直した人は単価・口座・給与形態・区分・部署がぜんぶ消え、
+       代わりに tanka:145 と kyuyo:'個数制(歩合)' が決め打ちで入っていた。
+       （しかもこの '個数制(歩合)' はかっこが半角で、画面の選択肢は全角の
+         '個数制（歩合）'。判定はどこにも当たらない。）
+
+       普段は staff_full がすぐ届いて上書きされるので表には出ない。
+       危ないのは、drivers のリスナーが先に届いて staff_full が遅れる
+       わずかな間と、staff_full が何かの理由で届かないときで、
+       その間に従業員を1人でも保存すると fbSet('staff_full', D.staff) が走り、
+       全員の単価と口座が落ちた配列でFirebaseを上書きしてしまう。
+
+       そこで「既に居る人には一切触らない。台帳に無い人だけ足す」に変えた。
+       足す人にも単価・給与形態は入れない。決め打ちの単価で給与計算に
+       乗るくらいなら、空のまま未入力として見えている方が安全。
+       区分も空にして、_needsReview を立てて内勤未確認として出す。
+       ══════════════════════════════════════════════════════════ */
     const fbDrivers = lsGet(LS_KEYS.DRIVERS, null);
     if (fbDrivers && fbDrivers.length) {
-      const fbNames = fbDrivers.map(d => d.name);
-      const newStaff = fbDrivers.map(d => ({
-        id: d.id,
-        empNo: d.id || '',
-        name: d.name,
-        kubun: d.officeType === 'collection' ? '集荷担当' : '個人事業主',
-        office: d.office || '',
-        tel: '',
-        kyuyo: '個数制(歩合)',
-        tanka: 145,
-      }));
-      const merged = [...D.staff.filter(s => !fbNames.includes(s.name)), ...newStaff];
-      D.staff = merged;
+      const _nk = v => String(v==null?'':v).replace(/[\s　]/g,'');
+      const have = new Set((D.staff||[]).map(s => _nk(s && s.name)).filter(Boolean));
+      let added = 0;
+      fbDrivers.forEach(d => {
+        if(!d || !d.name) return;
+        const key = _nk(d.name);
+        if(!key || have.has(key)) return;        // 台帳に居る人は触らない
+        have.add(key);
+        D.staff.push({
+          id: d.id,
+          empNo: d.id || '',
+          name: d.name,
+          kubun: '',                              // 決め打ちしない（画面で選んでもらう）
+          officeType: (d.officeType === 'collection') ? 'collection' : 'delivery',
+          office: d.office || '',
+          tel: '',
+          _fromDriversFallback: true,             // 簡略版から足した印
+          _needsReview: true,                     // 内勤未確認として出す
+        });
+        added++;
+      });
+      if(added) console.log('[台帳] 簡略版(drivers)から台帳に無い方を ' + added + '名 足しました（単価は未入力）');
     }
   }
 
