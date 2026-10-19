@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2348,6 +2348,27 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           宅配給与形態／宅配単価／集荷給与形態／集荷単価<br>
           「完了・転送」という1列にした場合は、完了と転送の両方に同じ値を入れたものとして扱います。<br>
           税区分は <span class="mono">税込</span> または <span class="mono">税別</span>。省略すると今の設定のままにします。
+        </div>
+      </div>
+
+      <!-- ★ 2026-10-19.5: フリート管理に渡すドライバーCSVの書き出し -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar" style="background:var(--blu2)"></div>フリート用 ドライバーCSV 書き出し</div></div>
+        <div class="xs muted mb8" style="line-height:1.7;">
+          経営管理で登録した方を、フリート管理に読ませるためのCSVです。<br>
+          <b>出すのは人を特定できる列だけ</b>です。単価・口座・生年月日・住所は1列も入りません。<br>
+          退職の方は出しません。フリートへは<b>こちらから書き込みません</b>ので、間違ってフリートのデータを消すことはありません。
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn b-pr btn-sm" onclick="exportFleetDriverCSV('diff')">フリートに無い方だけ</button>
+          <button class="btn b-gh btn-sm" onclick="exportFleetDriverCSV('all')">在籍者ぜんぶ</button>
+        </div>
+        <div id="res-fx" class="mt8"></div>
+        <div class="xs muted mt8" style="line-height:1.7;">
+          <b>列</b>　氏名／フリガナ／社員番号／uid／区分／在籍状況／営業所／電話／委託会社<br>
+          <b>委託会社</b>の欄が空なら弊社の方、入っていればその会社の所属ドライバーです。<br>
+          <b>uid</b> は日報・計数とつながっている変わらない鍵です。フリート側でもこれを持たせると、社員番号を付け替えても人がずれません。<br>
+          「フリートに無い方だけ」は、この端末にあるフリートのデータと突き合わせます。取れていないときは上の「フリートから再取得」を先に押してください。
         </div>
       </div>
 
@@ -5904,7 +5925,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.4';
+const APP_VER = '2026-10-19.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41822,6 +41843,131 @@ async function applyRateCSV(){
   console.log('[単価CSV] 適用', n, '名');
 }
 window.applyRateCSV = applyRateCSV;
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-19.5: フリート管理に渡すドライバーCSVの書き出し
+
+   経営管理で登録した人を、フリート管理にも手で打ち直している。
+   UAコーポレーションのように、経営管理には居るのにフリートの
+   会社ドライバーが0名のままという状態ができてしまう。
+
+   GASへ書き戻す口は作らない。作るとフリートのデータを
+   こちら側から壊せる経路ができてしまうので、CSVを1枚出して
+   フリート側で読ませる形にする。GASも触らない。
+
+   出すのは人を特定できる最小限だけ。
+   単価・口座・生年月日・住所は1列も出さない。
+   ══════════════════════════════════════════════════════════ */
+const FLEET_CSV_HEADER = ['氏名','フリガナ','社員番号','uid','区分','在籍状況','営業所','電話','委託会社'];
+
+/* 経営管理の区分（kubun）→ フリートの区分（type）
+   フリートは「社員」などの短い値を持っているので、そちらに寄せる。
+   当てはまらないものは、経営管理の値をそのまま出す（捨てない）。 */
+function _fleetKubun(k){
+  const s = String(k||'');
+  if(s === '社員・役員')        return '社員';
+  if(s === 'パート（事務）')    return 'パート';
+  if(s === '委託会社所属')      return '委託';
+  if(s.indexOf('個人事業主')===0) return '個人事業主';
+  return s;
+}
+
+/* 退職しているか。status は '在籍' / '終了' のほか、active:false の古い行もある。 */
+function _fleetRetired(st){
+  return !!(st && (st.status==='終了' || st.status==='退職' || st.active===false));
+}
+
+/* いまフリート側に居る人の氏名（空白を抜いたもの）の集合。
+   drivers（弊社）と companies[].drivers（委託）の両方を見る。
+   GASから取れていない端末では空集合になるので、呼ぶ側で件数を見て案内する。 */
+function _fleetKnownNames(){
+  const set = new Set();
+  const add = n => { const t=String(n||'').replace(/[\s　]/g,''); if(t) set.add(t); };
+  try{
+    fleetDriverList(JSON.parse(localStorage.getItem('fleet_drivers')||'[]')).forEach(d=>add(d&&d.name));
+  }catch(e){}
+  try{
+    JSON.parse(localStorage.getItem('fleet_companies')||'[]').forEach(c=>{
+      fleetDriverList(c && c.drivers).forEach(d=>add(d&&d.name));
+    });
+  }catch(e){}
+  return set;
+}
+
+function _fleetCsvCell(v){
+  const s = String(v==null?'':v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+
+/* mode: 'diff' = フリートに居ない方だけ / 'all' = 在籍者ぜんぶ */
+function exportFleetDriverCSV(mode){
+  const all = Array.isArray(D.staff) ? D.staff : [];
+  if(!all.length){ alert('台帳に従事員が居ません。'); return; }
+
+  const known = (mode==='diff') ? _fleetKnownNames() : null;
+  if(mode==='diff' && known.size===0){
+    alert('フリート側のデータがこの端末にありません。\n\n'
+      + '先に「フリート未登録ドライバー」カードの『フリートから再取得』を押すか、\n'
+      + 'フリート管理を一度開いてから、もう一度お試しください。\n\n'
+      + 'それができないときは「在籍者ぜんぶ」で出して、フリート側で重複を見てください。');
+    return;
+  }
+
+  const rows = [];
+  let skipRetired = 0, skipKnown = 0;
+  all.forEach(st=>{
+    if(_fleetRetired(st)){ skipRetired++; return; }          // 退職者は出さない
+    const nm = String(st.name||'').replace(/[\s　]/g,'');
+    if(!nm) return;
+    if(known && known.has(nm)){ skipKnown++; return; }        // 既にフリートに居る
+    const offices = Array.isArray(st.offices) ? st.offices.filter(Boolean).join('・')
+                  : String(st.office||'');
+    rows.push([
+      st.name || '',
+      st.kana || '',
+      st.empNo || '',
+      st.uid || '',
+      _fleetKubun(st.kubun),
+      '在籍',
+      offices,
+      st.tel || '',
+      st.companyName || ''
+    ]);
+  });
+
+  if(!rows.length){
+    alert(mode==='diff'
+      ? 'フリートに居ない在籍者は居ませんでした。\n（フリート側 '+known.size+'名と突き合わせました）'
+      : '出せる在籍者が居ませんでした。');
+    return;
+  }
+
+  rows.sort((a,b)=> String(a[8]||'').localeCompare(String(b[8]||'')) || String(a[0]).localeCompare(String(b[0])));
+  const csv = [FLEET_CSV_HEADER.join(',')]
+    .concat(rows.map(r=>r.map(_fleetCsvCell).join(',')))
+    .join('\r\n');
+
+  const d = new Date();
+  const ymd = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  dlcsv(csv, 'フリート用ドライバー_' + (mode==='diff'?'未登録のみ_':'在籍者_') + ymd + '.csv');
+
+  const el = $('res-fx');
+  if(el){
+    const co = {};
+    rows.forEach(r=>{ const k=r[8]||'（弊社）'; co[k]=(co[k]||0)+1; });
+    el.innerHTML = `<div class="al al-s"><span>📤</span><span>
+      <b>${rows.length}名</b>を書き出しました。<br>
+      ${Object.keys(co).map(k=>esc(k)+' '+co[k]+'名').join('　')}
+      <div class="xs muted mt8">
+        退職の方 ${skipRetired}名は出していません。
+        ${known ? 'フリートに既に居る ' + skipKnown + '名も外しました。' : ''}<br>
+        単価・口座・生年月日・住所は1列も入っていません。
+      </div>
+    </span></div>`;
+  }
+  console.log('[フリートCSV] 書き出し', rows.length, '名 / mode=', mode);
+}
+window.exportFleetDriverCSV = exportFleetDriverCSV;
 
 // CSV重複確認用一時データ
 let _csvPendingNew = [];    // 新規データ（重複なし）
