@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.6</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5925,7 +5925,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.5';
+const APP_VER = '2026-10-19.6';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -5955,6 +5955,73 @@ const KUBUN_LIST = [
 /* 委託会社に属さない区分。区分を変えたときに委託会社名を消す判定に使う。 */
 const KUBUN_INHOUSE = k =>
   k === '社員・役員' || k === 'パート（事務）' || String(k||'').indexOf('個人事業主') === 0;
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-19.6: 区分と在籍状況の判定を、この5本に集約する。
+
+   区分の選択肢を何度か作り直したため、古い値と比べている箇所が
+   14か所残っていた。古い値との比較は、エラーにならずに静かに
+   外れるだけなので、画面上は普通に動いて見える。実際に出ていた不具合：
+
+     ・委託会社所属の方の支払明細書・発行代行請求書が、会社ではなく
+       本人の名前・住所・印影・インボイス番号で出ていた
+       （'会社委託' だけを見ており、いまの値 '委託会社所属' に当たらない）
+     ・委託ドライバーの番号が、同じ会社で登録するたび「会社コード-001」に
+       なっていた（既存を0名と数えるため）
+     ・退職した方が社会保険・手当の一覧に残り、単価未登録の警告も出続けていた
+       （'退職' だけを見ており、台帳に入る値は '終了'）
+     ・集計の「社内（社員・パート）」が常に0名だった
+     ・社員・役員とパート（事務）の方が、一覧で「個人」バッジになっていた
+
+   今後また選択肢を増やしても、直すのはここだけで済むようにしておく。
+   金額の計算式には一切触っていない。
+   ══════════════════════════════════════════════════════════ */
+
+/* 委託会社に所属している人か。'会社委託' と '委託ドライバー' は旧表記。 */
+function isKbCompany(k){
+  const s = String(k||'');
+  return s === '委託会社所属' || s === '会社委託' || s === '委託ドライバー';
+}
+/* 社員・役員か。'社員' は旧表記。 */
+function isKbEmployee(k){
+  const s = String(k||'');
+  return s === '社員・役員' || s === '社員';
+}
+/* パート（事務）か。'パート' は旧表記。 */
+function isKbPart(k){
+  const s = String(k||'');
+  return s === 'パート（事務）' || s === 'パート';
+}
+/* 弊社が直接雇っている人（社員・役員 ＋ パート）。個人事業主は含めない。 */
+function isKbInhouse(k){ return isKbEmployee(k) || isKbPart(k); }
+
+/* 退職しているか。画面の表示は「退職（アーカイブ）」だが、台帳に入る値は '終了'。
+   '退職' と active:false は古いデータ向け。 */
+function isStRetired(st){
+  if(!st) return false;
+  return st.status === '終了' || st.status === '退職' || st.active === false;
+}
+
+/* 区分バッジの色だけを返す。 */
+function kbBadgeCls(k){
+  if(isKbEmployee(k)) return 'bb';
+  if(isKbPart(k))     return 'bg';
+  if(isKbCompany(k))  return 'ba';
+  return 'bz';
+}
+/* 一覧に出す区分のバッジ（短縮表記）。4か所でばらばらに書かれていたのを1本にする。 */
+function kbBadgeHtml(k, style){
+  const sty = style ? ` style="${style}"` : '';
+  if(isKbEmployee(k)) return `<span class="bdg bb"${sty}>社員</span>`;
+  if(isKbPart(k))     return `<span class="bdg bg"${sty}>パート</span>`;
+  if(isKbCompany(k))  return `<span class="bdg ba"${sty}>委託</span>`;
+  return `<span class="bdg bz"${sty}>個人</span>`;
+}
+/* 区分を全文のまま出すバッジ。個人事業主の歩合／時間単価／日額を
+   区別して見たい表（支払一覧など）で使う。色だけ上の判定に合わせる。 */
+function kbBadgeFull(k){
+  return `<span class="bdg ${kbBadgeCls(k)}">${esc(k||'未設定')}</span>`;
+}
 
 // ── HTML エスケープ ──
 function esc(s){
@@ -11443,7 +11510,8 @@ function _findMissingPriceDrivers(){
 
   (D.staff||[]).forEach(st => {
     if(!st.name) return;
-    if(st.status === '退職' || st.active === false) return;
+    /* ★ 2026-10-19.6: 同じ理由。退職した方の単価未登録の警告が出続けていた。 */
+    if(isStRetired(st)) return;
 
     const del = (D.delivery||[]).filter(r => r.staff===st.name && (r.date||'').replace(/-/g,'/').startsWith(monStr));
     const pu  = (D.pickup||[]).filter(r => r.staff===st.name && (r.date||'').replace(/-/g,'/').startsWith(monStr));
@@ -11940,7 +12008,7 @@ function renderDel() {
     const vok=r.mochidashi>0&&sm===r.mochidashi;
     const vc=vok?'<span style="color:var(--grn2)">✓ OK</span>':`<span style="color:var(--red2)" title="完了+転送+持戻+翌日=${sm}≠${r.mochidashi}">✗ NG</span>`;
     const sb=r.status==='照合済'?'<span class="bdg bg">照合済</span>':r.status==='差異あり'?'<span class="bdg br">差異あり</span>':'<span class="bdg bz">未照合</span>';
-    const kb=r.kubun==='社員'?'<span class="bdg bb">社員</span>':(r.kubun==='会社委託'||r.kubun==='委託会社所属')?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
+    const kb=kbBadgeHtml(r.kubun);
     // 金額計算
     const amt=(()=>{if(!r.unit)return 0;const u=r.unit;const s=u.s||[];return r.kanryo*(u.kanryo||0)+r.tenso*(u.tenso||0)+r.yakan*(u.yakan||0)+(r.ogata||0)*(u.ogata||0)+(r.shukka||0)*(u.shukka||0)+([r.sonota||[]].flat()).reduce((a,v,i)=>a+v*(s[i]||0),0);})();
     h+=`<tr>
@@ -16968,7 +17036,7 @@ function getDelColPayEntry(staff, companyName, officeName, ym){
 
   // 区分による優先順位の分岐
   const kubun = staff.kubun || '';
-  const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
+  const isCompanyDriver = isKbCompany(kubun);
 
   /* ★ 2026-10-19.1: 委託会社所属は「委託会社の単価が先」に統一した。
      完了・転送・夜間・大型・その他は _getEffectiveDelPrices で会社が優先なのに、
@@ -19245,7 +19313,7 @@ function _ivBulkGetData(){
     let totalAmount = 0;
     (D.staff||[]).forEach(s=>{
       // ★ 2026/09/20: 区分は「委託会社所属」で保存される。'会社委託' は旧表記。
-      if((s.kubun==='会社委託'||s.kubun==='委託会社所属') && s.companyName===c.name){
+      if(isKbCompany(s.kubun) && s.companyName===c.name){
         const pay = _calcStaffPayment(s.name, month);
         totalAmount += _calcInvoiceAmountFor(s, pay);
       }
@@ -24385,7 +24453,7 @@ function renderBillingPay(monStr){
       ${(()=>{ const b=_cmpBadgeHtml(_cmpStatsForStaff(m.name, monStr));
                return b?`<div style="margin-top:2px;">${b}</div>`:''; })()}</td>
     <td class="xs muted">${m.office}</td>
-    <td><span class="bdg ${m.kubun==='社員'?'bg':m.kubun==='会社委託'?'bb':'by'}">${m.kubun}</span></td>
+    <td>${kbBadgeFull(m.kubun)}</td>
     <td class="tr mono">${m.days.size}日</td>
     <td class="tr mono">${fmt(m.kanryo)}</td>
     <td class="tr mono xs">${m.tankaLabel}</td>
@@ -24772,9 +24840,11 @@ function renderMonthlySummary(){
     const pay = _calcStaffPayment(s.name, monStr);
     const cost = pay.total;
     totalPay += cost;
-    const isInHouse = s.kubun==='社員'||s.kubun==='パート';
+    /* ★ 2026-10-19.6: '社員'／'パート' は旧表記で、いまの値は
+       '社員・役員'／'パート（事務）'。社内が常に0名になっていた。 */
+    const isInHouse = isKbInhouse(s.kubun);
     const isIndividual = (s.kubun||'').includes('個人事業主');
-    const isCompany = s.kubun==='委託会社所属'||s.kubun==='委託ドライバー';
+    const isCompany = isKbCompany(s.kubun);
     if(isInHouse) inHousePay+=cost;
     else outsourcePay+=cost;
     if(isIndividual) individualPay+=cost;
@@ -24839,7 +24909,7 @@ function renderMonthlySummary(){
       <div style="padding:8px;background:rgba(66,133,244,.1);border-radius:5px;">
         <div class="fw7" style="color:var(--blu2);">社内（社員・パート）</div>
         <div class="mono fw7">¥${fmt(inHousePay)}</div>
-        <div class="xs muted">${activeStaff.filter(s=>s.kubun==='社員'||s.kubun==='パート').length}名</div>
+        <div class="xs muted">${activeStaff.filter(s=>isKbInhouse(s.kubun)).length}名</div>
       </div>
       <div style="padding:8px;background:rgba(230,126,34,.1);border-radius:5px;">
         <div class="fw7" style="color:var(--amb2);">外注（個人+委託）</div>
@@ -24901,7 +24971,7 @@ function renderCostAnalysis(){
     if((s.kubun||'').includes('個人事業主')){
       individuals.push({name:s.name, office:s.office, kanryo, days, cost});
       totalIndividual+=cost;
-    } else if(s.kubun==='委託会社所属'||s.kubun==='委託ドライバー'){
+    } else if(isKbCompany(s.kubun)){
       companies.push({name:s.name, company:s.companyName||s.company||'', office:s.office, kanryo, days, cost});
       totalCompany+=cost;
     } else {
@@ -24962,7 +25032,7 @@ function renderCostAnalysis(){
     activeStaff.forEach(s=>{
       const pay=_calcStaffPayment(s.name,ym);
       if((s.kubun||'').includes('個人事業主')) mInd+=pay.total;
-      else if(s.kubun==='委託会社所属'||s.kubun==='委託ドライバー') mCo+=pay.total;
+      else if(isKbCompany(s.kubun)) mCo+=pay.total;
       else mHouse+=pay.total;
     });
     trendData.push({label:ym.replace('-','/'),inHouse:mHouse,individual:mInd,company:mCo});
@@ -28327,7 +28397,7 @@ function _getDriverTypeMc(driverId){
     String(s.id) === String(driverId)
   );
   if(s){
-    if(s.kubun === '委託ドライバー' || s.companyId) return 'corporate';
+    if(isKbCompany(s.kubun) || s.companyId) return 'corporate';
     return 'personal';
   }
   // ID形式で判定
@@ -28357,7 +28427,7 @@ function renderMonthlyConfirmList(){
   // 各ドライバーごとに月次確認データを取得
   const rows = allDrivers.map(s => {
     const driverId = String(s.empNo || s.id);
-    const driverType = (s.kubun === '委託ドライバー' || s.companyId) ? 'corporate' : 'personal';
+    const driverType = (isKbCompany(s.kubun) || s.companyId) ? 'corporate' : 'personal';
     const conf = (MONTHLY_CONFIRMATIONS||[]).find(c => 
       c.yearMonth === ymInput && String(c.driverId) === driverId
     );
@@ -32374,6 +32444,11 @@ function saveCompany(){
     const idx=D.companies.findIndex(x=>x.id===_coEditId);
     if(idx>=0)D.companies[idx]=newCo;else D.companies.push(newCo);
     // ドライバーの fixedPrices を会社単価で上書き(任意)
+    /* ★ 2026-10-19.6: ここは意図して直していない。'委託ドライバー' は旧表記のため
+       この処理は長らく空振りしていたが、ver 2026-10-19.1 で単価は会社優先にしたので
+       写さなくても計算は会社の単価で出る。写すとドライバー個別の控えを
+       上書きしてしまうため、空振りのままが安全。判定だけ合わせると
+       既存の控えが消えるので、あえて触らない。 */
     D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===id).forEach(s=>{
       s.fixedPrices={del:prices.del, col:prices.col, charter:s.fixedPrices?.charter||[]};
       /* ★ 2026-10-09.53: 会社の単価をドライバーに写したら、
@@ -32429,7 +32504,9 @@ function openDriverModal(drvId,coId){
   let drvNo='';
   if(drv){drvNo=drv.driverNo||'';}
   else{
-    const ex=D.staff.filter(s=>s.kubun==='委託ドライバー'&&s.companyId===coId);
+    /* ★ 2026-10-19.6: '委託ドライバー' は旧表記のため常に0名で、
+       同じ会社で登録するたび「会社コード-001」が振られていた。 */
+    const ex=D.staff.filter(s=>isKbCompany(s.kubun)&&s.companyId===coId);
     // 3桁採番: 001〜998(999は管理者予約)
     const mx=ex.reduce((m,d)=>{
       const p=(d.driverNo||'').split('-');
@@ -32790,9 +32867,7 @@ function renderPhStaffList(){
   el.innerHTML = list.map(s=>{
     const histCount = (s.payHistory||[]).length;
     const isActive = s.id === _phSelStaffId;
-    const kb = s.kubun==='社員'?'<span class="bdg bb" style="font-size:7.5px;">社員</span>'
-              :s.kubun==='委託会社所属'?'<span class="bdg ba" style="font-size:7.5px;">委託</span>'
-              :'<span class="bdg bz" style="font-size:7.5px;">個人</span>';
+    const kb = kbBadgeHtml(s.kubun, 'font-size:7.5px;');
     return `<div class="ph-staff-item${isActive?' active':''}" onclick="selectPhStaff(${s.id})"
       style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s;
       ${isActive?'background:rgba(192,57,43,.08);border-left:2px solid var(--red);':'border-left:2px solid transparent;'}">
@@ -33362,7 +33437,7 @@ function renderSalary(){
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
     const isPaid=_isSalaryPaid(s.id, salMonStr);
     if(isPaid)paid++;else unpaid++;
-    const kb=s.kubun==='社員'?'<span class="bdg bb">社員</span>':s.kubun==='委託会社所属'?'<span class="bdg ba">委託</span>':'<span class="bdg bz">個人</span>';
+    const kb=kbBadgeHtml(s.kubun);
     const kn=delRows.reduce((a,r)=>a+r.kanryo,0);
     const puTot=puRows.reduce((a,r)=>a+Object.values(r.items||{}).reduce((x,v)=>x+v,0),0);
 
@@ -36223,7 +36298,7 @@ async function saveStaffAsk(continueAdd){
 function _getEffectiveDelPrices(staff, ym){
   if(!staff) return {};
   const kubun = staff.kubun || '';
-  const isCompanyDriver = (kubun === '委託会社所属' || kubun === '委託ドライバー');
+  const isCompanyDriver = isKbCompany(kubun);
   const _r = ym ? _rateAt(staff, ym) : null;
   const driverDel = (_r && _r.del) ? _r.del : (staff.fixedPrices?.del || {});
   if(!isCompanyDriver) return driverDel;
@@ -37283,8 +37358,10 @@ function _buildPaySlipHTMLContractor(pay, monStr){
   const info=_getSystemInfo();
   const st=pay.staff;
 
-  // 委託会社所属の場合、会社情報を宛先として使う（個人の場合は個人名）
-  const isCompany = st.kubun==='会社委託' && st.companyName;
+  /* 委託会社所属の場合、会社情報を宛先として使う（個人の場合は個人名）
+     ★ 2026-10-19.6: '会社委託' は旧表記で、いまの台帳の値は '委託会社所属'。
+        常に false になっていたため、委託会社あての紙が本人名義で出ていた。 */
+  const isCompany = isKbCompany(st.kubun) && st.companyName;
   const coInfo = isCompany?(D.companies||[]).find(c=>c.name===st.companyName):null;
   const toName = isCompany?(coInfo?.name||st.companyName):st.name;
   const toZip = (isCompany?coInfo?.zip:st.zip)||'';
@@ -37895,8 +37972,10 @@ function _buildInvoiceProxyHTML(staffName, monStr){
   const today = new Date();
   const todayLabel = `令和${today.getFullYear()-2018}年 ${today.getMonth()+1}月${today.getDate()}日`;
 
-  // 発行元情報
-  const isCompany = st.kubun==='会社委託' && st.companyName;
+  /* 発行元情報
+     ★ 2026-10-19.6: 上と同じ理由。請求書の発行元・印影・インボイス番号が
+        会社のものに切り替わらず、本人のものが刷られていた。 */
+  const isCompany = isKbCompany(st.kubun) && st.companyName;
   const coInfo = isCompany ? (D.companies||[]).find(c=>c.name===st.companyName) : null;
   const issuer = {
     name: isCompany ? (coInfo?.name || st.companyName) : st.name,
@@ -40281,8 +40360,10 @@ function _htStaffList(){
   const off=$('ht-office')?.value||'';
   return (D.staff||[]).filter(s=>{
     if(!s || !s.name) return false;
-    if(s.status==='退職') return false;
-    if(!(s.kubun==='社員・役員' || s.kubun==='パート（事務）')) return false;
+    /* ★ 2026-10-19.6: 台帳に入る値は '終了'。'退職' だけを見ていたため
+       退職した方がこの一覧に残っていた。 */
+    if(isStRetired(s)) return false;
+    if(!isKbInhouse(s.kubun)) return false;
     if(off && String(s.office||'')!==off) return false;
     return true;
   }).sort((a,b)=>String(a.office||'').localeCompare(String(b.office||''))
@@ -41865,17 +41946,16 @@ const FLEET_CSV_HEADER = ['氏名','フリガナ','社員番号','uid','区分',
    当てはまらないものは、経営管理の値をそのまま出す（捨てない）。 */
 function _fleetKubun(k){
   const s = String(k||'');
-  if(s === '社員・役員')        return '社員';
-  if(s === 'パート（事務）')    return 'パート';
-  if(s === '委託会社所属')      return '委託';
+  /* ★ 2026-10-19.6: ここも共通の判定に寄せた。古い値の方（'社員' など）も拾える。 */
+  if(isKbEmployee(s)) return '社員';
+  if(isKbPart(s))     return 'パート';
+  if(isKbCompany(s))  return '委託';
   if(s.indexOf('個人事業主')===0) return '個人事業主';
   return s;
 }
 
-/* 退職しているか。status は '在籍' / '終了' のほか、active:false の古い行もある。 */
-function _fleetRetired(st){
-  return !!(st && (st.status==='終了' || st.status==='退職' || st.active===false));
-}
+/* 退職しているか。★ 2026-10-19.6: 同じ判定を2本持つのをやめ、isStRetired に寄せた。 */
+function _fleetRetired(st){ return isStRetired(st); }
 
 /* いまフリート側に居る人の氏名（空白を抜いたもの）の集合。
    drivers（弊社）と companies[].drivers（委託）の両方を見る。
