@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-19.2</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2321,6 +2321,36 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div id="res-p" class="mt8"></div>
         </div>
       </div>
+
+      <!-- ★ 2026-10-19.2: 従事員の単価 取込（第1段階：読み込みと差分の表示だけ。書き込みはしない） -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar"></div>従事員の単価 取込</div></div>
+        <div class="al al-w mb8"><span>⚠️</span><span>
+          <b>この版では読み込んで差分を見せるだけで、台帳には書き込みません。</b>
+          中身が正しいことを確認してから、次の版で適用できるようにします。
+        </span></div>
+        <div class="xs muted mb8" style="line-height:1.7;">
+          既にいる方の単価だけを更新します。<b>新しい方の登録はしません</b>（従業員管理の画面から登録してください）。<br>
+          突き合わせは<b>氏名</b>で行います。社員番号は郵便局ごとに違うため使いません。<br>
+          触るのは単価と給与形態だけです。口座・生年月日・部署などほかの項目には一切触れません。
+        </div>
+        <div class="drop" id="dp-r" onclick="document.getElementById('fi-r').click()"
+          ondragover="dov(event,'dp-r')" ondragleave="dlv('dp-r')" ondrop="hdrop(event,'r')">
+          <div style="font-size:30px;margin-bottom:6px;">💴</div>
+          <div class="sm muted">従事員の単価CSVをドロップ</div>
+          <div class="xs muted mt8">クリックして選択 .csv</div>
+        </div>
+        <input type="file" id="fi-r" accept=".csv" style="display:none" onchange="hfile(event,'r')">
+        <div id="res-r" class="mt8"></div>
+        <div class="xs muted mt8" style="line-height:1.7;">
+          <b>列名</b>（別名可・順番は自由・使わない列は省略できます）<br>
+          氏名／適用年月／完了（または 完了・転送）／転送／夜間／大型／集荷／その他1〜4／税区分／
+          宅配給与形態／宅配単価／集荷給与形態／集荷単価<br>
+          「完了・転送」という1列にした場合は、完了と転送の両方に同じ値を入れたものとして扱います。<br>
+          税区分は <span class="mono">税込</span> または <span class="mono">税別</span>。省略すると今の設定のままにします。
+        </div>
+      </div>
+
       <!-- フォーマット仕様（全幅） -->
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>CSVフォーマット仕様</div></div>
@@ -5874,7 +5904,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-19.1';
+const APP_VER = '2026-10-19.2';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41457,12 +41487,162 @@ function hfile(e,type){
   const file=e.target.files[0];if(!file)return;
   const tryR=enc=>new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=rej;r.readAsText(file,enc);});
   tryR('UTF-8').then(txt=>{const g=(txt.match(/\ufffd/g)||[]).length>5;return g?tryR('Shift_JIS'):txt;})
-    .then(txt=>{if(type==='d')importCSV(txt,file.name);else importPostCSV(txt,file.name);e.target.value='';})
+    .then(txt=>{
+      /* ★ 2026-10-19.2: 'r' = 従事員の単価 */
+      if(type==='d') importCSV(txt,file.name);
+      else if(type==='r') importRateCSV(txt,file.name);
+      else importPostCSV(txt,file.name);
+      e.target.value='';
+    })
     .catch(()=>{$('res-'+type).innerHTML=`<div class="al al-e"><span>❌</span><span>読み込みに失敗しました</span></div>`;});
 }
-function hdrop(e,t){e.preventDefault();$(t==='d'?'dp-d':'dp-p').classList.remove('drag');const f=e.dataTransfer.files[0];if(f)hfile({target:{files:[f]}},t);}
+function hdrop(e,t){e.preventDefault();const z=$('dp-'+t);if(z)z.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)hfile({target:{files:[f]}},t);}
 function dov(e,id){e.preventDefault();$(id).classList.add('drag');}
 function dlv(id){$(id).classList.remove('drag');}
+
+/* ══════════════════════════════════════════════════════════════
+   ★ 2026-10-19.2: 従事員の単価 CSV取込（第1段階）
+     この版は読み込んで差分を見せるだけ。台帳には一切書き込まない。
+     ・突き合わせは氏名。社員番号は郵便局ごとに違うため使わない
+     ・既にいる方の更新だけ。新規登録はしない
+     ・触るのは単価と給与形態だけ。口座・生年月日などには触れない
+   ══════════════════════════════════════════════════════════════ */
+const RATE_CSV_COLS = [
+  {k:'kanryo', label:'完了',     alias:['完了','配達完了','完了単価']},
+  {k:'tenso',  label:'転送',     alias:['転送','転送還付','転送・還付']},
+  {k:'night',  label:'夜間',     alias:['夜間','夜間加算']},
+  {k:'ogata',  label:'大型',     alias:['大型','大型加算','170超']},
+  {k:'shukka', label:'集荷',     alias:['集荷','集荷委託']},
+  {k:'s1',     label:'その他1',  alias:['その他1']},
+  {k:'s2',     label:'その他2',  alias:['その他2']},
+  {k:'s3',     label:'その他3',  alias:['その他3']},
+  {k:'s4',     label:'その他4',  alias:['その他4']},
+];
+const RATE_CSV_NAME  = ['氏名','従事員名','担当者名','名前','従業員名'];
+const RATE_CSV_YM    = ['適用年月','年月','適用月'];
+const RATE_CSV_BOTH  = ['完了・転送','完了転送','完了/転送'];
+const RATE_CSV_TAX   = ['税区分','税'];
+const RATE_CSV_PM = [
+  {biz:'del', label:'宅配', t:['宅配給与形態','給与形態'], r:['宅配単価','給与形態の単価','時間単価','日額']},
+  {biz:'col', label:'集荷', t:['集荷給与形態'],            r:['集荷給与単価']},
+];
+
+function _rcNorm(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
+function _rcNum(v){
+  const t=String(v==null?'':v).replace(/[,\s　円]/g,'');
+  if(t==='') return null;
+  const n=Number(t);
+  return isFinite(n) ? n : null;
+}
+function _rcPick(headers, alias){
+  for(const a of alias){ const h=headers.find(x=>_rcNorm(x)===_rcNorm(a)); if(h) return h; }
+  return null;
+}
+function _rcShow(v){ return (v==null||v===''||Number(v)===0) ? '—' : Number(v).toLocaleString(); }
+
+function importRateCSV(txt, fn){
+  const el=$('res-r'); if(!el) return;
+  const {headers, rows} = parseCSV(txt);
+  if(!rows.length){ el.innerHTML=`<div class="al al-e"><span>❌</span><span>データの行がありませんでした</span></div>`; return; }
+
+  const hName = _rcPick(headers, RATE_CSV_NAME);
+  if(!hName){
+    el.innerHTML=`<div class="al al-e"><span>❌</span><span>氏名の列が見つかりませんでした。1行目の見出しに「氏名」を入れてください。</span></div>`;
+    return;
+  }
+  const hYm   = _rcPick(headers, RATE_CSV_YM);
+  const hBoth = _rcPick(headers, RATE_CSV_BOTH);
+  const hTax  = _rcPick(headers, RATE_CSV_TAX);
+  const hCol  = {}; RATE_CSV_COLS.forEach(c=>{ hCol[c.k]=_rcPick(headers, c.alias); });
+  const hPm   = RATE_CSV_PM.map(p=>({...p, ht:_rcPick(headers,p.t), hr:_rcPick(headers,p.r)}));
+
+  // 氏名→従事員（空白の違いを無視して引く）
+  const byName={};
+  (D.staff||[]).forEach(s=>{ const k=_rcNorm(s.name); if(k && !byName[k]) byName[k]=s; });
+
+  const miss=[], diffs=[], same=[];
+  rows.forEach((r,i)=>{
+    const nm=String(r[hName]||'').trim();
+    if(!nm) return;
+    const st=byName[_rcNorm(nm)];
+    if(!st){ miss.push({line:i+2, name:nm}); return; }
+    const cur=(st.fixedPrices && st.fixedPrices.del) || {};
+    const curTax=(cur._taxType)||{};
+    const ym=hYm ? String(r[hYm]||'').trim() : '';
+    const taxCsv=hTax ? String(r[hTax]||'').trim() : '';
+    const taxVal = taxCsv==='税込' ? 'in' : (taxCsv==='税別' ? 'ex' : '');
+
+    RATE_CSV_COLS.forEach(c=>{
+      let raw=null;
+      if(hCol[c.k]!=null) raw=_rcNum(r[hCol[c.k]]);
+      else if(hBoth && (c.k==='kanryo'||c.k==='tenso')) raw=_rcNum(r[hBoth]);
+      if(raw==null) return;                      // 列が無い／空欄は触らない
+      const now=_rcNum(cur[c.k]);
+      const nowTax=curTax[c.k]||'';
+      const changed = (now!==raw) || (taxVal && nowTax!==taxVal);
+      const rec={name:st.name, ym, item:c.label, now, next:raw,
+                 nowTax, nextTax:taxVal, isNew:(now==null||now===0)};
+      (changed?diffs:same).push(rec);
+    });
+
+    hPm.forEach(p=>{
+      if(!p.ht && !p.hr) return;
+      const t = p.ht ? String(r[p.ht]||'').trim() : '';
+      const rate = p.hr ? _rcNum(r[p.hr]) : null;
+      if(!t && rate==null) return;
+      const o=((st.payMode||{})[p.biz])||{};
+      const changed = (t && t!==(o.type||'')) || (rate!=null && rate!==(_rcNum(o.rate)));
+      const rec={name:st.name, ym, item:p.label+'の給与形態',
+                 now:(o.type? o.type+(o.rate?' '+Number(o.rate).toLocaleString()+'円':'') : null),
+                 next:(t||o.type||'')+(rate!=null?' '+rate.toLocaleString()+'円':''),
+                 isText:true, isNew:!o.type};
+      (changed?diffs:same).push(rec);
+    });
+  });
+
+  const hit=new Set(diffs.concat(same).map(d=>d.name)).size;
+  const rowsHtml = diffs.map(d=>{
+    const nowS = d.isText ? (d.now||'<span class="muted">未設定</span>') : _rcShow(d.now);
+    const nextS= d.isText ? esc(String(d.next)) : _rcShow(d.next);
+    const taxS = d.isText ? '' :
+      (d.nextTax ? `<span class="xs muted">${d.nowTax==='in'?'税込':(d.nowTax==='ex'?'税別':'—')} → ${d.nextTax==='in'?'税込':'税別'}</span>` : '');
+    return `<tr>
+      <td style="white-space:nowrap;font-weight:600;">${esc(d.name)}</td>
+      <td style="white-space:nowrap;">${esc(d.item)}</td>
+      <td class="tr" style="white-space:nowrap;color:var(--txt2);">${nowS}</td>
+      <td class="tr" style="white-space:nowrap;font-weight:700;color:var(--blu2);">${nextS}</td>
+      <td style="white-space:nowrap;">${d.isNew?'<span class="xs" style="color:var(--grn2);">新しく入ります</span>':'<span class="xs" style="color:var(--amb2);">変わります</span>'} ${taxS}</td>
+      <td style="white-space:nowrap;" class="xs muted">${esc(d.ym||'')}</td>
+    </tr>`;
+  }).join('');
+
+  const missHtml = miss.length ? `
+    <div class="al al-w mt8"><span>⚠️</span><span>
+      台帳に見つからなかった方が ${miss.length} 行あります。新規登録はしないため、この行は飛ばされます。<br>
+      <span class="xs">${miss.map(m=>`${m.line}行目: ${esc(m.name)}`).join(' / ')}</span>
+    </span></div>` : '';
+
+  el.innerHTML = `
+    <div class="al al-ok"><span>✅</span><span>
+      <b>${esc(fn)}</b> を読み込みました（${rows.length}行）。
+      台帳と一致 ${hit}名 ／ 変わるところ ${diffs.length}件 ／ 変わらないところ ${same.length}件
+    </span></div>
+    ${missHtml}
+    ${diffs.length ? `
+      <div class="mt8" style="max-height:420px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+        <table style="width:100%;font-size:12px;">
+          <thead><tr>
+            <th>氏名</th><th>項目</th><th class="tr">いまの台帳</th><th class="tr">CSV</th><th>扱い</th><th>適用年月</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>` : `<div class="al mt8"><span>ℹ️</span><span>台帳と違うところはありませんでした。</span></div>`}
+    <div class="al al-w mt8"><span>⚠️</span><span>
+      <b>この版では書き込みません。</b>上の内容でよければ、次の版で「適用」を付けます。
+    </span></div>`;
+  console.log('[単価CSV] 行', rows.length, '一致', hit, '差分', diffs.length, '同じ', same.length, '不明', miss.length);
+}
+window.importRateCSV = importRateCSV;
 
 // CSV重複確認用一時データ
 let _csvPendingNew = [];    // 新規データ（重複なし）
