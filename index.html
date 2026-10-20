@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.8</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.9</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5948,7 +5948,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.8';
+const APP_VER = '2026-10-20.9';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16841,18 +16841,33 @@ function expandDelColEntries(range, filters){
   const rows = filterDelCol(range);
   const result = [];
   rows.forEach(r=>{
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-10-20.9: 郵便局（postOffice）が空の行で、集荷が0円になっていた。
+
+       getDelColUnitPrice は局名が空だと 0 を返す。
+       日報アプリから来た行や「郵便局データから作成」で作られた行には
+       postOffice が入っていないことがあり、その日の定時集荷・
+       指定事業所集荷が丸ごと0円で請求から落ちていた。
+
+       日報の読み戻し（_pickDelOffice）は、postOffice が空なら
+       営業所をその日の郵便局として扱う。同じ考え方をここにも当てる。
+       絞り込みと集計のキーも同じ値を使わないと、
+       「郵便局で絞ると出てこない」「(未設定)に積まれる」が起きるので、
+       最初に1つ決めてから全部それを使う。
+       ══════════════════════════════════════════════════════════ */
+    const _po = r.postOffice || r.office || '';
     if(filters.staff && r.staff !== filters.staff) return;
     if(filters.driverId && String(r.driverId) !== String(filters.driverId)) return;
     if(filters.office && r.office !== filters.office) return;
-    if(filters.postOffice && r.postOffice !== filters.postOffice) return;
+    if(filters.postOffice && _po !== filters.postOffice) return;
     (r.companies||[]).forEach(c=>{
-      const unit = getDelColUnitPrice(r.postOffice, c.name);
+      const unit = getDelColUnitPrice(_po, c.name);
       result.push({
         date: r.date,
         staff: r.staff,
         driverId: r.driverId,
         office: r.office,
-        postOffice: r.postOffice,
+        postOffice: _po,
         company: c.name,
         count: c.count||0,
         unitPrice: unit,
