@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.3</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.4</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5946,7 +5946,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.3';
+const APP_VER = '2026-10-20.4';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -42700,11 +42700,43 @@ function _sortStaffByOffice(list){
 }
 
 // ══ 宅配：従事員コンボ ══
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.4: 営業所を選んだときに出す従事員の絞り込みを広げた。
+
+   元は s.office===selOff、つまり「メイン郵便局」だけを見ていた。そのため、
+     ・従業員台帳の「担当郵便局」に足しても、その局の日報では候補に出てこない
+     ・委託会社所属でメイン郵便局が空の人は、どの局でも候補に出てこない
+   という状態だった。担当郵便局は集荷先を見せるかどうかの判定
+   （_isStaffColAtOffice）には使われているので、登録はできるのに
+   日報では効かない片手落ちになっていた。
+
+   メイン ＋ 本人の担当郵便局 ＋ 所属委託会社の担当郵便局 の3つを見る。
+   会社の担当郵便局は本人に写さず、その場で会社を見る。こうすると
+   会社側で担当局を足し引きしたときに、所属ドライバー全員へすぐ効く。
+   写すと会社を変えるたびに全員を直すことになるので、そうしない。
+   ══════════════════════════════════════════════════════════ */
+function _ddSubName(x){ return (typeof x==='string') ? x : (x && x.name) || ''; }
+function _staffAtOffice(s, off){
+  if(!off) return true;                       // 営業所が空なら全員
+  if(!s) return false;
+  if(s.office === off) return true;           // メイン郵便局
+  if((s.subOffices||[]).some(x=>_ddSubName(x)===off)) return true;   // 本人の担当郵便局
+  if(s.companyId != null && s.companyId !== ''){                      // 所属委託会社の担当郵便局
+    const co = (D.companies||[]).find(c=>c && String(c.id)===String(s.companyId));
+    if(co && (co.subOffices||[]).some(x=>_ddSubName(x)===off)) return true;
+  }
+  return false;
+}
+/* 候補の2行目。メイン郵便局が空の委託会社所属は会社名を出す（空行にしない）。 */
+function _staffSubLabel(s){
+  return s.office || s.companyName || '';
+}
+
 function filterDdStaff(input){
   const q=(input?.value||'').trim();
   const qH=toHankaku(q);
   const selOff=$('dd-off')?.value||'';
-  const items=_sortStaffByOffice(D.staff.filter(s=>!selOff||s.office===selOff))
+  const items=_sortStaffByOffice(D.staff.filter(s=>_staffAtOffice(s, selOff)))
     .map(s=>{
       const n=s.empNo||'';
       const tail=n.slice(-3); // 末尾3桁で検索可能
@@ -42714,7 +42746,7 @@ function filterDdStaff(input){
         matchQuery(s.name,q)||
         matchQuery(s.kana||'',q);
       return match?{
-        no:n, label:s.name, sub:s.office,
+        no:n, label:s.name, sub:_staffSubLabel(s),
         onSelect:`selectDdStaff('${s.name.replace(/'/g,"\'")}','${n}')`
       }:null;
     }).filter(Boolean);
@@ -42836,11 +42868,12 @@ function filterPuStaff(input){
   const q=(input?.value||'').trim();
   const qH=toHankaku(q);
   const selOff=$('pu-off')?.value||'';
-  const items=_sortStaffByOffice(D.staff.filter(s=>!selOff||s.office===selOff))
+  /* ★ 2026-10-20.4: 宅配と同じ絞り込みにそろえた（メイン＋担当＋所属会社の担当）。 */
+  const items=_sortStaffByOffice(D.staff.filter(s=>_staffAtOffice(s, selOff)))
     .map(s=>{
       const n=s.empNo||'';const tail=n.slice(-3);
       const match=!q||matchQuery(n,q)||(isNumOnly(qH)&&(n.startsWith(qH)||tail.startsWith(qH)))||matchQuery(s.name,q)||matchQuery(s.kana||'',q);
-      return match?{no:n,label:s.name,sub:s.office,
+      return match?{no:n,label:s.name,sub:_staffSubLabel(s),
         onSelect:`selectPuStaff('${s.name.replace(/'/g,"\'")}','${n}')`}:null;
     }).filter(Boolean);
   _showDd('pu-staff-dd',items);
