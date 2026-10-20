@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.6</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.7</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5948,7 +5948,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.6';
+const APP_VER = '2026-10-20.7';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -6400,8 +6400,16 @@ function genEmpNo(officeName) {
 function genCoDriverNo(companyId){
   const co = (D.companies||[]).find(c => c && String(c.id)===String(companyId));
   if(!co) return '';
-  const prefix = String(co.companyCode || '').trim();
-  if(!prefix) return '';                      // 会社コードが無い会社では作れない
+  /* ★ 2026-10-20.7: 会社コードの欄が空の会社がある。
+     会社コードは saveCompany が 10001 から採番し、そのときIDにも同じ数字を入れている
+     （id = parseInt(code)）。つまりIDが5桁の数字ならそれが会社コードそのもの。
+     欄が空というだけで番号を作れずに止まるのはもったいないので、IDで補う。
+     IDが日時から作られた長い数字のときは会社コードではないので、使わない。 */
+  let prefix = String(co.companyCode || '').trim();
+  if(!prefix && /^\d{5}$/.test(String(co.id||'')) && Number(co.id) >= 10000){
+    prefix = String(co.id);
+  }
+  if(!prefix) return '';                      // 会社コードが分からない会社では作れない
   let mx = 0;
   (D.staff||[]).forEach(s=>{
     if(!s || String(s.companyId)!==String(companyId)) return;
