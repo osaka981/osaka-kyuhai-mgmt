@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.4</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.5</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2344,8 +2344,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div id="res-r" class="mt8"></div>
         <div class="xs muted mt8" style="line-height:1.7;">
           <b>列名</b>（別名可・順番は自由・使わない列は省略できます）<br>
-          氏名／適用年月／完了（または 完了・転送）／転送／夜間／大型／集荷／その他1〜4／税区分／
+          氏名／適用年月／<b>委託会社</b>／完了（または 完了・転送）／転送／夜間／大型／集荷／その他1〜4／税区分／
           宅配給与形態／宅配単価／集荷給与形態／集荷単価<br>
+          <b>委託会社</b>の列を入れておくと、台帳に無い方を「登録する」で開いたときに、
+          区分・委託会社・メイン郵便局・社員番号（会社コード-連番）がすべて入った状態になります。<br>
           「完了・転送」という1列にした場合は、完了と転送の両方に同じ値を入れたものとして扱います。<br>
           税区分は <span class="mono">税込</span> または <span class="mono">税別</span>。省略すると今の設定のままにします。
         </div>
@@ -5946,7 +5948,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.4';
+const APP_VER = '2026-10-20.5';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -6376,6 +6378,57 @@ function genEmpNo(officeName) {
   while(used.has(next) && next <= 999) next++;
   if (next > 999) { alert('この営業所の連番が上限(999)に達しています'); return ''; }
   return disp + String(next).padStart(3, '0');
+}
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.5: 委託会社所属のドライバー番号を「会社コード-連番」で作る。
+
+   これまで従業員管理から登録すると、委託会社の方にも弊社の社員番号
+   （営業所コード＋連番3桁、例 1001）が振られていた。委託会社には
+   会社ごとの番号を当てているので、弊社番号まで付くと番号が二重になり、
+   会社コードを当てている意味が薄れる。
+
+   委託会社管理の「＋ドライバー」から登録したときと同じ形にそろえる。
+   連番は「いちばん大きい番号＋1」。弊社番号（genEmpNo）が空き番を
+   埋めるのと違い、こちらは退職者の番号を使い回さない。
+   どの番号が誰だったかを会社と突き合わせるとき、使い回していると
+   追えなくなるため。
+
+   番号を変えても過去のデータは崩れない。saveStaff が旧番号を
+   empNoHistory に積み、findStaffByEmpNo が履歴も見て同じ人に寄せる。
+   ══════════════════════════════════════════════════════════ */
+function genCoDriverNo(companyId){
+  const co = (D.companies||[]).find(c => c && String(c.id)===String(companyId));
+  if(!co) return '';
+  const prefix = String(co.companyCode || '').trim();
+  if(!prefix) return '';                      // 会社コードが無い会社では作れない
+  let mx = 0;
+  (D.staff||[]).forEach(s=>{
+    if(!s || String(s.companyId)!==String(companyId)) return;
+    [s.driverNo, s.empNo].forEach(v=>{
+      const m = /^(\d+)-(\d{3})$/.exec(String(v==null?'':v).trim());
+      if(!m || m[1]!==prefix) return;
+      const n = parseInt(m[2],10);
+      if(n>=1 && n<=998) mx = Math.max(mx, n);
+    });
+  });
+  const next = mx + 1;
+  if(next > 998) return '';
+  return prefix + '-' + String(next).padStart(3,'0');
+}
+
+/* 画面の入力から、いま選ばれている委託会社のIDを返す（0＝委託会社所属でない・未選択）。
+   社員番号を決める時点では saveStaff の companyId がまだ出来ていないため、
+   同じ判定をここでも行う。 */
+function _stSelectedCompanyId(){
+  const kbn = $('st-kbn')?.value || '';
+  if(typeof isKbCompany==='function' ? !isKbCompany(kbn) : kbn!=='委託会社所属') return 0;
+  const selId = parseInt($('st-company-sel')?.value) || 0;
+  if(selId) return selId;
+  const nm = ($('st-company-name')?.value || '').trim();
+  if(!nm) return 0;
+  const co = (D.companies||[]).find(c => c && c.name===nm);
+  return co ? co.id : 0;
 }
 
 // officeCode から営業所名を引く
@@ -21376,6 +21429,16 @@ function prevEmpNo(){
   const disp=$('st-empno-disp');
   const manual=$('st-empno-manual')?.checked;
   if(!disp) return;
+  /* ★ 2026-10-20.5: 委託会社所属は、メイン郵便局ではなく
+     会社コード-連番を出す。編集中の方は既存の番号をそのまま残す。 */
+  const _coId = (typeof _stSelectedCompanyId==='function') ? _stSelectedCompanyId() : 0;
+  if(_coId){
+    if(manual) return;
+    if($('m-staff')?._editId) return;          // 編集中は番号を作り直さない
+    const cno = genCoDriverNo(_coId);
+    disp.value = cno || '';
+    return;
+  }
   // メイン郵便局が「なし」の場合は手入力強制
   if(!off){
     // 自動モードのままなら手入力に切替
@@ -21418,6 +21481,25 @@ function onCompanySelChange(){
   if($('st-company-tel'))$('st-company-tel').value=co.tel||'';
   if($('st-company-contact'))$('st-company-contact').value=co.contact||'';
   if($('st-company-addr'))$('st-company-addr').value=co.addr||'';
+  /* ★ 2026-10-20.5: メイン郵便局が空なら、会社の担当郵便局から入れる。
+     委託会社のドライバーは会社の契約で局が決まるので、
+     1人ずつ選び直す手間をなくす。既に入っていれば触らない。
+     メイン郵便局を必須のままにしているのは、空にすると
+     外注費分析・品目別集計・従業員の営業所フィルタで
+     「未設定」に落ちてしまうため。 */
+  try{
+    const off=$('st-off');
+    if(off && !off.value){
+      const subs=Array.isArray(co.subOffices)?co.subOffices:[];
+      const first=subs.map(x=>(typeof x==='string')?x:(x&&x.name)).filter(Boolean)[0];
+      if(first && [...off.options].some(o=>o.value===first)){
+        off.value=first;
+        if(typeof renderSubOfficeBadges==='function') renderSubOfficeBadges();
+      }
+    }
+  }catch(e){ console.warn('[委託会社] 担当郵便局の引き継ぎで問題', e); }
+  /* 会社を選び直したら社員番号の候補も作り直す（弊社番号→会社コード-連番） */
+  try{ if(typeof prevEmpNo==='function') prevEmpNo(); }catch(e){}
 }
 
 function onKyuChange(){
@@ -25892,11 +25974,25 @@ function saveStaff(continueAdd=false){
   const manual=$('st-empno-manual')?.checked;
   let empNo=$('st-empno-disp')?.value.trim();
   console.log('[saveStaff] manual=', manual, 'empNo(form)=', empNo);
+  /* ★ 2026-10-20.5: 委託会社所属には弊社の社員番号を振らない。
+     会社コード-連番（例 10001-001）を当てる。 */
+  const _coIdForNo = (typeof _stSelectedCompanyId==='function') ? _stSelectedCompanyId() : 0;
+  const _isCoStaff = (typeof isKbCompany==='function') && isKbCompany($('st-kbn')?.value||'');
   if(!manual){
     if(_existingStaff && _existingStaff.empNo){
       // 編集中: 既存の empNo を維持(自動採番で上書きしない)
       empNo = _existingStaff.empNo;
       console.log('[saveStaff] 編集モード: 既存empNo維持=', empNo);
+    } else if(_coIdForNo){
+      empNo = genCoDriverNo(_coIdForNo);
+      console.log('[saveStaff] 新規(委託会社): 自動採番=', empNo);
+      if(!empNo){
+        alert('この委託会社のドライバー番号を作れませんでした。\n\n委託会社管理でその会社を開き、会社コードが入っているか確認してください。');
+        return;
+      }
+    } else if(_isCoStaff){
+      alert('委託会社を選んでください。\n新しい会社のときは、先に委託会社管理で登録してください。');
+      return;
     } else if(officeName){
       // 新規追加: 自動採番
       empNo=genEmpNo(officeName);
@@ -41734,6 +41830,9 @@ const RATE_CSV_NAME  = ['氏名','従事員名','担当者名','名前','従業�
 const RATE_CSV_YM    = ['適用年月','年月','適用月'];
 const RATE_CSV_BOTH  = ['完了・転送','完了転送','完了/転送'];
 const RATE_CSV_TAX   = ['税区分','税'];
+/* ★ 2026-10-20.5: 委託会社の列。登録画面を開いたときに会社を自動で入れるため。
+   毎回ひとりずつ委託会社を選び直す手間をなくす。 */
+const RATE_CSV_CO    = ['委託会社','会社','所属会社','委託先'];
 const RATE_CSV_PM = [
   {biz:'del', label:'宅配', t:['宅配給与形態','給与形態'], r:['宅配単価','給与形態の単価','時間単価','日額']},
   {biz:'col', label:'集荷', t:['集荷給与形態'],            r:['集荷給与単価']},
@@ -41767,6 +41866,27 @@ function openStaffFromRateCSV(i){
     if(mei) mei.value=m.mei||'';
     try{ if(typeof syncStName==='function') syncStName(); }catch(e){}
     try{ if(typeof _checkStaffDuplicate==='function') _checkStaffDuplicate(); }catch(e){}
+
+    /* ★ 2026-10-20.5: CSVに委託会社の列があれば、区分と会社をここで入れる。
+       会社を選ぶと onCompanySelChange が走り、メイン郵便局も会社の
+       担当郵便局から入り、社員番号も会社コード-連番になる。
+       台帳に無い会社名だったときは、区分だけ立てて会社名を入れておく
+       （この場合は社員番号が作れないので、先に委託会社の登録が要る）。 */
+    if(m.coName){
+      const kb=$('st-kbn');
+      if(kb){
+        kb.value='委託会社所属';
+        try{ if(typeof onStKbnChange==='function') onStKbnChange(); }catch(e){}
+      }
+      const sel=$('st-company-sel');
+      if(m.coId && sel && [...sel.options].some(o=>String(o.value)===String(m.coId))){
+        sel.value=String(m.coId);
+        try{ if(typeof onCompanySelChange==='function') onCompanySelChange(); }catch(e){}
+      } else {
+        const nmEl=$('st-company-name'); if(nmEl) nmEl.value=m.coName;
+        console.warn('[単価CSV] 台帳に無い委託会社:', m.coName);
+      }
+    }
 
     // 宅配単価
     const map={kanryo:'st-pkanryo', tenso:'st-ptenso', night:'st-pnight', ogata:'st-pogata',
@@ -41804,6 +41924,7 @@ function importRateCSV(txt, fn){
   const hYm   = _rcPick(headers, RATE_CSV_YM);
   const hBoth = _rcPick(headers, RATE_CSV_BOTH);
   const hTax  = _rcPick(headers, RATE_CSV_TAX);
+  const hCo   = _rcPick(headers, RATE_CSV_CO);   /* ★ 2026-10-20.5 */
   const hCol  = {}; RATE_CSV_COLS.forEach(c=>{ hCol[c.k]=_rcPick(headers, c.alias); });
   const hPm   = RATE_CSV_PM.map(p=>({...p, ht:_rcPick(headers,p.t), hr:_rcPick(headers,p.r)}));
 
@@ -41834,8 +41955,15 @@ function importRateCSV(txt, fn){
         if(t || rr!=null) pm[p.biz]={type:t, rate:(rr!=null?rr:0)};
       });
       const parts=nm.split(/[\s　]+/);
+      /* ★ 2026-10-20.5: 委託会社名も控える。台帳の会社と名前で突き合わせ、
+         見つかればそのIDも持たせる（登録画面でそのまま選ぶため）。 */
+      const coName = hCo ? String(r[hCo]||'').trim() : '';
+      const coHit = coName
+        ? (D.companies||[]).find(c=>c && _rcNorm(c.name)===_rcNorm(coName))
+        : null;
       miss.push({line:i+2, name:nm, sei:parts[0]||nm, mei:parts.slice(1).join('') ,
-                 del:d, tax:tx, pm:pm});
+                 del:d, tax:tx, pm:pm,
+                 coName: coName, coId: (coHit ? coHit.id : 0)});
       return;
     }
 
