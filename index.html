@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.5</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.6</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5948,7 +5948,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.5';
+const APP_VER = '2026-10-20.6';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -26439,6 +26439,8 @@ function saveStaff(continueAdd=false){
   }
   prevEmpNo();
   renderStaff('');renderSalary();
+  /* ★ 2026-10-20.6: 単価CSVの「台帳に無い方」の一覧を描き直す。 */
+  try{ if(typeof _rateRefreshNew==='function') _rateRefreshNew(); }catch(e){}
   if(continueAdd){
     // 連続登録：モーダルを閉じずにフォームをリセット
     if($('st-name'))$('st-name').focus();
@@ -41856,6 +41858,73 @@ let _rateNew  = [];   /* ★ 2026-10-19.4: 台帳に無かった方（登録画�
 /* ★ 2026-10-19.4: CSVの1行を、従業員の新規登録画面に入れた状態で開く。
    氏名と単価だけを入れる。区分・営業所・委託会社は画面で選んでもらう。
    姓名が分かれた欄なので、同名の人がいれば既存の重複チェックが警告を出す。 */
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.6: 登録した方が「台帳に無い方」の一覧に残り続けていた。
+   保存しても消えないので、同じ人をもう一度「登録する」で開いてしまい、
+   二重登録の元になっていた（重複の警告は出るが、押す前に気づきたい）。
+   保存のたびに台帳と突き合わせ、入った方は「登録済み」に変える。
+   並びは変えずに印だけ変えるので、押す場所がずれない。
+   ══════════════════════════════════════════════════════════ */
+function _rateNewHtml(){
+  const miss = _rateNew || [];
+  if(!miss.length) return '';
+  const left = miss.filter(m=>!m.done).length;
+  const doneN = miss.length - left;
+  return `
+    <div class="al ${left?'al-w':'al-ok'} mt8"><span>${left?'⚠️':'✅'}</span><span>
+      ${left
+        ? `台帳に見つからなかった方が <b>${left}名</b> 残っています。`
+        : `台帳に無かった方は<b>すべて登録できました</b>。`}
+      ${doneN?`（登録済み ${doneN}名）`:''}<br>
+      ${left ? `下の「登録する」を押すと、<b>氏名・単価・委託会社を入れた状態で従業員の登録画面が開きます。</b><br>
+        保存すると、この一覧から「登録済み」に変わります。似た名前の方がいる場合は登録画面で警告が出ます。`
+             : `このままCSVをもう一度読み込んで「台帳に入れる」を押すと、単価が履歴に入ります。`}
+    </span></div>
+    <div class="mt8" style="max-height:300px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>行</th><th>氏名</th><th>委託会社</th><th>CSVの単価</th><th style="width:110px;"></th></tr></thead>
+        <tbody>${miss.map((m,i)=>{
+          const d=m.del||{}, pm=m.pm||{};
+          const bits=[];
+          if(d.kanryo) bits.push('完了'+Number(d.kanryo).toLocaleString());
+          if(d.night)  bits.push('夜間'+Number(d.night).toLocaleString());
+          if(d.ogata)  bits.push('大型'+Number(d.ogata).toLocaleString());
+          if(d.shukka) bits.push('集荷'+Number(d.shukka).toLocaleString());
+          ['s1','s2','s3','s4'].forEach((k,n)=>{ if(d[k]) bits.push('その他'+(n+1)+' '+Number(d[k]).toLocaleString()); });
+          ['del','col'].forEach(b=>{ const o=pm[b]; if(o&&o.type) bits.push((b==='del'?'宅配':'集荷')+' '+o.type+(o.rate?' '+Number(o.rate).toLocaleString()+'円':'')); });
+          return `<tr${m.done?' style="opacity:.45;"':''}>
+            <td class="xs muted">${m.line}</td>
+            <td style="white-space:nowrap;font-weight:600;">${esc(m.name)}</td>
+            <td class="xs" style="color:var(--blu2);white-space:nowrap;">${esc(m.coName||'')||'<span class="muted">—</span>'}</td>
+            <td class="xs" style="color:var(--txt2);">${bits.join(' ／ ')||'—'}</td>
+            <td>${m.done
+              ? '<span class="bdg bg" style="font-size:10px;">登録済み</span>'
+              : `<button class="btn b-grn btn-sm" style="font-size:11px;padding:3px 10px;"
+                  onclick="openStaffFromRateCSV(${i})">登録する</button>`}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+/* 台帳と突き合わせて「登録済み」の印を付け直し、一覧だけ描き直す。
+   保存のたびに saveStaff から呼ばれる。取込画面を開いていなければ何もしない。 */
+function _rateRefreshNew(){
+  if(!Array.isArray(_rateNew) || !_rateNew.length) return;
+  const have = new Set();
+  (D.staff||[]).forEach(s=>{ if(s && s.name) have.add(_rcNorm(s.name)); });
+  let changed = false;
+  _rateNew.forEach(m=>{
+    const now = have.has(_rcNorm(m.name));
+    if(now !== !!m.done){ m.done = now; changed = true; }
+  });
+  if(!changed) return;
+  const wrap = document.getElementById('rc-new-wrap');
+  if(wrap) wrap.innerHTML = _rateNewHtml();
+  console.log('[単価CSV] 登録済みの印を更新しました');
+}
+window._rateRefreshNew = _rateRefreshNew;
+
 function openStaffFromRateCSV(i){
   const m=_rateNew[i]; if(!m){ alert('データが見つかりません。CSVを読み込み直してください。'); return; }
   if(typeof openNewStaff!=='function'){ alert('登録画面を開けませんでした。'); return; }
@@ -42032,35 +42101,7 @@ function importRateCSV(txt, fn){
 
   /* ★ 2026-10-19.4: 台帳に無い方は、1人ずつ登録画面へ送れるようにする */
   _rateNew = miss;
-  const missHtml = miss.length ? `
-    <div class="al al-w mt8"><span>⚠️</span><span>
-      台帳に見つからなかった方が <b>${miss.length}名</b> います。
-      下の「登録する」を押すと、<b>氏名と単価を入れた状態で従業員の登録画面が開きます。</b><br>
-      区分・営業所・委託会社を選んで保存してください。似た名前の方がいる場合は画面上で警告が出ます。
-    </span></div>
-    <div class="mt8" style="max-height:300px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
-      <table style="width:100%;font-size:12px;">
-        <thead><tr><th>行</th><th>氏名</th><th>CSVの単価</th><th style="width:110px;"></th></tr></thead>
-        <tbody>${miss.map((m,i)=>{
-          const d=m.del||{}, pm=m.pm||{};
-          const bits=[];
-          if(d.kanryo) bits.push('完了'+Number(d.kanryo).toLocaleString());
-          if(d.night)  bits.push('夜間'+Number(d.night).toLocaleString());
-          if(d.ogata)  bits.push('大型'+Number(d.ogata).toLocaleString());
-          if(d.shukka) bits.push('集荷'+Number(d.shukka).toLocaleString());
-          ['s1','s2','s3','s4'].forEach((k,n)=>{ if(d[k]) bits.push('その他'+(n+1)+' '+Number(d[k]).toLocaleString()); });
-          ['del','col'].forEach(b=>{ const o=pm[b]; if(o&&o.type) bits.push((b==='del'?'宅配':'集荷')+' '+o.type+(o.rate?' '+Number(o.rate).toLocaleString()+'円':'')); });
-          return `<tr>
-            <td class="xs muted">${m.line}</td>
-            <td style="white-space:nowrap;font-weight:600;">${esc(m.name)}</td>
-            <td class="xs" style="color:var(--txt2);">${bits.join(' ／ ')||'—'}</td>
-            <td><button class="btn b-grn btn-sm" style="font-size:11px;padding:3px 10px;"
-                  onclick="openStaffFromRateCSV(${i})">登録する</button></td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>` : '';
-
+  const missHtml = `<div id="rc-new-wrap">${_rateNewHtml()}</div>`;
   el.innerHTML = `
     <div class="al al-ok"><span>✅</span><span>
       <b>${esc(fn)}</b> を読み込みました（${rows.length}行）。
