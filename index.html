@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.1</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.3</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2820,10 +2820,24 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
+      <!-- ★ 2026-10-20.3: 読み取り専用の一覧にした。
+           元は「💾 保存」ボタンが saveOfficePrices() を呼んでいたが、この関数は
+           どこにも無く、単価の一覧を描く処理も無かったため、カードは空のまま
+           押しても何も起きなかった。
+           単価の持ち主は拠点マスタ1か所だけなので、ここから書き込む経路は作らない。 -->
       <div id="ts-prices-content">
         <div class="card mb12">
-          <div class="ch"><div class="ct"><div class="cbar"></div>営業所別 郵便局契約単価</div>
-          <button class="btn b-grn btn-sm" onclick="saveOfficePrices()">💾 保存</button></div>
+          <div class="ch"><div class="ct"><div class="cbar"></div>郵便局別 契約単価</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-left:auto;">
+              <span class="xs muted">時点</span>
+              <input type="month" id="opr-mon" class="fi" style="width:150px;font-size:11px;padding:3px 6px;" onchange="renderPostPriceList()">
+              <button class="btn b-gh btn-sm" onclick="renderPostPriceList()">再読込</button>
+            </div>
+          </div>
+          <div class="xs muted mb8" style="line-height:1.7;">
+            単価の持ち主は<b>拠点マスタ</b>1か所だけです。この表は読み取り専用で、直すときは右の「編集」から拠点マスタを開いてください。<br>
+            選んだ月の<b>1日時点</b>で効いている単価を出します。月の途中で改定があると、適用開始日の列で分かります。
+          </div>
           <div id="office-price-tables"></div>
         </div>
       </div>
@@ -3619,7 +3633,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div id="dd-off-combo" style="position:relative;">
         <input type="text" id="dd-off-input" class="fi" placeholder="1・１・大阪北..."
           oninput="filterDdOff(this)" onfocus="filterDdOff(this)" onblur="hideDdDropdown('dd-off-dd',200)"
-          onkeydown="_comboKey(event,'dd-off-dd',()=>onDdOffKey(event))"
+          onkeydown="_comboKey(event,'dd-off-dd',()=>_ddNextField(event))"
           autocomplete="off">
         <div id="dd-off-dd" class="combo-dd" style="display:none;"></div>
         <input type="hidden" id="dd-off">
@@ -3640,7 +3654,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div style="position:relative;">
         <input type="text" id="dd-staff-input" class="fi" placeholder="001・1001・田中..."
           oninput="filterDdStaff(this)" onfocus="filterDdStaff(this)" onblur="hideDdDropdown('dd-staff-dd',200)"
-          onkeydown="_comboKey(event,'dd-staff-dd',()=>onDdStaffKey(event))"
+          onkeydown="_comboKey(event,'dd-staff-dd',()=>_ddNextField(event))"
           autocomplete="off">
         <div id="dd-staff-dd" class="combo-dd" style="display:none;"></div>
         <input type="hidden" id="dd-staff">
@@ -5681,8 +5695,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <span style="font-size:11px;font-weight:700;color:var(--txt);">郵便局との契約単価</span>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto;">
           <span style="font-size:10px;color:var(--txt2);">税区分:</span>
-          <button type="button" id="of-tax-btn-ex" onclick="setOfTax('ex')" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">税別</button>
-          <button type="button" id="of-tax-btn-in" onclick="setOfTax('in')" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">税込</button>
+          <button type="button" id="of-tax-btn-ex" disabled title="写しのため変更できません" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--red);background:var(--red);color:#fff;">税別</button>
+          <button type="button" id="of-tax-btn-in" disabled title="写しのため変更できません" style="padding:2px 9px;border-radius:3px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid var(--brd2);background:transparent;color:var(--txt2);">税込</button>
           <input type="hidden" id="of-tax-type" value="ex">
         </div>
       </div>
@@ -5691,16 +5705,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button class="btn b-gh btn-sm" onclick="requireTSForPrices()">PIN認証して編集</button>
       </div>
       <div id="of-del-price-content" style="display:none;">
+        <!-- ★ 2026-10-20.3: ここは拠点マスタの写しで、請求にも支払にも効かない。
+             入れられるのに効かないと「入れたのに請求が変わらない」が必ず起きるので、
+             読み取り専用にして拠点マスタへ案内する。 -->
+        <div class="al al-w mb8"><span>⚠️</span><span>
+          ここは<b>拠点マスタの写し</b>です。<b>請求にも支払にも効きません。</b><br>
+          単価を直すときは<b>拠点マスタ</b>で行ってください（郵便局マスタ → 単価 の一覧からも開けます）。
+        </span></div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-          <div class="fg"><label style="font-size:9px;">完了（円）</label><input type="number" id="of-pkanryo" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">転送（円）</label><input type="number" id="of-ptenso" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">夜間（円）</label><input type="number" id="of-pnight" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">大型（円）</label><input type="number" id="of-pogata" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">集荷（円）</label><input type="number" id="of-pshukka" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">その他1（円）</label><input type="number" id="of-ps1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">その他2（円）</label><input type="number" id="of-ps2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">その他3（円）</label><input type="number" id="of-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg"><label style="font-size:9px;">その他4（円）</label><input type="number" id="of-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">完了（円）</label><input type="number" id="of-pkanryo" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">転送（円）</label><input type="number" id="of-ptenso" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">夜間（円）</label><input type="number" id="of-pnight" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">大型（円）</label><input type="number" id="of-pogata" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">集荷（円）</label><input type="number" id="of-pshukka" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">その他1（円）</label><input type="number" id="of-ps1" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">その他2（円）</label><input type="number" id="of-ps2" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">その他3（円）</label><input type="number" id="of-ps3" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
+          <div class="fg"><label style="font-size:9px;">その他4（円）</label><input type="number" id="of-ps4" class="fi" readonly tabindex="-1" style="font-size:11px;padding:4px 6px;background:var(--bg3);color:var(--txt2);cursor:default;" placeholder="0"></div>
         </div>
         <!-- 集荷先（拠点マスタの写し・編集不可） -->
         <!-- ★ 2026-10-09.10: 集荷先の登録は拠点マスタ1本にまとめた。
@@ -5925,7 +5946,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.1';
+const APP_VER = '2026-10-20.3';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -6001,6 +6022,29 @@ function isStRetired(st){
   if(!st) return false;
   return st.status === '終了' || st.status === '退職' || st.active === false;
 }
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.2: 給与形態（kyuyo）の判定もここにまとめる。
+
+   画面の選択肢は 月給／保証／時給／個数制（歩合）／日給 の5つだが、
+   コードは '時間給'（3か所）と '時間単価'（2か所）と比べていた。
+   どちらも選択肢に無いので、当たっていなかった。
+   さらに '個数制(歩合)' とかっこが半角で書き込んでいる箇所があり、
+   全角と比べる判定（歩合かどうか）に当たらなくなっていた。
+   ══════════════════════════════════════════════════════════ */
+
+/* 個数制（歩合）か。半角かっこで入っている古いデータも拾う。 */
+function isKyuyoKeisu(k){
+  const s = String(k||'');
+  return s === '個数制（歩合）' || s === '個数制(歩合)';
+}
+/* 時給か。'時間給'・'時間単価' は選択肢に無い書き方だが、残っていれば拾う。 */
+function isKyuyoHourly(k){
+  const s = String(k||'');
+  return s === '時給' || s === '時間給' || s === '時間単価';
+}
+/* 月給か。 */
+function isKyuyoMonthly(k){ return String(k||'') === '月給'; }
 
 /* 区分バッジの色だけを返す。 */
 function kbBadgeCls(k){
@@ -10038,6 +10082,7 @@ function navByS(s) {
   if (s==='monthly-summary') _call('renderMonthlySummary');
   if (s==='cost-analysis')   _call('renderCostAnalysis');
   if (s==='ts-inv')      _call('renderTSInv');     // ★ 2026-10-08.17
+  if (s==='ts-prices')   _call('renderPostPriceList');   /* ★ 2026-10-20.3: 描画の呼び出しが1つも無く、画面が空だった */
   if (s==='offices')     _call('renderOffCards');
   if (s==='departments') _call('renderDeptCards');
   if (s==='locations')   _call('renderLocCards');
@@ -11549,8 +11594,11 @@ function _findMissingPriceDrivers(){
     const pu  = (D.pickup||[]).filter(r => r.staff===st.name && (r.date||'').replace(/-/g,'/').startsWith(monStr));
     if(del.length === 0 && pu.length === 0) return;
 
-    // 月給制は単価不要(固定額)なのでスキップ
-    if(st.kyuyo === '月給' || st.kyuyo === '時間給') return;
+    /* 固定額の方は単価が要らないのでスキップ。
+       ★ 2026-10-20.2: 元は '月給' と '時間給' を見ていたが、'時間給' は選択肢に無い。
+          そのため時給・日給・保証の方に「単価が未登録」の警告が出続けていた。
+          単価が要るのは個数制（歩合）だけなので、そこだけを見る形にそろえた。 */
+    if(st.kyuyo && !isKyuyoKeisu(st.kyuyo)) return;
 
     const missing = [];
     const dp = (typeof _getEffectiveDelPrices==='function') ? _getEffectiveDelPrices(st, monStr) : (st.fixedPrices?.del||{});
@@ -21099,7 +21147,7 @@ function renderStaff(flt){
     const _ndS = v => String(v||'').replace(/\//g,'-');
     const _myDel = D.delivery.filter(r=>r.staff===s.name && _ndS(r.date).startsWith(_curYM));
     const kn=_myDel.reduce((a,r)=>a+r.kanryo,0);
-    const isKeisu2=s.kyuyo==='個数制（歩合）';
+    const isKeisu2=isKyuyoKeisu(s.kyuyo);   // ★ 2026-10-20.2: 半角かっこの古いデータも拾う
     const dp2=s.fixedPrices?.del||{};
     let est=0;
     if(typeof _hasBizPayMode==='function' && _hasBizPayMode(s)){
@@ -21109,12 +21157,12 @@ function renderStaff(flt){
       _myDel.forEach(r=>{
         est+=(dp2.kanryo||0)*r.kanryo+(dp2.tenso||0)*r.tenso+(dp2.night||0)*(r.yakan||0);
       });
-    } else if(s.kyuyo==='時間単価' || s.kyuyo==='時間給'){
+    } else if(isKyuyoHourly(s.kyuyo)){   /* ★ 2026-10-20.2: 選択肢は '時給'。元の2つは当たっていなかった */
       // ★ 共通ヘルパー _calcHourlyPay で勤怠×単価を計算(明細タブと同一ロジック)
       const _ym = new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');
       est = _calcHourlyPay(s, _ym).amount;
     } else {
-      est=s.kyuyo==='月給'?s.tanka:s.tanka*kn;   // kn は当月分
+      est=isKyuyoMonthly(s.kyuyo)?s.tanka:s.tanka*kn;   // kn は当月分
     }
     const empBadge=s.empNo?`<span class="mono fw7" style="color:var(--amb2);letter-spacing:.1em;">${s.empNo}</span>`:'<span class="xs muted">未設定</span>';
 
@@ -31186,7 +31234,7 @@ function renderCompanyPage(){
         <span><strong style="color:var(--txt);">${routes.length}</strong><span style="color:var(--txt2);">件</span> 集荷ルート</span>
         <span style="margin-left:auto;display:flex;gap:6px;">
           <button class="btn b-grn btn-sm" onclick="openDriverModal(null,${co.id})" style="font-size:10px;padding:2px 8px;">＋ ドライバー</button>
-          <button class="btn b-gh btn-sm" onclick="openCoRouteModal(${co.id},null)" style="font-size:10px;padding:2px 8px;">＋ ルート</button>
+          <button class="btn b-gh btn-sm" onclick="openCompanyRouteModal(${co.id},null)" style="font-size:10px;padding:2px 8px;">＋ ルート</button>
           ${co.memo?.text?'<button class="btn btn-sm" onclick="openCoMonthlyInput('+co.id+')" style="background:rgba(192,57,43,.1);color:var(--red2);border:1px solid rgba(192,57,43,.3);font-size:10px;padding:2px 8px;">⚠️ 当月メモあり</button>':'<button class="btn b-gh btn-sm" onclick="openCoMonthlyInput('+co.id+')" style="font-size:10px;padding:2px 8px;">当月入力</button>'}
         </span>
       </div>
@@ -32601,20 +32649,36 @@ function saveDriver(){
     }).filter(x=>x);
   const newDrv={
     id:_drvEditId||(Date.now()),empNo:drvNo,driverNo:drvNo,name,kana:$('drv-kana')?.value||'',
-    kubun:'委託ドライバー',companyId:_drvCoId,
+    /* ★ 2026-10-20.2: '委託ドライバー' は旧表記。新しく登録する人には
+       いまの値 '委託会社所属' を入れる（台帳に残る旧表記は判定側で拾う）。 */
+    kubun:'委託会社所属',companyId:_drvCoId,
     workType: workType,
     office:(workType === 'collection' ? '' : (D.offices.find(o=>driverOffices.includes(o.id))?.name||'')),
     driverOffices:(workType === 'collection' ? [] : driverOffices),
     tel:toHankaku($('drv-tel')?.value||''),car:toHankaku($('drv-car')?.value||''),
     startDate:$('drv-start')?.value||'',note:$('drv-note')?.value||'',
-    kyuyo:'個数制(歩合)',tanka:0,
+    /* ★ 2026-10-20.2: かっこが半角で、歩合の判定に当たっていなかった。 */
+    kyuyo:'個数制（歩合）',tanka:0,
     // 部署・拠点(Phase 3追加)
     deptIds: delDept ? [delDept.id] : [],
     primaryDeptId: delDept?.id || null,
     primaryLocationId: workType === 'collection' ? null : (primaryLoc?.id || null),
     subLocationIds: workType === 'collection' ? [] : subLocs,
   };
-  if(_drvEditId){const idx=D.staff.findIndex(x=>x.id===_drvEditId);if(idx>=0)D.staff[idx]={...D.staff[idx],...newDrv};else D.staff.push(newDrv);}
+  if(_drvEditId){
+    const idx=D.staff.findIndex(x=>x.id===_drvEditId);
+    if(idx>=0){
+      /* ★ 2026-10-20.2: newDrv は給与形態と基本単価を必ず持っているため、
+         このダイアログで電話番号だけ直したときも、その人の給与形態が
+         '個数制（歩合）'、基本単価が0 に書き換わっていた。
+         この2つはこのダイアログに入力欄が無いので、既にあれば残す。 */
+      const prev=D.staff[idx];
+      const m={...prev, ...newDrv};
+      if(prev.kyuyo) m.kyuyo=prev.kyuyo;
+      if(prev.tanka!=null && prev.tanka!=='') m.tanka=prev.tanka;
+      D.staff[idx]=m;
+    } else D.staff.push(newDrv);
+  }
   else D.staff.push(newDrv);
   // Firebase 同期(staff_full + drivers簡略版)
   if(typeof fbSet === 'function'){
@@ -33626,20 +33690,34 @@ function addOffice(){
   // 郵便局単価
   const ofTaxType=$('of-tax-type')?.value||'ex';
   /* ★ 2026-10-17.19: 委託会社と同じ。入力した数字をそのまま持つ（÷1.1しない）。 */
-  const ofTc=v=>parseInt(v)||0;
-  const postPrices = isTSAuthenticated() ? {
-    p60:ofTc($('of-p60')?.value), p80:ofTc($('of-p80')?.value),
-    p100:ofTc($('of-p100')?.value), p120:ofTc($('of-p120')?.value),
-    p140:ofTc($('of-p140')?.value), p160:ofTc($('of-p160')?.value),
-    kanryo:ofTc($('of-pkanryo')?.value),
-    night:ofTc($('of-pnight')?.value), ogata:ofTc($('of-pogata')?.value),
-    tenso:ofTc($('of-ptenso')?.value), modori:ofTc($('of-pmodori')?.value),
-    shukka:ofTc($('of-pshukka')?.value),
-    s1:ofTc($('of-ps1')?.value), s2:ofTc($('of-ps2')?.value),
-    s3:ofTc($('of-ps3')?.value), s4:ofTc($('of-ps4')?.value),
-    colCompanies: (typeof collectColCompanies==='function') ? collectColCompanies() : [],
-    _taxType:ofTaxType,
-  } : null;
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-20.3: ここで postPrices を毎回作り直していたのをやめた。
+
+     of-p60 〜 of-p160 と of-pmodori は入力欄が存在しない。
+     それでも $('of-p60')?.value を読んでいたため undefined になり、
+     parseInt(undefined)||0 で 0 が入っていた。
+     つまり営業所を保存するたびに、写しのサイズ別単価と持戻が
+     毎回0に潰れていた（大阪西の単価が全部0になった事故と同じ形）。
+
+     そもそも営業所マスタの postPrices は拠点マスタの写しで、
+     請求にも支払にも効かない。生きているのは
+       ・colCompanies（日報アプリと支払の単価解決が読む集荷先の写し）
+       ・shukka（拠点マスタが0のときだけの予備）
+     の2つだけ。
+     なので写しは触らず、集荷先だけを拠点マスタからの写しとして重ねる。
+     単価の欄は読み取り専用にして、拠点マスタへ案内する。
+     ══════════════════════════════════════════════════════════ */
+  const _prevPP = editId
+    ? ((D.offices.find(x=>x.id===editId)||{}).postPrices || null)
+    : null;
+  const postPrices = (()=>{
+    const cols = (typeof collectColCompanies==='function') ? collectColCompanies() : null;
+    if(!_prevPP && !cols) return null;
+    const out = _prevPP ? {..._prevPP} : {};
+    if(cols) out.colCompanies = cols;
+    if(out._taxType == null) out._taxType = ofTaxType;   // 無いときだけ入れる
+    return out;
+  })();
 
   const offData = {
     officeCode: code, name,
@@ -42485,6 +42563,26 @@ function _ddConfirm(ddId){
 
 
 // コンボボックス共通キーハンドラ（↑↓Enter対応）
+/* ★ 2026-10-20.2: 「次の入力欄へ移る」部分を _comboKey の中から外に出した。
+   候補の一覧が閉じているときのEnterでも、同じ動きをさせたいため。
+   宅配日報の営業所欄・従事員欄は、閉じているときのEnterで
+   onDdOffKey / onDdStaffKey を呼んでいたが、この2つはどこにも定義が無く、
+   Enterを押しても何も起きていなかった（一覧が開いていれば効くので気づきにくい）。 */
+function _ddNextField(e){
+  const order = e.target.closest('#m-del') ? DD_ORDER : PU_ORDER;
+  const cur = e.target.id;
+  const idx = order.indexOf(cur);
+  for(let i=idx+1; i<order.length; i++){
+    const id=order[i];
+    if(id==='__SAVE_DEL__'){ confirmAndSave('del'); return; }
+    if(id==='__SAVE_PU__'){  confirmAndSave('pu');  return; }
+    const next=$(id);
+    if(next && next.offsetParent!==null){
+      setTimeout(()=>{ next.focus(); if(typeof next.select==='function')next.select(); },80);
+      return;
+    }
+  }
+}
 function _comboKey(e, ddId, fallback){
   const dd=$(ddId);
   const isOpen = dd && dd.style.display!=='none';
@@ -42494,23 +42592,7 @@ function _comboKey(e, ddId, fallback){
     e.preventDefault();
     if(isOpen){
       const confirmed=_ddConfirm(ddId);
-      if(confirmed){
-        // 確定後：次のフィールドへ自動移動
-        const order = e.target.closest('#m-del') ? DD_ORDER : PU_ORDER;
-        const cur = e.target.id;
-        const idx = order.indexOf(cur);
-        for(let i=idx+1; i<order.length; i++){
-          const id=order[i];
-          if(id==='__SAVE_DEL__'){ confirmAndSave('del'); return; }
-          if(id==='__SAVE_PU__'){  confirmAndSave('pu');  return; }
-          const next=$(id);
-          if(next && next.offsetParent!==null){
-            setTimeout(()=>{ next.focus(); if(typeof next.select==='function')next.select(); },80);
-            return;
-          }
-        }
-        return;
-      }
+      if(confirmed){ _ddNextField(e); return; }   // 確定後：次のフィールドへ自動移動
     }
     // ドロップダウンが閉じている→fallback（Enterで次フィールド移動）
     if(fallback) fallback();
@@ -44425,6 +44507,101 @@ function generatePostInvoice(locationId, monStr){
      画面側の id（tsinv-mon / tsinv-off / ts-inv-content）に合わせて作り直す。
      集計は既存の _calcPostBilling をそのまま使うので、金額の計算は変えない。
    ════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.3: 郵便局別 契約単価の一覧（読み取り専用）
+
+   郵便局単価の入れ物は3つあった。
+     1. 拠点マスタ D.locations[].prices ＋ priceHistory … これが正
+     2. 営業所マスタ D.offices[].postPrices … 写し。請求には効かない
+     3. この画面 … 空っぽ（描画も保存も無かった）
+
+   4局の単価を並べて見比べられる画面がどこにも無かったので、
+   3番をその用途にあてる。拠点マスタを読むだけで、書き込まない。
+   ══════════════════════════════════════════════════════════ */
+const OPR_COLS = [
+  {k:'kanryo',       l:'完了'},
+  {k:'tenso',        l:'転送'},
+  {k:'night',        l:'夜間'},
+  {k:'ogata',        l:'大型'},
+  {k:'shukka',       l:'集荷(定時)'},
+  {k:'mochimodoiri', l:'持戻'},
+];
+/* 一覧から拠点マスタを開く。id の型（数値・文字列）を気にしないよう名前で引く。 */
+function oprEditLoc(name){
+  const loc = (D.locations||[]).find(l => l && String(l.name) === String(name));
+  if(!loc){ alert('拠点マスタに見つかりませんでした。'); return; }
+  if(typeof openLocModal !== 'function'){ alert('拠点の編集画面を開けませんでした。'); return; }
+  openLocModal(loc.id);
+}
+window.oprEditLoc = oprEditLoc;
+
+function renderPostPriceList(){
+  const box = $('office-price-tables');
+  if(!box) return;
+  const monEl = $('opr-mon');
+  if(monEl && !monEl.value){
+    const d = new Date();
+    monEl.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  }
+  const mon  = (monEl && monEl.value) || '';
+  const asOf = mon ? (mon + '-01') : (new Date()).toISOString().slice(0,10);
+
+  const locs = (D.locations||[])
+    .filter(l => l && l.type === 'post_office' && l.active !== false)
+    .sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), 'ja'));
+
+  if(!locs.length){
+    box.innerHTML = '<div class="xs muted" style="padding:12px;">郵便局の拠点が登録されていません。拠点マスタで登録してください。</div>';
+    return;
+  }
+
+  const cell = v => (v==null || Number(v)===0)
+    ? '<span class="muted">—</span>'
+    : Number(v).toLocaleString();
+
+  let noPrice = 0;
+  const rows = locs.map(loc => {
+    const p = (typeof _locPriceAt === 'function') ? _locPriceAt(loc, asOf) : (loc.prices || null);
+    const hist = Array.isArray(loc.priceHistory) ? loc.priceHistory : [];
+    const taxIn = (((p && p._taxType) || (loc.prices && loc.prices._taxType) || 'ex') === 'in');
+    const from = (p && p._from) || '';
+    if(!p) noPrice++;
+    /* 適用開始日の欄。履歴が無い人は「履歴なし（いまの単価）」と出す。 */
+    const fromCell = from
+      ? `<span class="mono">${esc(from)}</span>`
+      : (hist.length
+          ? '<span class="bdg br" style="font-size:9px;">この時点の単価なし</span>'
+          : '<span class="muted xs">履歴なし</span>');
+    return `<tr>
+      <td class="fw7">${esc(loc.name||'')}
+        ${loc.isBilling === false ? '<span class="bdg bz" style="font-size:9px;margin-left:5px;">請求対象外</span>' : ''}</td>
+      <td class="xs">${taxIn ? '税込' : '税別'}</td>
+      ${OPR_COLS.map(c => `<td class="tr mono">${p ? cell(p[c.k]) : '<span class="muted">—</span>'}</td>`).join('')}
+      <td>${fromCell}</td>
+      <td class="tr"><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;"
+        onclick="oprEditLoc('${esc(String(loc.name||'')).replace(/'/g,"\\'")}')">編集</button></td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="tb" style="min-width:720px;">
+        <thead><tr>
+          <th>郵便局</th><th>税区分</th>
+          ${OPR_COLS.map(c=>`<th class="tr">${c.l}</th>`).join('')}
+          <th>適用開始日</th><th class="tr">　</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="xs muted mt8" style="line-height:1.7;">
+      ${mon ? esc(mon.replace('-','年'))+'月1日時点' : '今日時点'}の単価です（${locs.length}局）。
+      ${noPrice ? '<span style="color:var(--red2);font-weight:700;">'+noPrice+'局はこの時点の単価が未登録です。</span>' : ''}<br>
+      「—」は0円または未入力です。指定事業所集荷の集荷先別単価と、定時集荷の会社別単価はこの表には出していません（拠点マスタで確認してください）。
+    </div>`;
+}
+window.renderPostPriceList = renderPostPriceList;
+
 function renderTSInv(){
   const box = $('ts-inv-content');
   if(!box) return;
@@ -44684,6 +44861,7 @@ function nav(el){
   if(s==='qty-match'){ if(typeof renderQtyMatch==='function') renderQtyMatch(); }
   if(s==='invoice-gen'){ if(typeof renderInvoiceList==='function') renderInvoiceList(); }
   if(s==='gas-mgmt'){ if(typeof initGasMgmt==='function') initGasMgmt(); }
+  if(s==='ts-prices'){ if(typeof renderPostPriceList==='function') renderPostPriceList(); }   /* ★ 2026-10-20.3 */
   // 上部ナビのトップタブ・サブタブを同期
   const topTab=_PAGE_TO_TAB?.[s];
   if(topTab&&topTab!==_currentTopTab){ switchTopTab(topTab, true); }
