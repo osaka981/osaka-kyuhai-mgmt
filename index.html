@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.10</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.11</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5977,7 +5977,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.10';
+const APP_VER = '2026-10-20.11';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41989,8 +41989,10 @@ function _ubOffCandidates(){
   return m;
 }
 
-let _ubPlan = [];      /* 入れる行 */
-let _ubProb = [];      /* 入れられない行 */
+let _ubPlan  = [];     /* 入れる行 */
+let _ubProb  = [];     /* 入れられない行 */
+let _ubFiles = [];     /* 読み込んだCSVの中身（結びつけたあと読み直す） */
+let _ubLink  = [];     /* 結びつけ待ちの人 */
 
 function hfileUnbou(e){
   const files=[...(e.target.files||[])];
@@ -42018,6 +42020,8 @@ window.hfileUnbou=hfileUnbou; window.hdropUnbou=hdropUnbou;
 
 function importUnbouCSV(list){
   const el=$('res-u'); if(!el) return;
+  /* ★ 2026-10-20.11: 結びつけたあとに読み直せるよう、中身を控えておく */
+  if(list) _ubFiles=list; else list=_ubFiles||[];
   _ubPlan=[]; _ubProb=[];
 
   /* 台帳の索引：社員番号と氏名の両方から引けるようにする */
@@ -42027,7 +42031,17 @@ function importUnbouCSV(list){
     const n=_ubNorm(s.empNo); if(n && !byNo[n]) byNo[n]=s;
     (s.empNoHistory||[]).forEach(h=>{ const k=_ubNorm(h); if(k && !byNo[k]) byNo[k]=s; });
     const nm=_ubNorm(s.name); if(nm && !byName[nm]) byName[nm]=s;
+    /* ★ 2026-10-20.11: 別表記（aliases）でも引けるようにする。
+       運坊の氏名が台帳と違うとき（浦野光弘／光広など）、台帳の氏名は
+       正しいまま、運坊側の呼び名をここに足して突き合わせる。 */
+    (s.aliases||[]).forEach(a=>{ const k=_ubNorm(a); if(k && !byName[k]) byName[k]=s; });
   });
+  /* 台帳の氏名か、その別表記のどれかに一致するか */
+  const _nameOk=(st,nm)=>{
+    if(!st) return false;
+    if(_ubNorm(st.name)===_ubNorm(nm)) return true;
+    return (st.aliases||[]).some(a=>_ubNorm(a)===_ubNorm(nm));
+  };
   /* 既にある日報：日付＋氏名で引く */
   const have=new Set();
   (D.delivery||[]).forEach(r=>{ if(r && r.date && r.staff) have.add(_ubDate(r.date)+'__'+_ubNorm(r.staff)); });
@@ -42058,11 +42072,13 @@ function importUnbouCSV(list){
 
       /* 人を決める：社員番号 → 氏名 */
       let st=byNo[empId]||null, how='社員番号';
-      if(st && _ubNorm(st.name)!==_ubNorm(nmRaw)){
-        prob('社員番号 '+empId+' は台帳では「'+st.name+'」です（運坊は「'+nmRaw+'」）', 'ng'); return;
+      if(st && !_nameOk(st, nmRaw)){
+        /* ★ 2026-10-20.11: 番号は合うが氏名が違う。別人の可能性があるので取り込まない。
+           本人であれば、下の「この方は台帳の誰ですか」で結びつけてもらう。 */
+        prob('社員番号 '+empId+' は台帳では「'+st.name+'」です（運坊は「'+nmRaw+'」）', 'link'); return;
       }
       if(!st){ st=byName[_ubNorm(nmRaw)]||null; how='氏名'; }
-      if(!st){ prob('台帳に見つかりません（社員番号 '+empId+'）'); return; }
+      if(!st){ prob('台帳に見つかりません（社員番号 '+empId+'）', 'link'); return; }
 
       if(have.has(date+'__'+_ubNorm(st.name))){ prob('この日の日報が既にあります', 'muted'); return; }
 
@@ -42122,6 +42138,41 @@ function _ubRender(files, total){
   const fr=_ubPlan.filter(p=>p.fracSonota).length;
   if(fr) h+=`<div class="al mt8"><span>ℹ️</span><span>その他に時間（小数）が入っている ${fr}行は、その他を0で入れます。件数ではないためです。</span></div>`;
 
+  /* ★ 2026-10-20.11: 結びつけられる行を、人ごとにまとめて出す。
+     運坊の氏名や社員IDが台帳と違うだけで本人なら、ここで選んでもらう。
+     台帳の氏名は触らない。運坊側の呼び名を別表記として足すだけなので、
+     日報の紐づけ（氏名でつないでいる）が崩れない。 */
+  const link={};
+  _ubProb.filter(p=>p.cls==='link').forEach(p=>{
+    const k=p.empId+'__'+_ubNorm(p.name);
+    (link[k]=link[k]||{empId:p.empId, name:p.name, off:p.off, rows:[]}).rows.push(p);
+  });
+  _ubLink=Object.values(link).sort((a,b)=>b.rows.length-a.rows.length);
+  if(_ubLink.length){
+    const cand=(D.staff||[]).filter(s=>s && s.name && !(typeof isStRetired==='function' && isStRetired(s)))
+      .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+    h+=`<div class="al al-w mt8"><span>🔗</span><span>
+      <b>${_ubLink.length}名</b>は台帳と氏名か社員番号が違うため、取り込んでいません。
+      本人であれば、下で台帳の方を選んで「結びつける」を押してください。<br>
+      <span class="xs">台帳の氏名は変えません。運坊側の呼び名を<b>別表記</b>として、社員IDを<b>社員番号の履歴</b>として足します。
+      一度結びつければ、翌月以降は自動で当たります。</span>
+    </span></div>
+    <div class="mt8" style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>運坊の氏名</th><th>社員ID</th><th>局</th><th class="tr">行数</th><th>台帳の誰ですか</th><th style="width:100px;"></th></tr></thead>
+        <tbody>${_ubLink.map((g,i)=>`<tr>
+          <td class="fw7">${esc(g.name)}</td>
+          <td class="mono xs">${esc(g.empId)}</td>
+          <td class="xs muted">${esc(g.off)}</td>
+          <td class="tr mono">${g.rows.length}</td>
+          <td><select id="ub-link-${i}" class="fi" style="font-size:11px;padding:3px 6px;">
+            <option value="">— 選んでください —</option>
+            ${cand.map(s=>`<option value="${esc(String(s.id))}">${esc(String(s.empNo||'番号なし'))}　${esc(s.name)}${s.office?'（'+esc(s.office)+'）':''}</option>`).join('')}
+          </select></td>
+          <td><button class="btn b-pr btn-sm" style="font-size:11px;padding:3px 10px;" onclick="ubLinkStaff(${i})">結びつける</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>`;
+  }
   if(_ubProb.length){
     h+=`<div class="mt8" style="max-height:260px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
       <table style="width:100%;font-size:12px;">
@@ -42144,6 +42195,40 @@ function _ubRender(files, total){
   }
   el.innerHTML=h;
 }
+
+/* ★ 2026-10-20.11: 運坊の氏名・社員IDを、台帳の方に結びつける。
+   台帳の氏名は変えない。別表記（aliases）と社員番号の履歴（empNoHistory）に
+   足すだけなので、日報が氏名でつながっている今の作りを崩さない。 */
+async function ubLinkStaff(i){
+  const g=_ubLink[i];
+  if(!g){ alert('データが見つかりません。読み込み直してください。'); return; }
+  const sel=$('ub-link-'+i);
+  const id=sel ? sel.value : '';
+  if(!id){ alert('台帳の方を選んでください。'); return; }
+  const st=(D.staff||[]).find(x=>x && String(x.id)===String(id));
+  if(!st){ alert('台帳の方が見つかりませんでした。'); return; }
+
+  const addName = (_ubNorm(st.name)!==_ubNorm(g.name));
+  const addNo   = !!(g.empId && _ubNorm(st.empNo)!==_ubNorm(g.empId)
+                     && !(st.empNoHistory||[]).some(h=>_ubNorm(h)===_ubNorm(g.empId)));
+  const ok=await showDialog({ icon:'🔗', title:'台帳に結びつける',
+    msg:`運坊の「${g.name}」（社員ID ${g.empId||'なし'}）を\n台帳の「${st.name}」（${st.empNo||'番号なし'}）として扱います。\n\n`
+      + (addName?`・別表記に「${g.name}」を足します\n`:'')
+      + (addNo  ?`・社員番号の履歴に「${g.empId}」を足します\n`:'')
+      + `\n台帳の氏名と社員番号は変えません。`,
+    okText:'結びつける', cancelText:'やめる' });
+  if(!ok) return;
+
+  if(addName){ if(!Array.isArray(st.aliases)) st.aliases=[]; st.aliases.push(g.name); }
+  if(addNo){ if(!Array.isArray(st.empNoHistory)) st.empNoHistory=[]; st.empNoHistory.push(String(g.empId)); }
+  try{ lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff); }catch(e){}
+  try{ lsSet('nikki_staff_full', D.staff); }catch(e){}
+  try{ if(typeof fbSet==='function') await fbSet('staff_full', D.staff); }catch(e){ console.warn('[運坊取込] 結びつけの保存に失敗', e); }
+  console.log('[運坊取込] 結びつけ:', g.name, '→', st.name, {別表記:addName, 番号の履歴:addNo});
+  try{ if(typeof renderStaff==='function') renderStaff(); }catch(e){}
+  importUnbouCSV(null);     // 同じCSVを読み直して一覧を作り直す
+}
+window.ubLinkStaff=ubLinkStaff;
 
 async function applyUnbouImport(){
   if(!_ubPlan.length){ alert('入れるものがありません。'); return; }
