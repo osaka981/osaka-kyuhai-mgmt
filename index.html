@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.7</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.8</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5948,7 +5948,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.7';
+const APP_VER = '2026-10-20.8';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8394,8 +8394,11 @@ function applyFirebaseData() {
     const fbDel = ypLogs
       .filter(r => {
         const f = r.form || {};
-        // form.del(宅配データ)があるか、旧形式でmochidashiが入っているか
-        return f.del || (f.mochidashi != null && f.mochidashi > 0);
+        /* form.del(宅配データ)があるか、旧形式でmochidashiが入っているか
+           ★ 2026-10-20.8: 「mochidashi > 0」を外した。
+              持出が0の日報（集荷だけの日など）が、読み戻しで丸ごと消えていた。
+              持出の欄がある＝経営管理で入力した宅配日報なので、0でも拾う。 */
+        return f.del || (f.mochidashi != null);
       })
       .map(r => {
         const f = r.form || {};
@@ -8443,6 +8446,11 @@ function applyFirebaseData() {
               distance:     _n(t.distance),
             };
           })(),
+          /* ★ 2026-10-20.8: その他・特別・単価も読み戻す（保存側で書くようにした）。
+             古いデータには入っていないので、無ければ今までどおり空のまま。 */
+          sonota:     Array.isArray(d.sonota) ? d.sonota.map(v=>Number(v)||0) : [],
+          tokubetsu:  Number(d.tokubetsu) || 0,
+          unit:       (d.unit && typeof d.unit === 'object') ? d.unit : null,
           note:       f.notes || '',
           postData:   null,
           status:     '未照合',
@@ -15887,7 +15895,30 @@ async function saveDel(){
   /* ★ 2026-10-08.9: ここに postOffice を入れていなかったため、
      手入力した局日報は読み直すと郵便局が空になっていた。
      営業所をその日の郵便局として扱うようにしたので、必ず持たせる。 */
-  const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,postOffice:(rec.postOffice||rec.office||''),companyId:_coId,form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,notes:rec.note},submittedAt:new Date().toISOString()};
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-20.8: yp_logs に書いていない項目があり、読み戻すと消えていた。
+
+     D.delivery の保存先は yp_logs 1つだけで、Firebaseのリスナーが動くたびに
+     applyFirebaseData が yp_logs から D.delivery を作り直す。
+     ところが書いていたのは 持出・完了・夜間・転送・持戻・翌日廻し・集荷 だけで、
+       ・大型（ogata）
+       ・その他1〜4（sonota）
+       ・横乗・特別・駐車・給油・走行距離（teate）
+       ・入力した単価（unit）
+     が入っていなかった。保存した直後は画面に出ているが、
+     リスナーが一度動くと0に戻る。
+
+     とくに「その他」は青木克之さんの日額（その他1+その他2＝16,000円/日）や
+     高橋清衛さんの指定事業所集荷がここに入るため、支払額に直接ひびく。
+     足すだけなので、古いデータは今までどおり読める。
+     ══════════════════════════════════════════════════════════ */
+  const _ypEntry = {id:rec.id,type:'yuupack',driver:{id:_drvId,name:rec.staff,office:rec.office,officeType:'delivery'},date:rec.date,postOffice:(rec.postOffice||rec.office||''),companyId:_coId,form:{
+    mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,
+    mochimodoiri:rec.mochimodoiri,'翌日廻し':rec['翌日廻し'],shukka:rec.shukka,
+    ogata:rec.ogata, sonota:rec.sonota, tokubetsu:rec.tokubetsu, unit:rec.unit,
+    teate:{ yokonori:rec.yokonori, yokonoriWith:rec.yokonoriWith||[], parking:rec.parking,
+            refueled:!!rec.refueled, odoStart:rec.odoStart, odoEnd:rec.odoEnd, distance:rec.distance },
+    notes:rec.note},submittedAt:new Date().toISOString()};
   /* ★ 2026-10-09.19: 集荷の内訳は日報アプリと同じ form.col に入れる。
      こうしておくと、アプリから来た日報と同じ読み方で扱える。 */
   if(rec.shukkaCompanies && rec.shukkaCompanies.length){
