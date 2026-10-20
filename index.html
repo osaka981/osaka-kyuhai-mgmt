@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.9</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.10</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2371,6 +2371,35 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <b>委託会社</b>の欄が空なら弊社の方、入っていればその会社の所属ドライバーです。<br>
           <b>uid</b> は日報・計数とつながっている変わらない鍵です。フリート側でもこれを持たせると、社員番号を付け替えても人がずれません。<br>
           「フリートに無い方だけ」は、この端末にあるフリートのデータと突き合わせます。取れていないときは上の「フリートから再取得」を先に押してください。
+        </div>
+      </div>
+
+      <!-- ★ 2026-10-20.10: 運坊の日別実績 取込 -->
+      <div class="card mb12">
+        <div class="ch"><div class="ct"><div class="cbar" style="background:var(--grn2)"></div>運坊 日別実績 取込</div></div>
+        <div class="al al-w mb8"><span>⚠️</span><span>
+          読み込むとまず<b>中身の一覧</b>が出ます。確かめて「日報に入れる」を押すまで、書き込みはしません。<br>
+          <b>既にある日報には触れません。</b>同じ日・同じ方の日報があれば、その行は飛ばします。
+        </span></div>
+        <div class="xs muted mb8" style="line-height:1.7;">
+          局ごとに分かれていても、<b>まとめて選べます</b>（複数選択可）。文字コードはShift-JISのままで構いません。<br>
+          突き合わせは<b>社員番号</b>が基本で、見つからないときだけ氏名で探します。
+          番号が一致しても氏名が違う行は<b>取り込まず赤で知らせます</b>。
+        </div>
+        <div class="drop" id="dp-u" onclick="document.getElementById('fi-u').click()"
+          ondragover="dov(event,'dp-u')" ondragleave="dlv('dp-u')" ondrop="hdropUnbou(event)">
+          <div style="font-size:30px;margin-bottom:6px;">📅</div>
+          <div class="sm muted">運坊の日別実績CSVをドロップ（複数可）</div>
+          <div class="xs muted mt8">クリックして選択 .csv</div>
+        </div>
+        <input type="file" id="fi-u" accept=".csv" multiple style="display:none" onchange="hfileUnbou(event)">
+        <div id="res-u" class="mt8"></div>
+        <div class="xs muted mt8" style="line-height:1.7;">
+          <b>入るもの</b>　完了（第1・2便）／夜間／大型／集荷／その他1〜4／横乗／特別／入力した単価<br>
+          <b>入らないもの</b>　持出・転送・持戻・翌日廻し（運坊に項目がありません）。0で入り、備考に理由を書きます<br>
+          <b>集荷の内訳</b>（集荷先ごと）は運坊に無いので合計だけ入ります。請求書の「指定事業所集荷」への振り分けは別途必要です<br>
+          <b>その他</b>は整数のときだけ入れます（時間が入っている行は件数ではないため飛ばします）<br>
+          <b>集荷配送</b>は宅配の日報ではないので対象外です
         </div>
       </div>
 
@@ -5948,7 +5977,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.9';
+const APP_VER = '2026-10-20.10';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -41912,6 +41941,262 @@ let _rateNew  = [];   /* ★ 2026-10-19.4: 台帳に無かった方（登録画�
 /* ★ 2026-10-19.4: CSVの1行を、従業員の新規登録画面に入れた状態で開く。
    氏名と単価だけを入れる。区分・営業所・委託会社は画面で選んでもらう。
    姓名が分かれた欄なので、同名の人がいれば既存の重複チェックが警告を出す。 */
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.10: 運坊の日別実績CSVを宅配日報として取り込む。
+
+   運坊は売上（実績）の入力システムで、経営管理でいう月締め前の工程。
+   運坊 → JDL で控除まで完結している。経営管理へ移行する途中として、
+   まず運坊の実績をこちらへ写せるようにする。
+
+   方針：
+     ・既にある日報には触らない。同じ日・同じ方の行は飛ばす
+       （「郵便局データから作成」で作った行は持出・転送・持戻まで
+         入っていて運坊より情報が多いので、そちらを残す方が正しい）
+     ・突き合わせは社員番号が基本。番号は運坊から引き継いでいるため
+       （例：5110 榎本雅紀）、氏名の表記ゆれを避けられる
+     ・番号が一致しても氏名が違う行は取り込まない。フリート由来の
+       番号が台帳に残っていると別人に紐づくため、必ず目で見て止める
+     ・持出・転送・持戻・翌日廻しは運坊に無い。0で入れ、備考に書く
+     ・その他は整数のときだけ。時間（58.5など）が入る行は件数ではない
+   ══════════════════════════════════════════════════════════ */
+const UNBOU_H = {
+  date:'日付', offId:'郵便局ID', offName:'郵便局名', empId:'社員ID', empName:'社員名',
+  kan:'第1・2便個数', kanU:'第1・2便単価',
+  oga:'大型個数',     ogaU:'大型単価',
+  yak:'夜間個数',     yakU:'夜間単価',
+  shu:'集荷個数',     shuU:'集荷単価',
+  s1:'その他1個数', s1a:'その他1金額', s2:'その他2個数', s2a:'その他2金額',
+  s3:'その他3個数', s3a:'その他3金額', s4:'その他4個数', s4a:'その他4金額',
+  yoko:'横乗金額', toku:'特別金額',
+};
+const UNBOU_SKIP_OFF = ['集荷配送'];     // 宅配の日報ではない
+function _ubNum(v){ const n=Number(String(v==null?'':v).replace(/[,\s　]/g,'')); return isFinite(n)?n:0; }
+function _ubNorm(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
+function _ubDate(v){
+  const t=String(v==null?'':v).trim().replace(/\//g,'-').slice(0,10);
+  const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : '';
+}
+/* 局名の末尾（郵便局・局・営業所）を落として比べる */
+function _ubOffKey(s){ return _ubNorm(s).replace(/(郵便局|局|営業所)$/,''); }
+/* 経営管理側の局名の候補。日報で実際に使われている名前を優先する */
+function _ubOffCandidates(){
+  const m=new Map();
+  const add=n=>{ const k=_ubOffKey(n); if(k && !m.has(k)) m.set(k, n); };
+  (D.delivery||[]).forEach(r=>{ if(r && r.office) add(r.office); });
+  (D.locations||[]).forEach(l=>{ if(l && l.type==='post_office' && l.active!==false) add(l.name); });
+  (D.offices||[]).forEach(o=>{ if(o && o.typesDel) add(o.name); });
+  return m;
+}
+
+let _ubPlan = [];      /* 入れる行 */
+let _ubProb = [];      /* 入れられない行 */
+
+function hfileUnbou(e){
+  const files=[...(e.target.files||[])];
+  if(!files.length) return;
+  const one=file=>{
+    const tryR=enc=>new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=rej;r.readAsText(file,enc);});
+    return tryR('Shift_JIS').then(txt=>{
+      /* 運坊はShift-JIS。UTF-8のファイルを渡されたときのために取り直す */
+      const bad=(txt.match(/�/g)||[]).length>5;
+      return bad ? tryR('UTF-8').then(t2=>({name:file.name,txt:t2})) : {name:file.name,txt};
+    });
+  };
+  Promise.all(files.map(one))
+    .then(list=>{ importUnbouCSV(list); })
+    .catch(()=>{ const el=$('res-u'); if(el) el.innerHTML='<div class="al al-e"><span>❌</span><span>読み込みに失敗しました</span></div>'; });
+  e.target.value='';
+}
+function hdropUnbou(e){
+  e.preventDefault();
+  const z=$('dp-u'); if(z) z.classList.remove('drag');
+  const fs=[...(e.dataTransfer.files||[])];
+  if(fs.length) hfileUnbou({target:{files:fs}});
+}
+window.hfileUnbou=hfileUnbou; window.hdropUnbou=hdropUnbou;
+
+function importUnbouCSV(list){
+  const el=$('res-u'); if(!el) return;
+  _ubPlan=[]; _ubProb=[];
+
+  /* 台帳の索引：社員番号と氏名の両方から引けるようにする */
+  const byNo={}, byName={};
+  (D.staff||[]).forEach(s=>{
+    if(!s) return;
+    const n=_ubNorm(s.empNo); if(n && !byNo[n]) byNo[n]=s;
+    (s.empNoHistory||[]).forEach(h=>{ const k=_ubNorm(h); if(k && !byNo[k]) byNo[k]=s; });
+    const nm=_ubNorm(s.name); if(nm && !byName[nm]) byName[nm]=s;
+  });
+  /* 既にある日報：日付＋氏名で引く */
+  const have=new Set();
+  (D.delivery||[]).forEach(r=>{ if(r && r.date && r.staff) have.add(_ubDate(r.date)+'__'+_ubNorm(r.staff)); });
+  const offMap=_ubOffCandidates();
+
+  const files=[]; let total=0;
+  list.forEach(({name,txt})=>{
+    const {headers, rows}=parseCSV(txt);
+    if(!rows.length || !headers.includes(UNBOU_H.date)){
+      files.push({name, n:0, bad:'運坊の形ではありません（1行目に「日付」「社員ID」などが必要）'});
+      return;
+    }
+    files.push({name, n:rows.length, offs:[...new Set(rows.map(r=>r[UNBOU_H.offName]))].filter(Boolean)});
+    total+=rows.length;
+    rows.forEach((r,i)=>{
+      const line=i+2;
+      const date=_ubDate(r[UNBOU_H.date]);
+      const offRaw=String(r[UNBOU_H.offName]||'').trim();
+      const empId=_ubNorm(r[UNBOU_H.empId]);
+      const nmRaw=String(r[UNBOU_H.empName]||'').trim();
+      const prob=(why,cls)=>_ubProb.push({file:name, line, date, off:offRaw, empId, name:nmRaw, why, cls:cls||''});
+
+      if(!date){ prob('日付が読めません'); return; }
+      if(UNBOU_SKIP_OFF.includes(offRaw)){ prob('集荷配送は宅配の日報ではないため対象外', 'muted'); return; }
+
+      const office=offMap.get(_ubOffKey(offRaw));
+      if(!office){ prob('「'+offRaw+'」に当たる営業所が台帳にありません'); return; }
+
+      /* 人を決める：社員番号 → 氏名 */
+      let st=byNo[empId]||null, how='社員番号';
+      if(st && _ubNorm(st.name)!==_ubNorm(nmRaw)){
+        prob('社員番号 '+empId+' は台帳では「'+st.name+'」です（運坊は「'+nmRaw+'」）', 'ng'); return;
+      }
+      if(!st){ st=byName[_ubNorm(nmRaw)]||null; how='氏名'; }
+      if(!st){ prob('台帳に見つかりません（社員番号 '+empId+'）'); return; }
+
+      if(have.has(date+'__'+_ubNorm(st.name))){ prob('この日の日報が既にあります', 'muted'); return; }
+
+      /* その他は整数のときだけ。時間が入っている行は件数ではない */
+      const sraw=[_ubNum(r[UNBOU_H.s1]),_ubNum(r[UNBOU_H.s2]),_ubNum(r[UNBOU_H.s3]),_ubNum(r[UNBOU_H.s4])];
+      const sAmt=[_ubNum(r[UNBOU_H.s1a]),_ubNum(r[UNBOU_H.s2a]),_ubNum(r[UNBOU_H.s3a]),_ubNum(r[UNBOU_H.s4a])];
+      const frac=sraw.some(v=>v && !Number.isInteger(v));
+      const sonota=frac ? [0,0,0,0] : sraw;
+      const sUnit=sonota.map((v,k)=>(v>0 && sAmt[k]>0) ? Math.round(sAmt[k]/v) : 0);
+
+      const kan=_ubNum(r[UNBOU_H.kan]), yak=_ubNum(r[UNBOU_H.yak]),
+            oga=_ubNum(r[UNBOU_H.oga]), shu=_ubNum(r[UNBOU_H.shu]);
+      const yoko=_ubNum(r[UNBOU_H.yoko]), toku=_ubNum(r[UNBOU_H.toku]);
+      if(!kan && !yak && !oga && !shu && !sonota.some(v=>v) && !yoko && !toku){
+        prob('数字がすべて0の行', 'muted'); return;
+      }
+      have.add(date+'__'+_ubNorm(st.name));   // 同じCSV内の重複も防ぐ
+      _ubPlan.push({
+        file:name, line, date, office, staff:st, how, empIdCsv:empId, nameCsv:nmRaw,
+        kan, yak, oga, shu, sonota, yoko, toku, fracSonota:frac,
+        unit:{ kanryo:_ubNum(r[UNBOU_H.kanU]), tenso:0, yakan:_ubNum(r[UNBOU_H.yakU]),
+               ogata:_ubNum(r[UNBOU_H.ogaU]), shukka:_ubNum(r[UNBOU_H.shuU]), s:sUnit },
+      });
+    });
+  });
+  _ubRender(files, total);
+}
+window.importUnbouCSV=importUnbouCSV;
+
+function _ubRender(files, total){
+  const el=$('res-u'); if(!el) return;
+  const byOff={};
+  _ubPlan.forEach(p=>{ const a=byOff[p.office]=byOff[p.office]||{n:0,kan:0,ppl:new Set(),days:new Set()};
+    a.n++; a.kan+=p.kan; a.ppl.add(p.staff.name); a.days.add(p.date); });
+  const probBy={};
+  _ubProb.forEach(p=>{ const k=p.why.replace(/「[^」]*」/g,'「…」').replace(/\d+/g,'N');
+    (probBy[k]=probBy[k]||{why:p.why,cls:p.cls,rows:[]}).rows.push(p); });
+  const byName=(a,b)=>String(a).localeCompare(String(b),'ja');
+  const ng=_ubProb.filter(p=>p.cls==='ng').length;
+
+  let h=`<div class="al ${_ubPlan.length?'al-ok':'al-w'}"><span>${_ubPlan.length?'✅':'⚠️'}</span><span>
+    ${files.length}ファイル・${total}行を読みました。
+    <b>入れられる ${_ubPlan.length}行</b> ／ 入れないもの ${_ubProb.length}行
+    ${ng?`<span style="color:var(--red2);font-weight:700;">（うち確認が要るもの ${ng}行）</span>`:''}
+  </span></div>
+  <div class="xs muted mt8">${files.map(f=>`${esc(f.name)}<span class="muted">（${f.bad?esc(f.bad):f.n+'行 '+(f.offs||[]).map(esc).join('・')}）</span>`).join('　')}</div>`;
+
+  if(Object.keys(byOff).length){
+    h+=`<div class="mt8" style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>営業所</th><th class="tr">行</th><th class="tr">人数</th><th class="tr">日数</th><th class="tr">完了</th></tr></thead>
+        <tbody>${Object.keys(byOff).sort(byName).map(k=>{const a=byOff[k];
+          return `<tr><td class="fw7">${esc(k)}</td><td class="tr mono">${a.n}</td><td class="tr mono">${a.ppl.size}</td><td class="tr mono">${a.days.size}</td><td class="tr mono fw7">${a.kan.toLocaleString()}</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+  }
+  const fr=_ubPlan.filter(p=>p.fracSonota).length;
+  if(fr) h+=`<div class="al mt8"><span>ℹ️</span><span>その他に時間（小数）が入っている ${fr}行は、その他を0で入れます。件数ではないためです。</span></div>`;
+
+  if(_ubProb.length){
+    h+=`<div class="mt8" style="max-height:260px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>理由</th><th class="tr">行数</th><th>例</th></tr></thead>
+        <tbody>${Object.values(probBy).sort((a,b)=>b.rows.length-a.rows.length).map(g=>{
+          const ex=g.rows.slice(0,3).map(p=>`${p.date} ${esc(p.name)}`).join('／');
+          const c=g.cls==='ng'?' style="color:var(--red2);font-weight:700;"':(g.cls==='muted'?' class="muted"':'');
+          return `<tr><td${c}>${esc(g.why)}</td><td class="tr mono">${g.rows.length}</td><td class="xs muted">${ex}${g.rows.length>3?' ほか':''}</td></tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+  }
+  if(_ubPlan.length){
+    h+=`<div class="card mt8" style="background:var(--bg3);">
+      <div class="xs muted mb8" style="line-height:1.7;">
+        持出・転送・持戻・翌日廻しは<b>0で入ります</b>（運坊に項目がないため）。備考に「運坊から取込」と残します。<br>
+        既にある日報は1件も触りません。
+      </div>
+      <button class="btn b-grn" onclick="applyUnbouImport()">この ${_ubPlan.length}行 を日報に入れる</button>
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+async function applyUnbouImport(){
+  if(!_ubPlan.length){ alert('入れるものがありません。'); return; }
+  const days=new Set(_ubPlan.map(p=>p.date));
+  const ok=await showDialog({ icon:'📅', title:'日報に入れる',
+    msg:`${_ubPlan.length}行を宅配日報に追加します。\n\n対象の日：${[...days].sort()[0]} 〜 ${[...days].sort().slice(-1)[0]}\n\n既にある日報は変えません。`,
+    okText:'入れる', cancelText:'やめる' });
+  if(!ok) return;
+
+  const ypLogs=lsGet(LS_KEYS.YP,[])||[];
+  const base=Date.now();
+  _ubPlan.forEach((p,i)=>{
+    const st=p.staff;
+    const rec={
+      id: base+i, date:p.date, office:p.office, staff:st.name,
+      kubun: st.kubun||'', postOffice:p.office,
+      mochidashi:0, kanryo:p.kan, yakan:p.yak, tenso:0,
+      mochimodoiri:0, '翌日廻し':0,
+      ogata:p.oga, shukka:p.shu, shukkaCompanies:[],
+      sonota:p.sonota, unit:p.unit,
+      yokonori:p.yoko, tokubetsu:p.toku,
+      note:'運坊から取込（持出・転送・持戻・翌日廻しは運坊に無いため未入力）',
+      charters:[], penalties:[], gasRows:[],
+      postData:null, status:'未照合', _fromUnbou:true,
+    };
+    D.delivery.push(rec);
+    const _drvId=String(st.empNo||st.id||'');
+    ypLogs.push({ id:rec.id, type:'yuupack',
+      driver:{id:_drvId, name:rec.staff, office:rec.office, officeType:'delivery'},
+      date:rec.date, postOffice:rec.postOffice, companyId:String(st.companyId||''),
+      form:{ mochidashi:0, kanryo:rec.kanryo, yakan:rec.yakan, tenso:0,
+             mochimodoiri:0, '翌日廻し':0, shukka:rec.shukka,
+             ogata:rec.ogata, sonota:rec.sonota, tokubetsu:rec.tokubetsu, unit:rec.unit,
+             teate:{ yokonori:rec.yokonori, yokonoriWith:[], parking:0, refueled:false,
+                     odoStart:null, odoEnd:null, distance:null },
+             notes:rec.note },
+      submittedAt:new Date().toISOString() });
+  });
+  try{ lsSet(LS_KEYS.YP, ypLogs); }catch(e){}
+  try{ if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs); }catch(e){ console.warn('[運坊取込] 保存に失敗', e); }
+  const n=_ubPlan.length;
+  console.log('[運坊取込] '+n+'行を日報に追加しました');
+  _ubPlan=[];
+  try{ if(typeof renderDel==='function') renderDel(); }catch(e){}
+  try{ if(typeof renderDash==='function') renderDash(); }catch(e){}
+  const el=$('res-u');
+  if(el) el.innerHTML=`<div class="al al-ok"><span>✅</span><span>
+    <b>${n}行</b>を宅配日報に入れました。日報一覧で確認してください。<br>
+    <span class="xs muted">持出が0なので、一覧の検証は「NG」で出ます。運坊に持出の項目が無いためで、数字そのものは正しく入っています。</span>
+  </span></div>`;
+}
+window.applyUnbouImport=applyUnbouImport;
+
 /* ══════════════════════════════════════════════════════════
    ★ 2026-10-20.6: 登録した方が「台帳に無い方」の一覧に残り続けていた。
    保存しても消えないので、同じ人をもう一度「登録する」で開いてしまい、
