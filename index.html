@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.16</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.17</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1027,10 +1027,14 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- 宅配日報 -->
     <div id="s-del" class="sec">
+      <!-- ★ 2026-10-21.17: 郵便局照合と同じ月のサブタブ。
+           実体の月入力は del-mon のまま（初期化や他の画面が見ているため）、
+           見える側を _monTabs に差し替えて _delMonSync() で写す。 -->
+      <div id="del-mon-tabs"></div>
       <div class="flbc mb12">
         <div class="fla gap6">
           <div class="otabs" id="del-otabs"></div>
-          <input type="month" id="del-mon" class="fi" onchange="renderDelOtabs();renderDel()">
+          <input type="month" id="del-mon" class="fi" style="display:none;" onchange="renderDelOtabs();renderDel()">
         </div>
         <div class="fla gap6">
           <button class="btn b-gh btn-sm" onclick="expDelCSV()">📥 CSV出力</button>
@@ -5985,7 +5989,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.16';
+const APP_VER = '2026-10-21.17';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12186,6 +12190,9 @@ function setOff(n){D.curOff=n;renderDelOtabs();renderDel();}
 
 function renderDel() {
   const mon = _ymNorm($('del-mon')?.value||'');
+  /* ★ 2026-10-21.17: 月のサブタブ（郵便局照合と同じ見た目・同じ並び） */
+  const _dmt = $('del-mon-tabs');
+  if(_dmt && typeof _monTabs==='function') _dmt.innerHTML = _monTabs('del-mon-tab', mon, "_delMonSync()", {label:'対象月'});
   const rows = D.delivery.filter(r=>
     (!D.curOff||r.office===D.curOff) &&
     (!mon||r.date.startsWith(mon))
@@ -49204,6 +49211,17 @@ function _monTabPick(id, ym, cb){
   catch(e){ console.error('[_monTabPick] 実行エラー', cb, e); }
 }
 
+
+/* ★ 2026-10-21.17: 宅配日報: サブタブで選んだ月を実体の input#del-mon に写して再描画。
+   営業所タブの件数も月で変わるので renderDelOtabs も呼ぶ（元の onchange と同じ並び）。 */
+function _delMonSync(){
+  const v = document.getElementById('del-mon-tab')?.value || '';
+  const real = document.getElementById('del-mon');
+  if(real && real.value !== v) real.value = v;
+  try{ if(typeof renderDelOtabs==='function') renderDelOtabs(); }catch(e){}
+  if(typeof renderDel==='function') renderDel();
+}
+window._delMonSync = _delMonSync;
 
 // 郵便局照合: サブタブで選んだ月を実体の input#cmp-mon に反映して再描画
 function _cmpMonSync(){
