@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.17</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.18</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5989,7 +5989,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.17';
+const APP_VER = '2026-10-21.18';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -51710,6 +51710,23 @@ async function _ddWorkSave(){
 // 打刻1件の「休憩控除後・丸め前」の分数（給与計算の共通入口）
 function _attNetMin(a, st){
   if(!a) return 0;
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-21.18: 日別の休憩。勤務時間の画面で日ごとに分数を入れられる。
+     入っていればその日はその分だけ引き、基本情報の休憩控除（法定どおり／固定）は使わない。
+     空欄なら今までどおり基本情報の設定で引くので、既存のデータは何も変わらない。
+
+     すでに休憩を引いた時間で保存されている記録（運坊からの取込・局日報の手入力）は、
+     二度引くことになるので対象外にする。
+     ══════════════════════════════════════════════════════════ */
+  const _bm = (a.breakMin==null || a.breakMin==='') ? null : Math.max(0, Number(a.breakMin)||0);
+  if(_bm!=null){
+    const alreadyNet = (a.source==='manual' && !a.spanStored && a.manualSpan==null);
+    if(!alreadyNet){
+      const span = (a.manualSpan!=null) ? Math.max(0, Number(a.manualSpan)||0)
+                                        : Math.max(0, Number(a.workMin)||0);
+      return Math.max(0, span - _bm);
+    }
+  }
   if(a.manualSpan!=null){
     const sp = Math.max(0, Number(a.manualSpan)||0);
     return (typeof applyBreak==='function') ? applyBreak(sp, st) : sp;
@@ -52543,6 +52560,8 @@ function renderWorkTime(){
     const dow=new Date(date+'T00:00:00').getDay();
     const dcol = dow===0?'color:#d33;':dow===6?'color:#2c62c4;':'';
     const state = voided?'勤務なし（打刻を取消）':edited?'修正済み':manualOnly?'手入力':punch.length?'打刻':'';
+    /* ★ 2026-10-21.18: その日に入っている休憩（分）。無ければ空欄＝自動。 */
+    const _bmVal = (prim && prim.breakMin!=null && prim.breakMin!=='') ? String(Math.max(0,Number(prim.breakMin)||0)) : '';
     const bg = voided?'background:rgba(0,0,0,.04);':edited||manualOnly?'background:rgba(245,166,35,.12);':'';
     rowsHtml+=`<tr data-date="${date}" data-pin="${_hhmm(pIn)}" data-pout="${_hhmm(pOut)}" data-has-punch="${punch.length?1:0}" style="${bg}">
       <td class="mono" style="${dcol}white-space:nowrap;">${d}日(${W[dow]})</td>
@@ -52552,6 +52571,8 @@ function renderWorkTime(){
       <td class="mono xs" style="color:var(--txt2);white-space:nowrap;">${punchTxt}</td>
       <td><input type="text" class="fi wt-in"  value="${vIn}"  placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
       <td><input type="text" class="fi wt-out" value="${vOut}" placeholder="--:--" inputmode="numeric" style="width:70px;font-size:12px;padding:3px 6px;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
+      <!-- ★ 2026-10-21.18: 日別の休憩。空欄なら基本情報の設定で引く。 -->
+      <td><input type="text" class="fi wt-brk" value="${_bmVal}" placeholder="自動" inputmode="numeric" title="空欄＝基本情報の休憩控除。数字を入れるとその日はその分だけ引きます" style="width:58px;font-size:12px;padding:3px 6px;text-align:right;" onblur="_wtOnBlur(this)" onkeydown="_wtKey(event,this)"></td>
       <td class="tr mono wt-calc" style="white-space:nowrap;">${net>0?_wtFmtMin(net):''}</td>
       <td class="xs wt-state" style="white-space:nowrap;color:var(--amb2);">${state}${edited&&!voided?'':''}</td>
       <td style="white-space:nowrap;">${(edited)?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_wtRevert('${date}')">打刻に戻す</button> `:''}${recs.length?`<button type="button" class="btn b-gh btn-sm" style="font-size:10px;padding:2px 6px;" onclick="_sdDeleteAtt('${esc(st.name)}','${date}')">削除</button>`:''}</td>
@@ -52563,10 +52584,24 @@ function renderWorkTime(){
   root.innerHTML=fixCard+`
     <div class="xs muted" style="margin-bottom:6px;">${bizNote} 時刻は「900」「9:00」のどちらでも入力できます。Enterで右へ、行末で次の日へ進みます。
       計上時間は休憩控除と丸めを反映した時間です。空欄の日は勤務なしとして扱います。</div>
+    <!-- ★ 2026-10-21.18: この月の休憩をまとめて入れる。押すと全日の休憩欄に書き込むだけで、
+         月の設定をどこかに持つわけではない。そのあと日ごとに直せる。 -->
+    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px;padding:7px 10px;
+                background:var(--bg3);border:1px solid var(--brd2);border-radius:6px;">
+      <span class="xs fw7" style="color:var(--txt2);">この月の休憩をまとめて入れる</span>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_wtBulkBreak('')">自動（基本情報どおり）</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_wtBulkBreak(0)">0分</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_wtBulkBreak(45)">45分</button>
+      <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_wtBulkBreak(60)">60分</button>
+      <span class="xs" style="color:var(--txt3);">任意</span>
+      <input type="text" id="wt-brk-any" class="fi" inputmode="numeric" placeholder="分" style="width:60px;font-size:12px;padding:3px 6px;text-align:right;">
+      <button type="button" class="btn b-gh btn-sm" style="font-size:11px;padding:3px 10px;" onclick="_wtBulkBreak($('wt-brk-any')?.value)">入れる</button>
+      <span class="xs" style="color:var(--txt3);margin-left:auto;">入れたあと日ごとに直せます。保存するまで反映されません。</span>
+    </div>
     <div class="tw"><table id="wt-table"><thead><tr>
-      <th>日付</th><th>業務</th><th>打刻（日報アプリ）</th><th>開始</th><th>終了</th><th class="tr">計上時間</th><th>状態</th><th></th>
+      <th>日付</th><th>業務</th><th>打刻（日報アプリ）</th><th>開始</th><th>終了</th><th class="tr">休憩(分)</th><th class="tr">計上時間</th><th>状態</th><th></th>
     </tr></thead><tbody>${rowsHtml}</tbody>
-    <tfoot><tr style="background:var(--bg3);font-weight:700;"><td colspan="5" style="text-align:right;">月合計</td><td class="tr mono" id="wt-total"></td><td colspan="2"></td></tr></tfoot></table></div>
+    <tfoot><tr style="background:var(--bg3);font-weight:700;"><td colspan="6" style="text-align:right;">月合計</td><td class="tr mono" id="wt-total"></td><td colspan="2"></td></tr></tfoot></table></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
       <span id="wt-msg" class="xs" style="align-self:center;color:var(--red2);"></span>
       <button type="button" class="btn b-grn" onclick="_wtSave()">この月の勤務時間を保存</button>
@@ -52574,6 +52609,22 @@ function renderWorkTime(){
   document.querySelectorAll('#wt-table tbody tr').forEach(tr=>_wtCalcRow(tr));
   _wtTotal();
 }
+
+/* ★ 2026-10-21.18: 全日の休憩欄にまとめて書き込む。'' を渡すと空欄（＝自動）に戻す。 */
+function _wtBulkBreak(v){
+  const s=String(v==null?'':v).trim();
+  const val = (s==='') ? '' : String(Math.max(0, parseInt(s)||0));
+  document.querySelectorAll('#wt-table tbody tr').forEach(tr=>{
+    const el=tr.querySelector('.wt-brk'); if(!el) return;
+    el.value=val; _wtCalcRow(tr);
+  });
+  _wtTotal();
+  const msg=$('wt-msg');
+  if(msg){ msg.style.color='var(--txt2)';
+    msg.textContent = (val==='') ? '全日を自動に戻しました。保存すると反映されます。'
+                                 : `全日に休憩 ${val}分 を入れました。保存すると反映されます。`; }
+}
+window._wtBulkBreak=_wtBulkBreak;
 
 function _wtCalcRow(tr){
   const st=(D.staff||[]).find(s=>String(s.id)===String(_wtState.staffId));
@@ -52584,7 +52635,10 @@ function _wtCalcRow(tr){
   if(!i && !o){ cell.textContent=''; return; }
   if(!i || !o){ cell.innerHTML='<span style="color:var(--red2);">開始・終了の両方が必要</span>'; return; }
   const span=_spanMin(i,o);
-  const net=(typeof applyBreak==='function')?applyBreak(span,st):span;
+  /* ★ 2026-10-21.18: 休憩欄に数字があればその分だけ引く。空欄なら基本情報の設定で引く。 */
+  const _b=String(tr.querySelector('.wt-brk')?.value||'').trim();
+  const net = (_b!=='') ? Math.max(0, span - (parseInt(_b)||0))
+                        : ((typeof applyBreak==='function')?applyBreak(span,st):span);
   const rnd=(typeof roundWorkMin==='function')?roundWorkMin(net):net;
   tr.dataset.min=String(rnd);
   cell.textContent=_wtFmtMin(rnd);
@@ -52652,6 +52706,14 @@ async function _wtSave(){
     const date=tr.dataset.date;
     const i=_wtNormHM(tr.querySelector('.wt-in').value), o=_wtNormHM(tr.querySelector('.wt-out').value);
     const biz=tr.querySelector('.wt-biz')?.value||'del';
+    /* ★ 2026-10-21.18: その日の休憩（分）。空欄なら null＝自動（基本情報の設定で引く）。 */
+    const _bs=String(tr.querySelector('.wt-brk')?.value||'').trim();
+    const brk = (_bs==='') ? null : Math.max(0, parseInt(_bs)||0);
+    const _sameBrk = (rec) => {
+      const cur = (rec && rec.breakMin!=null && rec.breakMin!=='') ? Math.max(0,Number(rec.breakMin)||0) : null;
+      return cur===brk;
+    };
+    const _putBrk = (rec) => { if(brk==null) delete rec.breakMin; else rec.breakMin=brk; };
     const idxs=logs.map((a,k)=>(_attIsMine(a,st)&&String(a.date).replace(/\//g,'-')===date)?k:-1).filter(k=>k>=0);
     const punchIdx=idxs.filter(k=>logs[k].source!=='manual');
     const manIdx=idxs.filter(k=>logs[k].source==='manual');
@@ -52668,12 +52730,12 @@ async function _wtSave(){
           punchIdx.slice(1).forEach(k=>{ logs[k].manualSpan=0; logs[k].mergedInto=p.id||date; });
           changed++;
         }
-      } else if(i===pin && o===pout && p.manualSpan==null && !curVoid){
+      } else if(i===pin && o===pout && p.manualSpan==null && !curVoid && _sameBrk(p)){
         // 打刻どおり。業務だけ変わった場合は業務のみ記録
         if(curBiz!==biz){ p.biz=biz; p.editedAt=now; changed++; }
-      } else if(i!==curIn || o!==curOut || curBiz!==biz || curVoid){
+      } else if(i!==curIn || o!==curOut || curBiz!==biz || curVoid || !_sameBrk(p)){
         p.manualIn=_wtIso(date,i); p.manualOut=_wtIso(date,o,i); p.manualSpan=_spanMin(i,o);
-        p.biz=biz; p.editedAt=now; p.editedBy='mgmt';
+        p.biz=biz; p.editedAt=now; p.editedBy='mgmt'; _putBrk(p);
         // 同じ日の他の打刻は、この1件にまとめたので計上しない（記録は残す）
         punchIdx.slice(1).forEach(k=>{ logs[k].manualSpan=0; logs[k].mergedInto=p.id||date; });
         changed++;
@@ -52685,7 +52747,7 @@ async function _wtSave(){
       if(!i && !o){
         if(manIdx.length){ manIdx.sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); changed++; }
       } else {
-        const same = m && m.manualSpan!=null && _hhmm(m.manualIn)===i && _hhmm(m.manualOut)===o && m.biz===biz;
+        const same = m && m.manualSpan!=null && _hhmm(m.manualIn)===i && _hhmm(m.manualOut)===o && m.biz===biz && _sameBrk(m);
         if(!same){
           const rec={
             ...(m||{}),
@@ -52695,6 +52757,7 @@ async function _wtSave(){
             manualIn:_wtIso(date,i), manualOut:_wtIso(date,o,i), manualSpan:_spanMin(i,o),
             editedAt:now, editedBy:'mgmt',
           };
+          _putBrk(rec);
           delete rec.workMin; delete rec.clockIn; delete rec.clockOut;
           if(m){ logs[manIdx[0]]=rec; manIdx.slice(1).sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); }
           else logs.push(rec);
