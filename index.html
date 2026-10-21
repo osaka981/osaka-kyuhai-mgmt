@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.18</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.19</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2412,6 +2412,34 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <b>集荷の内訳</b>（集荷先ごと）は運坊に無いので合計だけ入ります。請求書の「指定事業所集荷」への振り分けは別途必要です<br>
           <b>その他</b>は整数のときだけ入れます（時間が入っている行は件数ではないため飛ばします）<br>
           <b>集荷配送</b>は宅配の日報ではないので対象外です
+        </div>
+      </div>
+
+      <!-- ★ 2026-10-21.19: 運坊 集荷事業（時給）の取込 -->
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="cbar"></div>運坊 集荷事業（時給）取込</div></div>
+        <div class="al al-w mb8"><span>⚠️</span><span>
+          読み込むとまず<b>人ごとの検算表</b>が出ます。確かめて「勤務時間に入れる」を押すまで、書き込みはしません。<br>
+          <b>打刻がある日には触れません。</b>その日は入れずに一覧へ出します。
+        </span></div>
+        <div class="xs muted mb8" style="line-height:1.7;">
+          運坊の<b>「その他1個数」＝実働時間</b>を、勤務時間（集荷）として入れます。<br>
+          運坊の時間は<b>休憩を引いたあとの実働</b>なので、こちらでは休憩を引きません。<br>
+          突き合わせは<b>社員番号</b>が基本で、見つからないときだけ氏名（別表記も可）で探します。
+        </div>
+        <div class="drop" id="dp-us" onclick="document.getElementById('fi-us').click()"
+          ondragover="dov(event,'dp-us')" ondragleave="dlv('dp-us')" ondrop="hdropUnbouCol(event)">
+          <div style="font-size:30px;margin-bottom:6px;">⏱️</div>
+          <div class="sm muted">運坊の集荷事業CSVをドロップ（複数可）</div>
+          <div class="xs muted mt8">クリックして選択 .csv</div>
+        </div>
+        <input type="file" id="fi-us" accept=".csv" multiple style="display:none" onchange="hfileUnbouCol(event)">
+        <div id="res-us" class="mt8"></div>
+        <div class="xs muted mt8" style="line-height:1.7;">
+          <b>入るもの</b>　その他1個数（実働時間）だけ。勤務時間（集荷）として日ごとに入ります<br>
+          <b>入らないもの</b>　集荷個数（個数制の方）・特別金額・横乗金額・運坊の金額<br>
+          運坊の金額は<b>検算にだけ</b>使います。台帳の時給で計算した額と並べて出すので、単価のずれがその場で分かります<br>
+          勤務時間の画面では<b>開始・終了が空</b>のまま「運坊から」と出ます。時刻は運坊に無いので作りません
         </div>
       </div>
 
@@ -5989,7 +6017,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.18';
+const APP_VER = '2026-10-21.19';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -42343,6 +42371,302 @@ async function applyUnbouImport(){
 window.applyUnbouImport=applyUnbouImport;
 
 /* ══════════════════════════════════════════════════════════
+   ★ 2026-10-21.19: 運坊の集荷事業（時給）を勤務時間として取り込む。
+
+   運坊の集荷事業は、ほとんどの方が時給制で、1行＝1人1日。
+   実働時間が「その他1個数」に0.25刻みで入り、
+   「その他1金額」＝実働時間×時給 になっている。
+
+   入れ先は集荷日報ではなく勤怠（att_logs）。
+   経営管理の時給計算は勤怠の時間を合計して台帳の時給を掛ける作りで、
+   勤怠には「休憩控除済みの時間」で入れる経路（source:'manual' + workMin）が
+   もともとある。運坊の時間は実働（控除後）なので、そこへ入れれば
+   給与計算は何も変えずにそのまま動く。
+
+   ・biz:'col' を付ける。集荷の時給だけに効き、宅配は歩合のまま
+     （玉岡鎌房さんのように両方やる方がいるため必須）
+   ・manualSpan / spanStored は付けない。付けると拘束時間とみなされ
+     休憩が二度引かれる
+   ・打刻がある日は入れない。打刻は実際の記録なので上書きしない
+   ・集荷個数（個数制の方）・特別金額・横乗金額は入れない。別途相談
+   ・運坊の金額は保存しない。検算のために画面へ出すだけ
+   ══════════════════════════════════════════════════════════ */
+const UNBOU_COL_OFF = ['集荷配送'];   /* この郵便局名の行だけを対象にする */
+let _ucPlan=[], _ucProb=[], _ucFiles=[], _ucSkip=[];
+
+function _ucNum(v){
+  const t=String(v==null?'':v).replace(/[,\s　]/g,'');
+  if(t==='') return 0;
+  const n=Number(t);
+  return isFinite(n) ? n : 0;
+}
+function _ucDate(v){
+  const t=String(v==null?'':v).trim().replace(/[\/．.]/g,'-').slice(0,10);
+  const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : '';
+}
+
+function hfileUnbouCol(e){
+  const files=[...(e.target.files||[])];
+  if(!files.length) return;
+  const one=file=>{
+    const tryR=enc=>new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=rej;r.readAsText(file,enc);});
+    return tryR('Shift_JIS').then(txt=>{
+      const bad=(txt.match(/�/g)||[]).length>5;
+      return bad ? tryR('UTF-8').then(t2=>({name:file.name,txt:t2})) : {name:file.name,txt};
+    });
+  };
+  Promise.all(files.map(one))
+    .then(list=>{ importUnbouColCSV(list); })
+    .catch(()=>{ const el=$('res-us'); if(el) el.innerHTML='<div class="al al-e"><span>❌</span><span>読み込みに失敗しました</span></div>'; });
+  e.target.value='';
+}
+function hdropUnbouCol(e){
+  e.preventDefault();
+  const z=$('dp-us'); if(z) z.classList.remove('drag');
+  const files=[...(e.dataTransfer?.files||[])].filter(f=>/\.csv$/i.test(f.name));
+  if(files.length) hfileUnbouCol({target:{files, value:''}});
+}
+window.hfileUnbouCol=hfileUnbouCol;
+window.hdropUnbouCol=hdropUnbouCol;
+
+function importUnbouColCSV(list){
+  const el=$('res-us'); if(!el) return;
+  if(list) _ucFiles=list;
+  _ucPlan=[]; _ucProb=[]; _ucSkip=[];
+  const files=_ucFiles||[];
+  if(!files.length){ el.innerHTML=''; return; }
+
+  /* 台帳：社員番号（履歴も）と氏名（別表記も）から引く */
+  const byNo={}, byName={};
+  (D.staff||[]).forEach(s=>{
+    if(!s) return;
+    [s.empNo, ...(s.empNoHistory||[])].forEach(v=>{
+      const k=String(v==null?'':v).trim(); if(k && !byNo[k]) byNo[k]=s;
+    });
+    const n=_ubNorm(s.name); if(n && !byName[n]) byName[n]=s;
+    (s.aliases||[]).forEach(a=>{ const x=_ubNorm(a); if(x && !byName[x]) byName[x]=s; });
+  });
+  /* 既にある勤怠（日付＋その人） */
+  const att=lsGet(LS_KEYS.ATT,[])||[];
+
+  let total=0;
+  const seen=new Set();
+  files.forEach(f=>{
+    const {headers, rows}=parseCSV(f.txt);
+    const h=(name)=>headers.find(x=>_ubNorm(x)===_ubNorm(name))||null;
+    const hDate=h(UNBOU_H.date), hOff=h(UNBOU_H.offName), hId=h(UNBOU_H.empId), hNm=h(UNBOU_H.empName);
+    const hH=h(UNBOU_H.s1), hHa=h(UNBOU_H.s1a), hShu=h(UNBOU_H.shu), hShuA=h(UNBOU_H.shuU), hShuAmt=h('集荷金額');
+    const hToku=h(UNBOU_H.toku), hYoko=h(UNBOU_H.yoko);
+    if(!hDate || !hNm || !hH){
+      _ucProb.push({file:f.name, line:1, date:'', name:'', why:'見出しに「日付」「社員名」「その他1個数」が必要です', cls:'ng'});
+      return;
+    }
+    rows.forEach((r,i)=>{
+      total++;
+      const line=i+2;
+      const prob=(why,cls)=>_ucProb.push({file:f.name, line, date:_ucDate(r[hDate]), name:String(r[hNm]||'').trim(), why, cls:cls||''});
+      const offRaw=String(hOff?r[hOff]:'').trim();
+      if(hOff && !UNBOU_COL_OFF.includes(offRaw)){ prob('集荷配送の行ではありません（'+offRaw+'）','muted'); return; }
+      const date=_ucDate(r[hDate]);
+      const nmRaw=String(r[hNm]||'').trim();
+      const idRaw=String(hId?r[hId]:'').trim();
+      if(!date){ prob('日付が読めません'); return; }
+      if(!nmRaw){ prob('社員名が空です'); return; }
+
+      const st = (idRaw && byNo[idRaw]) || byName[_ubNorm(nmRaw)] || null;
+      if(!st){ prob('台帳に見つかりません（'+idRaw+' '+nmRaw+'）','ng'); return; }
+      if(idRaw && byNo[idRaw] && _ubNorm(byNo[idRaw].name)!==_ubNorm(nmRaw)
+         && !((byNo[idRaw].aliases||[]).some(a=>_ubNorm(a)===_ubNorm(nmRaw)))){
+        prob('社員番号 '+idRaw+' は台帳では「'+byNo[idRaw].name+'」です（CSVは「'+nmRaw+'」）','ng'); return;
+      }
+
+      const hours=_ucNum(r[hH]);
+      const amt  =hHa?_ucNum(r[hHa]):0;
+      const shu  =hShu?_ucNum(r[hShu]):0;
+      const shuAmt=hShuAmt?_ucNum(r[hShuAmt]):0;
+      const toku =hToku?_ucNum(r[hToku]):0;
+      const yoko =hYoko?_ucNum(r[hYoko]):0;
+
+      /* 時間が無い行（個数制の方・特別金額だけの行）は入れない */
+      if(hours<=0){
+        if(shu>0||toku>0||yoko>0){
+          _ucSkip.push({date, staff:st, name:st.name, shu, shuAmt, toku, yoko,
+            why: shu>0 ? '個数制（集荷 '+shu+'個 ¥'+shuAmt.toLocaleString()+'）'
+                       : (toku>0 ? '特別金額 ¥'+toku.toLocaleString() : '横乗 ¥'+yoko.toLocaleString())});
+        }
+        return;
+      }
+      const key=date+'__'+_ubNorm(st.name);
+      if(seen.has(key)){ prob('同じ日・同じ方が2行あります','ng'); return; }
+      seen.add(key);
+
+      /* 打刻がある日は入れない（打刻を上書きしない） */
+      const punched=att.some(a=>a && a.clockIn && _attIsMine(a,st)
+        && String(a.date||'').replace(/\//g,'-')===date);
+      if(punched){ prob('この日は打刻があります（打刻を優先し、入れません）','warn'); return; }
+
+      _ucPlan.push({file:f.name, line, date, staff:st, hours, amt, toku, yoko,
+        workMin: Math.round(hours*60)});
+    });
+  });
+  _ucRender(total);
+}
+window.importUnbouColCSV=importUnbouColCSV;
+
+/* 台帳の時給（集荷）。業務別の設定があればそれ、無ければ基本情報。 */
+function _ucRate(st, ym){
+  try{
+    if(typeof _effBizMode==='function'){
+      const m=_effBizMode(st, 'col', (typeof getActivePayCondition==='function')?getActivePayCondition(st,String(ym||'').replace(/-/g,'/')):null, ym);
+      if(m && (m.type==='時間単価' || m.type==='時間給')) return {rate:Number(m.rate)||0, ok:true};
+      if(m && m.type) return {rate:Number(m.rate)||0, ok:false, type:m.type};
+    }
+  }catch(e){}
+  return {rate:Number(st && st.tanka)||0, ok:true};
+}
+
+function _ucRender(total){
+  const el=$('res-us'); if(!el) return;
+  const ng=_ucProb.filter(p=>p.cls==='ng').length;
+  const warn=_ucProb.filter(p=>p.cls==='warn').length;
+
+  /* 人ごとの検算 */
+  const by={};
+  _ucPlan.forEach(p=>{
+    const k=p.staff.name;
+    const a=by[k]=by[k]||{st:p.staff, days:0, min:0, unbou:0, ym:String(p.date).slice(0,7)};
+    a.days++; a.min+=p.workMin; a.unbou+=p.amt;
+  });
+  const names=Object.keys(by).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+  let sumMine=0, sumUnbou=0, diffN=0;
+  const rows=names.map(n=>{
+    const a=by[n]; const h=a.min/60;
+    const r=_ucRate(a.st, a.ym);
+    const mine=r.ok ? Math.round(r.rate*h) : null;
+    if(mine!=null) sumMine+=mine;
+    sumUnbou+=a.unbou;
+    const d=(mine==null)?null:(mine-a.unbou);
+    if(d!=null && d!==0) diffN++;
+    const dTxt=(d==null)?'<span style="color:var(--amb2);">—</span>'
+      :(d===0?'<span style="color:var(--grn2);">0</span>'
+             :`<b style="color:var(--red2);">${d>0?'+':''}${d.toLocaleString()}</b>`);
+    return `<tr>
+      <td class="fw7">${esc(n)}</td>
+      <td class="tr mono">${a.days}</td>
+      <td class="tr mono">${(a.min/60).toFixed(2)}h</td>
+      <td class="tr mono">${r.ok?('¥'+r.rate.toLocaleString()):('<span style="color:var(--amb2);">'+esc(r.type||'時給未設定')+'</span>')}</td>
+      <td class="tr mono fw7">${mine==null?'—':('¥'+mine.toLocaleString())}</td>
+      <td class="tr mono">¥${a.unbou.toLocaleString()}</td>
+      <td class="tr">${dTxt}</td></tr>`;
+  }).join('');
+
+  let h=`<div class="al ${_ucPlan.length?'al-ok':'al-w'}"><span>${_ucPlan.length?'✅':'⚠️'}</span><span>
+    ${_ucFiles.map(f=>'<b>'+esc(f.name)+'</b>').join(' / ')} を読みました（${total}行）。
+    <b>入れられる ${_ucPlan.length}行</b>（${names.length}名）
+    ／ 入れないもの ${_ucProb.length}行${ng?`<span style="color:var(--red2);font-weight:700;">（確認が要るもの ${ng}）</span>`:''}${warn?`<span style="color:var(--amb2);">（打刻あり ${warn}）</span>`:''}
+  </span></div>`;
+
+  if(rows){
+    h+=`<div class="mt8" style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>氏名</th><th class="tr">日数</th><th class="tr">実働</th><th class="tr">台帳の時給</th>
+          <th class="tr">経営管理の計算</th><th class="tr">運坊の金額</th><th class="tr">差</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:var(--bg3);font-weight:700;">
+          <td colspan="4" style="text-align:right;">合計</td>
+          <td class="tr mono">¥${sumMine.toLocaleString()}</td>
+          <td class="tr mono">¥${sumUnbou.toLocaleString()}</td>
+          <td class="tr mono" style="color:${sumMine-sumUnbou===0?'var(--grn2)':'var(--red2)'};">${sumMine-sumUnbou>0?'+':''}${(sumMine-sumUnbou).toLocaleString()}</td>
+        </tr></tfoot></table></div>`;
+    if(diffN) h+=`<div class="al al-w mt8"><span>⚠️</span><span>
+      <b>${diffN}名</b>で、台帳の時給で計算した額と運坊の金額が違います。
+      台帳の時給が正しいか確かめてから取り込んでください。<b>取り込んでも金額は保存されません</b>（入るのは時間だけ）。</span></div>`;
+  }
+
+  if(_ucSkip.length){
+    const g={};
+    _ucSkip.forEach(x=>{ (g[x.name]=g[x.name]||[]).push(x); });
+    h+=`<div class="al al-w mt8"><span>⏸️</span><span>
+      <b>入れない行が ${_ucSkip.length}件</b>あります（時間ではないもの）。<br>
+      ${Object.keys(g).map(n=>`<b>${esc(n)}</b>：${g[n].length}件　${esc(g[n][0].why)}${g[n].length>1?' ほか':''}`).join('<br>')}
+      <br><span class="xs">個数制の方の集荷と、特別金額・横乗金額です。入れ先が決まったら別途対応します。</span></span></div>`;
+  }
+
+  if(_ucProb.length){
+    const g={};
+    _ucProb.forEach(p=>{ const k=p.why.replace(/（[^）]*）/g,'（…）');
+      (g[k]=g[k]||{why:p.why,cls:p.cls,rows:[]}).rows.push(p); });
+    h+=`<div class="mt8" style="max-height:240px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>理由</th><th class="tr">行数</th><th>例</th></tr></thead>
+        <tbody>${Object.values(g).sort((a,b)=>b.rows.length-a.rows.length).map(x=>{
+          const c=x.cls==='ng'?' style="color:var(--red2);font-weight:700;"':(x.cls==='warn'?' style="color:var(--amb2);"':'');
+          return `<tr><td${c}>${esc(x.why)}</td><td class="tr mono">${x.rows.length}</td><td class="xs muted">${x.rows.slice(0,3).map(p=>esc((p.date||'')+' '+p.name)).join('／')}${x.rows.length>3?' ほか':''}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+  }
+
+  if(_ucPlan.length){
+    h+=`<div class="card mt8" style="background:var(--bg3);">
+      <div class="xs muted mb8" style="line-height:1.7;">
+        勤務時間（集荷）として日ごとに入れます。<b>休憩は引きません</b>（運坊の時間が実働のため）。<br>
+        <b>打刻がある日には入れません。</b>宅配の歩合には影響しません。
+      </div>
+      <button class="btn b-grn" onclick="applyUnbouColImport()">この ${_ucPlan.length}行 を勤務時間に入れる</button>
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+async function applyUnbouColImport(){
+  if(!_ucPlan.length){ alert('入れるものがありません。'); return; }
+  const days=[..._ucPlan.reduce((s,p)=>s.add(p.date), new Set())].sort();
+  const ok=await showDialog({ icon:'⏱️', title:'勤務時間に入れる',
+    msg:`${_ucPlan.length}行を勤務時間（集荷）に入れます。\n\n対象の日：${days[0]} 〜 ${days[days.length-1]}\n\n金額は保存しません。入るのは実働時間だけです。`,
+    okText:'入れる', cancelText:'やめる' });
+  if(!ok) return;
+
+  const logs=lsGet(LS_KEYS.ATT,[])||[];
+  const now=new Date().toISOString();
+  let add=0, upd=0;
+  _ucPlan.forEach(p=>{
+    const st=p.staff;
+    const idx=logs.findIndex(a=>a && _attIsMine(a,st) && !a.clockIn
+      && String(a.date||'').replace(/\//g,'-')===p.date && a.source==='manual');
+    const rec={
+      ...(idx>=0?logs[idx]:{}),
+      id: (idx>=0 && logs[idx].id) || (Date.now()*1000 + Math.floor(Math.random()*1000)),
+      date: p.date,
+      driverId: String(st.empNo||st.id||''), driverName: st.name,
+      kyuyo: st.kyuyo||'',
+      source:'manual', biz:'col',
+      workMin: p.workMin,          /* 休憩控除後の実働。spanStored は付けない */
+      fromUnbou:true,
+      editedAt:now, editedBy:'unbou',
+    };
+    /* 時刻は運坊に無いので作らない。拘束時間として扱われないよう消しておく */
+    delete rec.manualIn; delete rec.manualOut; delete rec.manualSpan;
+    delete rec.spanStored; delete rec.clockIn; delete rec.clockOut; delete rec.breakMin;
+    if(idx>=0){ logs[idx]=rec; upd++; } else { logs.push(rec); add++; }
+  });
+  try{ lsSet(LS_KEYS.ATT, logs); }catch(e){}
+  try{ if(typeof fbSet==='function') await fbSet('att_logs', logs); }
+  catch(e){ console.warn('[運坊集荷取込] 保存に失敗', e); alert('保存に失敗しました。通信状態を確認してもう一度お試しください。'); return; }
+
+  const n=_ucPlan.length, mins=_ucPlan.reduce((a,p)=>a+p.workMin,0);
+  _ucPlan=[];
+  try{ if(typeof renderWorkTime==='function') renderWorkTime(); }catch(e){}
+  try{ if(typeof renderSalary==='function') renderSalary(); }catch(e){}
+  const el=$('res-us');
+  if(el) el.innerHTML=`<div class="al al-ok"><span>✅</span><span>
+    <b>${n}行</b>を勤務時間に入れました（新規 ${add} ／ 上書き ${upd}）。実働の合計 <b>${(mins/60).toFixed(2)}時間</b>。<br>
+    <span class="xs muted">給与・人事 → 勤務時間 で確認できます。開始・終了は空のまま「運坊から」と出ます。</span>
+  </span></div>`;
+}
+window.applyUnbouColImport=applyUnbouColImport;
+
+
+/* ══════════════════════════════════════════════════════════
    ★ 2026-10-20.6: 登録した方が「台帳に無い方」の一覧に残り続けていた。
    保存しても消えないので、同じ人をもう一度「登録する」で開いてしまい、
    二重登録の元になっていた（重複の警告は出るが、押す前に気づきたい）。
@@ -52559,11 +52883,14 @@ function renderWorkTime(){
     const net = recs.reduce((s,a)=>s+((typeof roundWorkMin==='function')?roundWorkMin(_attNetMin(a,st),_rst):_attNetMin(a,st)),0);
     const dow=new Date(date+'T00:00:00').getDay();
     const dcol = dow===0?'color:#d33;':dow===6?'color:#2c62c4;':'';
-    const state = voided?'勤務なし（打刻を取消）':edited?'修正済み':manualOnly?'手入力':punch.length?'打刻':'';
+    /* ★ 2026-10-21.19: 運坊から取り込んだ実働。時刻が無いので開始・終了は空のまま。
+       計上時間だけが入っている状態なので、状態欄で分かるようにする。 */
+    const fromUnbou = !!(prim && prim.fromUnbou && prim.manualSpan==null);
+    const state = voided?'勤務なし（打刻を取消）':edited?'修正済み':fromUnbou?'運坊から':manualOnly?'手入力':punch.length?'打刻':'';
     /* ★ 2026-10-21.18: その日に入っている休憩（分）。無ければ空欄＝自動。 */
     const _bmVal = (prim && prim.breakMin!=null && prim.breakMin!=='') ? String(Math.max(0,Number(prim.breakMin)||0)) : '';
     const bg = voided?'background:rgba(0,0,0,.04);':edited||manualOnly?'background:rgba(245,166,35,.12);':'';
-    rowsHtml+=`<tr data-date="${date}" data-pin="${_hhmm(pIn)}" data-pout="${_hhmm(pOut)}" data-has-punch="${punch.length?1:0}" style="${bg}">
+    rowsHtml+=`<tr data-date="${date}" data-pin="${_hhmm(pIn)}" data-pout="${_hhmm(pOut)}" data-has-punch="${punch.length?1:0}" data-unbou="${fromUnbou?1:0}" data-unbou-min="${fromUnbou?net:0}" style="${bg}">
       <td class="mono" style="${dcol}white-space:nowrap;">${d}日(${W[dow]})</td>
       <td>${canPick
         ? `<select class="fi wt-biz" style="font-size:11px;padding:3px 4px;width:auto;"><option value="del"${biz==='del'?' selected':''}>宅配</option><option value="col"${biz==='col'?' selected':''}>集荷</option></select>`
@@ -52632,6 +52959,14 @@ function _wtCalcRow(tr){
   const cell=tr.querySelector('.wt-calc');
   tr.dataset.min='0';
   if(i===null||o===null){ cell.innerHTML='<span style="color:var(--red2);">時刻が不正</span>'; return; }
+  /* ★ 2026-10-21.19: 運坊から取り込んだ日は時刻が無い。実働だけが入っているので、
+     空欄でも計上時間を消さずにそのまま出す。時刻を入れればそちらが勝つ。 */
+  if(!i && !o && tr.dataset.unbou==='1'){
+    const m=Number(tr.dataset.unbouMin)||0;
+    tr.dataset.min=String(m);
+    cell.innerHTML=_wtFmtMin(m)+'<span class="xs" style="color:var(--amb2);margin-left:4px;">運坊</span>';
+    return;
+  }
   if(!i && !o){ cell.textContent=''; return; }
   if(!i || !o){ cell.innerHTML='<span style="color:var(--red2);">開始・終了の両方が必要</span>'; return; }
   const span=_spanMin(i,o);
@@ -52745,7 +53080,10 @@ async function _wtSave(){
     } else {
       const m = manIdx.length ? logs[manIdx[0]] : null;
       if(!i && !o){
-        if(manIdx.length){ manIdx.sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); changed++; }
+        /* ★ 2026-10-21.19: 運坊から取り込んだ実働は、時刻が無いだけで勤務はある。
+           空欄に見えるからといって消してはいけない。 */
+        const delIdx = manIdx.filter(k=>!logs[k].fromUnbou);
+        if(delIdx.length){ delIdx.sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); changed++; }
       } else {
         const same = m && m.manualSpan!=null && _hhmm(m.manualIn)===i && _hhmm(m.manualOut)===o && m.biz===biz && _sameBrk(m);
         if(!same){
@@ -52758,6 +53096,8 @@ async function _wtSave(){
             editedAt:now, editedBy:'mgmt',
           };
           _putBrk(rec);
+          /* ★ 2026-10-21.19: 時刻を入れたらこちらが正。運坊から来た印は外す */
+          delete rec.fromUnbou;
           delete rec.workMin; delete rec.clockIn; delete rec.clockOut;
           if(m){ logs[manIdx[0]]=rec; manIdx.slice(1).sort((a,b)=>b-a).forEach(k=>logs.splice(k,1)); }
           else logs.push(rec);
