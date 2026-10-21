@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.11</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.13</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2311,6 +2311,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div class="card" style="display:flex;flex-direction:column;">
           <div class="ch"><div class="ct"><div class="cbar"></div>郵便局データ 取込</div></div>
+          <div class="xs muted mb8" style="line-height:1.7;">
+            郵便局の調書（月間表）を取り込みます。<b>日報の数字には触りません。</b>別に持って照合に使います。<br>
+            <b>列</b>　日付／氏名／配達完了／転送・還付／夜間／170超（持ち出し・営業所は任意）<br>
+            同じ日・同じ方の調書が既にあれば上書きします。
+          </div>
           <div class="drop" id="dp-p" onclick="document.getElementById('fi-p').click()"
             ondragover="dov(event,'dp-p')" ondragleave="dlv('dp-p')" ondrop="hdrop(event,'p')" style="flex:1;display:flex;flex-direction:column;justify-content:center;">
             <div style="font-size:30px;margin-bottom:6px;">📮</div>
@@ -5977,7 +5982,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.11';
+const APP_VER = '2026-10-20.13';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -42986,21 +42991,235 @@ function importPUCSV(rows,fn){
   el.innerHTML=h;
 }
 
-function importPostCSV(txt,fn){
-  const el=$('res-p');
-  const {rows}=parseCSV(txt);
-  const MAP={'日付':'date','担当者名':'staff','従事員名':'staff','配達数':'post','配達完了':'post','完了数':'post','営業所':'office'};
-  let ok=0,no=0;
-  rows.forEach(row=>{
-    const m={};Object.entries(row).forEach(([c,v])=>{const k=MAP[c];if(k)m[k]=v;});
-    if(!m.date||!m.staff)return;
-    const date=m.date.replace(/-/g,'/').trim(),post=parseInt(m.post)||0;
-    const t=D.delivery.find(r=>r.date===date&&r.staff===m.staff);
-    if(t){t.postData=post;t.status=t.kanryo===post?'照合済':'差異あり';ok++;}else no++;
-  });
-  renderCmp();renderDash();
-  el.innerHTML=`<div class="al al-ok"><span>✅</span><span><strong>${fn}</strong> 取込 ／ 照合 <strong>${ok}件</strong></span></div>${no?`<div class="al al-w"><span>⚠️</span><span>未照合 ${no}件（対応日報なし）</span></div>`:''}`;
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-20.12: 郵便局データの取込を作り直した。
+
+   これまでの importPostCSV は2つの理由で動いていなかった。
+     ・日付をスラッシュに直してから突き合わせていたが、日報の日付は
+       ハイフンなので永久に一致しない
+         const date = m.date.replace(/-/g,'/');   // 2026/09/01
+         D.delivery.find(r => r.date===date ...)  // 日報は 2026-09-01
+     ・書き込んでいたのは postData（完了数ひとつ）だけ。いまの照合画面が
+       見ているのは postKanryo / postTenso / postYakan / postOgata の4つで、
+       取り込んでも照合には出なかった。
+
+   作り直したものは、手入力（openPostEntry）と同じ D.postLogs に入れる。
+   そこへ入れておけば _cmpJoinPostLogs が日報へ写すので、手入力と
+   まったく同じ扱いになる。日報の実績値（kanryo など）には触らない。
+
+   突き合わせは 日付＋氏名。氏名は従業員台帳の別表記（aliases）も見る。
+   同じ日・同じ方の調書が既にあれば上書きする（二重計上を防ぐ）。
+   ══════════════════════════════════════════════════════════ */
+const POSTCSV_COLS = [
+  {k:'kanryo', label:'配達完了',   alias:['配達完了','完了','完了数','配達数']},
+  {k:'tenso',  label:'転送・還付', alias:['転送・還付','転送還付','転送','返還','還付']},
+  {k:'yakan',  label:'夜間',       alias:['夜間','夜間（再掲）','夜間[再掲]','夜間再掲']},
+  {k:'ogata',  label:'170超',      alias:['170超','大型','170超（再掲）','170超[再掲]','170超再掲']},
+  {k:'mochi',  label:'持ち出し',   alias:['持ち出し','持出','持出し']},
+  /* ★ 2026-10-20.13: 集荷。調書は1日1人の合計しか来ない（定時／指定事業所の別が無い）。
+     請求の振り分けには使えないので、ここでは調書の数字として持つだけにする。
+     日報側の集荷は集荷先ごとに入っていて、その合計が r.shukka。月計で突き合わせる。 */
+  {k:'shukka', label:'集荷(定時)', alias:['集荷','集荷(定時)','集荷（定時）','定時集荷','集荷数']},
+];
+const POSTCSV_DATE = ['日付','年月日','日'];
+const POSTCSV_NAME = ['氏名','従事員名','担当者名','名前','従業員名'];
+const POSTCSV_OFF  = ['営業所','郵便局','郵便局名','局'];
+const POSTCSV_EMP  = ['社員番号','局社員番号','郵便局社員番号'];
+
+let _pcPlan = [];   /* 入れる行 */
+let _pcProb = [];   /* 入れられない行 */
+
+function _pcDate(v){
+  const t=String(v==null?'':v).trim().replace(/[\/．.]/g,'-').slice(0,10);
+  const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
+  return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : '';
 }
+function _pcNum(v){
+  const t=String(v==null?'':v).replace(/[,\s　]/g,'');
+  if(t==='') return null;
+  const n=parseInt(t,10);
+  return isFinite(n) ? n : null;
+}
+
+function importPostCSV(txt, fn){
+  const el=$('res-p'); if(!el) return;
+  _pcPlan=[]; _pcProb=[];
+  const {headers, rows}=parseCSV(txt);
+  const hDate=_rcPick(headers, POSTCSV_DATE);
+  const hName=_rcPick(headers, POSTCSV_NAME);
+  if(!hDate || !hName){
+    el.innerHTML=`<div class="al al-e"><span>❌</span><span>
+      1行目の見出しに「日付」と「氏名」が必要です。<br>
+      <span class="xs">いま読めた見出し：${esc(headers.join(' / '))||'（無し）'}</span>
+    </span></div>`;
+    return;
+  }
+  const hOff=_rcPick(headers, POSTCSV_OFF), hEmp=_rcPick(headers, POSTCSV_EMP);
+  const hCol={}; POSTCSV_COLS.forEach(c=>{ hCol[c.k]=_rcPick(headers, c.alias); });
+  const used=POSTCSV_COLS.filter(c=>hCol[c.k]!=null);
+  if(!used.length){
+    el.innerHTML=`<div class="al al-e"><span>❌</span><span>数量の列が1つも見つかりませんでした（配達完了・転送還付・夜間・170超・持ち出し・集荷）。</span></div>`;
+    return;
+  }
+
+  /* 台帳：氏名と別表記から引く */
+  const byName={};
+  (D.staff||[]).forEach(s=>{
+    if(!s || !s.name) return;
+    const k=_ubNorm(s.name); if(k && !byName[k]) byName[k]=s;
+    (s.aliases||[]).forEach(a=>{ const x=_ubNorm(a); if(x && !byName[x]) byName[x]=s; });
+  });
+  /* 日報：日付＋氏名。あれば営業所を引き継ぐ */
+  const delBy={};
+  (D.delivery||[]).forEach(r=>{ if(r && r.date && r.staff) delBy[_pcDate(r.date)+'__'+_ubNorm(r.staff)]=r; });
+  /* 既にある調書 */
+  const logBy={};
+  (D.postLogs||[]).forEach(l=>{ if(l && l.date && l.staff) logBy[_pcDate(l.date)+'__'+_ubNorm(l.staff)]=l; });
+
+  const seen=new Set();
+  rows.forEach((r,i)=>{
+    const line=i+2;
+    const date=_pcDate(r[hDate]);
+    const nmRaw=String(r[hName]||'').trim();
+    const prob=(why,cls)=>_pcProb.push({line, date, name:nmRaw, why, cls:cls||''});
+    if(!date){ prob('日付が読めません'); return; }
+    if(!nmRaw){ prob('氏名が空です'); return; }
+    const st=byName[_ubNorm(nmRaw)];
+    if(!st){ prob('台帳に見つかりません（'+nmRaw+'）', 'ng'); return; }
+
+    const vals={}; let any=false;
+    POSTCSV_COLS.forEach(c=>{
+      if(hCol[c.k]==null) return;
+      const v=_pcNum(r[hCol[c.k]]);
+      if(v!=null){ vals[c.k]=v; if(v>0) any=true; }
+    });
+    if(!Object.keys(vals).length){ prob('数量が1つも読めません'); return; }
+
+    const key=date+'__'+_ubNorm(st.name);
+    if(seen.has(key)){ prob('同じCSVの中に同じ日・同じ方が2行あります', 'ng'); return; }
+    seen.add(key);
+
+    const del=delBy[key];
+    const office=(hOff && String(r[hOff]||'').trim()) || (del && del.office) || st.office || '';
+    _pcPlan.push({ line, date, staff:st, office, vals, any,
+                   del: del||null, old: logBy[key]||null,
+                   empNo:(hEmp && String(r[hEmp]||'').trim()) || '' });
+  });
+  _pcRender(fn, rows.length, used);
+}
+window.importPostCSV=importPostCSV;
+
+function _pcRender(fn, total, used){
+  const el=$('res-p'); if(!el) return;
+  const nNew=_pcPlan.filter(p=>!p.old).length, nUpd=_pcPlan.filter(p=>p.old).length;
+  const noDel=_pcPlan.filter(p=>!p.del).length;
+  const ng=_pcProb.filter(p=>p.cls==='ng').length;
+  const byOff={};
+  _pcPlan.forEach(p=>{ const a=byOff[p.office||'(営業所なし)']=byOff[p.office||'(営業所なし)']||{n:0,k:0,s:0,days:new Set(),ppl:new Set()};
+    a.n++; a.k+=(p.vals.kanryo||0); a.s+=(p.vals.shukka||0); a.days.add(p.date); a.ppl.add(p.staff.name); });
+  /* 集荷が1件も無いCSVでは列そのものを出さない（空の列が並ぶのを避ける） */
+  const hasShukka=Object.keys(byOff).some(k=>byOff[k].s>0);
+
+  let h=`<div class="al ${_pcPlan.length?'al-ok':'al-w'}"><span>${_pcPlan.length?'✅':'⚠️'}</span><span>
+    <b>${esc(fn)}</b> を読みました（${total}行）。
+    <b>入れられる ${_pcPlan.length}行</b>（新しく入る ${nNew} ／ 上書き ${nUpd}）
+    ／ 入れないもの ${_pcProb.length}行${ng?`<span style="color:var(--red2);font-weight:700;">（確認が要るもの ${ng}）</span>`:''}<br>
+    <span class="xs muted">読めた数量の列：${used.map(c=>esc(c.label)).join('・')}</span>
+  </span></div>`;
+
+  if(Object.keys(byOff).length){
+    h+=`<div class="mt8" style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>営業所</th><th class="tr">行</th><th class="tr">人数</th><th class="tr">日数</th><th class="tr">配達完了</th>${hasShukka?'<th class="tr">集荷(定時)</th>':''}</tr></thead>
+        <tbody>${Object.keys(byOff).sort((a,b)=>String(a).localeCompare(String(b),'ja')).map(k=>{const a=byOff[k];
+          return `<tr><td class="fw7">${esc(k)}</td><td class="tr mono">${a.n}</td><td class="tr mono">${a.ppl.size}</td><td class="tr mono">${a.days.size}</td><td class="tr mono fw7">${a.k.toLocaleString()}</td>${hasShukka?`<td class="tr mono fw7" style="color:var(--grn2);">${a.s.toLocaleString()}</td>`:''}</tr>`;
+        }).join('')}</tbody></table></div>`;
+  }
+  if(noDel) h+=`<div class="al al-w mt8"><span>⚠️</span><span>
+    ${noDel}行は<b>その日の日報がありません</b>。調書としては入りますが、照合の相手がいないので差異は出ません。
+    日報を先に入れると照合されます。</span></div>`;
+
+  if(_pcProb.length){
+    const g={};
+    _pcProb.forEach(p=>{ const k=p.why.replace(/（[^）]*）/g,'（…）');
+      (g[k]=g[k]||{why:p.why,cls:p.cls,rows:[]}).rows.push(p); });
+    h+=`<div class="mt8" style="max-height:240px;overflow:auto;border:1px solid var(--brd);border-radius:6px;">
+      <table style="width:100%;font-size:12px;">
+        <thead><tr><th>理由</th><th class="tr">行数</th><th>例</th></tr></thead>
+        <tbody>${Object.values(g).sort((a,b)=>b.rows.length-a.rows.length).map(x=>{
+          const c=x.cls==='ng'?' style="color:var(--red2);font-weight:700;"':'';
+          return `<tr><td${c}>${esc(x.why)}</td><td class="tr mono">${x.rows.length}</td><td class="xs muted">${x.rows.slice(0,3).map(p=>esc(p.date+' '+p.name)).join('／')}${x.rows.length>3?' ほか':''}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+  }
+  if(_pcPlan.length){
+    h+=`<div class="card mt8" style="background:var(--bg3);">
+      <div class="xs muted mb8" style="line-height:1.7;">
+        日報の数字（完了・夜間など）には<b>触りません</b>。郵便局の調書として別に持ち、照合画面で突き合わせます。<br>
+        同じ日・同じ方の調書が既にあれば<b>上書き</b>します（二重計上を防ぐため）。
+      </div>
+      <button class="btn b-grn" onclick="applyPostCSV()">この ${_pcPlan.length}行 を調書に入れる</button>
+    </div>`;
+  }
+  el.innerHTML=h;
+}
+
+async function applyPostCSV(){
+  if(!_pcPlan.length){ alert('入れるものがありません。'); return; }
+  const days=[..._pcPlan.reduce((s,p)=>s.add(p.date), new Set())].sort();
+  const ok=await showDialog({ icon:'📮', title:'郵便局の調書に入れる',
+    msg:`${_pcPlan.length}行を入れます。\n\n対象の日：${days[0]} 〜 ${days[days.length-1]}\n\n日報の数字は変えません。`,
+    okText:'入れる', cancelText:'やめる' });
+  if(!ok) return;
+
+  if(!Array.isArray(D.postLogs)) D.postLogs=[];
+  const logs=D.postLogs;
+  let add=0, upd=0;
+  _pcPlan.forEach(p=>{
+    const rec={ date:p.date, office:p.office, empNo:p.empNo, staff:p.staff.name,
+                ...p.vals, src:'csv', at:new Date().toISOString() };
+    const idx=logs.findIndex(l=>l && _pcDate(l.date)===p.date && _ubNorm(l.staff)===_ubNorm(p.staff.name));
+    if(idx>=0){ logs[idx]={...logs[idx], ...rec}; upd++; }
+    else { logs.push(rec); add++; }
+  });
+  try{ lsSet(LS_KEYS.POSTLOG, logs); }catch(e){}
+  try{ if(typeof fbSet==='function') await fbSet('post_logs', logs); }catch(e){ console.warn('[郵便局取込] 保存に失敗', e); }
+  try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
+  try{ if(typeof renderCmp==='function') renderCmp(); }catch(e){}
+  try{ if(typeof renderDash==='function') renderDash(); }catch(e){}
+
+  /* 入れた結果、照合がどうなったかをその場で出す */
+  let same=0, diff=0, noPair=0;
+  _pcPlan.forEach(p=>{
+    if(!p.del){ noPair++; return; }
+    const nk=(p.del.kanryo||0)+(p.del.tenso||0);
+    const pk=(p.vals.kanryo||0)+(p.vals.tenso||0);
+    const ok2 = nk===pk && (p.del.yakan||0)===(p.vals.yakan||0) && (p.del.ogata||0)===(p.vals.ogata||0);
+    if(ok2) same++; else diff++;
+  });
+  /* ★ 2026-10-20.13: 集荷は1行ごとに比べない。
+     調書は合計しか来ず、日報は集荷先ごとに入っているため、
+     取り込んだ行の範囲で月計だけを突き合わせて出す。
+     一致／差異の件数には含めない（照合画面の見方とそろえるため）。 */
+  let shP=0, shN=0, shHas=false;
+  _pcPlan.forEach(p=>{
+    if(p.vals.shukka==null) return;
+    shHas=true; shP+=(p.vals.shukka||0);
+    if(p.del) shN+=(p.del.shukka||0);
+  });
+  const n=_pcPlan.length; _pcPlan=[];
+  const el=$('res-p');
+  if(el) el.innerHTML=`<div class="al al-ok"><span>✅</span><span>
+    <b>${n}行</b>を調書に入れました（新規 ${add} ／ 上書き ${upd}）。<br>
+    照合の結果：<b style="color:var(--grn2);">一致 ${same}</b> ／
+    <b style="color:var(--red2);">差異 ${diff}</b> ／ 日報なし ${noPair}<br>
+    ${shHas?`集荷(定時)の月計：調書 <b>${shP.toLocaleString()}</b> ／ 日報 <b>${shN.toLocaleString()}</b> ／
+      差 <b style="color:${shP-shN===0?'var(--grn2)':'var(--red2)'};">${shP-shN>0?'+':''}${(shP-shN).toLocaleString()}</b>
+      <span class="xs muted">（取り込んだ行の範囲。照合画面にはまだ集荷の列は出ません）</span><br>`:''}
+    <span class="xs muted">郵便局照合の画面で中身を確認できます。</span>
+  </span></div>`;
+  console.log('[郵便局取込] '+n+'行（新規'+add+'/上書き'+upd+'） 一致'+same+' 差異'+diff);
+}
+window.applyPostCSV=applyPostCSV;
 
 // ─── CSV出力 ───
 function expDelCSV(){
@@ -49650,6 +49869,7 @@ function _cmpJoinPostLogs(){
     r.postTenso  = l.tenso;
     r.postYakan  = l.yakan;
     r.postOgata  = l.ogata;
+    r.postShukka = l.shukka;   /* ★ 2026-10-20.13 調書の集荷(定時)。合計のみ */
     r.postSrc    = l.src||'';
   });
 }
@@ -49957,7 +50177,7 @@ function _cmpOrphanPostLogs(mon, off){
       date:l.date, office:l.office||'', staff:nm,
       _empNo:String(l.empNo||'').trim(),
       postMochi:l.mochi, postKanryo:l.kanryo, postTenso:l.tenso,
-      postYakan:l.yakan, postOgata:l.ogata,
+      postYakan:l.yakan, postOgata:l.ogata, postShukka:l.shukka,
     };
   });
 }
