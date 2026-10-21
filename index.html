@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-20.13</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.15</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5982,7 +5982,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-20.13';
+const APP_VER = '2026-10-21.15';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12178,11 +12178,19 @@ function renderDel() {
   );
   // KPI
   const s=rows.reduce((a,r)=>({mochidashi:a.mochidashi+r.mochidashi,kanryo:a.kanryo+r.kanryo,yakan:a.yakan+r.yakan,mochimodoiri:a.mochimodoiri+r.mochimodoiri}),{mochidashi:0,kanryo:0,yakan:0,mochimodoiri:0});
+  /* ★ 2026-10-21.15: 集荷の合計が出ていなかった。
+     表には「定時集荷」「指定事業所」の列があるのに、上の合計には無く、
+     集荷が何件あるのかを数えるには行を目で足すしかなかった。
+     列と同じ _shukkaSplit で割るので、表の数字をそのまま足したものになる。 */
+  const sh=rows.reduce((a,r)=>{ const x=(typeof _shukkaSplit==='function')?_shukkaSplit(r):{teiji:0,shitei:0};
+    return {teiji:a.teiji+(x.teiji||0), shitei:a.shitei+(x.shitei||0)}; },{teiji:0,shitei:0});
   $('del-kpi').innerHTML=[
     {l:'持出（合計）',v:fmt(s.mochidashi),u:'個',c:'--red'},
     {l:'配達完了',v:fmt(s.kanryo),u:'個',c:'--grn'},
     {l:'夜間（20時〜）',v:fmt(s.yakan),u:'個',c:'--blu'},
     {l:'持戻り＋翌日',v:fmt(s.mochimodoiri),u:'個',c:'--amb'},
+    {l:'定時集荷',v:fmt(sh.teiji),u:'個',c:'--grn'},
+    {l:'指定事業所',v:fmt(sh.shitei),u:'個',c:'--amb'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div></div>`).join('');
 
   let h='';
@@ -16518,6 +16526,32 @@ function savePU(){
       }
       _colLogsRemovePickup(colLogs, _orig);
       newRec.id = Date.now()*1000 + Math.floor(Math.random()*1000);
+    }
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-10-21.14: 1社だけの提出を編集すると、ルート契約と
+       チャーターの行が消えていた。
+
+       日報アプリの提出が顧客1社だけのとき、applyFirebaseData は
+       _conv(r, allRows, r.id) で作るので _logId が付かない。
+       上の分岐は _logId がある（＝複数顧客を分けた）ときだけ
+       route/チャーターを拾うので、1社だけの提出では _extraRows が
+       常に空のままだった。
+
+       下で rows を items から作り直すが、_conv は route / route_rest /
+       チャーター を items に入れない（金額を二重計上しないため）。
+       つまり拾い直さないと、保存のたびにその行が col_logs から消える。
+       単価も区間も金額もその行にしか無いので復元できず、
+       顧客請求書からルート配送・チャーターの行がまるごと落ちていた。
+
+       1社だけの提出は、この日報のidがそのまま提出のidなので、
+       そこから同じ3種類の行を拾っておく。
+       ══════════════════════════════════════════════════════════ */
+    else if (_orig) {
+      const li = colLogs.findIndex(l => String(l.id) === String(_orig.id));
+      if (li >= 0) {
+        _extraRows = (colLogs[li].rows||[]).filter(row =>
+          ['route','route_rest','チャーター'].includes(row && row.masterKey));
+      }
     }
   }
   if (editingId) {
@@ -50313,10 +50347,19 @@ async function applyPostToNikki(){
 function _cmpSumHeader(rows, orphans, label){
   const t={nk:0,pk:0,ny:0,py:0,no:0,po:0};
   let hasPost=false, okN=0, accN=0, ngN=0, unN=0, noPost=0;
+  /* ★ 2026-10-21.15: 集荷の合計をここにも出す。
+     調書の集荷は1日1人の合計しか来ず、日報は集荷先ごとに入っているので、
+     1行ずつ比べると集荷先の分け方が違うだけで差異が立つ。
+     そのため列は増やさず、月計だけを別の1枚で出す。
+     一致／差異の判定（okN/ngN）には入れないので、上の3本の見方は変わらない。 */
+  const _n0=v=>Math.max(0,parseInt(v)||0);
+  let shN=0, shP=0, shHasPost=false;
 
   (rows||[]).forEach(r=>{
     const d=_cmpDiffs(r);
     t.nk+=d.nikki.kanryo; t.ny+=d.nikki.yakan; t.no+=d.nikki.ogata;
+    shN+=_n0(r.shukka);
+    if(r.postShukka!=null){ shHasPost=true; shP+=_n0(r.postShukka); }
     if(d.hasPost){
       hasPost=true;
       t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
@@ -50329,6 +50372,7 @@ function _cmpSumHeader(rows, orphans, label){
   });
   (orphans||[]).forEach(r=>{
     const d=_cmpDiffs(r);
+    if(r.postShukka!=null){ shHasPost=true; shP+=_n0(r.postShukka); }
     if(d.hasPost){
       hasPost=true;
       t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
@@ -50374,6 +50418,26 @@ function _cmpSumHeader(rows, orphans, label){
       ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
       ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
     </div>
+    ${(shN||shP)?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
+      ${(function(){
+        const d=shP-shN;
+        return `<div style="flex:1 1 260px;max-width:420px;background:var(--sur2);border:1px solid var(--brd2);
+                    border-left:4px solid var(--grn2);border-radius:6px;padding:8px 12px;">
+          <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">集荷
+            <span style="font-size:9.5px;font-weight:400;color:var(--txt3);margin-left:4px;">月計のみ・行の列には出ません</span></div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap;">
+            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">郵便局</span>
+              <b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--grn2);">${shHasPost?n(shP):'—'}</b></div>
+            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">日報</span>
+              <b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(shN)}</b></div>
+            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
+              <b style="font-family:'DM Mono',monospace;font-size:17px;color:${!shHasPost?'var(--txt3)':(d<0?'var(--red2)':'var(--grn2)')};">${shHasPost?((d>0?'+':'')+n(d)):'—'}</b></div>
+          </div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:5px;">
+            調書は1日1人の合計しか来ないため、日ごとの突き合わせはしていません。一致／差異の件数にも入れていません。</div>
+        </div>`;
+      })()}
+    </div>`:''}
     ${noPost?`<div style="margin-top:8px;font-size:11px;color:var(--amb2);">
       郵便局データ未取込が ${noPost} 件あります。その分の日報の数量は郵便局側に計上されないため、
       上の差異には未取込分がそのまま含まれています。取込が済むまで差異の数字は目安としてご覧ください。
