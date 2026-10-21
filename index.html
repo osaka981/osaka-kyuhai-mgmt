@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.15</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.16</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1589,10 +1589,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
               <th colspan="3" class="tr cmp-grp" data-grp="0" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">完了＋転送還付</th>
               <th colspan="3" class="tr cmp-grp" data-grp="1" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(80,140,220,.13),rgba(80,140,220,.13)),var(--bg3);">夜間<span style="font-size:9px;font-weight:400;">再掲</span></th>
               <th colspan="3" class="tr cmp-grp" data-grp="2" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(150,110,200,.13),rgba(150,110,200,.13)),var(--bg3);">170超<span style="font-size:9px;font-weight:400;">再掲</span></th>
+              <!-- ★ 2026-10-21.16: 集荷。照合のときに画面で確かめられないと使えないため列にした。 -->
+              <th colspan="3" class="tr cmp-grp" data-grp="3" style="border-left:2px solid var(--brd2);background:linear-gradient(rgba(60,160,90,.13),rgba(60,160,90,.13)),var(--bg3);">集荷</th>
               <th rowspan="2" style="border-left:2px solid var(--brd2);">手当・立替<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">クリックで日報を直す</div></th>
               <th rowspan="2" style="border-left:2px solid var(--brd2);">原因</th><th rowspan="2">状態</th><th rowspan="2">操作</th>
             </tr>
             <tr>
+              <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
               <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
               <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
               <th class="tr" style="border-left:2px solid var(--brd2);font-size:10.5px;">郵便局</th><th class="tr" style="font-size:10.5px;">日報</th><th class="tr" style="font-size:10.5px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
@@ -5982,7 +5985,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.15';
+const APP_VER = '2026-10-21.16';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11092,7 +11095,7 @@ function renderCmp(){
     ? _cmpSumHeader(rows, orphans, (mon||'全期間')+(off?'　'+off:''))
     : '';
   const tbody=$('tb-cmp'); if(!tbody) return;
-  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="16" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
+  if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="19" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
   const sorted=rows.concat(orphans).sort(function(a,b){
@@ -11119,14 +11122,14 @@ function renderCmp(){
   const html=[];
   groups.forEach(function(g,gi){
     // ★ 2026/08/27: 日の切れ目。影は使わず、余白の中央に線を1本引くだけにする。
-    if(gi>0) html.push('<tr class="no-hover"><td colspan="16" style="height:8px;padding:0;'
+    if(gi>0) html.push('<tr class="no-hover"><td colspan="19" style="height:8px;padding:0;'
       +'border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>'
-      +'<tr class="no-hover"><td colspan="16" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
+      +'<tr class="no-hover"><td colspan="19" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
-    const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0};
-    let hasPostAny=false, orphInDay=false;
+    const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0,ns:0,ps:0};
+    let hasPostAny=false, orphInDay=false, hasShuAny=false;
 
     g.rows.forEach(function(r,ri){
       const d=_cmpDiffs(r);
@@ -11135,11 +11138,12 @@ function renderCmp(){
       const cls=orph?'tr-ng':(d.any&&!r.cmpOk)?'tr-ng':r.cmpOk?'tr-ok':'';
       const scls=orph?'ba':acc?'ba':r.cmpOk?'bg':d.any?'br':'bz';
       const stxt=orph?'日報なし':acc?'差異了承':r.cmpOk?'照合済':d.any?'差異':'未照合';
-      if(!orph){ sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata; }
+      if(!orph){ sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata; sum.ns+=(d.nShukka||0); }
       if(d.hasPost){
         hasPostAny=true;
         sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
       }
+      if(d.hasShu){ hasShuAny=true; sum.ps+=(d.pShukka||0); }
       if(orph) orphInDay=true;
       html.push('<tr class="'+cls+'">');
       // 日付は先頭行だけ表示。日が変わったことが分かるよう少し大きく、曜日を色分けする。
@@ -11163,6 +11167,11 @@ function renderCmp(){
       html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+numCell(d.hasPost?d.post.ogata:null)+'</td>');
       html.push('<td class="tr" style="color:var(--pur2);">'+(orph?dash:fmt(d.nikki.ogata))+'</td>');
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
+      /* ★ 2026-10-21.16: 集荷。調書に集荷の列が無い月は「—」にして差異を出さない。
+         日報なしの行でも、調書に集荷があればその数は出す。 */
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">'+(d.hasShu?fmt(d.pShukka):'&#8212;')+'</td>');
+      html.push('<td class="tr" style="color:var(--grn2);">'+(orph?dash:fmt(d.nShukka))+'</td>');
+      html.push((orph||!d.hasShu)?'<td class="tr">'+dash+'</td>':diffCell(d.dShukka));
       /* ★ 2026-10-09.31: 横乗り・駐車立替・給油・走行距離をここにも出す。
          紙の日報を見ながら数合わせするとき、この画面を離れずに直せるよう
          タグを押すとその日報の入力モーダルが開く。 */
@@ -11212,6 +11221,11 @@ function renderCmp(){
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--pur2);">'+(hasPostAny?fmt(sum.po):'&#8212;')+'</td>');
     html.push('<td class="tr fw7" style="color:var(--pur2);">'+fmt(sum.no)+'</td>');
     html.push(diffCell(doo));
+    /* ★ 2026-10-21.16: 日計の集荷。調書に集荷が無い日は差異を出さない。 */
+    const ds=hasShuAny?sum.ps-sum.ns:null;
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--grn2);">'+(hasShuAny?fmt(sum.ps):'&#8212;')+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--grn2);">'+fmt(sum.ns)+'</td>');
+    html.push(hasShuAny?diffCell(ds):'<td class="tr"><span style="color:var(--txt3);">&#8212;</span></td>');
     // ★ 2026-10-09.31: その日の手当・立替の合計
     {
       let _y=0,_p=0,_d=0,_g=false;
@@ -50171,8 +50185,20 @@ function _cmpDiffs(r){
   const dKanryo = hasPost ? post.kanryo - nikki.kanryo : null;
   const dYakan  = hasPost ? post.yakan  - nikki.yakan  : null;
   const dOgata  = hasPost ? post.ogata  - nikki.ogata  : null;
+  /* ★ 2026-10-21.16: 集荷も列として出す。
+     日報の集荷(r.shukka)も調書の集荷(r.postShukka)も「その日・その人の合計」なので、
+     日ごとに比べられる。集荷先ごとの内訳は比較に使わない。
+     調書に集荷の列が無い月（他局のCSVなど）は postShukka が入らないので、
+     そのときは「—」にして差異を出さない（0との比較にしない）。
+     一致／差異の判定(any)には今回は入れていない。入れると、修正モーダルに
+     集荷の行が無いため「差異だが直せない」行ができてしまうため。 */
+  const hasShu  = hasPost && (r.postShukka!==undefined && r.postShukka!==null);
+  const nShukka = n(r.shukka);
+  const pShukka = hasShu ? n(r.postShukka) : null;
+  const dShukka = hasShu ? pShukka - nShukka : null;
   return {
     nikki, post, hasPost, dKanryo, dYakan, dOgata,
+    hasShu, nShukka, pShukka, dShukka,
     any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
   };
 }
@@ -50402,6 +50428,27 @@ function _cmpSumHeader(rows, orphans, label){
         <b style="font-family:'DM Mono',monospace;font-size:17px;">${dcell(nv,pv)}</b></div>
     </div>`;
 
+  /* ★ 2026-10-21.16: 集荷のカード。表に集荷の列グループを足したので、
+     他の3枚と同じ形にして同じ並びに入れる（列に幅をそろえる仕組みに乗せるため）。
+     調書に集荷の列が無い月は郵便局側を「—」にして、差異も出さない。 */
+  const shGroup=()=>{
+    const d=shP-shN;
+    const col='var(--grn2)';
+    return `
+    <div class="cmp-sum-card" style="flex:1 1 170px;max-width:300px;background:var(--sur2);border:1px solid var(--brd2);
+                border-left:4px solid ${col};border-radius:6px;padding:8px 12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">集荷</div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
+        <span>郵便局</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:${col};">${shHasPost?n(shP):'—'}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);">
+        <span>日報</span><b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(shN)}</b></div>
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);
+                  border-top:1px dashed var(--brd);margin-top:4px;padding-top:4px;">
+        <span>差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
+        <b style="font-family:'DM Mono',monospace;font-size:17px;color:${!shHasPost?'var(--txt3)':(d<0?'var(--red2)':'var(--grn2)')};">${shHasPost?((d>0?'+':'')+n(d)):'—'}</b></div>
+    </div>`;
+  };
+
   return `<div style="background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:11px 13px;margin-bottom:10px;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:9px;">
       <div style="font-size:14px;font-weight:700;color:var(--txt);">${esc(label||'')} 合計</div>
@@ -50417,27 +50464,8 @@ function _cmpSumHeader(rows, orphans, label){
       ${group('完了＋転送還付','var(--grn2)',t.nk,t.pk,'請求根拠')}
       ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
       ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
+      ${shGroup()}
     </div>
-    ${(shN||shP)?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-      ${(function(){
-        const d=shP-shN;
-        return `<div style="flex:1 1 260px;max-width:420px;background:var(--sur2);border:1px solid var(--brd2);
-                    border-left:4px solid var(--grn2);border-radius:6px;padding:8px 12px;">
-          <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:5px;">集荷
-            <span style="font-size:9.5px;font-weight:400;color:var(--txt3);margin-left:4px;">月計のみ・行の列には出ません</span></div>
-          <div style="display:flex;gap:18px;flex-wrap:wrap;">
-            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">郵便局</span>
-              <b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--grn2);">${shHasPost?n(shP):'—'}</b></div>
-            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">日報</span>
-              <b style="font-family:'DM Mono',monospace;font-size:17px;color:var(--txt);">${n(shN)}</b></div>
-            <div style="display:flex;gap:7px;align-items:baseline;"><span style="font-size:11.5px;color:var(--txt2);">差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
-              <b style="font-family:'DM Mono',monospace;font-size:17px;color:${!shHasPost?'var(--txt3)':(d<0?'var(--red2)':'var(--grn2)')};">${shHasPost?((d>0?'+':'')+n(d)):'—'}</b></div>
-          </div>
-          <div style="font-size:10px;color:var(--txt3);margin-top:5px;">
-            調書は1日1人の合計しか来ないため、日ごとの突き合わせはしていません。一致／差異の件数にも入れていません。</div>
-        </div>`;
-      })()}
-    </div>`:''}
     ${noPost?`<div style="margin-top:8px;font-size:11px;color:var(--amb2);">
       郵便局データ未取込が ${noPost} 件あります。その分の日報の数量は郵便局側に計上されないため、
       上の差異には未取込分がそのまま含まれています。取込が済むまで差異の数字は目安としてご覧ください。
@@ -50460,7 +50488,9 @@ function _cmpAlignSummary(){
   const wrap=table.closest('.tw-sticky'); if(!wrap) return;
   const grps=[...table.querySelectorAll('thead th.cmp-grp')];
   const items=[...cards.querySelectorAll('.cmp-sum-card')];
-  if(grps.length!==3 || items.length!==3) return;
+  /* ★ 2026-10-21.16: 集荷の列グループを足したので 3 固定をやめ、
+     列グループとカードの数が同じであれば揃えるようにした。 */
+  if(!grps.length || grps.length!==items.length) return;
 
   const reset=()=>{
     cards.style.flexWrap='wrap';
