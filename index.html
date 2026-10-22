@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.31</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.32</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1775,10 +1775,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <select id="pc-co" class="fi" onchange="renderPuCmp()" title="対象（委託会社で絞ると、その会社のドライバーが入力した分だけを突き合わせます）">
             <option value="all">全体</option>
           </select>
-          <select id="pc-st" class="fi" onchange="renderPuCmp()">
-            <option value="diff">差異あり</option>
+          <span class="xs muted" style="align-self:center;">表示</span>
+          <select id="pc-st" class="fi" onchange="renderPuCmp()"
+                  title="了承（確認済み）にしていない顧客だけを出すか、全部出すかを切り替えます">
+            <option value="diff">まだ了承していない</option>
             <option value="all">全件</option>
-            <option value="ok">了承済</option>
+            <option value="ok">了承した分だけ</option>
           </select>
         </div>
         <div class="fla gap6" style="flex-wrap:wrap;flex-shrink:0;">
@@ -6011,7 +6013,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.31';
+const APP_VER = '2026-10-23.32';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14375,9 +14377,30 @@ function renderPuCmp(){
     const hasOther = Object.keys(oth).length>0;
     const cell = (D.colCmp[ym]||{})[_puCmpKey(id)] || {};
     const jetOnlyCust = (a.jetN>0 && a.handN===0);
+    /* ★ 2026-10-23.32: 売上（税別・概算）。
+       _calcCustBilling は運坊取込分（_fromUnbou）を除くので、この一覧が見せている
+       数量とズレる。ここでは画面に出ている数量にそのまま顧客単価を掛ける。
+       単価が入っていない品目があれば ok=false にして「—」と出す。 */
+    const cuObj=(D.customers||[]).find(c=>String(c.id)===String(id));
+    let sales=0, salesOk=!!cuObj;
+    if(cuObj){
+      keys.forEach(k=>{
+        const q=a.rep[k]||0; if(!q) return;
+        let price=null;
+        if(String(k).startsWith('__custom__')){
+          const o=((cuObj.otherItems)||[]).find(x=>x && x.name===String(k).slice(10));
+          price = o ? (Number(o.amt)||0) : null;
+        } else {
+          price = (typeof getCustPrice==='function') ? (Number(getCustPrice(cuObj,k,ym))||0) : null;
+        }
+        if(!price){ salesOk=false; return; }
+        sales += Math.floor(price*q);
+      });
+    }
     list.push({ id, name:a.name, keys, rep:a.rep, oth, sr, so,
                 diff: so-sr, hasOther, ok:!!cell.ok, days:a.days.size,
                 jetSum:a.jetSum, jetN:a.jetN, jetOnly:jetOnlyCust,
+                sales, salesOk,
                 dayN: Object.keys(_puCmpDays(ym,id)).length });
   });
   list.sort((a,b)=>a.name.localeCompare(b.name,'ja'));
@@ -14385,16 +14408,18 @@ function renderPuCmp(){
   const ngCount = list.filter(r=>!r.jetOnly && r.hasOther && r.diff!==0 && !r.ok).length;
   const okCount = list.filter(r=>r.ok).length;
   const setB=(id,t)=>{ const e=document.getElementById(id); if(e) e.textContent=t; };
-  setB('pc-b-all', '顧客 '+list.length);
-  setB('pc-b-ng',  '差異 '+ngCount);
-  setB('pc-b-ok',  '了承済 '+okCount);
+  setB('pc-b-all', '顧客 '+list.length+'社');
+  setB('pc-b-ng',  '差異 '+ngCount+'社');
+  setB('pc-b-ok',  '了承 '+okCount+'/'+list.length+'社');
 
   let view = list;
   if(st==='diff') view = list.filter(r=>!r.ok && !r.jetOnly && (!r.hasOther || r.diff!==0));
   if(st==='ok')   view = list.filter(r=>r.ok);
 
   if(!view.length){
-    root.innerHTML = `<div class="al al-e"><span>${st==='diff'?'差異のある顧客はありません。':'該当する顧客がありません。'}</span></div>`;
+    root.innerHTML = `<div class="al ${st==='diff'?'al-ok':'al-e'}"><span>${
+      st==='diff' ? 'この月の顧客はすべて了承済みです。' :
+      st==='ok'   ? 'まだ了承した顧客がありません。' : '該当する顧客がありません。'}</span></div>`;
     return;
   }
 
@@ -14406,6 +14431,7 @@ function renderPuCmp(){
         ${r.jetOnly?'<div class="xs muted">計数アプリの便のみ</div>':''}</td>
       <td class="xs muted">${r.days}日${r.dayN?`<br><span style="color:var(--grn2);">相手 ${r.dayN}日入力</span>`:''}</td>
       <td class="tr fw7">${r.jetOnly?fmt(r.jetSum):fmt(r.sr)}${(!r.jetOnly&&r.jetSum)?`<div class="xs muted" style="font-weight:400;">＋計数 ${fmt(r.jetSum)}</div>`:''}${r.jetOnly?'<div class="xs muted" style="font-weight:400;">計数アプリ</div>':''}</td>
+      <td class="tr mono">${r.salesOk?('¥'+fmt(r.sales)):'<span class="xs muted">単価なし</span>'}</td>
       <td class="tr">${r.jetOnly?'<span class="xs muted">計数照合で確認</span>':(r.hasOther?fmt(r.so):'<span class="muted">未入力</span>')}</td>
       <td class="tr" style="color:${(!r.jetOnly&&r.hasOther)?dc:'var(--txt3)'};font-weight:${(!r.jetOnly&&r.hasOther&&r.diff!==0)?'700':'400'};">${r.jetOnly?'—':(r.hasOther?((r.diff>0?'+':'')+fmt(r.diff)):'—')}</td>
       <td style="white-space:nowrap;">
@@ -14419,17 +14445,32 @@ function renderPuCmp(){
   });
 
   root.innerHTML = `
-    <div class="xs muted" style="margin-bottom:6px;">
-      月の合計を見て了承する画面です。相手の数量は「日別で合わせる」から日ごとに入れます。
-      計数アプリから来た便は、郵便局の引受数との突き合わせを計数照合で済ませているので、ここでは集計せず「計数照合へ」で移動します。
-      差異は「相手 − 日報」で、相手のほうが多ければ緑、少なければ赤です。
-      打ち込んだ数量は計数アプリには反映しません。顧客名をタップすると顧客ページで日報を直せます。
-      対象を委託会社に切り替えると、その会社のドライバーが入力した分だけを突き合わせます。
+    <div class="xs muted" style="margin-bottom:8px;line-height:1.75;">
+      <b style="color:var(--txt);">この画面でやること</b>　顧客ごとに1か月の数量を見て、合っていれば「了承」を押します。
+      了承は<b>その顧客のその月を確認し終えた印</b>です。押すと上の「表示」が
+      <b>まだ了承していない</b>のときは一覧から消えるので、<b>残っている行＝まだ見ていない顧客</b>になります。
+      間違えて押しても「了承を外す」で戻せます。<br>
+      <b style="color:var(--txt);">数量を入れる・直す</b>　「日別で合わせる」から日ごとに入れます。顧客名を押すと顧客ページで日報を直せます。<br>
+      <b style="color:var(--txt);">差異</b>　「相手 − 日報」です。相手のほうが多ければ緑、少なければ赤。相手がまだ未入力の顧客は「—」になります。<br>
+      <b style="color:var(--txt);">売上</b>　日報の数量 × 顧客台帳の単価（税別）です。単価が入っていない品目がある顧客は「単価なし」と出ます。<br>
+      <b style="color:var(--txt);">計数アプリの便</b>　郵便局の引受数との突き合わせを計数照合で済ませているので、ここでは集計せず「計数照合へ」で移動します。
+      ここで打った数量は計数アプリには反映しません。<br>
+      <b style="color:var(--txt);">対象</b>　委託会社に切り替えると、その会社のドライバーが入力した分だけを突き合わせます。
     </div>
     <div class="tw"><table><thead><tr>
       <th>顧客</th><th>稼働</th>
-      <th class="tr">日報</th><th class="tr">相手</th><th class="tr">差異</th><th></th>
-    </tr></thead><tbody>${body}</tbody></table></div>`;
+      <th class="tr">日報</th><th class="tr">売上<div class="xs muted" style="font-weight:400;">税別・概算</div></th>
+      <th class="tr">相手</th><th class="tr">差異</th><th></th>
+    </tr></thead><tbody>${body}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--brd2);font-weight:700;">
+      <td>合計 ${view.length}社</td>
+      <td class="xs muted">${view.reduce((x,r)=>x+r.days,0)}日</td>
+      <td class="tr">${fmt(view.reduce((x,r)=>x+(r.jetOnly?r.jetSum:r.sr),0))}</td>
+      <td class="tr mono">¥${fmt(view.reduce((x,r)=>x+(r.salesOk?r.sales:0),0))}${
+        view.some(r=>!r.salesOk)?`<div class="xs muted" style="font-weight:400;">単価なし${view.filter(r=>!r.salesOk).length}社を除く</div>`:''}</td>
+      <td class="tr">${fmt(view.reduce((x,r)=>x+(r.hasOther?r.so:0),0))}</td>
+      <td></td><td></td>
+    </tr></tfoot></table></div>`;
 }
 
 function renderJetCmp(){
