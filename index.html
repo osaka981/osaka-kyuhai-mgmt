@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.27</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.28</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6011,7 +6011,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.27';
+const APP_VER = '2026-10-22.28';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -42700,6 +42700,14 @@ const UBB_MASTER = {
   'クリックポスト'      : 'クリックポスト',
 };
 let _ubbFiles=[], _ubbPlan=[], _ubbProb=[], _ubbNeed=[];
+/* ★ 2026-10-22.28: 運坊と顧客台帳で、同じカスタム品目が違う名前になっていることがある。
+   （ASLAJ：運坊「配送センター～東淀川郵便局持込」＝台帳「ロジ発送」、単価はどちらも560）
+   名前が違うまま入れると同じ品目が二重に並ぶので、単価が一致する品目が
+   台帳にちょうど1件あるときだけ、台帳の名前へ寄せる。
+   単価が同じ品目が2件以上あるときは決め打ちせず、確認に出す。 */
+let _ubbAlias={}, _ubbMapped=[], _ubbUseAlias=true;
+function _ubbToggleAlias(on){ _ubbUseAlias=!!on; importUnbouBillCSV(null); }
+window._ubbToggleAlias=_ubbToggleAlias;
 
 function hfileUnbouBill(e){
   const files=[...(e.target.files||[])];
@@ -42739,7 +42747,7 @@ function _ubbUnitOf(mk, cu){
 function importUnbouBillCSV(list){
   const el=$('res-ub'); if(!el) return;
   if(list) _ubbFiles=list;
-  _ubbPlan=[]; _ubbProb=[]; _ubbNeed=[];
+  _ubbPlan=[]; _ubbProb=[]; _ubbNeed=[]; _ubbAlias={}; _ubbMapped=[];
   const files=_ubbFiles||[];
   if(!files.length){ el.innerHTML=''; return; }
 
@@ -42817,12 +42825,30 @@ function importUnbouBillCSV(list){
       let mk='';
       if(kub==='カスタム品目'){
         if(!cst){ _ubbProb.push({cls:'ng', where, msg:'カスタム品目名が空です', raw:cnm}); return; }
-        mk='__custom__'+cst;
-        const exists=((cu.otherItems)||[]).some(x=>x && x.name===cst);
-        if(!exists){
-          const k=String(cu.id)+'|'+cst;
-          if(!needKey.has(k)){
-            needKey.add(k);
+        const own=(cu.otherItems)||[];
+        const exists=own.some(x=>x && x.name===cst);
+        const ak=String(cu.id)+'|'+cst;
+        if(!exists && _ubbUseAlias && _ubbAlias[ak]===undefined && prc!=null){
+          /* 台帳に単価が一致する品目があるか見る */
+          const cand=own.filter(x=>x && x.name && Number(x.amt)===Number(prc));
+          if(cand.length===1){
+            _ubbAlias[ak]=cand[0].name;
+            _ubbMapped.push({cuName:cu.name, from:cst, to:cand[0].name,
+                             amt:prc, unit:cand[0].unit||'個'});
+          } else {
+            _ubbAlias[ak]=null;
+            if(cand.length>1){
+              _ubbProb.push({cls:'warn', where:cu.name,
+                msg:'同じ単価の品目が台帳に複数あるため、名前を寄せませんでした',
+                raw:`運坊「${cst}」¥${prc} ／ 台帳「${cand.map(x=>x.name).join('」「')}」`});
+            }
+          }
+        }
+        const alias=_ubbUseAlias ? _ubbAlias[ak] : null;
+        mk='__custom__'+(alias||cst);
+        if(!exists && !alias){
+          if(!needKey.has(ak)){
+            needKey.add(ak);
             _ubbNeed.push({cuId:cu.id, cuName:cu.name, name:cst, amt:prc||0, unit:uni||'個'});
           }
         }
@@ -42904,6 +42930,26 @@ function _ubbRender(nRow, nSkip){
       <td class="tr mono">${dTxt}</td></tr>`;
   }).join('');
 
+  const mapHtml = _ubbMapped.length ? `
+    <div class="al al-ok mt8"><span>🔗</span><span>
+      運坊と顧客台帳で<b>名前が違うカスタム品目が${_ubbMapped.length}件</b>ありました。
+      単価が一致するので<b>台帳の名前に寄せて</b>入れます。<br>
+      <span class="xs">寄せないと、同じ品目が違う名前で二重に並びます。</span>
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>顧客</th><th>運坊の品目</th><th></th><th>台帳の品目</th><th class="tr">単価</th><th>単位</th></tr></thead><tbody>
+      ${_ubbMapped.map(x=>`<tr><td>${esc(x.cuName)}</td><td>${esc(x.from)}</td>
+        <td class="tr muted">→</td><td class="fw7">${esc(x.to)}</td>
+        <td class="tr mono">¥${Number(x.amt).toLocaleString()}</td><td>${esc(x.unit)}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const aliasBox = `
+    <label class="xs" style="display:inline-flex;align-items:center;gap:5px;margin-top:8px;cursor:pointer;">
+      <input type="checkbox" ${_ubbUseAlias?'checked':''} onchange="_ubbToggleAlias(this.checked)"
+             style="width:13px;height:13px;">
+      <span>単価が一致する品目は、台帳の名前に寄せる</span>
+    </label>`;
+
   const needHtml = _ubbNeed.length ? `
     <div class="al al-w mt8"><span>⚠️</span><span>
       顧客台帳に無い<b>カスタム品目が${_ubbNeed.length}件</b>あります。
@@ -42947,8 +42993,10 @@ function _ubbRender(nRow, nSkip){
       <td class="tr mono">¥${sumM.toLocaleString()}</td>
       <td class="tr mono">${diffN?`<span style="color:var(--red2);">${diffN}社でずれ</span>`:'<span style="color:var(--grn2);">一致</span>'}</td>
     </tr></tfoot></table>
+    ${mapHtml}
     ${needHtml}
     ${probHtml}
+    ${aliasBox}
     <div class="mt12" style="display:flex;gap:8px;flex-wrap:wrap;">
       ${_ubbNeed.length?`<button class="btn b-gh" onclick="applyUnbouBillImport(true)">カスタム品目も登録して入れる</button>`:''}
       <button class="btn b-grn" onclick="applyUnbouBillImport(false)">集荷日報に入れる（${_ubbPlan.length}件）</button>
@@ -42969,7 +43017,12 @@ async function applyUnbouBillImport(withItems){
       if(!cu) return;
       cu.otherItems=cu.otherItems||[];
       if(cu.otherItems.some(o=>o && o.name===x.name)) return;
-      cu.otherItems.push({name:x.name, amt:Number(x.amt)||0, unit:x.unit||'個', _tax:'in'});
+      /* ★ 2026-10-22.27: 税区分は顧客の既定にそろえる。
+         顧客は全社 tax_excluded（税別）で登録されており、既存のカスタム品目も
+         すべて _tax='ex' になっている。ここを税込で決め打ちすると、
+         10月以降この品目で請求したときに消費税が乗らない。 */
+      cu.otherItems.push({name:x.name, amt:Number(x.amt)||0, unit:x.unit||'個',
+                          _tax:(cu.priceType==='tax_included')?'in':'ex'});
       addedItems++;
     });
     if(addedItems){
