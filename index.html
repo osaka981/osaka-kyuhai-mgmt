@@ -264,6 +264,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 .b-tel{background:var(--tel);color:#fff;}.b-tel:hover{background:var(--tel2);}
 .b-amb{background:var(--amb);color:#fff;}.b-amb:hover{background:var(--amb2);}
 .b-gh{background:transparent;color:var(--txt2);border-color:var(--brd2);}.b-gh:hover{color:var(--txt);background:var(--sur);}
+/* ★ 2026-10-23.33: ボタンが文字だけになって見えない問題を直す。
+   .btn は border:1px solid transparent で背景色も持たないため、
+   色のクラスが付いていないボタンは押せることが分からなかった。
+   ・b-prim / b-pr … 25か所以上で使われているのに CSS に定義が無かった。
+     「新規作成」「保存」「送信」「一括生成」など主要な操作なので青にする。
+   ・色のクラスが無いボタン … 枠線を出して、最低限ボタンに見えるようにする。 */
+.b-prim,.b-pr{background:var(--blu);color:#fff;}.b-prim:hover,.b-pr:hover{background:var(--blu2);}
+.btn:not([class*="b-"]){background:transparent;color:var(--txt2);border-color:var(--brd2);}
+.btn:not([class*="b-"]):hover{color:var(--txt);background:var(--sur);}
 .btn-sm{padding:var(--sz-p-btn-sm,4px 9px);font-size:var(--sz-btn-sm,10.5px);}
 
 /* CARD */
@@ -956,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.32</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.33</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6013,7 +6022,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.32';
+const APP_VER = '2026-10-23.33';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14438,7 +14447,7 @@ function renderPuCmp(){
         ${r.jetOnly
           ? `<button class="btn b-blu btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puJumpToJetMonth('${r.id}','${ym}')">計数照合へ</button>`
           : `<button class="btn b-blu btn-sm" style="font-size:11px;padding:4px 12px;" onclick="_puCmpOpen('${r.id}')">日別で合わせる</button>`}
-        <button class="btn btn-sm ${r.ok?'b-gh':''}" style="font-size:11px;padding:4px 12px;margin-left:4px;"
+        <button class="btn btn-sm ${r.ok?'b-gh':'b-grn'}" style="font-size:11px;padding:4px 12px;margin-left:4px;"
           onclick="_puCmpToggleOk('${r.id}')">${r.ok?'了承を外す':'了承'}</button>
       </td>
     </tr>`;
