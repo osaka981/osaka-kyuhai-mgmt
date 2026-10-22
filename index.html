@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.19</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.24</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6017,7 +6017,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.19';
+const APP_VER = '2026-10-21.24';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8543,7 +8543,20 @@ function applyFirebaseData() {
         return {
           id: r.id,
           date: r.date,
-          office: r.driver?.office || '',
+          /* ══════════════════════════════════════════════════════════
+             ★ 2026-10-21.22: ここだけ driver.office を見ていた。
+
+             2026-10-08.9 で「営業所はその日に選んだ郵便局を使う」と決めて
+             D.delivery は _pickDelOffice に直したが、宅配事業内集荷
+             （＝指定事業所集荷）の側が残っていた。
+
+             郵便局請求書は D.delivery も D.deliveryCol も r.office===局名 で
+             絞るため、大阪西を選んで出した日報（所属は浜寺）だと
+             配達は大阪西の請求書、指定事業所集荷は浜寺の請求書、と
+             別々の局に分かれていた。同じ1件の日報から出る数字なので、
+             営業所の決め方は D.delivery と同じでなければならない。
+             ══════════════════════════════════════════════════════════ */
+          office: _pickDelOffice(r),
           postOffice: r.postOffice || '',
           staff: r.driver?.name || '',
           driverId: r.driver?.id || '',
@@ -42012,12 +42025,7 @@ const RATE_CSV_PM = [
 ];
 
 function _rcNorm(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
-function _rcNum(v){
-  const t=String(v==null?'':v).replace(/[,\s　円]/g,'');
-  if(t==='') return null;
-  const n=Number(t);
-  return isFinite(n) ? n : null;
-}
+function _rcNum(v){ return _impNum(v); }   /* ★ 2026-10-21.23 */
 function _rcPick(headers, alias){
   for(const a of alias){ const h=headers.find(x=>_rcNorm(x)===_rcNorm(a)); if(h) return h; }
   return null;
@@ -42058,7 +42066,7 @@ const UNBOU_H = {
   yoko:'横乗金額', toku:'特別金額',
 };
 const UNBOU_SKIP_OFF = ['集荷配送'];     // 宅配の日報ではない
-function _ubNum(v){ const n=Number(String(v==null?'':v).replace(/[,\s　]/g,'')); return isFinite(n)?n:0; }
+function _ubNum(v){ return _impNum(v, {zero:true}); }   /* ★ 2026-10-21.23 */
 function _ubNorm(s){ return String(s==null?'':s).replace(/[\s　]/g,''); }
 function _ubDate(v){
   const t=String(v==null?'':v).trim().replace(/\//g,'-').slice(0,10);
@@ -42394,12 +42402,7 @@ window.applyUnbouImport=applyUnbouImport;
 const UNBOU_COL_OFF = ['集荷配送'];   /* この郵便局名の行だけを対象にする */
 let _ucPlan=[], _ucProb=[], _ucFiles=[], _ucSkip=[];
 
-function _ucNum(v){
-  const t=String(v==null?'':v).replace(/[,\s　]/g,'');
-  if(t==='') return 0;
-  const n=Number(t);
-  return isFinite(n) ? n : 0;
-}
+function _ucNum(v){ return _impNum(v, {zero:true}); }   /* ★ 2026-10-21.23 */
 function _ucDate(v){
   const t=String(v==null?'':v).trim().replace(/[\/．.]/g,'-').slice(0,10);
   const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
@@ -42720,7 +42723,14 @@ function _rateNewHtml(){
 function _rateRefreshNew(){
   if(!Array.isArray(_rateNew) || !_rateNew.length) return;
   const have = new Set();
-  (D.staff||[]).forEach(s=>{ if(s && s.name) have.add(_rcNorm(s.name)); });
+  /* ★ 2026-10-21.24: 別表記（aliases）も見る。
+     運坊取込・郵便局調書取込は別表記で引けるのに、単価CSVだけ引けず、
+     紐づけ済みの方を「台帳に無い方」と誤判定して二重登録に誘導していた。 */
+  (D.staff||[]).forEach(s=>{
+    if(!s || !s.name) return;
+    have.add(_rcNorm(s.name));
+    (s.aliases||[]).forEach(a=>{ const k=_rcNorm(a); if(k) have.add(k); });
+  });
   let changed = false;
   _rateNew.forEach(m=>{
     const now = have.has(_rcNorm(m.name));
@@ -42807,7 +42817,14 @@ function importRateCSV(txt, fn){
 
   // 氏名→従事員（空白の違いを無視して引く）
   const byName={};
-  (D.staff||[]).forEach(s=>{ const k=_rcNorm(s.name); if(k && !byName[k]) byName[k]=s; });
+  /* ★ 2026-10-21.24: 別表記（aliases）も見る。
+     運坊取込・郵便局調書取込は別表記で引けるのに、単価CSVだけ引けず、
+     紐づけ済みの方を「台帳に無い方」と誤判定して二重登録に誘導していた。 */
+  (D.staff||[]).forEach(s=>{
+    if(!s || !s.name) return;
+    const k=_rcNorm(s.name); if(k && !byName[k]) byName[k]=s;
+    (s.aliases||[]).forEach(a=>{ const x=_rcNorm(a); if(x && !byName[x]) byName[x]=s; });
+  });
 
   const miss=[], diffs=[], same=[];
   rows.forEach((r,i)=>{
@@ -42966,7 +42983,10 @@ async function applyRateCSV(){
 
   let n=0;
   _ratePlan.forEach(p=>{
-    const st=(D.staff||[]).find(s=>_rcNorm(s.name)===_rcNorm(p.name));
+    /* ★ 2026-10-21.24: 別表記でも引く（上の突き合わせと同じ引き方にそろえる） */
+    const _pk=_rcNorm(p.name);
+    const st=(D.staff||[]).find(s=>s && (_rcNorm(s.name)===_pk
+              || (s.aliases||[]).some(a=>_rcNorm(a)===_pk)));
     if(!st) return;
     st.fixedPrices = st.fixedPrices || {};
 
@@ -43154,7 +43174,12 @@ function importCSV(txt,fn){
   rows.forEach((row,idx)=>{
     const m={};Object.entries(row).forEach(([c,v])=>{const k=COL_DEL[c];if(k)m[k]=v;});
     if(!m.date||!m.staff) return;
-    const date=m.date.replace(/-/g,'/').trim();
+    /* ★ 2026-10-21.21: ここで日付をスラッシュに直していたため、
+       ハイフンで揃えてある D.delivery と永久に一致せず、
+       下の重複チェックが効かなかった（同じ日・同じ方の日報があっても
+       「新規」として追加され、請求と支払が二重になる）。
+       郵便局データ取込では 2026-10-20.12 で直した同じ誤り。 */
+    const date=_normDate(m.date);
     const md=parseInt(m.mochidashi)||0,kn=parseInt(m.kanryo)||0,yk=parseInt(m.yakan)||0;
     const tn=parseInt(m.tenso)||0,mo=parseInt(m.mochimodoiri)||0,yo=parseInt(m['翌日廻し'])||0;
     const sum=kn+tn+mo+yo;
@@ -43339,7 +43364,8 @@ function importPUCSV(rows,fn){
   rows.forEach((row,idx)=>{
     const m={};Object.entries(row).forEach(([c,v])=>{const k=COL_PU[c];if(k)m[k]=v;});
     if(!m.date||!m.customerName){errs.push(`行${idx+2}: 必須項目不足`);return;}
-    const date=m.date.replace(/-/g,'/').trim();
+    /* ★ 2026-10-21.21: 宅配側と同じ。D.pickup の日付もハイフンで揃えてある。 */
+    const date=_normDate(m.date);
     const key=m.masterKey||'';
     if(!ITEMS[key]){errs.push(`行${idx+2}: 不明な品目「${key}」`);return;}
     const qty=parseInt(m.qty)||0;if(!qty)return;
@@ -43413,12 +43439,34 @@ function _pcDate(v){
   const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);
   return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : '';
 }
-function _pcNum(v){
-  const t=String(v==null?'':v).replace(/[,\s　]/g,'');
-  if(t==='') return null;
-  const n=parseInt(t,10);
-  return isFinite(n) ? n : null;
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-21.23: 取込の数字を読むときの共通処理。
+
+   これまで取込ごとに別々の関数で読んでいて、2つの穴があった。
+     ・全角数字（１２３）が読めない
+       郵便局調書は「値なし」、運坊は0、単価CSVは「単価なし」になる。
+       列ぜんぶが全角なら「数量が1つも読めません」で止まるが、
+       1列だけ全角だと、その列だけ黙って0のまま通っていた
+     ・マイナス（-5）がそのまま入る
+       調書に負の数が入り、照合の差異が逆向きになる
+
+   全角を半角に直してから読み、負の数は「読めない」として扱う。
+   読めないものは取込プレビューの「入れない」一覧に出るので、
+   黙って0になることがなくなる。
+   ══════════════════════════════════════════════════════════ */
+function _impNum(v, opt){
+  opt = opt || {};
+  let t = String(v==null?'':v);
+  if(typeof toHankaku==='function') t = toHankaku(t);
+  t = t.replace(/[,\s　円]/g,'');
+  if(t==='') return opt.zero ? 0 : null;
+  const n = opt.int ? parseInt(t,10) : Number(t);
+  if(!isFinite(n)) return opt.zero ? 0 : null;
+  if(n < 0) return opt.zero ? 0 : null;    // マイナスは入れない
+  return n;
 }
+function _pcNum(v){ return _impNum(v, {int:true}); }
 
 function importPostCSV(txt, fn){
   const el=$('res-p'); if(!el) return;
@@ -50683,11 +50731,26 @@ async function applyPostToNikki(){
     const ypLogs=lsGet(LS_KEYS.YP,[])||[];
     const _st=(D.staff||[]).find(x=>x&&x.name===staff);
     const _drvId=String(_st?.empNo||_st?.id||'');
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-10-21.20: ここに ogata（大型）を書いていなかった。
+
+       D.delivery の保存先は yp_logs 1つだけで、リスナーが動くたびに
+       applyFirebaseData が yp_logs から D.delivery を作り直す。
+       rec には大型が入っているのに form に無かったため、読み戻しで0になり、
+       郵便局請求書の「大型加算」の行から落ちていた。
+       2026-10-20.8 で saveDel を直したのと同じ形が、この経路に残っていた。
+
+       postOffice も入れていなかったので、読み戻すと郵便局が空になっていた。
+       営業所は driver.office のフォールバックで救われるが、
+       郵便局名で紐づける画面では外れる。
+       ══════════════════════════════════════════════════════════ */
     ypLogs.push({id:rec.id,type:'yuupack',
       driver:{id:_drvId,name:staff,office:rec.office,officeType:'delivery'},
       date:rec.date,
+      postOffice:(rec.postOffice||rec.office||''),
       form:{mochidashi:rec.mochidashi,kanryo:rec.kanryo,yakan:rec.yakan,tenso:rec.tenso,
-            mochimodoiri:rec.mochimodoiri,'翌日廻し':0,shukka:0,notes:rec.note},
+            mochimodoiri:rec.mochimodoiri,'翌日廻し':0,shukka:0,
+            ogata:rec.ogata, sonota:rec.sonota, notes:rec.note},
       submittedAt:new Date().toISOString()});
     const okYp = await _safeSetYpLogs(ypLogs, '郵便局データから日報を作成');
     if(!okYp){
