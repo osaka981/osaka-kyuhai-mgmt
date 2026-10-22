@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.28</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.29</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6011,7 +6011,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.28';
+const APP_VER = '2026-10-22.29';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -43031,7 +43031,24 @@ async function applyUnbouBillImport(withItems){
     }
   }
 
-  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  /* ★ 2026-10-22.29: 書き込み前の安全弁。
+     fbSet は col_logs のノードを丸ごと置き換える。手元の控えが同期前で
+     空・少ないまま書くと、クラウドの集荷日報を消してしまう。
+     fbSet 自身が止めてくれるのは端末の容量不足のときだけなので、
+     yp_logs の _safeSetYpLogs と同じ考え方でここでも見る。 */
+  const _colRaw = lsGet(LS_KEYS.COL, null);
+  if(!Array.isArray(_colRaw)){
+    alert('集荷日報のデータがまだ読み込まれていないため、取込を中止しました。\n'
+        + '画面を再読み込みして、集荷の日報一覧に件数が出るのを確かめてから、もう一度お試しください。');
+    return;
+  }
+  if(_colRaw.length===0 && (D.pickup||[]).some(r=>!r._fromJet)){
+    alert('手元の集荷日報が0件なのに、画面には日報が出ています。\n'
+        + '同期前の可能性があるため、取込を中止しました。\n'
+        + '画面を再読み込みしてから、もう一度お試しください。');
+    return;
+  }
+  const colLogs=_colRaw.slice();
   const before=colLogs.length;
   const base=Date.now()*1000;
   _ubbPlan.forEach((p,i)=>{
@@ -43054,9 +43071,15 @@ async function applyUnbouBillImport(withItems){
     });
   });
 
+  /* 足した分だけ増えているか、書く直前にもう一度ふるいにかける */
+  if(colLogs.length !== before + n){
+    alert(`件数が合わないため取込を中止しました。\n取込前 ${before} 件 ＋ ${n} 件 = ${before+n} 件 のはずが ${colLogs.length} 件です。`);
+    return;
+  }
   lsSet(LS_KEYS.COL, colLogs);
   let ok=true;
-  try{ if(typeof fbSet==='function') await fbSet('col_logs', colLogs); }catch(e){ ok=false; }
+  try{ if(typeof fbSet==='function') ok = (await fbSet('col_logs', colLogs)) !== false; }
+  catch(e){ ok=false; console.error('[運坊請求取込] col_logs 保存', e); }
 
   const el=$('res-ub');
   if(el) el.innerHTML=`<div class="al ${ok?'al-ok':'al-w'}"><span>${ok?'✅':'⚠️'}</span><span>
