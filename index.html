@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.30</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.31</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6011,7 +6011,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.30';
+const APP_VER = '2026-10-22.31';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8232,6 +8232,9 @@ function applyFirebaseData() {
       charter: c.charter || [],
       otherItems: c.otherItems || [],
       offset: c.offset || null,
+      /* ★ 2026-10-22.31: 別表記（運坊など他システムでの呼び方）。
+         顧客番号で引けたのに名前が違う、というときの紐づけに使う。 */
+      aliases: Array.isArray(c.aliases) ? c.aliases : [],
     }));
     D.customers = [...D.customers.filter(c => !fbKeys.has(_custKey(c))), ...newCusts];
     // ★ 2026/07/27: 過去に発生済みの重複(同一顧客番号が複数)をここで自動収束させる。
@@ -18852,6 +18855,8 @@ async function saveCust(){
     : null;
   const custData={
     custNo,name,
+    /* ★ 2026-10-22.31: 別表記は画面に欄が無いので、保存で消さないよう引き継ぐ。 */
+    aliases: editId ? (((D.customers||[]).find(c=>c.id===editId)||{}).aliases || []) : [],
     region:$('cu-reg')?.value.trim()||'',
     start:$('cu-start')?.value.replace(/-/g,'/')||'',
     // ★ 2026/08/03: 基本の訪問時間(日報アプリの集荷カード上部に表示)
@@ -18976,6 +18981,8 @@ async function saveCust(){
     charter:cu.charter||[],
     otherItems:cu.otherItems||[],
     offset:cu.offset||null,
+    /* ★ 2026-10-22.31: 別表記。ここに入れ忘れると紐づけが共有に残らない。 */
+    aliases:Array.isArray(cu.aliases)?cu.aliases:[],
     // ★ 2026/08/04: 基本の訪問時間。ここに入れ忘れると日報アプリ側へ届かない。
     //   このリストは「Firebaseへ送る項目の許可リスト」なので、
     //   顧客マスタに項目を追加したら必ずここにも足すこと。
@@ -42713,6 +42720,12 @@ let _ubbFiles=[], _ubbPlan=[], _ubbProb=[], _ubbNeed=[];
    台帳にちょうど1件あるときだけ、台帳の名前へ寄せる。
    単価が同じ品目が2件以上あるときは決め打ちせず、確認に出す。 */
 let _ubbAlias={}, _ubbMapped=[], _ubbUseAlias=true;
+/* ★ 2026-10-22.31: 顧客名の紐づけ。運坊と台帳で会社名の呼び方が違うことがある
+   （顧客番号64：運坊「有限会社レヨンベールジャパン」＝台帳「レヨンベールアクア」）。
+   株式会社・有限会社の有無や記号の違いは _custNameEq が吸収するので、
+   ここに残るのは本当に呼び方が違うものだけ。顧客台帳の aliases に入れておけば
+   次からは黙って引ける。 */
+let _ubbNameLink=[];
 function _ubbToggleAlias(on){ _ubbUseAlias=!!on; importUnbouBillCSV(null); }
 window._ubbToggleAlias=_ubbToggleAlias;
 
@@ -42754,7 +42767,7 @@ function _ubbUnitOf(mk, cu){
 function importUnbouBillCSV(list){
   const el=$('res-ub'); if(!el) return;
   if(list) _ubbFiles=list;
-  _ubbPlan=[]; _ubbProb=[]; _ubbNeed=[]; _ubbAlias={}; _ubbMapped=[];
+  _ubbPlan=[]; _ubbProb=[]; _ubbNeed=[]; _ubbAlias={}; _ubbMapped=[]; _ubbNameLink=[];
   const files=_ubbFiles||[];
   if(!files.length){ el.innerHTML=''; return; }
 
@@ -42770,8 +42783,12 @@ function importUnbouBillCSV(list){
     const no=_noKey(c.custNo);
     if(no && !byNo[no]) byNo[no]=c;
     byId[String(c.id)]=c;
-    const n=String(c.name||'').replace(/[\s　]/g,'');
+    const n=_custNameNorm(c.name);
     if(n && !byName[n]) byName[n]=c;
+    /* 別表記でも引く */
+    (Array.isArray(c.aliases)?c.aliases:[]).forEach(al=>{
+      const k=_custNameNorm(al); if(k && !byName[k]) byName[k]=c;
+    });
   });
 
   /* 既にある集荷日報（日付＋顧客）。重複して入れないため */
@@ -42812,20 +42829,17 @@ function importUnbouBillCSV(list){
       const cidN=_noKey(cid);
       let cu = cidN ? (byNo[cidN] || byId[cid] || byId[cidN]) : null;
       let byNameHit=false;
-      if(!cu && cnm){ cu = byName[String(cnm).replace(/[\s　]/g,'')]; byNameHit=!!cu; }
+      if(!cu && cnm){ cu = byName[_custNameNorm(cnm)]; byNameHit=!!cu; }
       if(!cu){
         _ubbProb.push({cls:'ng', where, msg:'顧客台帳に見つかりません', raw:`${cid} ${cnm}`}); return;
       }
-      /* 顧客番号で引けたが名称が違う場合は知らせる（別会社に計上する事故を防ぐ） */
-      if(!byNameHit && cnm){
-        const a=String(cu.name||'').replace(/[\s　]/g,'');
-        const b=String(cnm).replace(/[\s　]/g,'');
-        if(a && b && a!==b && !nameWarn.has(cu.id)){
-          nameWarn.add(cu.id);
-          _ubbProb.push({cls:'warn', where:`顧客番号 ${cid}`,
-            msg:'顧客番号は合っていますが名前が違います。同じ会社か確かめてください',
-            raw:`運坊「${cnm}」／台帳「${cu.name}」`});
-        }
+      /* 顧客番号で引けたが名前が違う場合は紐づけの候補に出す。
+         株式会社・有限会社の有無や記号の違いは _custNameEq が吸収するので、
+         ここに残るのは本当に呼び方が違うものだけ。 */
+      if(!byNameHit && cnm && !_custNameEq(cu.name, cnm) && !nameWarn.has(cu.id)){
+        nameWarn.add(cu.id);
+        const known=(Array.isArray(cu.aliases)?cu.aliases:[]).some(x=>_custNameEq(x, cnm));
+        if(!known) _ubbNameLink.push({cuId:cu.id, cuName:cu.name, from:cnm, custNo:cid});
       }
 
       /* 品目キーを決める */
@@ -42906,6 +42920,7 @@ function _ubbRecalc(p){
 function _ubbRender(nRow, nSkip){
   const el=$('res-ub'); if(!el) return;
   const ng=_ubbProb.filter(p=>p.cls==='ng').length;
+  const warnN=_ubbProb.length-ng;
 
   /* 顧客ごとにまとめる */
   const by={};
@@ -42969,15 +42984,41 @@ function _ubbRender(nRow, nSkip){
         <td class="tr mono">¥${Number(x.amt).toLocaleString()}</td><td>${esc(x.unit)}</td></tr>`).join('')}
     </tbody></table>` : '';
 
-  const probHtml = _ubbProb.length ? `
-    <div class="al ${ng?'al-e':'al-w'} mt8"><span>${ng?'❌':'⚠️'}</span><span>
-      入れられない行が<b>${_ubbProb.length}件</b>あります。この分は取り込みません。</span></div>
+  const linkHtml = _ubbNameLink.length ? `
+    <div class="al al-w mt8"><span>🔗</span><span>
+      顧客番号は合っているのに<b>名前が違う顧客が${_ubbNameLink.length}社</b>あります。
+      <b>この分も取り込みます</b>が、同じ会社か確かめてください。<br>
+      <span class="xs">同じ会社なら「別表記として紐づける」を押すと顧客台帳に覚えます。次からは出ません。</span>
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>顧客番号</th><th>運坊の呼び方</th><th></th><th>台帳の顧客名</th></tr></thead><tbody>
+      ${_ubbNameLink.map(x=>`<tr><td class="mono">${esc(x.custNo)}</td><td>${esc(x.from)}</td>
+        <td class="tr muted">→</td><td class="fw7">${esc(x.cuName)}</td></tr>`).join('')}
+    </tbody></table>
+    <button class="btn b-gh btn-sm mt4" onclick="_ubbLinkNames()">別表記として紐づける（${_ubbNameLink.length}社）</button>` : '';
+
+  /* ★ 2026-10-22.31: 弾いた行（ng）とお知らせ（warn）を分ける。
+     以前は両方を「入れられない行」とまとめて出していたため、
+     取り込めている行まで落ちたように見えていた。 */
+  const probHtml = ng ? `
+    <div class="al al-e mt8"><span>❌</span><span>
+      入れられない行が<b>${ng}件</b>あります。この分は取り込みません。</span></div>
     <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
       <th>場所</th><th>内容</th><th>元の値</th></tr></thead><tbody>
-      ${_ubbProb.slice(0,40).map(p=>`<tr><td class="xs muted">${esc(p.where)}</td>
+      ${_ubbProb.filter(p=>p.cls==='ng').slice(0,40).map(p=>`<tr><td class="xs muted">${esc(p.where)}</td>
         <td>${esc(p.msg)}</td><td class="xs mono">${esc(p.raw||'')}</td></tr>`).join('')}
     </tbody></table>
-    ${_ubbProb.length>40?`<div class="xs muted mt4">ほか ${_ubbProb.length-40} 件</div>`:''}` : '';
+    ${ng>40?`<div class="xs muted mt4">ほか ${ng-40} 件</div>`:''}` : '';
+
+  /* お知らせ（warn）は別枠。取り込みは止まらない。 */
+  const warnHtml = warnN ? `
+    <div class="al al-w mt8"><span>⚠️</span><span>
+      確かめてほしいことが<b>${warnN}件</b>あります。<b>取り込みは止まりません。</b></span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>場所</th><th>内容</th><th>元の値</th></tr></thead><tbody>
+      ${_ubbProb.filter(p=>p.cls!=='ng').slice(0,40).map(p=>`<tr><td class="xs muted">${esc(p.where)}</td>
+        <td>${esc(p.msg)}</td><td class="xs mono">${esc(p.raw||'')}</td></tr>`).join('')}
+    </tbody></table>` : '';
 
   el.innerHTML=`
     <div class="al al-ok"><span>✅</span><span>
@@ -42998,11 +43039,21 @@ function _ubbRender(nRow, nSkip){
       <td>合計 ${names.length}社</td><td class="tr mono">${_ubbPlan.length}</td><td></td>
       <td class="tr mono">¥${sumU.toLocaleString()}</td>
       <td class="tr mono">¥${sumM.toLocaleString()}</td>
-      <td class="tr mono">${diffN?`<span style="color:var(--red2);">${diffN}社でずれ</span>`:'<span style="color:var(--grn2);">一致</span>'}</td>
+      <td class="tr mono">${(()=>{
+        /* ★ 2026-10-22.31: 単価が入っていない社は台帳側が0で集計されるため、
+           差0の社ばかりでも合計は合わない。「一致」とだけ出すと誤解を招くので、
+           除いた社数を必ず添える。 */
+        const noRate=names.filter(x=>!by[x].mineOk).length;
+        if(diffN) return `<span style="color:var(--red2);">${diffN}社でずれ</span>`;
+        if(noRate) return `<span style="color:var(--amb2);">単価なし${noRate}社を除き一致</span>`;
+        return '<span style="color:var(--grn2);">一致</span>';
+      })()}</td>
     </tr></tfoot></table>
     ${mapHtml}
+    ${linkHtml}
     ${needHtml}
     ${probHtml}
+    ${warnHtml}
     ${aliasBox}
     <div class="mt12" style="display:flex;gap:8px;flex-wrap:wrap;">
       ${_ubbNeed.length?`<button class="btn b-gh" onclick="applyUnbouBillImport(true)">カスタム品目も登録して入れる</button>`:''}
@@ -43101,6 +43152,29 @@ async function applyUnbouBillImport(withItems){
   renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
   renderCustTbl&&renderCustTbl();
 }
+/* 顧客名の紐づけを顧客台帳の aliases に入れる */
+async function _ubbLinkNames(){
+  if(!_ubbNameLink.length) return;
+  const list=_ubbNameLink.map(x=>`・${x.cuName} ← 「${x.from}」`).join('\n');
+  if(!confirm(`次の呼び方を、顧客台帳の別表記として覚えます。\n\n${list}\n\n同じ会社であることを確かめましたか？`)) return;
+  let n=0;
+  _ubbNameLink.forEach(x=>{
+    const cu=(D.customers||[]).find(c=>String(c.id)===String(x.cuId));
+    if(!cu) return;
+    if(!Array.isArray(cu.aliases)) cu.aliases=[];
+    if(cu.aliases.some(a=>_custNameEq(a, x.from))) return;
+    cu.aliases.push(x.from); n++;
+  });
+  if(!n){ alert('すでに覚えていました'); return; }
+  lsSet(LS_KEYS.CUSTOMERS, D.customers);
+  let ok=true;
+  try{ if(typeof fbSet==='function') ok=(await fbSet('customers', D.customers))!==false; }
+  catch(e){ ok=false; console.error('[運坊請求取込] 別表記の保存', e); }
+  alert(ok ? `${n}社の別表記を覚えました。次からは出ません。`
+           : `${n}社の別表記をこの端末には覚えましたが、クラウドへの保存に失敗しました。`);
+  importUnbouBillCSV(null);   /* 読み直して一覧から消す */
+}
+window._ubbLinkNames=_ubbLinkNames;
 window.hfileUnbouBill=hfileUnbouBill;
 window.hdropUnbouBill=hdropUnbouBill;
 window.importUnbouBillCSV=importUnbouBillCSV;
