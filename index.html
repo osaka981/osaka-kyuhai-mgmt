@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-21.24</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.25</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4355,7 +4355,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <button type="button" class="btn b-grn btn-sm" style="font-size:10px;padding:3px 8px;" onclick="addCuOtherRow()">＋ 行追加</button>
     </div>
     <div class="xs muted mb8" style="font-size:9.5px;line-height:1.5;">
-      ・<b>件 / 個 / 日額</b> … 日報アプリで入力した数量 × 単価。入力が無い月は請求されません<br>
+      ・<b>件 / 個 / 日</b> … 日報アプリで入力した数量 × 単価。入力が無い月は請求されません<br>
+      ・<b>日額</b> … 稼働日数（その顧客に集荷実績がある日数）× 単価。日報では数量を入力しません<br>
+      　<span style="color:var(--amb2);">※同じ顧客で車両ごとに日数が違う場合は「日額」ではなく「日」を使ってください</span><br>
       ・<b>月額</b> … 固定費。日報の入力に関係なく毎月 1×単価 を自動計上（日報アプリには出しません）<br>
       ・契約状態が「終了」「停止」の顧客は、月額の自動計上も止まります<br>
       ・<b>税区分</b>は品目ごとに指定します（税別＝別途消費税10%を加算 / 税込＝単価に消費税を含む）
@@ -6017,7 +6019,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-21.24';
+const APP_VER = '2026-10-22.25';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -17432,7 +17434,14 @@ function addCuCharterRow(){
 
 // その他立替(カスタム品目)行の追加・編集
 function cuOtherRowHtml(name, amt, unit, tax){
-  const units = ['件','個','日額','月額'];
+  /* ★ 2026-10-22.25: 単位に「日」を足す。
+     庸車のように「1日あたり○円 × 稼働日数」で請求する品目は、
+     日報アプリで日数を入力して 数量×単価 で計上したい。
+     「日額」は数量を入力させず顧客の稼働日数を一律に掛ける仕様なので、
+     同じ顧客で車両ごとに日数が違うケース（UPの庸車4台）を表せない。
+     計算側は「月額」と「日額」だけを特別扱いし、それ以外は 数量×単価 に
+     落ちる作りなので、この選択肢を足すだけで「日」は正しく集計される。 */
+  const units = ['件','個','日','日額','月額'];
   const optionsHtml = units.map(u => `<option value="${u}"${u===(unit||'月額')?' selected':''}>${u}</option>`).join('');
   // ★ 2026/07/27: 品目ごとに税込/税別を選べるようにする(既定=税別)
   const tx = (tax === 'in') ? 'in' : 'ex';
@@ -31929,6 +31938,7 @@ function _addOtherRow(listId, d){
         <option ${d.unit==='日額'?'selected':''}>日額</option>
         <option ${d.unit==='件'?'selected':''}>件</option>
         <option ${d.unit==='個'?'selected':''}>個</option>
+        <option ${d.unit==='日'?'selected':''}>日</option>
       </select></div>
     <button type="button" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:15px;align-self:flex-end;padding:2px;" onclick="this.parentElement.remove()">✕</button>`;
   list.appendChild(row);
