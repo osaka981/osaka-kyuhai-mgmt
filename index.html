@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.25</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.26</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -4318,7 +4318,12 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <div style="display:flex;border:1px solid var(--brd2);border-radius:5px;overflow:hidden;margin-bottom:8px;">
     <button type="button" class="otab on" id="cu-ptab-col" onclick="switchCuTab('col')" style="flex:1;font-size:10.5px;">集荷単価</button>
     <button type="button" class="otab" id="cu-ptab-other" onclick="switchCuTab('other')" style="flex:1;font-size:10.5px;">📋 その他・立替</button>
-    <button type="button" class="otab" id="cu-ptab-offset" onclick="switchCuTab('offset')" style="flex:1;font-size:10.5px;">⚖️ 相殺・手当</button>
+    <!-- ★ 2026-10-22.26: 「⚖️ 相殺・手当」タブを廃止した。
+         手当・燃料費・庸車両の3つとも、請求の計算（_calcCustBilling /
+         _calcInvoiceAmount）が一切読んでいなかった。同名の offset を読んで
+         いるコードは全部 st.offset（従業員台帳）で、そちらは生きている。
+         顧客側は従業員台帳のUIをコピーした残りで、実データでも金額が入った
+         顧客は0件だった。保存済みの値は消さずに引き継ぐ（saveCustomer 参照）。 -->
   </div>
 
   <!-- 集荷単価タブ -->
@@ -4373,50 +4378,6 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     </div>
   </div>
 
-  <!-- ⚖️ 相殺・手当タブ -->
-  <div id="cu-ptab-content-offset" style="display:none;background:var(--bg3);border:1px solid var(--brd);border-radius:6px;padding:10px 12px;margin-bottom:8px;">
-    <!-- 💰 手当 -->
-    <div style="margin-bottom:10px;">
-      <div class="xs fw7 mb6" style="color:var(--grn2);">💰 手当</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        <div class="fg"><label style="font-size:9px;">横乗手当（円/回）</label><input type="number" id="cu-yokonori-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">特別手当（円/回）</label><input type="number" id="cu-tokubetsu-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">その他手当（円/月）</label><input type="number" id="cu-teate-other" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      </div>
-    </div>
-    <!-- ⛽ 燃料費 -->
-    <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs fw7 mb6" style="color:var(--amb2);">⛽ 燃料費</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-        <div class="fg"><label style="font-size:9px;">支給形態</label>
-          <select id="cu-gas-type" class="fi" style="font-size:11px;padding:4px 6px;">
-            <option>カード貸出</option><option>実費精算</option><option>月額固定</option>
-          </select>
-        </div>
-        <div class="fg"><label style="font-size:9px;">備考</label><input type="text" id="cu-gas-note" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="カード番号など"></div>
-        <div class="fg"><label style="font-size:9px;">月額上限/固定額（円）</label><input type="number" id="cu-gas-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-      </div>
-    </div>
-    <!-- 🚐 庸車両 -->
-    <div style="border-top:1px solid var(--brd);padding-top:8px;">
-      <div class="xs fw7 mb6" style="color:var(--blu2);">🚐 庸車両</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;">
-        <div class="fg"><label style="font-size:9px;">算定方式</label>
-          <select id="cu-yosha-type" class="fi" style="font-size:11px;padding:4px 6px;">
-            <option>日額</option><option>月額</option>
-          </select>
-        </div>
-        <div class="fg"><label style="font-size:9px;">金額（円）</label><input type="number" id="cu-yosha-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">税区分</label>
-          <select id="cu-yosha-tax" class="fi" style="font-size:11px;padding:4px 6px;">
-            <option value="in">税込</option>
-            <option value="ex">税別</option>
-          </select>
-        </div>
-        <div class="fg"><label style="font-size:9px;">備考</label><input type="text" id="cu-yosha-note" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="車両番号など"></div>
-      </div>
-    </div>
-  </div>
 
   <!-- 税計算プレビュー -->
   <div id="cu-tax-preview" style="display:none;margin-top:8px;background:var(--bg3);border:1px solid var(--brd);border-radius:5px;padding:7px 10px;">
@@ -6019,7 +5980,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.25';
+const APP_VER = '2026-10-22.26';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -9863,10 +9824,10 @@ const _TAB_NAV = {
     }
   },
   cust: {
-    tabs: ['col','other','offset'],
+    tabs: ['col','other'],
     fn: (t) => switchCuTab(t),
     getActive: () => {
-      for(const t of ['col','other','offset']){
+      for(const t of ['col','other']){
         const b = $('cu-ptab-'+t);
         if(b && b.classList.contains('on')) return t;
       }
@@ -16712,7 +16673,7 @@ function editPU(id){
 
 // ─── 顧客モーダル タブ切り替え ───
 function switchCuTab(t){
-  ['col','other','offset'].forEach(id=>{
+  ['col','other'].forEach(id=>{
     const btn=$('cu-ptab-'+id), con=$('cu-ptab-content-'+id);
     if(btn) btn.classList.toggle('on', id===t);
     if(con) con.style.display = id===t ? '' : 'none';
@@ -18835,18 +18796,13 @@ async function saveCust(){
     const tx = row.querySelector('.cu-other-tax')?.value === 'in' ? 'in' : 'ex';
     if(nm) otherItems.push({name:nm, amt:at, unit:ut, _tax:tx});
   });
-  const offset={
-    yokonoriUnit:parseInt($('cu-yokonori-unit')?.value)||0,
-    tokubetsuUnit:parseInt($('cu-tokubetsu-unit')?.value)||0,
-    teateOther:parseInt($('cu-teate-other')?.value)||0,
-    gasType:$('cu-gas-type')?.value||'',
-    gasNote:$('cu-gas-note')?.value||'',
-    gasAmt:parseInt($('cu-gas-amt')?.value)||0,
-    yoshaType:$('cu-yosha-type')?.value||'日額',
-    yoshaAmt:parseInt($('cu-yosha-amt')?.value)||0,
-    yoshaTax:$('cu-yosha-tax')?.value||'in',
-    yoshaNote:$('cu-yosha-note')?.value||'',
-  };
+  /* ★ 2026-10-22.26: 「相殺・手当」タブを廃止したので、DOM からは読まない。
+     欄が無い状態で読むと全部が既定値になり、保存済みの値を上書きしてしまう。
+     編集時は既存レコードの offset をそのまま引き継ぎ、新規は null のままにする。
+     （どの計算も読んでいない項目だが、入っているものを消さないために残す） */
+  const offset = editId
+    ? (((D.customers||[]).find(c=>c.id===editId)||{}).offset || null)
+    : null;
   const custData={
     custNo,name,
     region:$('cu-reg')?.value.trim()||'',
@@ -20487,17 +20443,8 @@ function editCust(id){
     if($(`cu-oth${n}-unit`))$(`cu-oth${n}-unit`).value=o.unit||'月額';
   });
   // 相殺・手当復元
-  const off=c.offset||{};
-  if($('cu-yokonori-unit'))$('cu-yokonori-unit').value=off.yokonoriUnit||'';
-  if($('cu-tokubetsu-unit'))$('cu-tokubetsu-unit').value=off.tokubetsuUnit||'';
-  if($('cu-teate-other'))$('cu-teate-other').value=off.teateOther||'';
-  if($('cu-gas-type'))$('cu-gas-type').value=off.gasType||'カード貸出';
-  if($('cu-gas-note'))$('cu-gas-note').value=off.gasNote||'';
-  if($('cu-gas-amt'))$('cu-gas-amt').value=off.gasAmt||'';
-  if($('cu-yosha-type'))$('cu-yosha-type').value=off.yoshaType||'日額';
-  if($('cu-yosha-amt'))$('cu-yosha-amt').value=off.yoshaAmt||'';
-  if($('cu-yosha-tax'))$('cu-yosha-tax').value=off.yoshaTax||'in';
-  if($('cu-yosha-note'))$('cu-yosha-note').value=off.yoshaNote||'';
+  /* ★ 2026-10-22.26: 「相殺・手当」タブの廃止にともない、復元する欄が無くなった。
+     c.offset は保存済みの値として持ち回るだけで、画面には出さない。 */
   $('m-cust')._editId=id;
   resetCuTax();
   openM('m-cust');
@@ -46737,9 +46684,6 @@ function openM(id){
         addCuOtherRow('', '', '月額', 'ex');
       }
       for(let i=1;i<=5;i++){const n=document.getElementById(`cu-oth${i}-name`);const a=document.getElementById(`cu-oth${i}-amt`);if(n)n.value='';if(a)a.value='';}
-      ['cu-yokonori-unit','cu-tokubetsu-unit','cu-teate-other','cu-gas-amt','cu-yosha-amt'].forEach(fid=>{const e=$(fid);if(e)e.value='';});
-      if($('cu-gas-note'))$('cu-gas-note').value='';
-      if($('cu-yosha-note'))$('cu-yosha-note').value='';
     }
     // 編集時は cu-no・各フィールドは editCust() で既にセット済みなので触らない
     switchCuTab('col');
