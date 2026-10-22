@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.29</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.30</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6011,7 +6011,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.29';
+const APP_VER = '2026-10-22.30';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -18719,6 +18719,14 @@ async function saveCustAsk(){
 
 async function saveCust(){
   const name=$('cu-name')?.value.trim();if(!name){alert('顧客名を入力してください');return;}
+  /* ★ 2026-10-22.30: editId の宣言をここへ上げた。
+     2026/09/13 に下の「顧客番号の変更を無視する」処理が入ったとき、
+     その中で editId を使っているのに宣言は30行ほど下のままだった。
+     const は宣言より前では参照できない（TDZ）ため、
+     saveCust は毎回 ReferenceError で落ち、
+     顧客台帳が新規でも編集でも一切保存できなくなっていた。
+     宣言は1か所だけ。下の重複チェックの手前にあったものは消した。 */
+  const editId=$('m-cust')?._editId;
   // 顧客番号を3桁形式に正規化
   let custNo=$('cu-no')?.value.trim()||genCustNo();
   custNo = _normalizeCustNo(custNo);
@@ -18737,7 +18745,6 @@ async function saveCust(){
     return;
   }
   // 重複チェック(編集中のID除外、正規化後で比較)
-  const editId=$('m-cust')?._editId;
   const dupCust = D.customers.find(c=>_normalizeCustNo(c.custNo)===custNo && c.id!==editId && c.status!=='終了');
   if(dupCust){
     alert(`顧客番号 ${custNo} は現役の顧客「${dupCust.name}」で使用されています`);return;
