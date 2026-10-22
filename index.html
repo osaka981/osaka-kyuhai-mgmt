@@ -956,7 +956,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.26</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-22.27</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2440,6 +2440,37 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <b>入らないもの</b>　集荷個数（個数制の方）・特別金額・横乗金額・運坊の金額<br>
           運坊の金額は<b>検算にだけ</b>使います。台帳の時給で計算した額と並べて出すので、単価のずれがその場で分かります<br>
           勤務時間の画面では<b>開始・終了が空</b>のまま「運坊から」と出ます。時刻は運坊に無いので作りません
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="cbar"></div>運坊 顧客請求（集荷事業）取込</div></div>
+        <div class="al al-w mb8"><span>⚠️</span><span>
+          読み込むとまず<b>顧客ごとの検算表</b>が出ます。確かめて「集荷日報に入れる」を押すまで、書き込みはしません。<br>
+          <b>同じ日・同じ顧客の集荷日報が既にある分は入れません。</b>一覧へ出します。
+        </span></div>
+        <div class="al al-ok mb8"><span>📌</span><span>
+          ここで入れるのは<b>記録だけ</b>です。運坊で請求済みの分なので、
+          <b>経営管理の請求書には出ません</b>。日報一覧では「運坊」と出て、編集もできません。
+        </span></div>
+        <div class="xs muted mb8" style="line-height:1.7;">
+          顧客は<b>取引先ID</b>が基本で、見つからないときだけ顧客名で探します。<br>
+          <b>ゆうパック・ゆうパケットはサイズ区分が運坊に無い</b>ため、ゆうパックは60サイズ、ゆうパケットは通常へまとめて入れます。
+          顧客の単価は全サイズ同額で登録されているので、金額は変わりません。<br>
+          顧客台帳に無いカスタム品目があれば、単価と単位つきで一緒に登録できます。
+        </div>
+        <div class="drop" id="dp-ub" onclick="document.getElementById('fi-ub').click()"
+          ondragover="dov(event,'dp-ub')" ondragleave="dlv('dp-ub')" ondrop="hdropUnbouBill(event)">
+          <div style="font-size:30px;margin-bottom:6px;">🧾</div>
+          <div class="sm muted">運坊の顧客請求（日別明細）CSVをドロップ（複数可）</div>
+          <div class="xs muted mt8">クリックして選択 .csv</div>
+        </div>
+        <input type="file" id="fi-ub" accept=".csv" multiple style="display:none" onchange="hfileUnbouBill(event)">
+        <div id="res-ub" class="mt8"></div>
+        <div class="xs muted mt8" style="line-height:1.7;">
+          <b>必要な列</b>　日付／取引先ID／経営管理の品目／数量　（カスタム品目名・単位・単価・金額もあれば使います）<br>
+          <b>入らないもの</b>　数量が0の行<br>
+          運坊の金額は<b>検算にだけ</b>使います。顧客台帳の単価で計算した額と並べて出すので、単価のずれがその場で分かります
         </div>
       </div>
 
@@ -5980,7 +6011,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-22.26';
+const APP_VER = '2026-10-22.27';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8645,6 +8676,12 @@ function applyFirebaseData() {
         } : null,
         note: r.note || '',
         _fromApp: true,
+        /* ★ 2026-10-22.27: 運坊の顧客請求から取り込んだ記録。
+           運坊で請求済みなので、経営管理の請求計算からは必ず除外する
+           （_calcCustBilling と _getCustomerMonthlyData の2か所）。
+           ここで通し忘れると印が消えて、9月分が二重請求になる。 */
+        _fromUnbou: !!r._fromUnbou,
+        _ubbYm: r._ubbYm || '',
       };
     };
     const fbPu = [];
@@ -14709,7 +14746,7 @@ function renderPU() {
       ${cells}
       <td class="tr fw7">${fmt(tot)}</td>
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
-      <td>${r._fromJet?'<span class="xs muted">計数</span>':`<button class="btn b-gh btn-sm" onclick="editPU('${r.id}')">編集</button>`}</td>
+      <td>${r._fromJet?'<span class="xs muted">計数</span>':r._fromUnbou?'<span class="xs muted">運坊</span>':`<button class="btn b-gh btn-sm" onclick="editPU('${r.id}')">編集</button>`}</td>
     </tr>`;
   });
   $('tb-pu').innerHTML=h||`<tr><td colspan="${5+visKeys.length+3}" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
@@ -16444,6 +16481,9 @@ async function _pubSave(){
     const cu=(D.customers||[]).find(c=>Number(c.id)===Number(cid)); if(!cu) continue;
     const ex=exist.find(r=>Number(r.customerId)===Number(cid));
     if(ex && ex._fromJet) continue;                     // 計数の便は触らない
+    /* ★ 2026-10-22.27: 運坊の顧客請求から取り込んだ記録も触らない。
+       上書きすると印（_fromUnbou）が落ちて、その分が請求に乗ってしまう。 */
+    if(ex && ex._fromUnbou) continue;
     const v=_pubState.vals[cid]||{items:{},note:''};
     const items={}; Object.entries(v.items||{}).forEach(([k,q])=>{ if(q>0) items[k]=q; });
     if(!Object.keys(items).length){ if(ex) empty.push({rec:ex, name:cu.name}); continue; }
@@ -29582,6 +29622,9 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
   // COL_LOGS(集荷事業)- 品目別に集計
   (D.pickup||[]).forEach(r => {
     if(!r.date || !r.date.startsWith(ymPrefix)) return;
+    /* ★ 2026-10-22.27: 運坊の顧客請求から取り込んだ記録は請求に乗せない。
+       _calcCustBilling 側と同じ除外。片方だけだと発行代行請求書に出てしまう。 */
+    if(r._fromUnbou) return;
     const blocks = _qmNormalizeBlocks(r.blocks);
     blocks.forEach(b => {
       const collectFrom = (cust) => {
@@ -34492,7 +34535,7 @@ function renderStaffDaily(el, name){
               <td></td><td class="mono xs" style="padding-left:14px;">${r.date||''}</td>
               <td class="xs muted">${r._fromJet?esc(_puBinLabel(r,ri)):(r.office||'')}</td>
               ${_dt}<td class="tr xs">${_drt||''}</td>
-              <td style="white-space:nowrap;">${r._fromJet?'<span class="xs muted">計数</span>':
+              <td style="white-space:nowrap;">${r._fromJet?'<span class="xs muted">計数</span>':r._fromUnbou?'<span class="xs muted" title="運坊の顧客請求から取り込んだ記録です。請求書には出ません">運坊</span>':
                 `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="event.stopPropagation();editPU('${r.id}')">編集</button>`
                 +`<button class="btn btn-sm" style="font-size:10px;padding:2px 7px;margin-left:3px;background:transparent;border:1px solid var(--red2);color:var(--red2);" onclick="event.stopPropagation();deleteSingle('pu','${r.id}')">削除</button>`}</td></tr>`;
           });
@@ -35059,6 +35102,7 @@ async function _puQtySave(recId, items){
   const rec=(D.pickup||[]).find(r=>String(r.id)===String(recId));
   if(!rec) return {ok:false, msg:'対象の日報が見つかりませんでした'};
   if(rec._fromJet) return {ok:false, msg:'計数アプリから来た便は、ここでは直せません'};
+  if(rec._fromUnbou) return {ok:false, msg:'運坊の顧客請求から取り込んだ記録は、ここでは直せません'};
 
   const clean={};
   Object.entries(items||{}).forEach(([k,v])=>{ const n=parseInt(v)||0; if(n>0) clean[k]=n; });
@@ -35293,13 +35337,15 @@ function renderCustDaily(el, name){
           <td class="xs">${r.office?officeLink(r.office):''}</td>
           <td class="xs muted">${esc(_puItemsText(r))}</td>
           <td class="tr xs">${t1}${c1?`<span class="muted"> ＋${c1}</span>`:''}</td>
-          <td style="white-space:nowrap;">${r._fromJet
+          <td style="white-space:nowrap;">${r._fromUnbou
+            ? `<span class="xs muted" title="運坊の顧客請求から取り込んだ記録です。請求書には出ません">運坊</span>`
+            : r._fromJet
             ? `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;"
                  title="計数アプリの便です。スキャンは書き換えず、引受数の訂正で直します"
                  onclick="_puJumpToJet('${esc((r._jet&&r._jet.key)||'')}','${esc(r.date||'')}')">引受数を直す</button>`
             : `<button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_puRowEditToggle('${r.id}')">直す</button>`}</td>
         </tr>`;
-        if(!r._fromJet){
+        if(!r._fromJet && !r._fromUnbou){
           const eks=_puEditKeys(r, cuObj);
           html+=`<tr id="pued-${r.id}" data-cdgrp="${key}" style="display:none;background:var(--sur2);">
             <td></td>
@@ -37187,7 +37233,9 @@ function _calcCustBilling(custName, monStr){
   monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
   const cu=(D.customers||[]).find(c=>c.name===custName);
   if(!cu) return {total:0, breakdown:[], routes:[], charters:[], subtotalEx:0, subtotalIn:0, tax:0};
-  const rows=(D.pickup||[]).filter(r=>r.customerName===custName&&(r.date||'').startsWith(monStr));
+  /* ★ 2026-10-22.27: 運坊の顧客請求から取り込んだ記録（_fromUnbou）は除外する。
+     運坊で既に請求済みの分なので、ここに入れると二重請求になる。 */
+  const rows=(D.pickup||[]).filter(r=>!r._fromUnbou&&r.customerName===custName&&(r.date||'').startsWith(monStr));
   const breakdown=[];
   let total=0;
   // 税別/税込の小計を分けて集計(税別合計×1.1+税込合計で誤差最小)
@@ -42624,6 +42672,357 @@ async function applyUnbouColImport(){
   </span></div>`;
 }
 window.applyUnbouColImport=applyUnbouColImport;
+
+/* ═══════════════════════════════════════════════════════════════
+   運坊 顧客請求（集荷事業）取込　★ 2026-10-22.27
+
+   運坊で作った顧客請求の日別明細を、集荷日報として記録だけ入れる。
+   運坊で既に請求済みの分なので、経営管理からは請求書を出さない。
+   そのため入れたレコードには _fromUnbou を立て、
+   　・_calcCustBilling（顧客請求の計算）
+   　・_getCustomerMonthlyData（発行代行請求書の計算）
+   の両方で必ず除外する。編集も、計数アプリの便（_fromJet）と同じく止める。
+
+   CSVの列（集荷事業_顧客請求_YYYYMM_明細_v2.csv）
+     日付 / 取引先ID / 取引先名 / 運坊の品目 / 経営管理の品目 /
+     カスタム品目名 / 単位 / 数量 / 単価 / 金額 / 備考
+   ═══════════════════════════════════════════════════════════════ */
+
+/* 設定表の「経営管理の品目」→ 品目マスタのキー。
+   ゆうパック・ゆうパケットは運坊側にサイズ区分が無く、
+   顧客の単価も全サイズ同額で登録されているため、代表の1区分へ入れる。 */
+const UBB_MASTER = {
+  'ゆうパック'          : 'ゆうパック_60',
+  'ゆうパケット'        : 'ゆうパケット_通常',
+  'ケース'              : 'ケース',
+  '定形外（ゆうメール）': '定形外(ゆうメール)',
+  '定形外(ゆうメール)'  : '定形外(ゆうメール)',
+  'クリックポスト'      : 'クリックポスト',
+};
+let _ubbFiles=[], _ubbPlan=[], _ubbProb=[], _ubbNeed=[];
+
+function hfileUnbouBill(e){
+  const files=[...(e.target.files||[])];
+  if(!files.length) return;
+  const one=file=>{
+    const tryR=enc=>new Promise((res,rej)=>{const r=new FileReader();r.onload=ev=>res(ev.target.result);r.onerror=rej;r.readAsText(file,enc);});
+    return tryR('UTF-8').then(txt=>{
+      const bad=(txt.match(/�/g)||[]).length>5;
+      return bad ? tryR('Shift_JIS').then(t2=>({name:file.name,txt:t2})) : {name:file.name,txt};
+    });
+  };
+  Promise.all(files.map(one))
+    .then(list=>{ importUnbouBillCSV(list); })
+    .catch(()=>{ const el=$('res-ub'); if(el) el.innerHTML='<div class="al al-e"><span>❌</span><span>読み込みに失敗しました</span></div>'; });
+  e.target.value='';
+}
+function hdropUnbouBill(e){
+  e.preventDefault();
+  const z=$('dp-ub'); if(z) z.classList.remove('drag');
+  const files=[...(e.dataTransfer?.files||[])].filter(f=>/\.csv$/i.test(f.name));
+  if(files.length) hfileUnbouBill({target:{files, value:''}});
+}
+
+/* 列名のゆらぎを吸収して1つ取り出す */
+function _ubbCol(o, names){
+  for(const n of names){ if(o[n]!=null && String(o[n]).trim()!=='') return String(o[n]).trim(); }
+  return '';
+}
+/* 顧客のカスタム品目の単位（無ければ個） */
+function _ubbUnitOf(mk, cu){
+  const k=String(mk||'');
+  if(!k.startsWith('__custom__')) return (ITEMS[k] && ITEMS[k].unit) || '個';
+  const o=((cu&&cu.otherItems)||[]).find(x=>x && x.name===k.slice(10));
+  return (o && o.unit) || '個';
+}
+
+function importUnbouBillCSV(list){
+  const el=$('res-ub'); if(!el) return;
+  if(list) _ubbFiles=list;
+  _ubbPlan=[]; _ubbProb=[]; _ubbNeed=[];
+  const files=_ubbFiles||[];
+  if(!files.length){ el.innerHTML=''; return; }
+
+  /* 顧客台帳：顧客番号・内部ID・名称から引けるようにする。
+     ★ 2026-10-22.27: 運坊の「取引先ID」は顧客番号（custNo）であって内部IDではない。
+       顧客番号は3桁ゼロ詰め（064）で持っているので、ゼロを落として突き合わせる。
+       内部IDが顧客番号と同じ値の顧客が多いため見落としやすいが、
+       後から登録した顧客は内部IDが時刻値（1785128664697）になっていて一致しない。 */
+  const byNo={}, byId={}, byName={};
+  const _noKey=v=>String(v==null?'':v).trim().replace(/^0+/,'');
+  (D.customers||[]).forEach(c=>{
+    if(!c) return;
+    const no=_noKey(c.custNo);
+    if(no && !byNo[no]) byNo[no]=c;
+    byId[String(c.id)]=c;
+    const n=String(c.name||'').replace(/[\s　]/g,'');
+    if(n && !byName[n]) byName[n]=c;
+  });
+
+  /* 既にある集荷日報（日付＋顧客）。重複して入れないため */
+  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  const have=new Set();
+  colLogs.forEach(l=>{
+    const d=_normDate(l && l.date);
+    ((l&&l.rows)||[]).forEach(row=>{
+      if(row && row.customerId) have.add(d+'|'+String(row.customerId));
+    });
+  });
+
+  const group={};          // 日付|顧客ID -> プラン
+  const needKey=new Set(); // 顧客ID|カスタム品目名
+  const nameWarn=new Set();// 名前違いを顧客ごとに1回だけ出す
+  let nRow=0, nSkip=0;
+
+  files.forEach(f=>{
+    const {rows}=parseCSV(f.txt||'');
+    rows.forEach((o,i)=>{
+      const date=_normDate(_ubbCol(o,['日付','年月日']));
+      const cid =_ubbCol(o,['取引先ID','顧客ID','取引先番号','顧客番号']);
+      const cnm =_ubbCol(o,['取引先名','顧客名']);
+      const kub =_ubbCol(o,['経営管理の品目','品目区分']);
+      const cst =_ubbCol(o,['カスタム品目名']);
+      const uni =_ubbCol(o,['単位']);
+      const qty =_impNum(_ubbCol(o,['数量','個数']), {zero:true});
+      const prc =_impNum(_ubbCol(o,['単価']));
+      const amt =_impNum(_ubbCol(o,['金額']), {zero:true});
+      const where=`${f.name} ${i+2}行目`;
+
+      if(!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)){
+        _ubbProb.push({cls:'ng', where, msg:'日付が読めません', raw:_ubbCol(o,['日付','年月日'])}); return;
+      }
+      if(!qty){ nSkip++; return; }   /* 数量0の行は入れない */
+
+      /* 顧客を 顧客番号 → 内部ID → 名称 の順で引く */
+      const cidN=_noKey(cid);
+      let cu = cidN ? (byNo[cidN] || byId[cid] || byId[cidN]) : null;
+      let byNameHit=false;
+      if(!cu && cnm){ cu = byName[String(cnm).replace(/[\s　]/g,'')]; byNameHit=!!cu; }
+      if(!cu){
+        _ubbProb.push({cls:'ng', where, msg:'顧客台帳に見つかりません', raw:`${cid} ${cnm}`}); return;
+      }
+      /* 顧客番号で引けたが名称が違う場合は知らせる（別会社に計上する事故を防ぐ） */
+      if(!byNameHit && cnm){
+        const a=String(cu.name||'').replace(/[\s　]/g,'');
+        const b=String(cnm).replace(/[\s　]/g,'');
+        if(a && b && a!==b && !nameWarn.has(cu.id)){
+          nameWarn.add(cu.id);
+          _ubbProb.push({cls:'warn', where:`顧客番号 ${cid}`,
+            msg:'顧客番号は合っていますが名前が違います。同じ会社か確かめてください',
+            raw:`運坊「${cnm}」／台帳「${cu.name}」`});
+        }
+      }
+
+      /* 品目キーを決める */
+      let mk='';
+      if(kub==='カスタム品目'){
+        if(!cst){ _ubbProb.push({cls:'ng', where, msg:'カスタム品目名が空です', raw:cnm}); return; }
+        mk='__custom__'+cst;
+        const exists=((cu.otherItems)||[]).some(x=>x && x.name===cst);
+        if(!exists){
+          const k=String(cu.id)+'|'+cst;
+          if(!needKey.has(k)){
+            needKey.add(k);
+            _ubbNeed.push({cuId:cu.id, cuName:cu.name, name:cst, amt:prc||0, unit:uni||'個'});
+          }
+        }
+      } else {
+        mk=UBB_MASTER[kub]||'';
+        if(!mk){ _ubbProb.push({cls:'ng', where, msg:'経営管理の品目が分かりません', raw:kub}); return; }
+      }
+
+      nRow++;
+      const gk=date+'|'+cu.id;
+      const g=group[gk]=group[gk]||{date, cu, cuId:cu.id, cuName:cu.name,
+                                    region:cu.region||'', items:{}, amt:0, prices:{}, dup:have.has(gk)};
+      g.items[mk]=(g.items[mk]||0)+qty;
+      g.amt += amt;
+      if(prc!=null && g.prices[mk]==null) g.prices[mk]=prc;
+    });
+  });
+
+  _ubbPlan=Object.values(group).sort((a,b)=>
+    a.date===b.date ? String(a.cuName).localeCompare(String(b.cuName),'ja') : a.date.localeCompare(b.date));
+
+  /* 重複している日報は入れない */
+  _ubbPlan.filter(p=>p.dup).forEach(p=>{
+    _ubbProb.push({cls:'ng', where:p.date, msg:'同じ日・同じ顧客の集荷日報が既にあります', raw:p.cuName});
+  });
+  _ubbPlan=_ubbPlan.filter(p=>!p.dup);
+
+  _ubbRender(nRow, nSkip);
+}
+
+/* 台帳の単価で計算し直して、運坊の金額と並べる（検算） */
+function _ubbRecalc(p){
+  let sum=0, ok=true;
+  Object.entries(p.items).forEach(([mk,q])=>{
+    let price=null;
+    if(mk.startsWith('__custom__')){
+      const o=((p.cu.otherItems)||[]).find(x=>x && x.name===mk.slice(10));
+      price = o ? (Number(o.amt)||0) : null;
+    } else {
+      price = (typeof getCustPrice==='function') ? (getCustPrice(p.cu, mk, String(p.date).slice(0,7))||0) : null;
+    }
+    if(price==null || !price){ ok=false; return; }
+    sum += Math.floor(price*q);
+  });
+  return ok ? sum : null;
+}
+
+function _ubbRender(nRow, nSkip){
+  const el=$('res-ub'); if(!el) return;
+  const ng=_ubbProb.filter(p=>p.cls==='ng').length;
+
+  /* 顧客ごとにまとめる */
+  const by={};
+  _ubbPlan.forEach(p=>{
+    const a=by[p.cuName]=by[p.cuName]||{cu:p.cu, days:0, qty:0, unbou:0, mine:0, mineOk:true, ym:String(p.date).slice(0,7)};
+    a.days++;
+    Object.values(p.items).forEach(q=>a.qty+=q);
+    a.unbou+=p.amt;
+    const m=_ubbRecalc(p);
+    if(m==null) a.mineOk=false; else a.mine+=m;
+  });
+  const names=Object.keys(by).sort((a,b)=>String(a).localeCompare(String(b),'ja'));
+  let sumU=0, sumM=0, diffN=0;
+
+  const rows=names.map(n=>{
+    const a=by[n];
+    sumU+=a.unbou; if(a.mineOk) sumM+=a.mine;
+    const d=a.mineOk ? (a.mine-a.unbou) : null;
+    if(d!=null && d!==0) diffN++;
+    const dTxt=(d==null) ? '<span style="color:var(--amb2);">台帳に単価なし</span>'
+      : (d===0 ? '<span style="color:var(--grn2);">0</span>'
+               : `<b style="color:var(--red2);">${d>0?'+':''}${d.toLocaleString()}</b>`);
+    return `<tr>
+      <td class="fw7">${esc(n)}</td>
+      <td class="tr mono">${a.days}</td>
+      <td class="tr mono">${a.qty.toLocaleString()}</td>
+      <td class="tr mono">¥${a.unbou.toLocaleString()}</td>
+      <td class="tr mono">${a.mineOk?('¥'+a.mine.toLocaleString()):'—'}</td>
+      <td class="tr mono">${dTxt}</td></tr>`;
+  }).join('');
+
+  const needHtml = _ubbNeed.length ? `
+    <div class="al al-w mt8"><span>⚠️</span><span>
+      顧客台帳に無い<b>カスタム品目が${_ubbNeed.length}件</b>あります。
+      取り込むと数量は入りますが、品目の単価・単位は登録されません。<br>
+      <span class="xs">下の「カスタム品目も登録する」を使うと、単価と単位つきで顧客台帳に足します。</span>
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>顧客</th><th>カスタム品目名</th><th class="tr">単価</th><th>単位</th></tr></thead><tbody>
+      ${_ubbNeed.map(x=>`<tr><td>${esc(x.cuName)}</td><td class="fw7">${esc(x.name)}</td>
+        <td class="tr mono">¥${Number(x.amt).toLocaleString()}</td><td>${esc(x.unit)}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const probHtml = _ubbProb.length ? `
+    <div class="al ${ng?'al-e':'al-w'} mt8"><span>${ng?'❌':'⚠️'}</span><span>
+      入れられない行が<b>${_ubbProb.length}件</b>あります。この分は取り込みません。</span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>場所</th><th>内容</th><th>元の値</th></tr></thead><tbody>
+      ${_ubbProb.slice(0,40).map(p=>`<tr><td class="xs muted">${esc(p.where)}</td>
+        <td>${esc(p.msg)}</td><td class="xs mono">${esc(p.raw||'')}</td></tr>`).join('')}
+    </tbody></table>
+    ${_ubbProb.length>40?`<div class="xs muted mt4">ほか ${_ubbProb.length-40} 件</div>`:''}` : '';
+
+  el.innerHTML=`
+    <div class="al al-ok"><span>✅</span><span>
+      <b>${nRow.toLocaleString()}行</b>を読みました。
+      ${_ubbPlan.length.toLocaleString()}件の集荷日報として入ります（${names.length}社）。
+      ${nSkip?`<span class="xs muted">数量0の${nSkip}行は入れません。</span>`:''}
+    </span></div>
+    <div class="al al-w mt8"><span>📌</span><span>
+      入れたデータは<b>記録だけ</b>です。運坊で請求済みなので、
+      <b>経営管理の請求書には出ません</b>。日報の一覧では「運坊」と出て、編集もできません。
+    </span></div>
+    <div class="xs muted mt8">運坊の金額と、顧客台帳の単価で計算し直した額を並べています。単価のずれはここで分かります。</div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>顧客</th><th class="tr">日数</th><th class="tr">数量</th>
+      <th class="tr">運坊の金額</th><th class="tr">台帳の単価で</th><th class="tr">差</th>
+    </tr></thead><tbody>${rows}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--brd2);font-weight:700;">
+      <td>合計 ${names.length}社</td><td class="tr mono">${_ubbPlan.length}</td><td></td>
+      <td class="tr mono">¥${sumU.toLocaleString()}</td>
+      <td class="tr mono">¥${sumM.toLocaleString()}</td>
+      <td class="tr mono">${diffN?`<span style="color:var(--red2);">${diffN}社でずれ</span>`:'<span style="color:var(--grn2);">一致</span>'}</td>
+    </tr></tfoot></table>
+    ${needHtml}
+    ${probHtml}
+    <div class="mt12" style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${_ubbNeed.length?`<button class="btn b-gh" onclick="applyUnbouBillImport(true)">カスタム品目も登録して入れる</button>`:''}
+      <button class="btn b-grn" onclick="applyUnbouBillImport(false)">集荷日報に入れる（${_ubbPlan.length}件）</button>
+    </div>`;
+}
+
+async function applyUnbouBillImport(withItems){
+  if(!_ubbPlan.length){ alert('入れるものがありません'); return; }
+  const n=_ubbPlan.length;
+  if(!confirm(`集荷日報に ${n} 件を記録として入れます。\n` +
+              `運坊で請求済みの分なので、経営管理の請求書には出ません。\n\n進めますか？`)) return;
+
+  /* カスタム品目を顧客台帳に足す（単価と単位つき） */
+  let addedItems=0;
+  if(withItems && _ubbNeed.length){
+    _ubbNeed.forEach(x=>{
+      const cu=(D.customers||[]).find(c=>String(c.id)===String(x.cuId));
+      if(!cu) return;
+      cu.otherItems=cu.otherItems||[];
+      if(cu.otherItems.some(o=>o && o.name===x.name)) return;
+      cu.otherItems.push({name:x.name, amt:Number(x.amt)||0, unit:x.unit||'個', _tax:'in'});
+      addedItems++;
+    });
+    if(addedItems){
+      lsSet(LS_KEYS.CUSTOMERS, D.customers);
+      try{ if(typeof fbSet==='function') await fbSet('customers', D.customers); }catch(e){}
+    }
+  }
+
+  const colLogs=lsGet(LS_KEYS.COL,[])||[];
+  const before=colLogs.length;
+  const base=Date.now()*1000;
+  _ubbPlan.forEach((p,i)=>{
+    const cu=(D.customers||[]).find(c=>String(c.id)===String(p.cuId))||p.cu;
+    const rows=Object.entries(p.items).map(([mk,qty])=>({
+      customerId:p.cuId, customerName:p.cuName, region:p.region||'',
+      masterKey:mk, qty, unit:_ubbUnitOf(mk, cu),
+    }));
+    colLogs.push({
+      id: base+i,
+      type:'collection',
+      driver:{ id:'', name:'運坊', office:'堺営業所' },
+      date:p.date,
+      rows,
+      note:'運坊の顧客請求から取込（運坊で請求済み）',
+      submittedAt:new Date().toISOString(),
+      /* ★ この印が請求からの除外と編集禁止の根拠。消さないこと。 */
+      _fromUnbou:true,
+      _ubbYm:String(p.date).slice(0,7),
+    });
+  });
+
+  lsSet(LS_KEYS.COL, colLogs);
+  let ok=true;
+  try{ if(typeof fbSet==='function') await fbSet('col_logs', colLogs); }catch(e){ ok=false; }
+
+  const el=$('res-ub');
+  if(el) el.innerHTML=`<div class="al ${ok?'al-ok':'al-w'}"><span>${ok?'✅':'⚠️'}</span><span>
+    集荷日報に<b>${n}件</b>を入れました（${before}件 → ${colLogs.length}件）。
+    ${addedItems?`カスタム品目を<b>${addedItems}件</b>顧客台帳に登録しました。`:''}
+    ${ok?'':'<br><b>クラウドへの保存に失敗しました。</b>この端末には入っています。'}
+    <br><span class="xs muted">集荷 → 日報一覧 で確認できます。請求書には出ません。</span>
+  </span></div>`;
+  _ubbPlan=[]; _ubbNeed=[]; _ubbProb=[]; _ubbFiles=[];
+  /* col_logs から D.pickup を作り直す（_conv を通すので _fromUnbou もここで付く） */
+  try{ if(typeof applyFirebaseData==='function') applyFirebaseData(); }catch(e){ console.warn('[運坊請求取込] 再読込', e); }
+  renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
+  renderCustTbl&&renderCustTbl();
+}
+window.hfileUnbouBill=hfileUnbouBill;
+window.hdropUnbouBill=hdropUnbouBill;
+window.importUnbouBillCSV=importUnbouBillCSV;
+window.applyUnbouBillImport=applyUnbouBillImport;
+
 
 
 /* ══════════════════════════════════════════════════════════
