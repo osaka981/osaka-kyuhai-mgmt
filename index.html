@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.36</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.37</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6034,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.36';
+const APP_VER = '2026-10-23.37';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14114,6 +14114,196 @@ function _puCmpOtherMap(ym, custId){
   return _puCmpArrToMap(c && c.items);
 }
 // 日ごとの相手の数量を書き換える
+/* ───────── 確定数（訂正）と日報の保存　★ 2026-10-23.37 ─────────
+   訂正は日報に書き戻さない。請求・売上は「訂正 ?? 日報」を見る。
+   日報を直すと支払も動くので、訂正とは別の操作に分けてある。 */
+let _puCmpNewOwner = '';
+/* 画面を作り直さずに、差と合計だけ計算し直す。
+   作り直すと、まだ保存していない日報の入力が消えてしまうため。 */
+function _puCmpDayRecalc(){
+  const root=document.getElementById('pc-body'); if(!root) return;
+  const val=el=>{ const t=String(el.value==null?'':el.value).trim(); return t===''?null:Math.max(0,parseInt(t,10)||0); };
+  const rep={}, oth={}, fix={};
+  root.querySelectorAll('.pcd-rep').forEach(el=>{
+    (rep[el.dataset.d]=rep[el.dataset.d]||{})[el.dataset.k]=val(el)||0; });
+  root.querySelectorAll('.pcd-rep-ro').forEach(el=>{
+    (rep[el.dataset.d]=rep[el.dataset.d]||{})[el.dataset.k]=Number(el.dataset.v)||0; });
+  root.querySelectorAll('.pcd-oth').forEach(el=>{
+    (oth[el.dataset.d]=oth[el.dataset.d]||{})[el.dataset.k]=val(el)||0; });
+  root.querySelectorAll('.pcd-fix').forEach(el=>{
+    const v=val(el); if(v!=null) (fix[el.dataset.d]=fix[el.dataset.d]||{})[el.dataset.k]=v; });
+
+  let tR=0,tO=0,tF=0;
+  const rowR={}, rowO={}, rowF={};
+  root.querySelectorAll('.pcd-df').forEach(el=>{
+    const d=el.dataset.d, k=el.dataset.k;
+    const rv=((rep[d]||{})[k])||0, ov=((oth[d]||{})[k])||0;
+    const fv=((fix[d]||{})[k]);
+    const kv=(fv!=null)?fv:rv, df=ov-kv;
+    rowR[d]=(rowR[d]||0)+rv; rowO[d]=(rowO[d]||0)+ov; rowF[d]=(rowF[d]||0)+kv;
+    tR+=rv; tO+=ov; tF+=kv;
+    el.textContent=(df>0?'+':'')+df;
+    el.style.color = df===0?'var(--txt3)':(df<0?'var(--red2)':'var(--grn2)');
+    el.style.fontWeight = df===0?'400':'700';
+  });
+  root.querySelectorAll('.pcd-rsum').forEach(el=>{
+    const d=el.dataset.d, r=rowR[d]||0, f=rowF[d]||0;
+    el.innerHTML = (r||'') + (f!==r?`<div style="color:var(--amb2);">確定 ${f}</div>`:'');
+  });
+  root.querySelectorAll('.pcd-rdf').forEach(el=>{
+    const d=el.dataset.d, v=(rowO[d]||0)-(rowF[d]||0);
+    el.textContent=(v>0?'+':'')+v;
+    el.style.color = v===0?'var(--txt3)':(v<0?'var(--red2)':'var(--grn2)');
+    el.style.fontWeight = v===0?'400':'700';
+  });
+  const set=(id,t)=>{ const e=document.getElementById(id); if(e) e.textContent=t; };
+  const f=(typeof fmt==='function')?fmt:(x=>String(x));
+  set('pcd-trep', f(tR)); set('pcd-tfix', f(tF)); set('pcd-toth', f(tO));
+  const td=tO-tF, e=document.getElementById('pcd-tdf');
+  if(e){ e.textContent='差異 '+((td>0?'+':'')+f(td)); e.style.color = td===0?'var(--grn2)':'var(--red2)'; }
+}
+window._puCmpDayRecalc=_puCmpDayRecalc;
+
+function _puCmpSetFixVal(custId, date, key, val){
+  const ym = $('pc-mon')?.value || ''; if(!ym || !date) return;
+  const c = _puCmpCell(ym, custId);
+  if(!c.fix || typeof c.fix!=='object') c.fix = {};
+  const arr = Array.isArray(c.fix[date]) ? c.fix[date].slice()
+            : (c.fix[date] && typeof c.fix[date]==='object' ? Object.values(c.fix[date]) : []);
+  const i = arr.findIndex(x=>x && x.k===key);
+  const t = String(val==null?'':val).trim();
+  if(t===''){ if(i>=0) arr.splice(i,1); }          /* 空にしたら日報の値に戻る */
+  else {
+    const n = Math.max(0, parseInt(t,10)||0);
+    if(i>=0) arr[i] = {k:key, v:n}; else arr.push({k:key, v:n});
+  }
+  if(arr.length) c.fix[date] = arr; else delete c.fix[date];
+  _puCmpSave();
+  /* 画面は作り直さない。保存前の日報の入力が消えるため（差は _puCmpDayRecalc が更新する） */
+}
+/* 確定数（訂正 ?? 日報）を1か月ぶん返す。請求・売上はこれを見る */
+function _puCmpFixedMap(ym, custId, repByDay){
+  const c = (D.colCmp && D.colCmp[ym] && D.colCmp[ym][_puCmpKey(custId)]) || null;
+  const fixAll = (c && c.fix && typeof c.fix==='object') ? c.fix : {};
+  const out = {};
+  Object.entries(repByDay||{}).forEach(([d,m])=>{
+    Object.entries(m||{}).forEach(([k,v])=>{ out[k]=(out[k]||0)+(Number(v)||0); });
+  });
+  Object.entries(fixAll).forEach(([d,arr])=>{
+    const fm=_puCmpArrToMap(arr), rm=(repByDay||{})[d]||{};
+    Object.entries(fm).forEach(([k,v])=>{ out[k]=(out[k]||0) - (Number(rm[k])||0) + (Number(v)||0); });
+  });
+  return out;
+}
+/* 画面に打った日報をまとめて保存する（新規は作る・既存は直す） */
+async function _puCmpSaveReps(custId){
+  const ym = $('pc-mon')?.value || ''; if(!ym) return;
+  const cu = (D.customers||[]).find(c=>String(c.id)===String(custId));
+  if(!cu){ alert('顧客が見つかりません'); return; }
+
+  /* 画面の入力を 日付→品目→数量 に畳む */
+  const want = {};
+  document.querySelectorAll('#pc-body .pcd-rep').forEach(el=>{
+    const d=el.getAttribute('data-d'), k=el.getAttribute('data-k');
+    const t=String(el.value||'').trim();
+    const n=(t==='')?0:Math.max(0, parseInt(t,10)||0);
+    (want[d]=want[d]||{})[k]=n;
+  });
+
+  /* 今ある日報（計数の便は触らない） */
+  const cur = {};
+  (D.pickup||[]).forEach(r=>{
+    if(String(r.customerId||0)!==String(custId)) return;
+    if(!(r.date||'').startsWith(ym)) return;
+    if(r._fromJet) return;
+    if(!cur[r.date]) cur[r.date]=r;
+  });
+
+  const add=[], upd=[], del=[];
+  Object.entries(want).forEach(([d,items])=>{
+    const clean={}; Object.entries(items).forEach(([k,v])=>{ if(v>0) clean[k]=v; });
+    const has=Object.keys(clean).length>0;
+    const rec=cur[d];
+    if(!rec){ if(has) add.push({date:d, items:clean}); return; }
+    const same = JSON.stringify(Object.entries(rec.items||{}).filter(([,v])=>v>0).sort())
+               === JSON.stringify(Object.entries(clean).sort());
+    if(same) return;
+    if(has) upd.push({rec, items:clean}); else del.push(rec);
+  });
+
+  if(!add.length && !upd.length && !del.length){ alert('変わったところがありません'); return; }
+
+  /* 新しく作る日報には担当が要る */
+  let owner=null;
+  if(add.length){
+    const v=$('pcd-owner')?.value||'';
+    if(!v){ alert(`新しく日報を作る日が ${add.length} 日あります。\n上の「新しく作る日報の担当」を選んでください。`); return; }
+    if(v.startsWith('co:')){
+      const co=(D.companies||[]).find(c=>String(c.id)===v.slice(3));
+      if(!co){ alert('委託会社が見つかりません'); return; }
+      owner={ id:'', name:co.name, office:'堺営業所', companyId:co.id, byCompany:true };
+    } else {
+      const st=(D.staff||[]).find(x=>String(x.id)===v.slice(3));
+      if(!st){ alert('従業員が見つかりません'); return; }
+      owner={ id:String(st.empNo||st.id||''), name:st.name, office:st.office||'堺営業所', companyId:st.companyId||0 };
+    }
+  }
+
+  const msg = [add.length?`新しく作る ${add.length}日`:'', upd.length?`直す ${upd.length}日`:'', del.length?`空にする ${del.length}日`:'']
+    .filter(Boolean).join(' / ');
+  if(!confirm(`${esc(cu.name)} ${ym} の日報を保存します。\n${msg}\n\n`
+            + `日報は支払の根拠です。請求は確定数（訂正 ?? 日報）で別に計算します。\n\n進めますか？`)) return;
+
+  const colLogs = lsGet(LS_KEYS.COL, null);
+  if(!Array.isArray(colLogs)){
+    alert('集荷日報がまだ読み込まれていません。画面を再読み込みしてから、もう一度お試しください。');
+    return;
+  }
+  const next = colLogs.slice();
+  const mkRows = (items) => Object.entries(items).map(([k,q])=>({
+    customerId:Number(custId)||0, customerName:cu.name, region:cu.region||'',
+    masterKey:k, qty:q,
+    unit:(String(k).startsWith('__custom__')
+          ? ((((cu.otherItems)||[]).find(o=>o && o.name===String(k).slice(10))||{}).unit || '個')
+          : ((ITEMS[k] && ITEMS[k].unit) || '個')),
+  }));
+  const base=Date.now()*1000;
+  add.forEach((a,i)=>{
+    next.push({ id:base+i, type:'collection',
+      driver:{ id:owner.id, name:owner.name, office:owner.office },
+      companyId: owner.companyId||0, byCompany: !!owner.byCompany,
+      date:a.date, rows:mkRows(a.items), note:'',
+      submittedAt:new Date().toISOString() });
+  });
+  upd.forEach(u=>{
+    const i=next.findIndex(x=>String(x.id)===String(u.rec.id));
+    const old=(i>=0)?next[i]:null;
+    const extra=((old&&old.rows)||[]).filter(r=>r && ['route','route_rest','チャーター'].includes(r.masterKey));
+    const ent={ id:u.rec.id, type:'collection',
+      driver:(old&&old.driver)||{ id:'', name:u.rec.staff||'', office:u.rec.office||'' },
+      companyId:(old&&old.companyId)||0, byCompany:!!(old&&old.byCompany),
+      date:u.rec.date, rows:mkRows(u.items).concat(extra), note:(old&&old.note)||'',
+      submittedAt:new Date().toISOString() };
+    if(i>=0) next[i]=ent; else next.push(ent);
+  });
+  del.forEach(r=>{
+    const i=next.findIndex(x=>String(x.id)===String(r.id));
+    if(i>=0) next.splice(i,1);
+  });
+
+  lsSet(LS_KEYS.COL, next);
+  let ok=true;
+  try{ if(typeof fbSet==='function') ok=(await fbSet('col_logs', next))!==false; }
+  catch(e){ ok=false; console.error('[集荷照合] 日報の保存', e); }
+  try{ if(typeof applyFirebaseData==='function') applyFirebaseData(); }catch(e){}
+  renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
+  renderPuCmp&&renderPuCmp();
+  if(ok) _showSaveToast&&_showSaveToast(`${cu.name} ${ym} の日報を保存しました（${msg}）`);
+  else alert('クラウドへの保存に失敗しました。この端末には入っています。通信を確かめてもう一度お試しください。');
+}
+window._puCmpSetFixVal=_puCmpSetFixVal;
+window._puCmpSaveReps=_puCmpSaveReps;
+window._puCmpFixedMap=_puCmpFixedMap;
 function _puCmpSetDayVal(custId, date, key, val){
   const ym = $('pc-mon')?.value || ''; if(!ym || !date) return;
   const c = _puCmpCell(ym, custId);
@@ -14127,7 +14317,6 @@ function _puCmpSetDayVal(custId, date, key, val){
   else arr.push({k:key, v:n});
   if(arr.length) c.days[date] = arr; else delete c.days[date];
   _puCmpSave();
-  _puCmpDetailRecalc();
 }
 function _puCmpToggleOk(custId){
   const ym = $('pc-mon')?.value || ''; if(!ym) return;
@@ -14236,19 +14425,26 @@ function renderPuCmp(){
 
   // ── 日別の照合表（顧客を1社開いた状態）──
   if(_puCmpOpenId){
+    /* ═══════════════════════════════════════════════════════════════
+       1社×1か月の入力・照合　★ 2026-10-23.37
+       　日報 … 社内の実績。支払の根拠。ここで打てる（計数の便だけは読み取り専用）
+       　相手 … 運坊／顧客の申告。請求の正
+       　訂正 … 差があるときだけ打つ。空なら日報の値がそのまま確定になる
+       　確定 … 訂正 ?? 日報。請求・売上の根拠。日報とは切り離してあるので、
+       　　　　 ここを直しても支払は動かない
+       その月の全日を行に出すので、日報が無い日に打てば新規の日報になる。
+       ═══════════════════════════════════════════════════════════════ */
     const id=_puCmpOpenId;
     const cu=(D.customers||[]).find(c=>String(c.id)===String(id));
     const name=cu?cu.name:'（不明な顧客）';
     const mine=rows.filter(r=>String(r.customerId||0)===String(id));
-    const rep={}, dateSet=new Set(), keySet=[];
-    // ★ 2026-10-02.3: その日が計数アプリの便だけで出来ているかを調べる。
-    //   計数だけの日は計数照合で突き合わせ済みなので、ここでは入力させず集計からも外す。
-    const dayJet={};
+
+    /* 日報（社内の実績）を日×品目に畳む。計数の便かどうかも覚えておく */
+    const rep={}, jetDay={}, dayRec={};
+    const keySet=[];
     mine.forEach(r=>{
       const d=r.date||''; if(!d) return;
-      dateSet.add(d);
-      const c=dayJet[d]||(dayJet[d]={jet:0,all:0});
-      c.all++; if(r._fromJet) c.jet++;
+      if(r._fromJet) jetDay[d]=true; else if(!dayRec[d]) dayRec[d]=r;
       const m=rep[d]||(rep[d]={});
       Object.entries(r.items||{}).forEach(([k,q])=>{
         const n=Number(q)||0; if(!n) return;
@@ -14256,93 +14452,139 @@ function renderPuCmp(){
         if(!keySet.includes(k)) keySet.push(k);
       });
     });
-    const jetOnly = d => !!(dayJet[d] && dayJet[d].all>0 && dayJet[d].jet===dayJet[d].all);
-    // 相手だけ入っている日・品目も列と行に出す
+    /* 相手・訂正に入っている品目も列に出す */
+    const cell=_puCmpCell(ym, id);
+    const fixAll=(cell.fix && typeof cell.fix==='object') ? cell.fix : {};
     const days=_puCmpDays(ym, id);
     Object.keys(days).forEach(d=>{
-      const m=_puCmpArrToMap(days[d]);
-      if(Object.keys(m).length) dateSet.add(d);
-      Object.keys(m).forEach(k=>{ if(!keySet.includes(k)) keySet.push(k); });
+      Object.keys(_puCmpArrToMap(days[d])).forEach(k=>{ if(!keySet.includes(k)) keySet.push(k); });
+    });
+    Object.keys(fixAll).forEach(d=>{
+      Object.keys(_puCmpArrToMap(fixAll[d])).forEach(k=>{ if(!keySet.includes(k)) keySet.push(k); });
+    });
+    /* その顧客で使う品目は、数量が無くても列に出す（新規入力のため） */
+    (typeof custUseItems==='function' ? custUseItems(cu, keySet) : IK).forEach(k=>{
+      if(ITEMS[k] && k!=='チャーター' && !keySet.includes(k)) keySet.push(k);
+    });
+    ((cu&&cu.otherItems)||[]).forEach(o=>{
+      if(!o || !String(o.name||'').trim()) return;
+      if(['月額','日額'].includes(o.unit||'月額')) return;
+      const k='__custom__'+o.name; if(!keySet.includes(k)) keySet.push(k);
     });
     const keys=IK.filter(k=>keySet.includes(k)).concat(keySet.filter(k=>!ITEMS[k]));
-    const dates=[...dateSet].sort();
+
+    /* その月の全日を出す */
+    const [gy,gm]=ym.split('-').map(Number);
+    const last=new Date(gy, gm, 0).getDate();
+    const dates=[];
+    for(let i=1;i<=last;i++) dates.push(`${ym}-${String(i).padStart(2,'0')}`);
     _puCmpDetail={custId:id, ym, keys, dates, rep, skip:new Set()};
 
-    if(!dates.length){
-      root.innerHTML=`<div class="fla gap6 mb12"><button class="btn b-gh btn-sm" onclick="_puCmpBack()">← 一覧へ戻る</button>
-        <span class="fw7">${esc(name)}　${esc(ym)}</span></div>
-        <div class="al al-e"><span>この月のデータがありません。</span></div>`;
-      return;
-    }
-
-    const cell=(D.colCmp[ym]||{})[_puCmpKey(id)]||{};
-    const legacy=_puCmpArrToMap(cell.items);
-    const hasLegacy=Object.keys(legacy).length>0 && !_puCmpHasDays(ym, id);
-
-    const [gy,gm]=ym.split('-').map(Number);
     const wd=['日','月','火','水','木','金','土'];
+    const label=k=>String(k).startsWith('__custom__') ? String(k).slice(10)
+                 : (ITEMS[k] ? (ITEMS[k].shortLabel||ITEMS[k].label||k) : k);
+
+    /* 担当の候補：委託会社と従業員 */
+    const cos=(D.companies||[]).filter(c=>c && c.name && c.active!==false)
+      .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));
+    const sts=(D.staff||[]).filter(x=>x && x.name && x.status!=='退職')
+      .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));
+    const keep=_puCmpNewOwner||'';
+    const ownerSel=`<select id="pcd-owner" class="fi" style="font-size:11px;padding:3px 7px;min-width:190px;"
+        onchange="_puCmpNewOwner=this.value;">
+      <option value="">（担当を選ぶ）</option>
+      <optgroup label="委託会社">${cos.map(c=>`<option value="co:${c.id}" ${keep==='co:'+c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>
+      <optgroup label="従業員">${sts.map(x=>`<option value="st:${x.id}" ${keep==='st:'+x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</optgroup>
+    </select>`;
+
+    let tRep=0, tOth=0, tFix=0;
     let body='';
     dates.forEach((d,di)=>{
       const dow=new Date(gy,gm-1,Number(d.slice(8,10))).getDay();
       const dowCol=dow===0?'var(--red2)':(dow===6?'var(--blu)':'var(--txt2)');
       const rowBg=(dow===0||dow===6)?'background:rgba(176,154,138,.06);':'';
       const oth=_puCmpDayMap(ym, id, d);
+      const fix=_puCmpArrToMap(fixAll[d]);
+      const isJet=!!jetDay[d];
+      const rec=dayRec[d];
+      let rRep=0, rOth=0, rFix=0;
       let tds='';
-      /* ★ 2026-10-23.36: 計数アプリの便だけの日も、相手を入力して差を見られるようにした。
-         相手が運坊（請求の正）になったので、計数の日こそ突き合わせたい。
-         日報の数量はどの日も読み取り専用なので、計数のスキャンに触る心配はない。
-         引受数の訂正は従来どおり計数照合で行う（行末のボタン）。 */
-      const isJetDay = jetOnly(d);
       keys.forEach((k,ki)=>{
-        const rv=(rep[d]&&rep[d][k])||0, ov=oth[k]||0, df=ov-rv;
-        // ★ 2026-10-02.2: セルを右揃えにする。入力欄だけ左に寄って、
-        //   上の日報・下の差異と縦に揃っていなかった。
-        tds+=`<td style="padding:3px 6px;white-space:nowrap;text-align:right;">
-          <div class="xs muted" style="line-height:1.35;">${rv||'0'}</div>
-          <input type="number" min="0" class="fi" value="${ov||''}" placeholder="0"
-            style="width:72px;font-size:11.5px;padding:2px 5px;text-align:right;display:inline-block;"
-            onchange="_puCmpSetDayVal('${id}','${d}','${esc(k)}',this.value)">
-          <div class="xs" id="pcdd_${di}_${ki}" style="line-height:1.35;color:${df===0?'var(--txt3)':(df<0?'var(--red2)':'var(--grn2)')};font-weight:${df===0?'400':'700'};">${(df>0?'+':'')+df}</div>
+        const rv=(rep[d]&&rep[d][k])||0;
+        const ov=oth[k]||0;
+        const fv=(fix[k]!=null) ? fix[k] : null;
+        const kv=(fv!=null)?fv:rv;                 /* 確定 */
+        const df=ov-kv;
+        rRep+=rv; rOth+=ov; rFix+=kv;
+        const q=s=>String(s).replace(/'/g,"\\'");
+        tds+=`<td style="padding:3px 5px;white-space:nowrap;text-align:right;">
+          ${isJet
+            ? `<div class="xs muted pcd-rep-ro" data-d="${d}" data-k="${q(k)}" data-v="${rv||0}" style="line-height:1.4;" title="計数アプリの便です。ここでは直せません">${rv||'0'} <span style="font-size:8.5px;">計数</span></div>`
+            : `<input type="number" min="0" class="fi pcd-rep" value="${rv||''}" placeholder="0"
+                 style="width:70px;font-size:11px;padding:1px 4px;text-align:right;"
+                 data-d="${d}" data-k="${q(k)}" data-v="${rv||0}"
+                 oninput="_puCmpDayRecalc()"
+                 title="日報（社内の実績）。支払の根拠です">`}
+          <input type="number" min="0" class="fi pcd-oth" value="${ov||''}" placeholder="相手"
+            style="width:70px;font-size:11px;padding:1px 4px;text-align:right;margin-top:2px;background:rgba(66,133,244,.06);"
+            data-d="${d}" data-k="${q(k)}"
+            onchange="_puCmpSetDayVal('${id}','${d}','${q(k)}',this.value);_puCmpDayRecalc();"
+            title="相手の数量（運坊・顧客の申告）">
+          <input type="number" min="0" class="fi pcd-fix" value="${fv!=null?fv:''}" placeholder="${rv||0}"
+            style="width:70px;font-size:11px;padding:1px 4px;text-align:right;margin-top:2px;background:rgba(251,188,5,.08);"
+            data-d="${d}" data-k="${q(k)}"
+            onchange="_puCmpSetFixVal('${id}','${d}','${q(k)}',this.value);_puCmpDayRecalc();"
+            title="訂正（確定数）。空なら日報の値がそのまま確定になります。ここを直しても支払は動きません">
+          <div class="xs pcd-df" data-d="${d}" data-k="${q(k)}" style="line-height:1.3;color:${df===0?'var(--txt3)':(df<0?'var(--red2)':'var(--grn2)')};font-weight:${df===0?'400':'700'};">${(df>0?'+':'')+df}</div>
         </td>`;
       });
-      const rRep=keys.reduce((a,k)=>a+((rep[d]&&rep[d][k])||0),0);
-      const rOth=keys.reduce((a,k)=>a+(oth[k]||0),0);
-      const rd=rOth-rRep;
+      tRep+=rRep; tOth+=rOth; tFix+=rFix;
+      const rd=rOth-rFix;
+      const who = rec ? (rec.staff||'') : '';
       body+=`<tr style="${rowBg}">
-        <td class="mono" style="white-space:nowrap;">${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span>${
-          isJetDay?`<div class="xs muted" style="font-weight:400;">計数</div>`:''}</td>
-        <td class="tr xs muted">${rRep||''}</td>
+        <td class="mono" style="white-space:nowrap;vertical-align:top;padding-top:6px;">
+          ${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span>
+          ${isJet?'<div class="xs muted" style="font-weight:400;">計数</div>':''}
+          ${who?`<div class="xs muted" style="font-weight:400;">${esc(who)}</div>`:''}</td>
+        <td class="tr xs muted pcd-rsum" data-d="${d}" style="vertical-align:top;padding-top:6px;">
+          ${rRep||''}${rFix!==rRep?`<div style="color:var(--amb2);">確定 ${rFix}</div>`:''}</td>
         ${tds}
-        <td class="tr fw7" id="pcdr_${di}" style="color:${rd===0?'var(--txt3)':(rd<0?'var(--red2)':'var(--grn2)')};">${rOth?((rd>0?'+':'')+rd):''}</td>
+        <td class="tr pcd-rdf" data-d="${d}" style="vertical-align:top;padding-top:6px;color:${rd===0?'var(--txt3)':(rd<0?'var(--red2)':'var(--grn2)')};font-weight:${rd===0?'400':'700'};">${(rd>0?'+':'')+rd}</td>
       </tr>`;
     });
 
+    const tDiff=tOth-tFix;
     root.innerHTML=`
-      <div class="fla gap6 mb8" style="flex-wrap:wrap;align-items:center;">
-        <button class="btn b-gh btn-sm" onclick="_puCmpBack()">← 一覧へ戻る</button>
-        <span class="fw7" style="font-size:15px;">${esc(name)}</span>
-        <span class="xs muted">${esc(ym)}　${dates.length}日</span>
-        <span class="bdg" id="pcdg" style="margin-left:auto;"></span>
+      <div class="flbc mb8" style="flex-wrap:wrap;gap:8px;">
+        <div class="fla gap6">
+          <button class="btn b-gh btn-sm" onclick="_puCmpBack()">← 一覧へ戻る</button>
+          <span class="fw7">${esc(name)}</span><span class="xs muted">${esc(ym)}</span>
+        </div>
+        <div class="fla gap6" style="flex-wrap:wrap;">
+          <span class="xs muted">日報 <b class="mono" id="pcd-trep">${fmt(tRep)}</b></span>
+          <span class="xs" style="color:var(--amb2);">確定 <b class="mono" id="pcd-tfix">${fmt(tFix)}</b></span>
+          <span class="xs muted">相手 <b class="mono" id="pcd-toth">${fmt(tOth)}</b></span>
+          <span class="xs" style="font-weight:700;" id="pcd-tdf">差異 ${(tDiff>0?'+':'')+fmt(tDiff)}</span>
+        </div>
       </div>
-      ${hasLegacy?`<div class="al al-w" style="margin-bottom:8px;"><span>この月には月まとめで入れた相手の数量が残っています（合計 ${fmt(Object.values(legacy).reduce((a,b)=>a+b,0))}）。日ごとに入れ直すと、そちらが使われます。</span></div>`:''}
-      <div class="xs muted" style="margin-bottom:6px;">
-        各マスは上が日報の数量、真ん中が相手の数量の入力欄、下が差異です。差異は「相手 − 日報」。
-        日報の側を直すときは顧客ページの日報一覧から直してください。
+      <div class="fla gap6 mb8" style="flex-wrap:wrap;">
+        <span class="xs muted">新しく作る日報の担当</span>${ownerSel}
+        <button class="btn b-grn btn-sm" onclick="_puCmpSaveReps('${id}')">日報を保存</button>
+        <span class="xs muted">相手と訂正は打つとすぐ保存されます。日報だけこのボタンで保存します。</span>
       </div>
-      <style>
-        #pcd-table td,#pcd-table th{padding-top:4px;padding-bottom:4px;}
-        #pcd-table tbody tr td{border-top:1px solid var(--brd2);}
-        #pcd-table input::-webkit-outer-spin-button,
-        #pcd-table input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-        #pcd-table input{-moz-appearance:textfield;}
-      </style>
-      <div class="tw" style="max-height:62vh;"><table id="pcd-table"><thead><tr>
-        <th style="position:sticky;left:0;background:var(--bg2);z-index:2;">日付</th>
+      <div class="xs muted mb8" style="line-height:1.7;">
+        各マスは上から<b>日報</b>（社内の実績・支払の根拠）、<b style="color:var(--blu2);">相手</b>（運坊や顧客の申告）、
+        <b style="color:var(--amb2);">訂正</b>（空なら日報の値がそのまま確定）、<b>差</b>（相手 − 確定）です。<br>
+        <b>訂正を入れても日報は変わりません。</b>請求と売上は確定数（訂正 ?? 日報）で、支払は日報のままです。
+        入力漏れを埋めるときは<b>日報の欄</b>に打ってください。<br>
+        <b>計数アプリの便は日報を直せません。</b>相手と訂正だけ打てます。引受数の訂正は計数照合で行います。
+      </div>
+      <div class="tw"><table><thead><tr>
+        <th style="white-space:nowrap;">日付</th>
         <th class="tr">日報計</th>
-        ${keys.map((k,ki)=>`<th class="${ITEMS[k]?(ITEMS[k].cls||''):''}" style="text-align:right;white-space:nowrap;${ITEMS[k]?'':'color:var(--clay,#c1724c);font-weight:700;'}">${esc(_puKeyLabel(k))}<div class="xs" id="pcdc_${ki}" style="font-weight:400;"></div></th>`).join('')}
+        ${keys.map(k=>`<th class="${ITEMS[k]?(ITEMS[k].cls||''):''}" style="text-align:right;white-space:nowrap;">${esc(label(k))}</th>`).join('')}
         <th class="tr">差異</th>
       </tr></thead><tbody>${body}</tbody></table></div>`;
-    _puCmpDetailRecalc();
     return;
   }
 
