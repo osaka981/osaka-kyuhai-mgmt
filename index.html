@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.33</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.34</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2478,6 +2478,17 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <input type="file" id="fi-ub" accept=".csv" multiple style="display:none" onchange="hfileUnbouBill(event)">
         <div id="res-ub" class="mt8"></div>
+        <!-- ★ 2026-10-23.34: 10/22 に日報へ入れた分の取り消し -->
+        <div style="border-top:1px solid var(--brd);margin-top:12px;padding-top:10px;">
+          <div class="xs fw7 mb6" style="color:var(--red2);">運坊から入れた分の取り消し</div>
+          <div class="xs muted mb6" style="line-height:1.7;">
+            運坊の顧客請求は、本来<b>「日報」ではなく「相手」</b>に入れるものです。
+            日報に入れると計数アプリの便と足し算になり、照合の意味がなくなります。<br>
+            10/22 に日報へ入れた分はここで取り消せます。<b>計数アプリのスキャンにも、手で入れた日報にも触りません。</b>
+          </div>
+          <button class="btn b-gh btn-sm" onclick="renderUbbUndo()">入っている分を調べる</button>
+          <div id="res-ub-undo" class="mt8"></div>
+        </div>
         <div class="xs muted mt8" style="line-height:1.7;">
           <b>必要な列</b>　日付／取引先ID／経営管理の品目／数量　（カスタム品目名・単位・単価・金額もあれば使います）<br>
           <b>入らないもの</b>　数量が0の行<br>
@@ -6022,7 +6033,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.33';
+const APP_VER = '2026-10-23.34';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -43225,6 +43236,85 @@ async function _ubbLinkNames(){
   importUnbouBillCSV(null);   /* 読み直して一覧から消す */
 }
 window._ubbLinkNames=_ubbLinkNames;
+
+/* ───────── 運坊から入れた分の取り消し　★ 2026-10-23.34 ─────────
+   運坊の顧客請求は「日報」ではなく「相手（照合の相手方）」に入れるのが正しい。
+   10/22 に集荷日報（col_logs）へ入れた分は、計数アプリの便と足し算になって
+   しまうため取り消す。消すのは _fromUnbou の印が付いた分だけで、
+   計数アプリのスキャンにも、手で入れた日報にも触らない。 */
+function _ubbFindImported(){
+  const logs = lsGet(LS_KEYS.COL, null);
+  if(!Array.isArray(logs)) return null;
+  const hit = logs.filter(l => l && l._fromUnbou);
+  const byYm = {};
+  hit.forEach(l => {
+    const ym = String(l._ubbYm || l.date || '').slice(0,7);
+    const a = byYm[ym] = byYm[ym] || {n:0, custs:new Set()};
+    a.n++;
+    ((l.rows)||[]).forEach(r => { if(r && r.customerName) a.custs.add(r.customerName); });
+  });
+  return {logs, hit, byYm};
+}
+function renderUbbUndo(){
+  const el = $('res-ub-undo'); if(!el) return;
+  const f = _ubbFindImported();
+  if(!f){
+    el.innerHTML = '<div class="al al-w"><span>⚠️</span><span>集荷日報がまだ読み込まれていません。画面を再読み込みしてください。</span></div>';
+    return;
+  }
+  if(!f.hit.length){
+    el.innerHTML = '<div class="al al-ok"><span>✅</span><span>運坊から入れた集荷日報はありません。</span></div>';
+    return;
+  }
+  const rows = Object.keys(f.byYm).sort().map(ym => `<tr>
+    <td class="fw7 mono">${esc(ym)}</td>
+    <td class="tr mono">${f.byYm[ym].n.toLocaleString()}件</td>
+    <td class="tr mono">${f.byYm[ym].custs.size}社</td></tr>`).join('');
+  el.innerHTML = `
+    <div class="al al-w"><span>⚠️</span><span>
+      運坊から入れた集荷日報が<b>${f.hit.length.toLocaleString()}件</b>あります。
+      これは<b>相手側に入れ直すため取り消します</b>。<br>
+      <span class="xs">消えるのは運坊から入れた分だけです。計数アプリのスキャンにも、手で入れた日報にも触りません。</span>
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>対象月</th><th class="tr">件数</th><th class="tr">顧客</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="mt8"><button class="btn b-red btn-sm" onclick="undoUnbouBillImport()">
+      運坊から入れた分を取り消す（${f.hit.length.toLocaleString()}件）</button></div>`;
+}
+async function undoUnbouBillImport(){
+  const f = _ubbFindImported();
+  if(!f){ alert('集荷日報がまだ読み込まれていません。画面を再読み込みしてから、もう一度お試しください。'); return; }
+  if(!f.hit.length){ alert('運坊から入れた集荷日報はありません。'); return; }
+  const n = f.hit.length;
+  if(!confirm(`運坊から入れた集荷日報 ${n} 件を取り消します。\n\n`
+            + `計数アプリのスキャンにも、手で入れた日報にも触りません。\n\n進めますか？`)) return;
+
+  const before = f.logs.length;
+  const next = f.logs.filter(l => !(l && l._fromUnbou));
+  /* 消す件数が合っているかを書く直前に確かめる */
+  if(next.length !== before - n){
+    alert(`件数が合わないため取り消しを中止しました。\n${before} 件 − ${n} 件 = ${before-n} 件 のはずが ${next.length} 件です。`);
+    return;
+  }
+  lsSet(LS_KEYS.COL, next);
+  let ok = true;
+  try{ if(typeof fbSet==='function') ok = (await fbSet('col_logs', next)) !== false; }
+  catch(e){ ok = false; console.error('[運坊請求取消] col_logs 保存', e); }
+
+  try{ if(typeof applyFirebaseData==='function') applyFirebaseData(); }
+  catch(e){ console.warn('[運坊請求取消] 再読込', e); }
+  renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
+  renderPuCmp&&renderPuCmp();
+
+  const el = $('res-ub-undo');
+  if(el) el.innerHTML = `<div class="al ${ok?'al-ok':'al-w'}"><span>${ok?'✅':'⚠️'}</span><span>
+    運坊から入れた<b>${n}件</b>を取り消しました（${before}件 → ${next.length}件）。
+    ${ok?'':'<br><b>クラウドへの保存に失敗しました。</b>この端末からは消えています。'}
+  </span></div>`;
+  setTimeout(renderUbbUndo, 50);
+}
+window.renderUbbUndo=renderUbbUndo;
+window.undoUnbouBillImport=undoUnbouBillImport;
 window.hfileUnbouBill=hfileUnbouBill;
 window.hdropUnbouBill=hdropUnbouBill;
 window.importUnbouBillCSV=importUnbouBillCSV;
