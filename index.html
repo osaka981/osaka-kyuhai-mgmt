@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.35</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.36</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6034,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.35';
+const APP_VER = '2026-10-23.36';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14165,7 +14165,8 @@ function _puCmpDetailRecalc(){
   const colT={}; st.keys.forEach(k=>colT[k]={rep:0, oth:0});
   let gRep=0, gOth=0;
   st.dates.forEach((d,di)=>{
-    if(st.skip && st.skip.has(d)) return;   // ★ 計数だけの日は合計に入れない
+    /* ★ 2026-10-23.36: 計数だけの日も合計に入れる。
+       相手が運坊になり、計数の日も突き合わせの対象になったため。 */
     const oth=_puCmpDayMap(ym, id, d);
     let rRep=0, rOth=0;
     st.keys.forEach((k,ki)=>{
@@ -14265,7 +14266,7 @@ function renderPuCmp(){
     });
     const keys=IK.filter(k=>keySet.includes(k)).concat(keySet.filter(k=>!ITEMS[k]));
     const dates=[...dateSet].sort();
-    _puCmpDetail={custId:id, ym, keys, dates, rep, skip:new Set(dates.filter(jetOnly))};
+    _puCmpDetail={custId:id, ym, keys, dates, rep, skip:new Set()};
 
     if(!dates.length){
       root.innerHTML=`<div class="fla gap6 mb12"><button class="btn b-gh btn-sm" onclick="_puCmpBack()">← 一覧へ戻る</button>
@@ -14287,21 +14288,11 @@ function renderPuCmp(){
       const rowBg=(dow===0||dow===6)?'background:rgba(176,154,138,.06);':'';
       const oth=_puCmpDayMap(ym, id, d);
       let tds='';
-      if(jetOnly(d)){
-        // 計数アプリの便だけの日。引受数の訂正は計数照合で行う。
-        keys.forEach(k=>{
-          const rv=(rep[d]&&rep[d][k])||0;
-          tds+=`<td style="padding:4px 6px;white-space:nowrap;text-align:right;color:var(--txt3);">${rv||'0'}</td>`;
-        });
-        body+=`<tr style="${rowBg}opacity:.75;">
-          <td class="mono" style="white-space:nowrap;">${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span></td>
-          <td class="tr xs muted">${keys.reduce((a,k)=>a+((rep[d]&&rep[d][k])||0),0)||''}</td>
-          ${tds}
-          <td class="tr xs"><button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;"
-            onclick="_puJumpToJetMonth('${id}','${ym}')">計数照合</button></td>
-        </tr>`;
-        return;
-      }
+      /* ★ 2026-10-23.36: 計数アプリの便だけの日も、相手を入力して差を見られるようにした。
+         相手が運坊（請求の正）になったので、計数の日こそ突き合わせたい。
+         日報の数量はどの日も読み取り専用なので、計数のスキャンに触る心配はない。
+         引受数の訂正は従来どおり計数照合で行う（行末のボタン）。 */
+      const isJetDay = jetOnly(d);
       keys.forEach((k,ki)=>{
         const rv=(rep[d]&&rep[d][k])||0, ov=oth[k]||0, df=ov-rv;
         // ★ 2026-10-02.2: セルを右揃えにする。入力欄だけ左に寄って、
@@ -14318,7 +14309,8 @@ function renderPuCmp(){
       const rOth=keys.reduce((a,k)=>a+(oth[k]||0),0);
       const rd=rOth-rRep;
       body+=`<tr style="${rowBg}">
-        <td class="mono" style="white-space:nowrap;">${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span></td>
+        <td class="mono" style="white-space:nowrap;">${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span>${
+          isJetDay?`<div class="xs muted" style="font-weight:400;">計数</div>`:''}</td>
         <td class="tr xs muted">${rRep||''}</td>
         ${tds}
         <td class="tr fw7" id="pcdr_${di}" style="color:${rd===0?'var(--txt3)':(rd<0?'var(--red2)':'var(--grn2)')};">${rOth?((rd>0?'+':'')+rd):''}</td>
@@ -14364,9 +14356,19 @@ function renderPuCmp(){
     a.days.add(r.date);
     // ★ 2026-10-02.3: 計数アプリの便は計数照合で突き合わせ済み。
     //   ここでは比較に入れず、参考の数量としてだけ持つ。
+    /* ★ 2026-10-23.36: 計数アプリの便も「日報（社内の実績）」に含める。
+       相手が運坊になったことで、照合の中身が変わった。
+       　旧：日報 vs 顧客の申告（計数は郵便局の引受数と計数照合で済ませるので対象外）
+       　新：日報 vs 運坊（請求の正）
+       計数も社内の実績なので、運坊と比べる対象に入れる。
+       jetSum は内訳（うち計数 ○○）として残す。足し算ではない。 */
     if(r._fromJet){
       a.jetN++;
-      Object.entries(r.items||{}).forEach(([k,q])=>{ a.jetSum += Number(q)||0; });
+      Object.entries(r.items||{}).forEach(([k,q])=>{
+        const n=Number(q)||0; if(!n) return;
+        a.jetSum += n;
+        a.rep[k] = (a.rep[k]||0) + n;
+      });
       return;
     }
     a.handN++;
@@ -14397,7 +14399,9 @@ function renderPuCmp(){
     const so = keys.reduce((s,k)=>s+(oth[k]||0),0);
     const hasOther = Object.keys(oth).length>0;
     const cell = (D.colCmp[ym]||{})[_puCmpKey(id)] || {};
-    const jetOnlyCust = (a.jetN>0 && a.handN===0);
+    /* 相手の数量が入っていれば、計数だけの顧客でもふつうに比べる。
+       入っていないときだけ「計数照合へ」に寄せる。 */
+    const jetOnlyCust = (a.jetN>0 && a.handN===0) && !hasOther;
     /* ★ 2026-10-23.32: 売上（税別・概算）。
        _calcCustBilling は運坊取込分（_fromUnbou）を除くので、この一覧が見せている
        数量とズレる。ここでは画面に出ている数量にそのまま顧客単価を掛ける。
@@ -14438,9 +14442,17 @@ function renderPuCmp(){
   if(st==='ok')   view = list.filter(r=>r.ok);
 
   if(!view.length){
-    root.innerHTML = `<div class="al ${st==='diff'?'al-ok':'al-e'}"><span>${
-      st==='diff' ? 'この月の顧客はすべて了承済みです。' :
-      st==='ok'   ? 'まだ了承した顧客がありません。' : '該当する顧客がありません。'}</span></div>`;
+    /* ★ 2026-10-23.36: 「全件が0件」と「絞り込んだ結果が0件」を区別する。
+       計数だけの顧客は『まだ了承していない』の一覧から外れるため、
+       了承が0件でも「すべて了承済み」と出てしまっていた。 */
+    const okN = list.filter(r=>r.ok).length;
+    root.innerHTML = `<div class="al ${(st==='diff'&&list.length&&okN===list.length)?'al-ok':'al-e'}"><span>${
+      !list.length  ? 'この月はデータがありません。' :
+      st==='ok'     ? 'まだ了承した顧客がありません。' :
+      st==='diff'   ? (okN===list.length
+                        ? `この月の顧客${list.length}社はすべて了承済みです。`
+                        : `顧客は${list.length}社ありますが、ここには出ません。計数アプリだけの顧客は相手の数量を入れるまで「全件」でご覧ください。`)
+                    : '該当する顧客がありません。'}</span></div>`;
     return;
   }
 
@@ -14451,7 +14463,7 @@ function renderPuCmp(){
       <td>${custLink(r.name)}${r.ok?'<span class="bdg bg" style="margin-left:5px;">了承</span>':''}
         ${r.jetOnly?'<div class="xs muted">計数アプリの便のみ</div>':''}</td>
       <td class="xs muted">${r.days}日${r.dayN?`<br><span style="color:var(--grn2);">相手 ${r.dayN}日入力</span>`:''}</td>
-      <td class="tr fw7">${r.jetOnly?fmt(r.jetSum):fmt(r.sr)}${(!r.jetOnly&&r.jetSum)?`<div class="xs muted" style="font-weight:400;">＋計数 ${fmt(r.jetSum)}</div>`:''}${r.jetOnly?'<div class="xs muted" style="font-weight:400;">計数アプリ</div>':''}</td>
+      <td class="tr fw7">${r.jetOnly?fmt(r.jetSum):fmt(r.sr)}${(!r.jetOnly&&r.jetSum)?`<div class="xs muted" style="font-weight:400;">うち計数 ${fmt(r.jetSum)}</div>`:''}${r.jetOnly?'<div class="xs muted" style="font-weight:400;">計数アプリ</div>':''}</td>
       <td class="tr mono">${r.salesOk?('¥'+fmt(r.sales)):'<span class="xs muted">単価なし</span>'}</td>
       <td class="tr">${r.jetOnly?'<span class="xs muted">計数照合で確認</span>':(r.hasOther?fmt(r.so):'<span class="muted">未入力</span>')}</td>
       <td class="tr" style="color:${(!r.jetOnly&&r.hasOther)?dc:'var(--txt3)'};font-weight:${(!r.jetOnly&&r.hasOther&&r.diff!==0)?'700':'400'};">${r.jetOnly?'—':(r.hasOther?((r.diff>0?'+':'')+fmt(r.diff)):'—')}</td>
