@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.37</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.38</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6034,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.37';
+const APP_VER = '2026-10-23.38';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14118,6 +14118,8 @@ function _puCmpOtherMap(ym, custId){
    訂正は日報に書き戻さない。請求・売上は「訂正 ?? 日報」を見る。
    日報を直すと支払も動くので、訂正とは別の操作に分けてある。 */
 let _puCmpNewOwner = '';
+/* ゆうパック・ゆうパケットのサイズを分けて出すか（既定はまとめる） */
+let _puCmpExpand = false;
 /* 画面を作り直さずに、差と合計だけ計算し直す。
    作り直すと、まだ保存していない日報の入力が消えてしまうため。 */
 function _puCmpDayRecalc(){
@@ -14462,16 +14464,65 @@ function renderPuCmp(){
     Object.keys(fixAll).forEach(d=>{
       Object.keys(_puCmpArrToMap(fixAll[d])).forEach(k=>{ if(!keySet.includes(k)) keySet.push(k); });
     });
-    /* その顧客で使う品目は、数量が無くても列に出す（新規入力のため） */
-    (typeof custUseItems==='function' ? custUseItems(cu, keySet) : IK).forEach(k=>{
-      if(ITEMS[k] && k!=='チャーター' && !keySet.includes(k)) keySet.push(k);
-    });
+    /* ★ 2026-10-23.38: 列を絞る。
+       以前は顧客が使いうる品目をすべて出していたため、
+       一般後納しか使わない顧客にもゆうパックの6サイズが並んでいた。
+       　・その月に数量がある品目は必ず出す
+       　・顧客に単価が入っている品目を出す（単価が無いものは出さない）
+       　・ゆうパック／ゆうパケットは、単価が同じでデータが1サイズ以下ならまとめて1列
+       まとめた列は実際には1つの品目キーなので、入力も保存もそのまま通る。 */
+    const _rateOf=k=>{
+      if(String(k).startsWith('__custom__')){
+        const o=((cu&&cu.otherItems)||[]).find(x=>x && x.name===String(k).slice(10));
+        return o?(Number(o.amt)||0):0;
+      }
+      return (typeof getCustPrice==='function') ? (Number(getCustPrice(cu,k,ym))||0) : 0;
+    };
+    const _hasData=k=>{
+      if(keySet.includes(k)){
+        let n=0;
+        Object.values(rep).forEach(m=>{ n+=Number((m||{})[k])||0; });
+        Object.values(days).forEach(a=>{ n+=Number(_puCmpArrToMap(a)[k])||0; });
+        Object.values(fixAll).forEach(a=>{ n+=Number(_puCmpArrToMap(a)[k])||0; });
+        return n>0;
+      }
+      return false;
+    };
+    /* 候補：数量があるもの ＋ 単価が入っているもの */
+    const cand=[];
+    IK.forEach(k=>{ if(!ITEMS[k] || k==='チャーター') return;
+      if(_hasData(k) || _rateOf(k)>0) cand.push(k); });
     ((cu&&cu.otherItems)||[]).forEach(o=>{
       if(!o || !String(o.name||'').trim()) return;
       if(['月額','日額'].includes(o.unit||'月額')) return;
-      const k='__custom__'+o.name; if(!keySet.includes(k)) keySet.push(k);
+      const k='__custom__'+o.name; if(!cand.includes(k)) cand.push(k);
     });
-    const keys=IK.filter(k=>keySet.includes(k)).concat(keySet.filter(k=>!ITEMS[k]));
+    keySet.forEach(k=>{ if(!cand.includes(k)) cand.push(k); });
+
+    /* サイズをまとめる */
+    const colLabel={};
+    const keys=[];
+    const doneGrp={};
+    cand.forEach(k=>{
+      const g=(ITEMS[k] && ITEMS[k].group) || '';
+      if(!_puCmpExpand && (g==='ゆうパック' || g==='ゆうパケット')){
+        if(doneGrp[g]) return;
+        const mem=cand.filter(x=>((ITEMS[x]&&ITEMS[x].group)||'')===g);
+        const rates=[...new Set(mem.map(_rateOf).filter(v=>v>0))];
+        const withData=mem.filter(_hasData);
+        if(rates.length<=1 && withData.length<=1){
+          doneGrp[g]=true;
+          const pick=withData[0]||mem[0];
+          keys.push(pick);
+          colLabel[pick]=g+(mem.length>1?`<div class="xs muted" style="font-weight:400;">${mem.length}サイズまとめ</div>`:'');
+          return;
+        }
+      }
+      keys.push(k);
+    });
+    const _lbl=k=>colLabel[k]!=null ? colLabel[k]
+      : esc(String(k).startsWith('__custom__') ? String(k).slice(10)
+            : (ITEMS[k] ? (ITEMS[k].shortLabel||ITEMS[k].label||k) : k));
 
     /* その月の全日を出す */
     const [gy,gm]=ym.split('-').map(Number);
@@ -14481,8 +14532,6 @@ function renderPuCmp(){
     _puCmpDetail={custId:id, ym, keys, dates, rep, skip:new Set()};
 
     const wd=['日','月','火','水','木','金','土'];
-    const label=k=>String(k).startsWith('__custom__') ? String(k).slice(10)
-                 : (ITEMS[k] ? (ITEMS[k].shortLabel||ITEMS[k].label||k) : k);
 
     /* 担当の候補：委託会社と従業員 */
     const cos=(D.companies||[]).filter(c=>c && c.name && c.active!==false)
@@ -14570,6 +14619,10 @@ function renderPuCmp(){
       <div class="fla gap6 mb8" style="flex-wrap:wrap;">
         <span class="xs muted">新しく作る日報の担当</span>${ownerSel}
         <button class="btn b-grn btn-sm" onclick="_puCmpSaveReps('${id}')">日報を保存</button>
+        <label class="xs" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" ${_puCmpExpand?'checked':''} style="width:13px;height:13px;"
+                 onchange="_puCmpExpand=this.checked;renderPuCmp();">
+          <span>サイズを分けて出す</span></label>
         <span class="xs muted">相手と訂正は打つとすぐ保存されます。日報だけこのボタンで保存します。</span>
       </div>
       <div class="xs muted mb8" style="line-height:1.7;">
@@ -14582,7 +14635,7 @@ function renderPuCmp(){
       <div class="tw"><table><thead><tr>
         <th style="white-space:nowrap;">日付</th>
         <th class="tr">日報計</th>
-        ${keys.map(k=>`<th class="${ITEMS[k]?(ITEMS[k].cls||''):''}" style="text-align:right;white-space:nowrap;">${esc(label(k))}</th>`).join('')}
+        ${keys.map(k=>`<th class="${ITEMS[k]?(ITEMS[k].cls||''):''}" style="text-align:right;white-space:nowrap;">${_lbl(k)}</th>`).join('')}
         <th class="tr">差異</th>
       </tr></thead><tbody>${body}</tbody></table></div>`;
     return;
