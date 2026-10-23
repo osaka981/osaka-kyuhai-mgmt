@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.34</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.35</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2457,12 +2457,13 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="card">
         <div class="ch"><div class="ct"><div class="cbar"></div>運坊 顧客請求（集荷事業）取込</div></div>
         <div class="al al-w mb8"><span>⚠️</span><span>
-          読み込むとまず<b>顧客ごとの検算表</b>が出ます。確かめて「集荷日報に入れる」を押すまで、書き込みはしません。<br>
-          <b>同じ日・同じ顧客の集荷日報が既にある分は入れません。</b>一覧へ出します。
+          読み込むとまず<b>顧客ごとの検算表</b>が出ます。確かめてボタンを押すまで、書き込みはしません。
         </span></div>
         <div class="al al-ok mb8"><span>📌</span><span>
-          ここで入れるのは<b>記録だけ</b>です。運坊で請求済みの分なので、
-          <b>経営管理の請求書には出ません</b>。日報一覧では「運坊」と出て、編集もできません。
+          入れ先は<b>照合の「相手」</b>です。<b>日報（社内の実績）には入れません。</b><br>
+          運坊は請求の正なので、突き合わせる相手になります。
+          <b>差異がそのまま社内の入力漏れの量</b>として出ます。<br>
+          <span class="xs">手で打った値は上書きしません。違っていれば一覧に出すので、どちらが正しいかはご自身で判断してください。</span>
         </span></div>
         <div class="xs muted mb8" style="line-height:1.7;">
           顧客は<b>取引先ID</b>が基本で、見つからないときだけ顧客名で探します。<br>
@@ -6033,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.34';
+const APP_VER = '2026-10-23.35';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -42852,15 +42853,11 @@ function importUnbouBillCSV(list){
     });
   });
 
-  /* 既にある集荷日報（日付＋顧客）。重複して入れないため */
-  const colLogs=lsGet(LS_KEYS.COL,[])||[];
-  const have=new Set();
-  colLogs.forEach(l=>{
-    const d=_normDate(l && l.date);
-    ((l&&l.rows)||[]).forEach(row=>{
-      if(row && row.customerId) have.add(d+'|'+String(row.customerId));
-    });
-  });
+  /* ★ 2026-10-23.35: 入れ先が「相手」になったので、日報がある日も必ず入れる。
+     以前は日報(col_logs)へ入れていたため「同じ日・同じ顧客の日報があれば飛ばす」
+     という判定をしていた。そのままだと、計数アプリの日報があるジェットの
+     9/3〜9/23 が除かれてしまう。比べたいのはまさにその日なので外す。
+     相手側の既存値との兼ね合いは、入れるときに手入力かどうかで分けている。 */
 
   const group={};          // 日付|顧客ID -> プラン
   const needKey=new Set(); // 顧客ID|カスタム品目名
@@ -42942,7 +42939,7 @@ function importUnbouBillCSV(list){
       nRow++;
       const gk=date+'|'+cu.id;
       const g=group[gk]=group[gk]||{date, cu, cuId:cu.id, cuName:cu.name,
-                                    region:cu.region||'', items:{}, amt:0, prices:{}, dup:have.has(gk)};
+                                    region:cu.region||'', items:{}, amt:0, prices:{}};
       g.items[mk]=(g.items[mk]||0)+qty;
       g.amt += amt;
       if(prc!=null && g.prices[mk]==null) g.prices[mk]=prc;
@@ -42952,11 +42949,6 @@ function importUnbouBillCSV(list){
   _ubbPlan=Object.values(group).sort((a,b)=>
     a.date===b.date ? String(a.cuName).localeCompare(String(b.cuName),'ja') : a.date.localeCompare(b.date));
 
-  /* 重複している日報は入れない */
-  _ubbPlan.filter(p=>p.dup).forEach(p=>{
-    _ubbProb.push({cls:'ng', where:p.date, msg:'同じ日・同じ顧客の集荷日報が既にあります', raw:p.cuName});
-  });
-  _ubbPlan=_ubbPlan.filter(p=>!p.dup);
 
   _ubbRender(nRow, nSkip);
 }
@@ -43084,12 +43076,12 @@ function _ubbRender(nRow, nSkip){
   el.innerHTML=`
     <div class="al al-ok"><span>✅</span><span>
       <b>${nRow.toLocaleString()}行</b>を読みました。
-      ${_ubbPlan.length.toLocaleString()}件の集荷日報として入ります（${names.length}社）。
+      ${_ubbPlan.length.toLocaleString()}日分の相手の数量として入ります（${names.length}社）。
       ${nSkip?`<span class="xs muted">数量0の${nSkip}行は入れません。</span>`:''}
     </span></div>
     <div class="al al-w mt8"><span>📌</span><span>
-      入れたデータは<b>記録だけ</b>です。運坊で請求済みなので、
-      <b>経営管理の請求書には出ません</b>。日報の一覧では「運坊」と出て、編集もできません。
+      入れ先は<b>照合の「相手」</b>です。日報には入れません。
+      集荷照合の画面で、社内の日報と並べて差が出ます。
     </span></div>
     <div class="xs muted mt8">運坊の金額と、顧客台帳の単価で計算し直した額を並べています。単価のずれはここで分かります。</div>
     <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
@@ -43118,15 +43110,25 @@ function _ubbRender(nRow, nSkip){
     ${aliasBox}
     <div class="mt12" style="display:flex;gap:8px;flex-wrap:wrap;">
       ${_ubbNeed.length?`<button class="btn b-gh" onclick="applyUnbouBillImport(true)">カスタム品目も登録して入れる</button>`:''}
-      <button class="btn b-grn" onclick="applyUnbouBillImport(false)">集荷日報に入れる（${_ubbPlan.length}件）</button>
+      <button class="btn b-grn" onclick="applyUnbouBillImport(false)">相手の数量に入れる（${_ubbPlan.length}日分）</button>
     </div>`;
 }
 
 async function applyUnbouBillImport(withItems){
   if(!_ubbPlan.length){ alert('入れるものがありません'); return; }
   const n=_ubbPlan.length;
-  if(!confirm(`集荷日報に ${n} 件を記録として入れます。\n` +
-              `運坊で請求済みの分なので、経営管理の請求書には出ません。\n\n進めますか？`)) return;
+
+  /* ★ 2026-10-23.35: 入れ先を「日報」から「相手」へ変えた。
+     運坊は請求の正であって社内の実績ではない。日報（col_logs）へ入れると
+     計数アプリの便と足し算になり、照合そのものが成り立たなくなる。
+     相手側（col_cmp の日別）に入れて、差異＝社内の入力漏れとして見せる。
+     ・対象は 'all'（全体）に固定する。運坊の数は委託会社ごとに分かれていない。
+     ・手で打った値は上書きしない。違っていれば一覧に出して本人に任せる。
+     ・運坊から入った値には s:'unbou' を付ける。手で打ち直すと消えるので、
+       どこまで手入力に移ったかがそのまま分かる。 */
+  const ym = String(_ubbPlan[0].date||'').slice(0,7);
+  if(!confirm(`${ym} の相手の数量として ${n} 日分を入れます。\n`
+            + `日報（社内の実績）には入れません。差異が入力漏れの量として出ます。\n\n進めますか？`)) return;
 
   /* カスタム品目を顧客台帳に足す（単価と単位つき） */
   let addedItems=0;
@@ -43136,10 +43138,7 @@ async function applyUnbouBillImport(withItems){
       if(!cu) return;
       cu.otherItems=cu.otherItems||[];
       if(cu.otherItems.some(o=>o && o.name===x.name)) return;
-      /* ★ 2026-10-22.27: 税区分は顧客の既定にそろえる。
-         顧客は全社 tax_excluded（税別）で登録されており、既存のカスタム品目も
-         すべて _tax='ex' になっている。ここを税込で決め打ちすると、
-         10月以降この品目で請求したときに消費税が乗らない。 */
+      /* 税区分は顧客の既定にそろえる（顧客は全社 税別） */
       cu.otherItems.push({name:x.name, amt:Number(x.amt)||0, unit:x.unit||'個',
                           _tax:(cu.priceType==='tax_included')?'in':'ex'});
       addedItems++;
@@ -43150,68 +43149,55 @@ async function applyUnbouBillImport(withItems){
     }
   }
 
-  /* ★ 2026-10-22.29: 書き込み前の安全弁。
-     fbSet は col_logs のノードを丸ごと置き換える。手元の控えが同期前で
-     空・少ないまま書くと、クラウドの集荷日報を消してしまう。
-     fbSet 自身が止めてくれるのは端末の容量不足のときだけなので、
-     yp_logs の _safeSetYpLogs と同じ考え方でここでも見る。 */
-  const _colRaw = lsGet(LS_KEYS.COL, null);
-  if(!Array.isArray(_colRaw)){
-    alert('集荷日報のデータがまだ読み込まれていないため、取込を中止しました。\n'
-        + '画面を再読み込みして、集荷の日報一覧に件数が出るのを確かめてから、もう一度お試しください。');
-    return;
-  }
-  if(_colRaw.length===0 && (D.pickup||[]).some(r=>!r._fromJet)){
-    alert('手元の集荷日報が0件なのに、画面には日報が出ています。\n'
-        + '同期前の可能性があるため、取込を中止しました。\n'
-        + '画面を再読み込みしてから、もう一度お試しください。');
-    return;
-  }
-  const colLogs=_colRaw.slice();
-  const before=colLogs.length;
-  const base=Date.now()*1000;
-  _ubbPlan.forEach((p,i)=>{
-    const cu=(D.customers||[]).find(c=>String(c.id)===String(p.cuId))||p.cu;
-    const rows=Object.entries(p.items).map(([mk,qty])=>({
-      customerId:p.cuId, customerName:p.cuName, region:p.region||'',
-      masterKey:mk, qty, unit:_ubbUnitOf(mk, cu),
-    }));
-    colLogs.push({
-      id: base+i,
-      type:'collection',
-      driver:{ id:'', name:'運坊', office:'堺営業所' },
-      date:p.date,
-      rows,
-      note:'運坊の顧客請求から取込（運坊で請求済み）',
-      submittedAt:new Date().toISOString(),
-      /* ★ この印が請求からの除外と編集禁止の根拠。消さないこと。 */
-      _fromUnbou:true,
-      _ubbYm:String(p.date).slice(0,7),
-    });
-  });
+  _puCmpLoad();
+  const m = D.colCmp[ym] = D.colCmp[ym] || {};
+  let nSet=0, nSame=0;
+  const kept=[];                       /* 手入力があって上書きしなかった分 */
 
-  /* 足した分だけ増えているか、書く直前にもう一度ふるいにかける */
-  if(colLogs.length !== before + n){
-    alert(`件数が合わないため取込を中止しました。\n取込前 ${before} 件 ＋ ${n} 件 = ${before+n} 件 のはずが ${colLogs.length} 件です。`);
-    return;
-  }
-  lsSet(LS_KEYS.COL, colLogs);
-  let ok=true;
-  try{ if(typeof fbSet==='function') ok = (await fbSet('col_logs', colLogs)) !== false; }
-  catch(e){ ok=false; console.error('[運坊請求取込] col_logs 保存', e); }
+  _ubbPlan.forEach(p=>{
+    const key = 'all_' + String(p.cuId);
+    const c = m[key] = m[key] || { ok:false, okAt:'', note:'', items:[], days:{} };
+    if(!c.days || typeof c.days!=='object') c.days = {};
+    const cur = Array.isArray(c.days[p.date]) ? c.days[p.date].slice()
+              : (c.days[p.date] && typeof c.days[p.date]==='object' ? Object.values(c.days[p.date]) : []);
+    Object.entries(p.items).forEach(([k,q])=>{
+      const i = cur.findIndex(x=>x && x.k===k);
+      if(i<0){ cur.push({k, v:q, s:'unbou'}); nSet++; return; }
+      const was = cur[i];
+      if(was.s==='unbou'){                       /* 前回の取込ぶん → 入れ直す */
+        if(Number(was.v)===Number(q)) nSame++; else nSet++;
+        cur[i] = {k, v:q, s:'unbou'};
+        return;
+      }
+      /* 手で打った値。違うときだけ知らせて、こちらは触らない */
+      if(Number(was.v)!==Number(q)){
+        kept.push({date:p.date, cuName:p.cuName, k, hand:Number(was.v)||0, csv:q});
+      } else nSame++;
+    });
+    if(cur.length) c.days[p.date] = cur; else delete c.days[p.date];
+  });
+  _puCmpSave();
 
   const el=$('res-ub');
-  if(el) el.innerHTML=`<div class="al ${ok?'al-ok':'al-w'}"><span>${ok?'✅':'⚠️'}</span><span>
-    集荷日報に<b>${n}件</b>を入れました（${before}件 → ${colLogs.length}件）。
+  if(el) el.innerHTML=`<div class="al al-ok"><span>✅</span><span>
+    ${esc(ym)} の<b>相手の数量</b>として<b>${n}日分</b>を入れました（${nSet.toLocaleString()}件を登録${nSame?`・${nSame.toLocaleString()}件は同じ値`:''}）。
     ${addedItems?`カスタム品目を<b>${addedItems}件</b>顧客台帳に登録しました。`:''}
-    ${ok?'':'<br><b>クラウドへの保存に失敗しました。</b>この端末には入っています。'}
-    <br><span class="xs muted">集荷 → 日報一覧 で確認できます。請求書には出ません。</span>
-  </span></div>`;
-  _ubbPlan=[]; _ubbNeed=[]; _ubbProb=[]; _ubbFiles=[];
-  /* col_logs から D.pickup を作り直す（_conv を通すので _fromUnbou もここで付く） */
-  try{ if(typeof applyFirebaseData==='function') applyFirebaseData(); }catch(e){ console.warn('[運坊請求取込] 再読込', e); }
-  renderPU&&renderPU(); renderDash&&renderDash(); renderSum&&renderSum(); renderPUInv&&renderPUInv();
-  renderCustTbl&&renderCustTbl();
+    <br><span class="xs muted">集荷 → 照合 → 集荷照合 で確認できます。日報には入れていないので、差異が社内の入力漏れの量になります。</span>
+  </span></div>` + (kept.length ? `
+    <div class="al al-w mt8"><span>⚠️</span><span>
+      手で打った値が<b>${kept.length}件</b>あり、運坊の数と違っていました。
+      <b>手で打った値はそのままにしています。</b>どちらが正しいか確かめてください。
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>日付</th><th>顧客</th><th>品目</th><th class="tr">手入力</th><th class="tr">運坊</th></tr></thead><tbody>
+      ${kept.slice(0,40).map(x=>`<tr><td class="mono">${esc(x.date)}</td><td>${esc(x.cuName)}</td>
+        <td class="xs">${esc(String(x.k).startsWith('__custom__')?String(x.k).slice(10):(ITEMS[x.k]?ITEMS[x.k].label:x.k))}</td>
+        <td class="tr mono">${x.hand.toLocaleString()}</td><td class="tr mono">${x.csv.toLocaleString()}</td></tr>`).join('')}
+    </tbody></table>
+    ${kept.length>40?`<div class="xs muted mt4">ほか ${kept.length-40} 件</div>`:''}` : '');
+
+  _ubbPlan=[]; _ubbNeed=[]; _ubbProb=[]; _ubbFiles=[]; _ubbMapped=[]; _ubbNameLink=[]; _ubbAlias={};
+  renderPuCmp&&renderPuCmp();
 }
 /* 顧客名の紐づけを顧客台帳の aliases に入れる */
 async function _ubbLinkNames(){
