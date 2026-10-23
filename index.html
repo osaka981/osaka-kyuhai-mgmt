@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.41</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.42</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6034,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.41';
+const APP_VER = '2026-10-23.42';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14155,7 +14155,7 @@ function _puCmpDayRecalc(){
   });
   root.querySelectorAll('.pcd-rsum').forEach(el=>{
     const d=el.dataset.d, r=rowR[d]||0, f=rowF[d]||0;
-    el.innerHTML = (r||'') + (f!==r?`<div style="color:var(--amb2);">確定 ${f}</div>`:'');
+    el.innerHTML = (r||'') + `<div style="height:13px;color:var(--amb2);">${f!==r?('確定 '+f):''}</div>`;
   });
   root.querySelectorAll('.pcd-rdf').forEach(el=>{
     const d=el.dataset.d, v=(rowO[d]||0)-(rowF[d]||0);
@@ -14623,8 +14623,8 @@ function renderPuCmp(){
             data-d="${d}" data-k="${q(k)}"
             onchange="_puCmpSetDayVal('${id}','${d}','${q(k)}',this.value);_puCmpDayRecalc();"
             title="照合数（突き合わせる照合数）${osrc?'　出どころ：'+osrc:''}">`)}
-          ${osrc?`<div style="display:flex;justify-content:flex-end;margin:-1px 0 2px;">
-            <span style="font-size:8px;color:var(--txt3);width:72px;text-align:right;">${osrc}</span></div>`:''}
+          <div style="display:flex;justify-content:flex-end;margin:-1px 0 2px;height:11px;">
+            <span style="font-size:8px;line-height:11px;color:var(--txt3);width:72px;text-align:right;">${osrc}</span></div>
           ${_row('訂正','var(--amb2)', `<input type="number" min="0" class="fi pcd-fix" value="${fv!=null?fv:''}" placeholder="${rv||0}"
             style="${_ist}background:rgba(251,188,5,.09);"
             data-d="${d}" data-k="${q(k)}"
@@ -14644,17 +14644,18 @@ function renderPuCmp(){
         if(rec.byCompany && rec.companyId) ownVal='co:'+rec.companyId;
         else if(rec.staff && stByName[rec.staff]) ownVal='st:'+stByName[rec.staff].id;
       }
+      /* ★ 2026-10-23.42: 計数の日は「計数」を1度だけ出す。
+         担当の文字は薄くしない（入っているか分からなくなるため）。 */
       const ownCell = isJet
-        ? `<div class="xs muted" style="font-weight:400;">${esc((rec&&rec.staff)||'計数')}</div>`
-        : `<select class="fi pcd-own" data-d="${d}" style="font-size:10px;padding:1px 3px;width:132px;margin-top:3px;${
-             ownVal?'':'color:var(--txt3);'}">${ownOpts(ownVal, rec?'（担当なし）':'上の担当を使う')}</select>`;
+        ? `<div class="xs muted" style="font-weight:400;margin-top:3px;">計数${(rec&&rec.staff)?'・'+esc(rec.staff):''}</div>`
+        : `<select class="fi pcd-own" data-d="${d}" style="font-size:10px;padding:2px 4px;width:136px;margin-top:3px;${
+             ownVal?'border-color:var(--blu);':''}">${ownOpts(ownVal, rec?'（担当なし）':'― 上の担当を使う')}</select>`;
       body+=`<tr style="${rowBg}">
         <td class="mono" style="white-space:nowrap;vertical-align:top;padding-top:6px;">
           ${d.slice(5)}<span style="color:${dowCol};"> ${wd[dow]}</span>
-          ${isJet?'<div class="xs muted" style="font-weight:400;">計数</div>':''}
           ${ownCell}</td>
         <td class="tr xs muted pcd-rsum" data-d="${d}" style="vertical-align:top;padding-top:6px;">
-          ${rRep||''}${rFix!==rRep?`<div style="color:var(--amb2);">確定 ${rFix}</div>`:''}</td>
+          ${rRep||''}<div style="height:13px;color:var(--amb2);">${rFix!==rRep?('確定 '+rFix):''}</div></td>
         ${tds}
         <td class="tr pcd-rdf" data-d="${d}" style="vertical-align:top;padding-top:6px;color:${rd===0?'var(--txt3)':(rd<0?'var(--red2)':'var(--grn2)')};font-weight:${rd===0?'400':'700'};">${(rd>0?'+':'')+rd}</td>
       </tr>`;
