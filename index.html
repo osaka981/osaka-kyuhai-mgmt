@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-23.42</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-26.44</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6034,7 +6034,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-23.42';
+const APP_VER = '2026-10-26.44';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -14658,6 +14658,7 @@ function renderPuCmp(){
           ${rRep||''}<div style="height:13px;color:var(--amb2);">${rFix!==rRep?('確定 '+rFix):''}</div></td>
         ${tds}
         <td class="tr pcd-rdf" data-d="${d}" style="vertical-align:top;padding-top:6px;color:${rd===0?'var(--txt3)':(rd<0?'var(--red2)':'var(--grn2)')};font-weight:${rd===0?'400':'700'};">${(rd>0?'+':'')+rd}</td>
+        <td></td>
       </tr>`;
     });
 
@@ -14701,6 +14702,9 @@ function renderPuCmp(){
             <span style="color:var(--txt2);">日報</span>／<span style="color:var(--blu2);">照合</span>／<span style="color:var(--amb2);">訂正</span>
           </div></th>`).join('')}
         <th class="tr">差異</th>
+        <!-- ★ 2026-10-23.43: 列が少ないと表が横いっぱいに広がって右に寄るため、
+             余った幅をここで吸わせて中身を左に寄せる。 -->
+        <th style="width:99%;"></th>
       </tr></thead><tbody>${body}</tbody></table></div>`;
     return;
   }
@@ -44443,6 +44447,7 @@ const POSTCSV_OFF  = ['営業所','郵便局','郵便局名','局'];
 const POSTCSV_EMP  = ['社員番号','局社員番号','郵便局社員番号'];
 
 let _pcPlan = [];   /* 入れる行 */
+let _pcNew  = [];   /* ★ 2026-10-26.44: 台帳に無かった氏名（紐づけ・登録の候補） */
 let _pcProb = [];   /* 入れられない行 */
 
 function _pcDate(v){
@@ -44479,9 +44484,101 @@ function _impNum(v, opt){
 }
 function _pcNum(v){ return _impNum(v, {int:true}); }
 
+/* ───────── 調書の氏名を台帳へ紐づける／登録する　★ 2026-10-26.44 ─────────
+   郵便局が作る調書は、こちらの台帳と表記が違うことがある
+   （杉尾 勝巳／勝己、玉置 嵩浩／崇浩、姓だけ など）。
+   照合では別表記（aliases）も見ているので、ここで紐づければ次から通る。
+   まだ台帳に居ない人は、いつもの登録画面を氏名入りで開く。 */
+function _pcNewHtml(){
+  const miss=_pcNew||[];
+  if(!miss.length) return '';
+  const left=miss.filter(m=>!m.done).length;
+  const sts=(D.staff||[]).filter(x=>x && x.name && x.status!=='退職')
+    .sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja'));
+  const rows=miss.map((m,i)=>{
+    if(m.done) return `<tr style="opacity:.55;">
+      <td class="fw7">${esc(m.name)}</td><td class="xs muted">${esc(m.off||'')}</td>
+      <td class="tr mono">${m.n}行</td>
+      <td colspan="2" class="xs" style="color:var(--grn2);">✔ ${esc(m.doneMsg||'済み')}</td></tr>`;
+    /* 同じ姓の人を上に出す */
+    const sei=String(m.sei||'');
+    const near=sts.filter(x=>String(x.name||'').replace(/[\s　]/g,'').startsWith(sei));
+    const rest=sts.filter(x=>!near.includes(x));
+    const opt=a=>a.map(x=>`<option value="${x.id}">${esc(x.name)}${x.office?'（'+esc(x.office)+'）':''}</option>`).join('');
+    return `<tr>
+      <td class="fw7">${esc(m.name)}</td>
+      <td class="xs muted">${esc(m.off||'')}</td>
+      <td class="tr mono">${m.n}行</td>
+      <td><select id="pcn-sel-${i}" class="fi" style="font-size:10.5px;padding:2px 5px;max-width:200px;">
+        <option value="">（台帳から選ぶ）</option>
+        ${near.length?`<optgroup label="同じ姓">${opt(near)}</optgroup>`:''}
+        <optgroup label="すべて">${opt(rest)}</optgroup>
+      </select></td>
+      <td style="white-space:nowrap;">
+        <button class="btn b-blu btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_pcLink(${i})">紐づける</button>
+        <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;margin-left:3px;" onclick="_pcRegister(${i})">新しく登録</button>
+      </td></tr>`;
+  }).join('');
+  return `
+    <div class="al ${left?'al-w':'al-ok'} mt8"><span>${left?'⚠️':'✅'}</span><span>
+      ${left?`台帳に無い氏名が<b>${left}名</b>あります。この分は取り込めません。`
+            :`台帳に無かった氏名は<b>すべて片づきました</b>。`}<br>
+      <span class="xs">同じ人が台帳に別の表記で居るなら<b>「紐づける」</b>（次からこの表記でも通ります）。
+      まだ居ない人は<b>「新しく登録」</b>。どちらも済んだらCSVをもう一度ドロップしてください。</span>
+    </span></div>
+    <table style="font-size:10.5px;margin-top:6px;"><thead><tr>
+      <th>調書の氏名</th><th>営業所</th><th class="tr">行数</th><th>台帳の誰か</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+function _pcRefreshNew(){
+  const w=document.getElementById('pc-new-wrap');
+  if(w) w.innerHTML=_pcNewHtml();
+}
+async function _pcLink(i){
+  const m=(_pcNew||[])[i]; if(!m) return;
+  const sel=document.getElementById('pcn-sel-'+i);
+  const id=sel?sel.value:'';
+  if(!id){ alert('台帳の誰かを選んでください。'); return; }
+  const st=(D.staff||[]).find(x=>String(x.id)===String(id));
+  if(!st){ alert('台帳に見つかりませんでした。'); return; }
+  if(!confirm(`調書の「${m.name}」を、台帳の「${st.name}」の別表記として覚えます。\n\n`
+            + `次からは調書に「${m.name}」と書かれていても${st.name}さんとして取り込みます。\n\n進めますか？`)) return;
+  if(!Array.isArray(st.aliases)) st.aliases=[];
+  if(!st.aliases.some(a=>_ubNorm(a)===_ubNorm(m.name))) st.aliases.push(m.name);
+  lsSet(LS_KEYS.STAFF, D.staff);
+  let ok=true;
+  try{ if(typeof fbSet==='function') ok=(await fbSet('staff_full', D.staff))!==false; }
+  catch(e){ ok=false; console.error('[調書取込] 別表記の保存', e); }
+  m.done=true; m.doneMsg=`${st.name} に紐づけ`;
+  _pcRefreshNew();
+  if(!ok) alert('この端末には覚えましたが、クラウドへの保存に失敗しました。通信を確かめてください。');
+}
+function _pcRegister(i){
+  const m=(_pcNew||[])[i]; if(!m) return;
+  if(typeof openNewStaff!=='function'){ alert('登録画面を開けませんでした。'); return; }
+  openNewStaff();
+  setTimeout(()=>{
+    const sei=$('st-sei'), mei=$('st-mei');
+    if(sei) sei.value=m.sei||'';
+    if(mei) mei.value=m.mei||'';
+    try{ if(typeof syncStName==='function') syncStName(); }catch(e){}
+    try{ if(typeof _checkStaffDuplicate==='function') _checkStaffDuplicate(); }catch(e){}
+    /* 調書の営業所をメイン郵便局に入れておく */
+    if(m.off){
+      const o=$('st-office'); 
+      if(o && o.tagName==='SELECT'){
+        const hit=[...o.options].find(x=>String(x.value).indexOf(m.off)>=0 || String(x.textContent).indexOf(m.off)>=0);
+        if(hit){ o.value=hit.value; try{ o.dispatchEvent(new Event('change')); }catch(e){} }
+      } else if(o){ o.value=m.off; }
+    }
+    m.done=true; m.doneMsg='登録画面を開きました';
+    _pcRefreshNew();
+  }, 160);
+}
+window._pcLink=_pcLink; window._pcRegister=_pcRegister; window._pcRefreshNew=_pcRefreshNew;
 function importPostCSV(txt, fn){
   const el=$('res-p'); if(!el) return;
-  _pcPlan=[]; _pcProb=[];
+  _pcPlan=[]; _pcProb=[]; _pcNew=[];
   const {headers, rows}=parseCSV(txt);
   const hDate=_rcPick(headers, POSTCSV_DATE);
   const hName=_rcPick(headers, POSTCSV_NAME);
@@ -44523,7 +44620,23 @@ function importPostCSV(txt, fn){
     if(!date){ prob('日付が読めません'); return; }
     if(!nmRaw){ prob('氏名が空です'); return; }
     const st=byName[_ubNorm(nmRaw)];
-    if(!st){ prob('台帳に見つかりません（'+nmRaw+'）', 'ng'); return; }
+    if(!st){
+      /* ★ 2026-10-26.44: 台帳に無い氏名は、その場で紐づけ・登録できるように集めておく。
+         調書は郵便局が作るので、こちらの台帳と表記が違うことがある
+         （杉尾 勝巳／勝己、玉置 嵩浩／崇浩 など）。
+         別表記（aliases）は照合時に見ているので、紐づければ次から通る。 */
+      const key=_ubNorm(nmRaw);
+      let e=_pcNew.find(x=>x.key===key);
+      if(!e){
+        const parts=String(nmRaw).trim().split(/[\s　]+/);
+        e={key, name:nmRaw, sei:parts[0]||nmRaw, mei:parts.slice(1).join('') ,
+           off:String(r[hOff]||'').trim(), n:0, done:false};
+        _pcNew.push(e);
+      }
+      e.n++;
+      if(!e.off) e.off=String(r[hOff]||'').trim();
+      prob('台帳に見つかりません（'+nmRaw+'）', 'ng'); return;
+    }
 
     const vals={}; let any=false;
     POSTCSV_COLS.forEach(c=>{
@@ -44576,6 +44689,9 @@ function _pcRender(fn, total, used){
   if(noDel) h+=`<div class="al al-w mt8"><span>⚠️</span><span>
     ${noDel}行は<b>その日の日報がありません</b>。調書としては入りますが、照合の相手がいないので差異は出ません。
     日報を先に入れると照合されます。</span></div>`;
+
+  /* ★ 2026-10-26.44: 台帳に無い氏名は、その場で紐づけ・登録できるようにする */
+  h+=`<div id="pc-new-wrap">${_pcNewHtml()}</div>`;
 
   if(_pcProb.length){
     const g={};
