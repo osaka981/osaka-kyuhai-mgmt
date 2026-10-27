@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.46</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.47</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6035,7 +6035,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-27.46';
+const APP_VER = '2026-10-27.47';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11205,8 +11205,8 @@ function renderCmp(){
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
-    const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0,ns:0,ps:0};
-    let hasPostAny=false, orphInDay=false, hasShuAny=false;
+    const sum={nk:0,pk:0,ny:0,py:0,no:0,po:0,ns:0,ps:0,pt:0,pi:0,nt:0,ni:0};
+    let hasPostAny=false, orphInDay=false, hasShuAny=false, hasShiAny=false;
 
     g.rows.forEach(function(r,ri){
       const d=_cmpDiffs(r);
@@ -11221,6 +11221,9 @@ function renderCmp(){
         sum.pk+=(d.post.kanryo||0); sum.py+=(d.post.yakan||0); sum.po+=(d.post.ogata||0);
       }
       if(d.hasShu){ hasShuAny=true; sum.ps+=(d.pShukka||0); }
+      /* ★ 2026-10-27.47: 日計でも内訳をたせるように集める */
+      if(d.hasShi){ hasShiAny=true; sum.pt+=(d.pTeiji||0); sum.pi+=(d.pShitei||0);
+        if(!orph){ sum.nt+=(d.nTeiji||0); sum.ni+=(d.nShitei||0); } }
       if(orph) orphInDay=true;
       html.push('<tr class="'+cls+'">');
       // 日付は先頭行だけ表示。日が変わったことが分かるよう少し大きく、曜日を色分けする。
@@ -11246,9 +11249,31 @@ function renderCmp(){
       html.push(orph?'<td class="tr">'+dash+'</td>':diffCell(d.dOgata));
       /* ★ 2026-10-21.16: 集荷。調書に集荷の列が無い月は「—」にして差異を出さない。
          日報なしの行でも、調書に集荷があればその数は出す。 */
-      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">'+(d.hasShu?fmt(d.pShukka):'&#8212;')+'</td>');
-      html.push('<td class="tr" style="color:var(--grn2);">'+(orph?dash:fmt(d.nShukka))+'</td>');
-      html.push((orph||!d.hasShu)?'<td class="tr">'+dash+'</td>':diffCell(d.dShukka));
+      /* ★ 2026-10-27.47: 内訳のある局は、合計の下に「定 ○／指 ○」を小さく添える。
+         列は増やさないので表の幅は変わらない。内訳の無い局はこれまでどおり合計だけ。 */
+      const _sub=function(t,s){
+        if(!d.hasShi || t==null || s==null) return '';
+        return '<div class="xs" style="line-height:1.35;font-weight:400;color:var(--txt2);">'
+          +'定 '+fmt(t)+'<br><span style="color:var(--amb2);">指 '+fmt(s)+'</span></div>';
+      };
+      const _subD=function(t,s){
+        if(!d.hasShi || t==null || s==null) return '';
+        const _c=function(v){ return v===0?'var(--txt3)':(v<0?'var(--red2)':'var(--grn2)'); };
+        return '<div class="xs" style="line-height:1.35;font-weight:400;">'
+          +'<span style="color:'+_c(t)+';">定 '+(t>0?'+':'')+fmt(t)+'</span><br>'
+          +'<span style="color:'+_c(s)+';">指 '+(s>0?'+':'')+fmt(s)+'</span></div>';
+      };
+      html.push('<td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);vertical-align:top;">'
+        +(d.hasShu?fmt(d.pShukka):'&#8212;')+_sub(d.pTeiji,d.pShitei)+'</td>');
+      html.push('<td class="tr" style="color:var(--grn2);vertical-align:top;">'
+        +(orph?dash:fmt(d.nShukka))+(orph?'':_sub(d.nTeiji,d.nShitei))+'</td>');
+      if(orph||!d.hasShu){
+        html.push('<td class="tr">'+dash+'</td>');
+      }else{
+        const _dc = d.dShukka<0?'var(--red2)':'var(--grn2)';
+        html.push('<td class="tr" style="vertical-align:top;"><span style="color:'+_dc+';font-weight:700;">'
+          +(d.dShukka>0?'+':'')+fmt(d.dShukka)+'</span>'+_subD(d.dTeiji,d.dShitei)+'</td>');
+      }
       /* ★ 2026-10-09.31: 横乗り・駐車立替・給油・走行距離をここにも出す。
          紙の日報を見ながら数合わせするとき、この画面を離れずに直せるよう
          タグを押すとその日報の入力モーダルが開く。 */
@@ -11300,9 +11325,27 @@ function renderCmp(){
     html.push(diffCell(doo));
     /* ★ 2026-10-21.16: 日計の集荷。調書に集荷が無い日は差異を出さない。 */
     const ds=hasShuAny?sum.ps-sum.ns:null;
-    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--grn2);">'+(hasShuAny?fmt(sum.ps):'&#8212;')+'</td>');
-    html.push('<td class="tr fw7" style="color:var(--grn2);">'+fmt(sum.ns)+'</td>');
-    html.push(hasShuAny?diffCell(ds):'<td class="tr"><span style="color:var(--txt3);">&#8212;</span></td>');
+    /* ★ 2026-10-27.47: 日計にも定時／指定事業所の内訳を添える */
+    const _dsub=function(t,s){
+      if(!hasShiAny) return '';
+      return '<div class="xs" style="line-height:1.35;font-weight:400;color:var(--txt2);">'
+        +'定 '+fmt(t)+'<br><span style="color:var(--amb2);">指 '+fmt(s)+'</span></div>';
+    };
+    html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--grn2);vertical-align:top;">'
+      +(hasShuAny?fmt(sum.ps):'&#8212;')+_dsub(sum.pt,sum.pi)+'</td>');
+    html.push('<td class="tr fw7" style="color:var(--grn2);vertical-align:top;">'+fmt(sum.ns)+_dsub(sum.nt,sum.ni)+'</td>');
+    if(!hasShuAny){
+      html.push('<td class="tr"><span style="color:var(--txt3);">&#8212;</span></td>');
+    }else if(!hasShiAny){
+      html.push(diffCell(ds));
+    }else{
+      const _c=function(v){ return v===0?'var(--txt3)':(v<0?'var(--red2)':'var(--grn2)'); };
+      html.push('<td class="tr" style="vertical-align:top;"><span style="color:'+_c(ds)+';font-weight:700;">'
+        +(ds>0?'+':'')+fmt(ds)+'</span>'
+        +'<div class="xs" style="line-height:1.35;font-weight:400;">'
+        +'<span style="color:'+_c(sum.pt-sum.nt)+';">定 '+(sum.pt-sum.nt>0?'+':'')+fmt(sum.pt-sum.nt)+'</span><br>'
+        +'<span style="color:'+_c(sum.pi-sum.ni)+';">指 '+(sum.pi-sum.ni>0?'+':'')+fmt(sum.pi-sum.ni)+'</span></div></td>');
+    }
     // ★ 2026-10-09.31: その日の手当・立替の合計
     {
       let _y=0,_p=0,_d=0,_g=false;
@@ -51727,9 +51770,26 @@ function _cmpDiffs(r){
   const nShukka = n(r.shukka);
   const pShukka = hasShu ? n(r.postShukka) : null;
   const dShukka = hasShu ? pShukka - nShukka : null;
+  /* ★ 2026-10-27.47: 集荷を定時と指定事業所に分けて持つ。
+     ・調書側 … postShitei（内訳つきCSVで入った局だけ）。定時はその引き算
+     ・日報側 … _shukkaSplit が集荷先の登録（定時集荷先／指定事業所集荷先）で振り分ける
+     単価が違う（西成は定時125.7／指定事業所83.1）ので、合計が合っていても
+     内訳がずれていれば請求額は変わる。そこを見えるようにするための列。
+     postShitei が無い局（浜寺・藤井寺・大阪西）は hasShi が false になり、
+     これまでどおり合計だけを出す。 */
+  const hasShi  = hasShu && (r.postShitei!==undefined && r.postShitei!==null);
+  const pShitei = hasShi ? n(r.postShitei) : null;
+  const pTeiji  = hasShi ? Math.max(0, pShukka - pShitei) : null;
+  let nShitei=null, nTeiji=null;
+  if(hasShi && typeof _shukkaSplit==='function'){
+    try{ const sp=_shukkaSplit(r); nShitei=sp.shitei; nTeiji=sp.teiji; }catch(e){ }
+  }
+  const dShitei = (hasShi && nShitei!=null) ? pShitei - nShitei : null;
+  const dTeiji  = (hasShi && nTeiji !=null) ? pTeiji  - nTeiji  : null;
   return {
     nikki, post, hasPost, dKanryo, dYakan, dOgata,
     hasShu, nShukka, pShukka, dShukka,
+    hasShi, pShitei, pTeiji, nShitei, nTeiji, dShitei, dTeiji,
     any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
   };
 }
