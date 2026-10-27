@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.47</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.48</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6035,7 +6035,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-27.47';
+const APP_VER = '2026-10-27.48';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15799,6 +15799,19 @@ function applyFix(opt){
 
   const before={};
   FIX_COLS.forEach(c=>{ before[c.k]={n:r[c.n], p:r[c.p]}; });
+  /* ★ 2026-10-27.48: 集荷も履歴に残す。支払に効くので、
+     誰がいつ何個にしたかを後から追えるようにしておく。
+     キーをそのまま見出しに使うので「集荷 ECOボール」のような形にする。 */
+  const _shuSnap = function(x){
+    const o={};
+    o['集荷 合計'] = {n:x.shukka||0, p:(x.postShukka==null?'':x.postShukka)};
+    (Array.isArray(x.shukkaCompanies)?x.shukkaCompanies:[]).forEach(c=>{
+      if(!c || !c.name) return;
+      o['集荷 '+c.name] = {n:Math.max(0,parseInt(c.count)||0)};
+    });
+    return o;
+  };
+  const _shuBefore = _shuSnap(r);
 
   // ★ 2026-09-22.20: 郵便局（営業所）の選び直し
   // ★ 2026-10-08.4: 「差異を認めて確定」でも営業所の直しが効くように、
@@ -15853,6 +15866,23 @@ function applyFix(opt){
   if(!r.fixHistory) r.fixHistory=[];
   const after={};
   FIX_COLS.forEach(c=>{ after[c.k]={n:r[c.n], p:r[c.p]}; });
+  /* ★ 2026-10-27.48: 集荷の前後を足す。
+     履歴の描画は after のキーだけを回すので、消えた集荷先が残らない。
+     before にしか無いものは 0 として after にも置いておく。 */
+  /* 履歴を取るのは書き戻しより前なので、r はまだ古い。
+     直した内容は r.__shukkaFix に入っているので、あればそちらから作る。 */
+  const _shuAfter = (function(){
+    if(!Array.isArray(r.__shukkaFix)) return _shuSnap(r);
+    const list = r.__shukkaFix
+      .map(c=>({ name:String((c&&c.name)||'').trim(),
+                 count:Math.max(0, parseInt(c&&c.count)||0) }))
+      .filter(c=>c.name && c.count>0);
+    return _shuSnap({ shukka:list.reduce((a,c)=>a+c.count,0),
+                      postShukka:r.postShukka, shukkaCompanies:list });
+  })();
+  Object.assign(before, _shuBefore);
+  Object.assign(after,  _shuAfter);
+  Object.keys(_shuBefore).forEach(k=>{ if(after[k]===undefined) after[k]={n:0}; });
   r.fixHistory.push({at:new Date().toISOString(), by:_opName(), mode:opt.accept?'accept':'edit', before, after, reason});
 
   // この画面で確定した時点で人が内容を確認済み。差異が残っていても照合済とする。
@@ -15865,7 +15895,9 @@ function applyFix(opt){
 
   // ★ 2026/08/21: ここまでは全てメモリ上の変更。保存しないとリロードで消える。
   // ★ 2026-10-08.4: 営業所だけを直した場合も書き戻す（戻らないようにする）
-  if(!opt.accept || _offChanged) _cmpWriteBackYp(r);   // 日報側の数量・営業所を yp_logs に書き戻す
+  /* ★ 2026-10-27.48: 集荷だけを直して「差異を認めて確定」を押した場合も書き戻す。
+     これを足しておかないと、集荷の訂正が保存されずに消える。 */
+  if(!opt.accept || _offChanged || Array.isArray(r.__shukkaFix)) _cmpWriteBackYp(r);
   _cmpStateSave(r);                     // 照合状態を別テーブルに保存
 
   closeM('m-cmp-fix');
@@ -52209,6 +52241,35 @@ async function _cmpWriteBackYp(r){
       ypLogs[i].driver.office = r.office;
       ypLogs[i].postOffice    = r.office;
       ypLogs[i].officeFixedAt = new Date().toISOString();
+    }
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-10-27.48: 集荷（集荷先ごとの内訳）の書き戻し。
+
+       内訳は form.col.companies（[{name,count}]）、合計は form.col.total。
+       日報一覧は shukka を (d.shukka || 0) || col合計 の順で読むので、
+       内訳だけ直して d.shukka を古いままにすると合計が変わらない。
+       必ず両方そろえる。form.del と form 直下の二重持ちも数量と同じ。
+
+       触るのは r.__shukkaFix が入っているときだけ。
+       ここを Array.isArray(r.shukkaCompanies) で判定すると、
+       内訳が空のまま営業所だけ直した行で合計が0に書き換わってしまう
+       （高橋さんの165のように、内訳なしで合計だけ入っている日報が実在する）。
+       ══════════════════════════════════════════════════════════ */
+    if(Array.isArray(r.__shukkaFix)){
+      const list = r.__shukkaFix
+        .map(c=>({ name:String((c&&c.name)||'').trim(),
+                   count:Math.max(0, parseInt(c&&c.count)||0) }))
+        .filter(c=>c.name && c.count>0);
+      const stotal = list.reduce((a,c)=>a+c.count, 0);
+      const col = f.col || (f.col={});
+      col.companies = list;
+      col.total     = stotal;
+      tgt.shukka    = stotal;
+      if(f.del && f.del!==f) f.shukka = f.del.shukka;
+      /* 画面側の写しもそろえる。次の描画まで古い数が残らないように */
+      r.shukka = stotal;
+      r.shukkaCompanies = list;
+      delete r.__shukkaFix;
     }
     ypLogs[i].updatedAt=new Date().toISOString();
     return await _safeSetYpLogs(ypLogs, '照合修正の書き戻し');
