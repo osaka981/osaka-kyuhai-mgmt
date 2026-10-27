@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.45</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.46</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6035,7 +6035,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-27.45';
+const APP_VER = '2026-10-27.46';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -44766,7 +44766,10 @@ async function applyPostCSV(){
      取り込んだ行の範囲で月計だけを突き合わせて出す。
      一致／差異の件数には含めない（照合画面の見方とそろえるため）。 */
   let shP=0, shN=0, shHas=false;
+  /* ★ 2026-10-27.45: 指定事業所集荷ぶんも一緒に出す（入っているCSVのときだけ） */
+  let stP=0, stHas=false;
   _pcPlan.forEach(p=>{
+    if(p.vals.shitei!=null && p.vals.shitei>0){ stHas=true; stP+=p.vals.shitei; }
     if(p.vals.shukka==null) return;
     shHas=true; shP+=(p.vals.shukka||0);
     if(p.del) shN+=(p.del.shukka||0);
@@ -44777,9 +44780,11 @@ async function applyPostCSV(){
     <b>${n}行</b>を調書に入れました（新規 ${add} ／ 上書き ${upd}）。<br>
     照合の結果：<b style="color:var(--grn2);">一致 ${same}</b> ／
     <b style="color:var(--red2);">差異 ${diff}</b> ／ 日報なし ${noPair}<br>
-    ${shHas?`集荷(定時)の月計：調書 <b>${shP.toLocaleString()}</b> ／ 日報 <b>${shN.toLocaleString()}</b> ／
+    ${shHas?`集荷の月計：調書 <b>${shP.toLocaleString()}</b> ／ 日報 <b>${shN.toLocaleString()}</b> ／
       差 <b style="color:${shP-shN===0?'var(--grn2)':'var(--red2)'};">${shP-shN>0?'+':''}${(shP-shN).toLocaleString()}</b>
-      <span class="xs muted">（取り込んだ行の範囲。照合画面にはまだ集荷の列は出ません）</span><br>`:''}
+      <span class="xs muted">（取り込んだ行の範囲）</span><br>
+      ${stHas?`<span class="xs">調書の内訳：定時 <b>${Math.max(0,shP-stP).toLocaleString()}</b> ／
+        指定事業所 <b style="color:var(--amb2);">${stP.toLocaleString()}</b></span><br>`:''}`:''}
     <span class="xs muted">郵便局照合の画面で中身を確認できます。</span>
   </span></div>`;
   console.log('[郵便局取込] '+n+'行（新規'+add+'/上書き'+upd+'） 一致'+same+' 差異'+diff);
