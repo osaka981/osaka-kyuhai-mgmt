@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-26.44</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.45</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2331,7 +2331,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="ch"><div class="ct"><div class="cbar"></div>郵便局データ 取込</div></div>
           <div class="xs muted mb8" style="line-height:1.7;">
             郵便局の調書（月間表）を取り込みます。<b>日報の数字には触りません。</b>別に持って照合に使います。<br>
-            <b>列</b>　日付／氏名／配達完了／転送・還付／夜間／170超（持ち出し・営業所は任意）<br>
+            <b>列</b>　日付／氏名／配達完了／転送・還付／夜間／170超／集荷（持ち出し・営業所は任意）<br>
+            <span class="xs">集荷は<b>定時＋指定事業所の合計</b>です。内訳がある局は<b>指定事業所集荷</b>の列を足すと、そのうち何個かも持てます。</span><br>
             同じ日・同じ方の調書が既にあれば上書きします。
           </div>
           <div class="drop" id="dp-p" onclick="document.getElementById('fi-p').click()"
@@ -6034,7 +6035,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-26.44';
+const APP_VER = '2026-10-27.45';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -44436,10 +44437,17 @@ const POSTCSV_COLS = [
   {k:'yakan',  label:'夜間',       alias:['夜間','夜間（再掲）','夜間[再掲]','夜間再掲']},
   {k:'ogata',  label:'170超',      alias:['170超','大型','170超（再掲）','170超[再掲]','170超再掲']},
   {k:'mochi',  label:'持ち出し',   alias:['持ち出し','持出','持出し']},
-  /* ★ 2026-10-20.13: 集荷。調書は1日1人の合計しか来ない（定時／指定事業所の別が無い）。
-     請求の振り分けには使えないので、ここでは調書の数字として持つだけにする。
-     日報側の集荷は集荷先ごとに入っていて、その合計が r.shukka。月計で突き合わせる。 */
-  {k:'shukka', label:'集荷(定時)', alias:['集荷','集荷(定時)','集荷（定時）','定時集荷','集荷数']},
+  /* ★ 2026-10-20.13: 集荷。調書の1日1人の数で、日報側の集荷合計(r.shukka)と突き合わせる。
+     ★ 2026-10-27.45: 見出しを「集荷(定時)」から「集荷(合計)」に直した。
+       中身はもともと合計（定時＋指定事業所）で、比べる相手も日報の合計だったが、
+       見出しだけが定時と書かれていて紛らわしかった。計算は変えていない。 */
+  {k:'shukka', label:'集荷(合計)', alias:['集荷','集荷(合計)','集荷（合計）','引受','集荷数']},
+  /* ★ 2026-10-27.45: 指定事業所集荷。西成だけ契約にあり、単価が定時と違う（125.7／83.1）。
+     調書の本紙には内訳が無いが、末尾の「集荷個数」表に集荷先ごとの列がある
+     （西成はECOボール）。そこから起こした列を読めるようにした。
+     ここは調書（郵便局の申告）側で、請求は日報の集荷先から振り分ける。
+     この列を入れても請求額は動かない。照合で内訳の差が見えるようになるだけ。 */
+  {k:'shitei', label:'指定事業所集荷', alias:['指定事業所集荷','指定事業所','指定集荷','指定事業所(個)']},
 ];
 const POSTCSV_DATE = ['日付','年月日','日'];
 const POSTCSV_NAME = ['氏名','従事員名','担当者名','名前','従業員名'];
@@ -44593,7 +44601,7 @@ function importPostCSV(txt, fn){
   const hCol={}; POSTCSV_COLS.forEach(c=>{ hCol[c.k]=_rcPick(headers, c.alias); });
   const used=POSTCSV_COLS.filter(c=>hCol[c.k]!=null);
   if(!used.length){
-    el.innerHTML=`<div class="al al-e"><span>❌</span><span>数量の列が1つも見つかりませんでした（配達完了・転送還付・夜間・170超・持ち出し・集荷）。</span></div>`;
+    el.innerHTML=`<div class="al al-e"><span>❌</span><span>数量の列が1つも見つかりませんでした（配達完了・転送還付・夜間・170超・持ち出し・集荷・指定事業所集荷）。</span></div>`;
     return;
   }
 
@@ -44666,10 +44674,13 @@ function _pcRender(fn, total, used){
   const noDel=_pcPlan.filter(p=>!p.del).length;
   const ng=_pcProb.filter(p=>p.cls==='ng').length;
   const byOff={};
-  _pcPlan.forEach(p=>{ const a=byOff[p.office||'(営業所なし)']=byOff[p.office||'(営業所なし)']||{n:0,k:0,s:0,days:new Set(),ppl:new Set()};
-    a.n++; a.k+=(p.vals.kanryo||0); a.s+=(p.vals.shukka||0); a.days.add(p.date); a.ppl.add(p.staff.name); });
+  _pcPlan.forEach(p=>{ const a=byOff[p.office||'(営業所なし)']=byOff[p.office||'(営業所なし)']||{n:0,k:0,s:0,t:0,days:new Set(),ppl:new Set()};
+    a.n++; a.k+=(p.vals.kanryo||0); a.s+=(p.vals.shukka||0); a.t+=(p.vals.shitei||0);
+    a.days.add(p.date); a.ppl.add(p.staff.name); });
   /* 集荷が1件も無いCSVでは列そのものを出さない（空の列が並ぶのを避ける） */
   const hasShukka=Object.keys(byOff).some(k=>byOff[k].s>0);
+  /* ★ 2026-10-27.45: 指定事業所集荷も同じ扱い。入っている局だけ列を出す */
+  const hasShitei=Object.keys(byOff).some(k=>byOff[k].t>0);
 
   let h=`<div class="al ${_pcPlan.length?'al-ok':'al-w'}"><span>${_pcPlan.length?'✅':'⚠️'}</span><span>
     <b>${esc(fn)}</b> を読みました（${total}行）。
@@ -44681,9 +44692,9 @@ function _pcRender(fn, total, used){
   if(Object.keys(byOff).length){
     h+=`<div class="mt8" style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">
       <table style="width:100%;font-size:12px;">
-        <thead><tr><th>営業所</th><th class="tr">行</th><th class="tr">人数</th><th class="tr">日数</th><th class="tr">配達完了</th>${hasShukka?'<th class="tr">集荷(定時)</th>':''}</tr></thead>
+        <thead><tr><th>営業所</th><th class="tr">行</th><th class="tr">人数</th><th class="tr">日数</th><th class="tr">配達完了</th>${hasShukka?'<th class="tr">集荷(合計)</th>':''}${hasShitei?'<th class="tr">うち定時</th><th class="tr">うち指定事業所</th>':''}</tr></thead>
         <tbody>${Object.keys(byOff).sort((a,b)=>String(a).localeCompare(String(b),'ja')).map(k=>{const a=byOff[k];
-          return `<tr><td class="fw7">${esc(k)}</td><td class="tr mono">${a.n}</td><td class="tr mono">${a.ppl.size}</td><td class="tr mono">${a.days.size}</td><td class="tr mono fw7">${a.k.toLocaleString()}</td>${hasShukka?`<td class="tr mono fw7" style="color:var(--grn2);">${a.s.toLocaleString()}</td>`:''}</tr>`;
+          return `<tr><td class="fw7">${esc(k)}</td><td class="tr mono">${a.n}</td><td class="tr mono">${a.ppl.size}</td><td class="tr mono">${a.days.size}</td><td class="tr mono fw7">${a.k.toLocaleString()}</td>${hasShukka?`<td class="tr mono fw7">${a.s.toLocaleString()}</td>`:''}${hasShitei?`<td class="tr mono fw7" style="color:var(--grn2);">${Math.max(0,a.s-a.t).toLocaleString()}</td><td class="tr mono fw7" style="color:var(--amb2);">${a.t.toLocaleString()}</td>`:''}</tr>`;
         }).join('')}</tbody></table></div>`;
   }
   if(noDel) h+=`<div class="al al-w mt8"><span>⚠️</span><span>
@@ -51431,7 +51442,8 @@ function _cmpJoinPostLogs(){
     r.postTenso  = l.tenso;
     r.postYakan  = l.yakan;
     r.postOgata  = l.ogata;
-    r.postShukka = l.shukka;   /* ★ 2026-10-20.13 調書の集荷(定時)。合計のみ */
+    r.postShukka = l.shukka;   /* ★ 2026-10-20.13 調書の集荷。定時＋指定事業所の合計 */
+    r.postShitei = l.shitei;   /* ★ 2026-10-27.45 そのうち指定事業所集荷。無い局は undefined */
     r.postSrc    = l.src||'';
   });
 }
