@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-27.48</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.49</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6035,7 +6035,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-27.48';
+const APP_VER = '2026-10-28.49';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11253,13 +11253,13 @@ function renderCmp(){
          列は増やさないので表の幅は変わらない。内訳の無い局はこれまでどおり合計だけ。 */
       const _sub=function(t,s){
         if(!d.hasShi || t==null || s==null) return '';
-        return '<div class="xs" style="line-height:1.35;font-weight:400;color:var(--txt2);">'
+        return '<div class="xs" style="line-height:1.35;font-weight:400;white-space:nowrap;color:var(--txt2);">'
           +'定 '+fmt(t)+'<br><span style="color:var(--amb2);">指 '+fmt(s)+'</span></div>';
       };
       const _subD=function(t,s){
         if(!d.hasShi || t==null || s==null) return '';
         const _c=function(v){ return v===0?'var(--txt3)':(v<0?'var(--red2)':'var(--grn2)'); };
-        return '<div class="xs" style="line-height:1.35;font-weight:400;">'
+        return '<div class="xs" style="line-height:1.35;font-weight:400;white-space:nowrap;">'
           +'<span style="color:'+_c(t)+';">定 '+(t>0?'+':'')+fmt(t)+'</span><br>'
           +'<span style="color:'+_c(s)+';">指 '+(s>0?'+':'')+fmt(s)+'</span></div>';
       };
@@ -11328,7 +11328,7 @@ function renderCmp(){
     /* ★ 2026-10-27.47: 日計にも定時／指定事業所の内訳を添える */
     const _dsub=function(t,s){
       if(!hasShiAny) return '';
-      return '<div class="xs" style="line-height:1.35;font-weight:400;color:var(--txt2);">'
+      return '<div class="xs" style="line-height:1.35;font-weight:400;white-space:nowrap;color:var(--txt2);">'
         +'定 '+fmt(t)+'<br><span style="color:var(--amb2);">指 '+fmt(s)+'</span></div>';
     };
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);color:var(--grn2);vertical-align:top;">'
@@ -11342,7 +11342,7 @@ function renderCmp(){
       const _c=function(v){ return v===0?'var(--txt3)':(v<0?'var(--red2)':'var(--grn2)'); };
       html.push('<td class="tr" style="vertical-align:top;"><span style="color:'+_c(ds)+';font-weight:700;">'
         +(ds>0?'+':'')+fmt(ds)+'</span>'
-        +'<div class="xs" style="line-height:1.35;font-weight:400;">'
+        +'<div class="xs" style="line-height:1.35;font-weight:400;white-space:nowrap;">'
         +'<span style="color:'+_c(sum.pt-sum.nt)+';">定 '+(sum.pt-sum.nt>0?'+':'')+fmt(sum.pt-sum.nt)+'</span><br>'
         +'<span style="color:'+_c(sum.pi-sum.ni)+';">指 '+(sum.pi-sum.ni>0?'+':'')+fmt(sum.pi-sum.ni)+'</span></div></td>');
     }
