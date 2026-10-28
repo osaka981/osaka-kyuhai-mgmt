@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.54</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.55</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6041,7 +6041,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.54';
+const APP_VER = '2026-10-29.55';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12416,8 +12416,13 @@ function renderDel() {
      合わないように見えていた（浜寺9月：カード18,906／照合19,016）。 */
   const s=rows.reduce((a,r)=>({mochidashi:a.mochidashi+r.mochidashi,kanryo:a.kanryo+r.kanryo,
     tenso:a.tenso+(parseInt(r.tenso)||0),
-    yakan:a.yakan+r.yakan,mochimodoiri:a.mochimodoiri+r.mochimodoiri}),
-    {mochidashi:0,kanryo:0,tenso:0,yakan:0,mochimodoiri:0});
+    yakan:a.yakan+r.yakan,mochimodoiri:a.mochimodoiri+r.mochimodoiri,
+    /* ★ 2026-10-29.55: 翌日廻しを足した。
+       カードの見出しは「持戻り＋翌日」なのに持戻しか足しておらず、
+       表の翌日の列に数がある月は、実際より少なく出ていた。
+       持出＝完了＋転送＋持戻＋翌日 の検算と同じ数え方にそろえる。 */
+    yokujitsu:a.yokujitsu+(parseInt(r['翌日廻し'])||0)}),
+    {mochidashi:0,kanryo:0,tenso:0,yakan:0,mochimodoiri:0,yokujitsu:0});
   /* ★ 2026-10-21.15: 集荷の合計が出ていなかった。
      表には「定時集荷」「指定事業所」の列があるのに、上の合計には無く、
      集荷が何件あるのかを数えるには行を目で足すしかなかった。
@@ -12430,7 +12435,8 @@ function renderDel() {
     /* ★ 2026-10-29.54: 請求は完了＋転送還付の合計なので、その数も添える */
     {l:'転送・還付',v:fmt(s.tenso),u:'個',c:'--tel',sub:'完了＋転送 '+fmt(s.kanryo+s.tenso)+' 個'},
     {l:'夜間（20時〜）',v:fmt(s.yakan),u:'個',c:'--blu'},
-    {l:'持戻り＋翌日',v:fmt(s.mochimodoiri),u:'個',c:'--amb'},
+    {l:'持戻り＋翌日',v:fmt(s.mochimodoiri+s.yokujitsu),u:'個',c:'--amb',
+     sub:'持戻 '+fmt(s.mochimodoiri)+' ／ 翌日 '+fmt(s.yokujitsu)},
     {l:'定時集荷',v:fmt(sh.teiji),u:'個',c:'--grn'},
     {l:'指定事業所',v:fmt(sh.shitei),u:'個',c:'--amb'},
   ].map(k=>`<div class="kpi" style="--kc:var(${k.c})"><div class="kl">${k.l}</div><div class="kv">${k.v}<span class="ku">${k.u}</span></div>`
