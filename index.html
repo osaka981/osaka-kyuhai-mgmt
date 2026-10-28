@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.50</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.52</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6039,7 +6039,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-28.50';
+const APP_VER = '2026-10-28.52';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15817,6 +15817,8 @@ function _fixShuCalc(){
       ? '<b style="color:var(--amb2);">集荷を直しています。</b>日報の合計も <b>'+fmt(sum)+'</b> に書き換わります。集荷の支払はこの数で計算されるので、支払額も変わります。'
       : '数を変えなければ、集荷には何も書き込みません。';
   }
+  /* ★ 2026-10-28.51: 下の見出しに集荷のずれを反映させる */
+  if(typeof _fixCalc==='function'){ try{ _fixCalc(); }catch(e){} }
 }
 
 // 修正画面で扱う4項目(日報側フィールド / 郵便局側フィールド)
@@ -15926,13 +15928,30 @@ function _fixCalc(){
     if(!hasPost){ sd.textContent='—'; sd.style.color='var(--txt3)'; }
     else{ const d=sp-sn; sd.textContent=(d>0?'+':'')+d; sd.style.color=d<0?'var(--red2)':'var(--grn2)'; }
   }
+  /* ★ 2026-10-28.51: 集荷の差も見出しに入れる。
+     集荷は一致／差異の判定(any)には入れていないが、
+     上の4項目だけを見て「全項目が一致しています」と書くと、
+     集荷がずれていても一致と読めてしまう。文言だけそろえる。 */
+  const _shuD=(function(){
+    const w=$('fix-shu-wrap'); if(!w) return null;
+    const praw=w.getAttribute('data-ptot');
+    if(praw===''||praw===null||praw===undefined) return null;
+    const inps=w.querySelectorAll('.fx-shu'); if(!inps.length) return null;
+    let s=0; inps.forEach(el=>{ s+=Math.max(0,parseInt(el.value)||0); });
+    return (parseInt(praw)||0)-s;
+  })();
   const hint=$('fix-hint');
   if(hint){
+    const shuTxt = (_shuD!==null && _shuD!==0)
+      ? '<br><span style="color:var(--red2);">集荷が '+(_shuD>0?'+':'')+_shuD+' ずれています。</span>上の集荷の表で直せます。'
+      : '';
     hint.innerHTML = !hasPost
-      ? '<span style="color:var(--amb2);">郵便局データが未取込です。空欄のままなら郵便局側は登録されません。</span>'
+      ? '<span style="color:var(--amb2);">郵便局データが未取込です。空欄のままなら郵便局側は登録されません。</span>'+shuTxt
       : anyDiff
-        ? '差異が残っています。数量を直すか、<b>差異を認めて確定</b>で現状のまま照合済にできます。'
-        : '<span style="color:var(--grn2);">全項目が一致しています。</span>';
+        ? '差異が残っています。数量を直すか、<b>差異を認めて確定</b>で現状のまま照合済にできます。'+shuTxt
+        : (_shuD!==null && _shuD!==0)
+          ? '<span style="color:var(--grn2);">完了・夜間・170超は一致しています。</span>'+shuTxt
+          : '<span style="color:var(--grn2);">全項目が一致しています。</span>';
   }
 }
 
@@ -51967,8 +51986,11 @@ function _cmpDiffs(r){
      日ごとに比べられる。集荷先ごとの内訳は比較に使わない。
      調書に集荷の列が無い月（他局のCSVなど）は postShukka が入らないので、
      そのときは「—」にして差異を出さない（0との比較にしない）。
-     一致／差異の判定(any)には今回は入れていない。入れると、修正モーダルに
-     集荷の行が無いため「差異だが直せない」行ができてしまうため。 */
+     ★ 2026-10-28.52: 一致／差異の判定(any)に集荷を入れた。
+     もともと外していたのは「修正モーダルに集荷の行が無く、差異だが直せない行が
+     できてしまう」ためだったが、.50 で集荷先ごとの行を出して直せるようにしたので
+     その理由が無くなった。集荷は請求にも支払にも効くので、ずれていれば差異に立てる。
+     調書に集荷の列が無い局（hasShu が false）はこれまでどおり判定に入らない。 */
   const hasShu  = hasPost && (r.postShukka!==undefined && r.postShukka!==null);
   const nShukka = n(r.shukka);
   const pShukka = hasShu ? n(r.postShukka) : null;
@@ -51993,7 +52015,8 @@ function _cmpDiffs(r){
     nikki, post, hasPost, dKanryo, dYakan, dOgata,
     hasShu, nShukka, pShukka, dShukka,
     hasShi, pShitei, pTeiji, nShitei, nTeiji, dShitei, dTeiji,
-    any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0),
+    any: hasPost && (dKanryo!==0 || dYakan!==0 || dOgata!==0
+                     || (hasShu && dShukka!==0)),   /* ★ 2026-10-28.52 */
   };
 }
 
