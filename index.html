@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.52</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.53</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1590,6 +1590,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <!-- ★ 2026-10-08.10: 全画面のときだけ出す絞り込み帯（月・営業所） -->
         <div id="cmp-fs-bar" hidden></div>
         <div id="cmp-sum" class="fold-hide"></div>
+        <!-- ★ 2026-10-28.53: 片側しか無い行を集めて、コードの取り違えを見つける -->
+        <div id="cmp-mix"></div>
         <button type="button" id="cmp-to-top" class="to-top-btn" onclick="_cmpScrollTop()" title="最上部へ戻る">▲ 最上部へ</button>
         <div class="al al-i mb8" style="font-size:11px;">
           <span>ℹ️</span>
@@ -6039,7 +6041,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-28.52';
+const APP_VER = '2026-10-28.53';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11115,6 +11117,95 @@ function _cmpFilterFoldInit(){
   setCmpFilterFold(v === '1');
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-28.53: 取り違えの候補
+
+   郵便局は「使用コード」で氏名を割り当てる。新人や、コードを
+   作っている途中の人は、他人のコードを借りて配達することがある。
+   そうなると調書はコードの持ち主の名前で来て、日報は実際に
+   走った人の名前で出る。局の日計は合うので気づきにくい。
+
+   （実例：2026-09-15 西成。浅井さんが夏目さんのコードを使った。
+     調書は夏目25・夜間5、日報は浅井25・夜間5 で別々に立っていた。）
+
+   ここでは同じ日・同じ局で
+     ・調書だけある人（日報が出ていない）
+     ・日報だけある人（調書に名前が無い）
+   を並べる。両方が同じ日に居れば取り違えの可能性が高い。
+   完了＋転送と夜間がそろえば「数字が一致」と印を付ける。
+
+   状況（全件・差異あり…）の絞り込みは見ない。
+   取り違えは差異として立たないことがあるため。
+   ════════════════════════════════════════════════════════════ */
+function _cmpMixRender(mon, off){
+  const el=$('cmp-mix'); if(!el) return;
+  el.innerHTML='';
+  const inR=r=>!((mon && (!r.date || String(r.date).substring(0,7)!==mon)) || (off && r.office!==off));
+  const nikkiOnly=(D.delivery||[]).filter(r=>r && r.date && inR(r) && !_cmpDiffs(r).hasPost);
+  const postOnly=(typeof _cmpOrphanPostLogs==='function') ? (_cmpOrphanPostLogs(mon, off)||[]) : [];
+  if(!nikkiOnly.length && !postOnly.length) return;
+
+  const n0=v=>Math.max(0, parseInt(v)||0);
+  const kan =r=>n0(r.kanryo)+n0(r.tenso);
+  const pkan=r=>n0(r.postKanryo)+n0(r.postTenso);
+
+  const byDay={};
+  const put=(r,side)=>{
+    const k=String(r.date||'')+'__'+String(r.office||'');
+    (byDay[k]=byDay[k]||{date:r.date, office:r.office||'', n:[], p:[]})[side].push(r);
+  };
+  nikkiOnly.forEach(r=>put(r,'n'));
+  postOnly.forEach(r=>put(r,'p'));
+
+  const out=[]; let nMatch=0;
+  Object.keys(byDay).sort().forEach(k=>{
+    const g=byDay[k], rest=g.n.slice();
+    g.p.forEach(p=>{
+      let mi=-1;
+      for(let i=0;i<rest.length;i++){
+        if(kan(rest[i])===pkan(p) && n0(rest[i].yakan)===n0(p.postYakan)){ mi=i; break; }
+      }
+      const m = mi>=0 ? rest.splice(mi,1)[0] : null;
+      if(m) nMatch++;
+      out.push({date:g.date, office:g.office, p, n:m});
+    });
+    rest.forEach(x=>out.push({date:g.date, office:g.office, p:null, n:x}));
+  });
+
+  const sideP=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(pkan(r))+' ／ 夜間 '+fmt(n0(r.postYakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
+  const sideN=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(kan(r))+' ／ 夜間 '+fmt(n0(r.yakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
+
+  el.innerHTML=`
+    <div class="al ${nMatch?'al-w':'al-i'} mb8"><span>${nMatch?'⚠️':'ℹ️'}</span><span>
+      <b>片側しか無い行が ${nikkiOnly.length+postOnly.length}件</b>あります
+      （調書だけ ${postOnly.length} ／ 日報だけ ${nikkiOnly.length}）。
+      ${nMatch?`<b style="color:var(--amb2);">うち ${nMatch}組は数字がそろっており、コードの取り違えの可能性があります。</b>`:''}<br>
+      <span class="xs">郵便局は使用コードで氏名を決めるため、他人のコードで配達すると
+      調書と日報が別の名前で立ちます。直すときは日計の<b>「局データ修正」</b>で、
+      調書の数字を正しい人へ移してください。誤って作った日報は宅配日報の一覧から削除します。</span>
+    </span></div>
+    <div class="tw" style="max-height:300px;overflow:auto;margin-bottom:10px;"><table>
+      <thead><tr>
+        <th style="white-space:nowrap;">日付</th><th>営業所</th>
+        <th style="color:var(--blu);">調書だけ（郵便局）</th>
+        <th style="color:var(--grn2);">日報だけ（社内）</th>
+        <th style="white-space:nowrap;">見立て</th>
+      </tr></thead>
+      <tbody>${out.map(x=>{
+        const both=x.p&&x.n;
+        const v=both ? '<b style="color:var(--amb2);">数字が一致。取り違えの可能性</b>'
+              : (x.p ? '日報が出ていません' : '調書に名前がありません');
+        return `<tr${both?' style="background:rgba(251,188,5,.07);"':''}>
+          <td class="mono" style="white-space:nowrap;">${esc(x.date||'')}</td>
+          <td class="xs">${esc(x.office||'')}</td>
+          <td style="font-size:12px;">${sideP(x.p)}</td>
+          <td style="font-size:12px;">${sideN(x.n)}</td>
+          <td class="xs" style="white-space:nowrap;">${v}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+}
+
 function renderCmp(){
   // ★ 2026/08/20: ここは従来 toYM() で "2026/08" に変換していたが、
   //   下の比較相手は r.date.substring(0,7) = "2026-08" のためスラッシュ形式では
@@ -11175,6 +11266,7 @@ function renderCmp(){
   if(_cs) _cs.innerHTML=(rows.length||orphans.length)
     ? _cmpSumHeader(rows, orphans, (mon||'全期間')+(off?'　'+off:''))
     : '';
+  _cmpMixRender(mon, off);    /* ★ 2026-10-28.53 取り違えの候補 */
   const tbody=$('tb-cmp'); if(!tbody) return;
   if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="19" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
