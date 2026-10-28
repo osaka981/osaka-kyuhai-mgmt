@@ -965,7 +965,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.49</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-28.50</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1689,6 +1689,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </tr></tfoot>
         </table>
       </div>
+
+      <!-- ★ 2026-10-28.50: 集荷（集荷先ごと）。拠点マスタに登録した集荷先が行になる。
+           集荷を扱わない人・局では何も出さない。 -->
+      <div id="fix-shu-wrap" style="margin-bottom:10px;"></div>
 
       <!-- ★ 2026-09-22.20: 郵便局（営業所）の選び間違いをここで直せるようにした -->
       <div class="fg mb12">
@@ -6035,7 +6039,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-28.49';
+const APP_VER = '2026-10-28.50';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15671,7 +15675,148 @@ function openCmpFix(id) {
     }).join('');
   }
   _fixCalc();
+  _fixShuRender(r);          /* ★ 2026-10-28.50 */
   openM('m-cmp-fix');
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-28.50: 修正モーダルの集荷
+
+   行は拠点マスタに登録した集荷先（_ddShukkaDefs）。終了日を過ぎたものは出ない。
+   日報側が入力欄、郵便局側は調書の数で読み取り専用。
+
+   内訳が空で合計だけ入っている日報（高橋さんの165）は、
+   システムが「全部定時」と読んでいるので、最初の定時集荷先に合計を置く。
+   これを初期値（_fixShuBase）として覚えておき、人が触らなければ書き戻さない。
+   触らずに「修正を適用」しただけで履歴が増えるのを避けるため。
+
+   郵便局側は、定時／指定事業所がそれぞれ1つのときだけ行に出す。
+   同じ種類の集荷先が複数ある局では割り振りようがないので「—」にして合計だけ出す。
+   ════════════════════════════════════════════════════════════ */
+let _fixShuBase = null;   /* {集荷先名: 個数} 初期値。触ったかどうかの判定に使う */
+let _fixShuSeen = null;   /* 行に出した集荷先の名前（旧名称も含む） */
+
+function _fixShuRender(r){
+  const wrap=$('fix-shu-wrap'); if(!wrap) return;
+  _fixShuBase=null; _fixShuSeen=null;
+  const defs=(typeof _ddShukkaDefs==='function') ? (_ddShukkaDefs(r.office, r.date)||[]) : [];
+  const nTotal=Math.max(0, parseInt(r.shukka)||0);
+  const hasP = (r.postShukka!==undefined && r.postShukka!==null);
+  const pTot = hasP ? Math.max(0, parseInt(r.postShukka)||0) : null;
+  const hasPi= hasP && (r.postShitei!==undefined && r.postShitei!==null);
+  const pShi = hasPi ? Math.max(0, parseInt(r.postShitei)||0) : null;
+  const pTei = hasPi ? Math.max(0, pTot-pShi) : null;
+
+  /* 集荷の登録も実績も無いなら、まるごと出さない */
+  if(!defs.length && !nTotal && !hasP){ wrap.innerHTML=''; return; }
+
+  if(!defs.length){
+    wrap.innerHTML=`<div class="al al-w"><span>⚠️</span><span>
+      <b>集荷</b>　日報 <b class="mono">${fmt(nTotal)}</b>${hasP?` ／ 郵便局 <b class="mono">${fmt(pTot)}</b>`:''}<br>
+      <span class="xs">${esc(r.office||'この郵便局')}に集荷先が登録されていないため、ここでは直せません。
+      拠点マスタで定時集荷先・指定事業所集荷先を登録すると、集荷先ごとに入力できます。</span>
+    </span></div>`;
+    return;
+  }
+
+  /* いまの内訳。旧名称で入っているものは新しい名前へ寄せる */
+  const cur={};
+  (Array.isArray(r.shukkaCompanies)?r.shukkaCompanies:[]).forEach(c=>{
+    if(!c || !c.name) return;
+    const nm=String(c.name);
+    const hit=defs.find(d=>d.name===nm || (d.prevName && d.prevName===nm));
+    cur[hit?hit.name:nm]=(cur[hit?hit.name:nm]||0)+Math.max(0,parseInt(c.count)||0);
+  });
+  const sumCur=Object.keys(cur).reduce((a,k)=>a+cur[k],0);
+  /* 内訳が無い（または足りない）ぶんは、システムの読み方に合わせて定時へ置く */
+  if(nTotal>sumCur){
+    const t=defs.find(d=>d.kind==='teiji');
+    if(t) cur[t.name]=(cur[t.name]||0)+(nTotal-sumCur);
+  }
+  _fixShuBase={}; defs.forEach(d=>{ _fixShuBase[d.name]=cur[d.name]||0; });
+  /* 行に吸い上げた名前（新旧とも）。保存時にこれを二重に足さないため */
+  _fixShuSeen={}; defs.forEach(d=>{ _fixShuSeen[d.name]=1; if(d.prevName) _fixShuSeen[d.prevName]=1; });
+
+  const nTei=defs.filter(d=>d.kind==='teiji').length;
+  const nShi=defs.filter(d=>d.kind==='shitei').length;
+  const dash='<span style="color:var(--txt3);">&#8212;</span>';
+
+  wrap.innerHTML=`
+    <div style="font-size:12.5px;font-weight:700;color:var(--grn2);margin-bottom:5px;">集荷
+      <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:6px;">集荷先ごと。単価が違うので分けて入れてください</span></div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th style="width:120px;">集荷先</th>
+        <th class="tr" style="width:110px;">郵便局</th>
+        <th class="tr" style="width:110px;">日報</th>
+        <th class="tr" style="width:80px;">差異</th>
+      </tr></thead>
+      <tbody>${defs.map(d=>{
+        const isShi=d.kind==='shitei';
+        let pv=null;
+        if(hasPi && isShi && nShi===1) pv=pShi;
+        else if(hasPi && !isShi && nTei===1) pv=pTei;
+        else if(hasP && !hasPi && !isShi && nTei===1 && nShi===0) pv=pTot;
+        return `<tr>
+          <td style="font-size:12.5px;font-weight:700;color:${isShi?'var(--amb2)':'var(--grn2)'};">${esc(d.name)}
+            <div style="font-size:9.5px;font-weight:400;color:var(--txt3);">${isShi?'指定事業所集荷':'定時集荷'}</div></td>
+          <td class="tr mono fw7" style="font-size:15px;">${pv==null?dash:fmt(pv)}</td>
+          <td style="padding:3px 6px;"><input type="number" min="0" class="fx-shu" data-name="${esc(d.name)}"
+            data-p="${pv==null?'':pv}" value="${cur[d.name]||0}" oninput="_fixShuCalc()" onfocus="this.select()"
+            style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
+                   font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
+                   background:var(--sur2);color:var(--txt);"></td>
+          <td class="tr mono fw7 fx-shu-d" style="font-size:14px;">0</td>
+        </tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
+        <td style="font-size:12.5px;font-weight:700;">合計<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">請求根拠</div></td>
+        <td class="tr mono fw7" style="font-size:16px;">${hasP?fmt(pTot):dash}</td>
+        <td class="tr mono fw7" id="fix-shu-n" style="font-size:16px;">0</td>
+        <td class="tr mono fw7" id="fix-shu-d" style="font-size:16px;">0</td>
+      </tr></tfoot>
+    </table></div>
+    <div id="fix-shu-note" class="xs" style="color:var(--txt2);margin-top:5px;line-height:1.6;"></div>`;
+  wrap.setAttribute('data-ptot', hasP?String(pTot):'');
+  _fixShuCalc();
+}
+
+function _fixShuCalc(){
+  const wrap=$('fix-shu-wrap'); if(!wrap) return;
+  const inps=wrap.querySelectorAll('.fx-shu'); if(!inps.length) return;
+  const ds=wrap.querySelectorAll('.fx-shu-d');
+  let sum=0;
+  inps.forEach((el,i)=>{
+    const v=Math.max(0, parseInt(el.value)||0);
+    sum+=v;
+    const praw=el.getAttribute('data-p');
+    const cell=ds[i]; if(!cell) return;
+    if(praw===''||praw===null){ cell.innerHTML='<span style="color:var(--txt3);">&#8212;</span>'; return; }
+    const d=(parseInt(praw)||0)-v;
+    cell.textContent=(d>0?'+':'')+d;
+    cell.style.color = d===0 ? 'var(--txt3)' : (d<0?'var(--red2)':'var(--grn2)');
+  });
+  const n=$('fix-shu-n'); if(n) n.textContent=fmt(sum);
+  const praw=wrap.getAttribute('data-ptot');
+  const dEl=$('fix-shu-d');
+  if(dEl){
+    if(praw===''||praw===null){ dEl.innerHTML='<span style="color:var(--txt3);">&#8212;</span>'; }
+    else{
+      const d=(parseInt(praw)||0)-sum;
+      dEl.textContent=(d>0?'+':'')+fmt(d);
+      dEl.style.color = d===0 ? 'var(--grn2)' : 'var(--red2)';
+    }
+  }
+  const note=$('fix-shu-note');
+  if(note){
+    const base=_fixShuBase||{};
+    let changed=false;
+    inps.forEach(el=>{ const nm=el.getAttribute('data-name')||'';
+      if((base[nm]||0)!==Math.max(0,parseInt(el.value)||0)) changed=true; });
+    note.innerHTML = changed
+      ? '<b style="color:var(--amb2);">集荷を直しています。</b>日報の合計も <b>'+fmt(sum)+'</b> に書き換わります。集荷の支払はこの数で計算されるので、支払額も変わります。'
+      : '数を変えなければ、集荷には何も書き込みません。';
+  }
 }
 
 // 修正画面で扱う4項目(日報側フィールド / 郵便局側フィールド)
@@ -15812,6 +15957,32 @@ function applyFix(opt){
     return o;
   };
   const _shuBefore = _shuSnap(r);
+  /* ★ 2026-10-28.50: 集荷の入力を読む。
+     初期値（_fixShuBase）から1つでも動いていれば __shukkaFix に入れる。
+     触っていなければ何もしない。「差異を認めて確定」でも同じように読む。 */
+  {
+    const wrap=$('fix-shu-wrap');
+    const inps=wrap ? wrap.querySelectorAll('.fx-shu') : [];
+    if(inps.length && _fixShuBase){
+      const list=[]; let changed=false;
+      inps.forEach(el=>{
+        const nm=el.getAttribute('data-name')||'';
+        if(!nm) return;
+        const v=Math.max(0, parseInt(el.value)||0);
+        list.push({name:nm, count:v});
+        if((_fixShuBase[nm]||0)!==v) changed=true;
+      });
+      /* 画面に出ていない集荷先（終了日を過ぎたもの）に数が残っていれば、消さずに残す */
+      (Array.isArray(r.shukkaCompanies)?r.shukkaCompanies:[]).forEach(c=>{
+        if(!c || !c.name) return;
+        if(list.find(x=>x.name===String(c.name))) return;
+        if(_fixShuSeen && _fixShuSeen[String(c.name)]) return;   /* 旧名称で行に吸い上げ済み */
+        const v=Math.max(0, parseInt(c.count)||0);
+        if(v>0) list.push({name:String(c.name), count:v});
+      });
+      if(changed) r.__shukkaFix=list;
+    }
+  }
 
   // ★ 2026-09-22.20: 郵便局（営業所）の選び直し
   // ★ 2026-10-08.4: 「差異を認めて確定」でも営業所の直しが効くように、
