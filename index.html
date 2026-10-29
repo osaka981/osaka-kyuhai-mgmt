@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.57</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.58</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6051,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.57';
+const APP_VER = '2026-10-29.58';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -52285,11 +52285,53 @@ async function applyPostToNikki(){
   const staff=$('p2n-staff')?.value||t.staffName;
   if(!staff){ alert('反映先のドライバーを選択してください'); return; }
 
-  // 既に同じ日付・同じドライバーの日報があれば二重登録しない
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-29.58: 選んだ人に日報が既にあるときは、調書を付け替える。
+
+     郵便局は「使用コード」で氏名を決めるため、新人やコードを作っている
+     途中の人が他人のコードで配達すると、調書はコードの持ち主の名前で、
+     日報は実際に走った人の名前で立つ（2026-09-15 西成：浅井さんが
+     夏目さんのコードを使った）。
+     このとき作るべきは日報ではなく、調書の名義の付け替え。
+     日報を作ると同じ仕事が2件になり、請求も支払も二重になる。
+
+     動かすのは調書（D.postLogs）の名義だけ。
+     日報＝支払の根拠には一切触らない。
+     ══════════════════════════════════════════════════════════ */
   const dup=(D.delivery||[]).find(r=>r.date===t.date && r.staff===staff);
   if(dup){
-    alert(`${t.date} の ${staff} の日報は既に存在します。\n照合一覧の「修正」から数量を調整してください。`);
-    closeM('m-p2n'); return;
+    const from = l.staff || t.staffName || '（名義なし）';
+    if(from===staff){
+      alert(`${t.date} の ${staff} の日報は既にあります。\n数量を直すなら照合一覧の「修正」から行ってください。`);
+      closeM('m-p2n'); return;
+    }
+    const ok = await showDialog({ icon:'🔀', title:'調書を付け替える',
+      msg:`${t.date} の ${staff} さんの日報は既にあります。\n\n`
+        + `郵便局の調書は「${from}」の名義で届いています。\n`
+        + `これを ${staff} さんのものに付け替えますか。\n\n`
+        + `・日報の数字は変えません（支払も動きません）\n`
+        + `・調書の名義だけを ${staff} さんへ移します\n`
+        + `・付け替えたあと、${staff} さんの日報と照合されます`,
+      okText:'付け替える', cancelText:'やめる' });
+    if(!ok){ closeM('m-p2n'); return; }
+    const st=(D.staff||[]).find(x=>x && x.name===staff);
+    /* 社員番号は照合の突き合わせに使われるので、必ず新しい人のものに差し替える。
+       新しい人に社員番号が無いときは空にして、氏名で引かせる。 */
+    l.staff      = staff;
+    l.empNo      = String((st&&st.empNo)||'').trim();
+    l.movedFrom  = from;
+    l.movedAt    = new Date().toISOString();
+    D.postLogs   = logs;
+    try{ lsSet(LS_KEYS.POSTLOG, logs); }catch(e){}
+    try{ if(typeof fbSet==='function') await fbSet('post_logs', logs); }
+    catch(e){ console.warn('[調書の付け替え] 保存に失敗', e); }
+    try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
+    closeM('m-p2n');
+    try{ if(typeof renderCmp==='function') renderCmp(); }catch(e){}
+    try{ if(typeof renderDash==='function') renderDash(); }catch(e){}
+    const msg=`調書を ${from} → ${staff} に付け替えました。日報は変えていません。`;
+    if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
+    return;
   }
 
   const n = v => Math.max(0, parseInt(v)||0);
