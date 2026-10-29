@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.59</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.60</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6051,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.59';
+const APP_VER = '2026-10-29.60';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11173,7 +11173,22 @@ function _cmpMixRender(mon, off){
      集荷事業の日報(D.pickup)が同じ日・同じ人にあれば、その理由も出す。 */
   const hasQty = r => (kan(r) + n0(r.yakan) + n0(r.ogata) + n0(r.shukka)) > 0;
   const _nd = d => (typeof _normDate==='function') ? _normDate(d) : String(d||'');
-  const puOn = r => (D.pickup||[]).some(x=>x && x.staff===r.staff && _nd(x.date)===_nd(r.date));
+  /* ★ 2026-10-29.60: 氏名は空白の有無でよく食い違うので、
+     取込や照合と同じ _ubNorm（空白を落とす）で突き合わせる。
+     「田中 功一」と「田中功一」が別人扱いになっていた。
+     別表記（aliases）も見るので、台帳で紐づけてあれば拾える。 */
+  const _nn = s => (typeof _ubNorm==='function') ? _ubNorm(s) : String(s||'').replace(/[\s　]/g,'');
+  const _aliasSet = nm=>{
+    const set=new Set([_nn(nm)]);
+    const st=(D.staff||[]).find(s=>s && (_nn(s.name)===_nn(nm)
+      || (s.aliases||[]).some(a=>_nn(a)===_nn(nm))));
+    if(st){ set.add(_nn(st.name)); (st.aliases||[]).forEach(a=>set.add(_nn(a))); }
+    return set;
+  };
+  const puOn = r => {
+    const names=_aliasSet(r.staff), d=_nd(r.date);
+    return (D.pickup||[]).some(x=>x && _nd(x.date)===d && names.has(_nn(x.staff)));
+  };
 
   const out=[]; let nMatch=0;
   Object.keys(byDay).sort().forEach(k=>{
