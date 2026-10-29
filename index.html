@@ -413,9 +413,19 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .prog{background:var(--bg3);border-radius:2px;height:3px;overflow:hidden;}.pf{height:100%;border-radius:2px;transition:width .3s;}
 .drop{border:2px dashed var(--brd2);border-radius:6px;padding:22px;text-align:center;cursor:pointer;transition:all .18s;background:var(--bg3);}
 .drop:hover,.drop.drag{border-color:var(--red);background:rgba(192,57,43,.04);}
-::-webkit-scrollbar{width:4px;height:4px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--sur3);border-radius:2px;}
+/* ★ 2026-10-29.56: スクロールバーを見えるようにした。
+   4px しかなく、溝も透明だったため、表が横に長くても
+   「右にまだ列がある」ことに気づけず、つまみも掴みにくかった。
+   横棒（height）を太めにして、溝とつまみに色を付ける。 */
+::-webkit-scrollbar{width:11px;height:14px;}
+::-webkit-scrollbar-track{background:var(--sur2);border-radius:7px;}
+::-webkit-scrollbar-thumb{background:var(--brd2);border-radius:7px;
+  border:2px solid transparent;background-clip:padding-box;}
+::-webkit-scrollbar-thumb:hover{background:var(--txt3);background-clip:padding-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+/* 注意：ここで scrollbar-width / scrollbar-color（標準のほう）を指定すると、
+   Chrome は上の ::-webkit-scrollbar の指定を丸ごと無視して細いバーに戻す。
+   使っているのが Chrome なので、標準プロパティはあえて書かない。 */
 .combo-dd{position:absolute;top:100%;left:0;right:0;z-index:1200;background:var(--bg2);border:1px solid var(--brd2);border-radius:5px;max-height:180px;overflow-y:auto;box-shadow:0 4px 14px rgba(0,0,0,.35);}
 .combo-dd-item{padding:6px 10px;cursor:pointer;font-size:11px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:6px;}
 .combo-dd-item:hover,.combo-dd-item.active{background:var(--bg3);}
@@ -965,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.55</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.56</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6041,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.55';
+const APP_VER = '2026-10-29.56';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
