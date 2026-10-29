@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.58</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.59</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6051,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.58';
+const APP_VER = '2026-10-29.59';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11167,12 +11167,21 @@ function _cmpMixRender(mon, off){
   nikkiOnly.forEach(r=>put(r,'n'));
   postOnly.forEach(r=>put(r,'p'));
 
+  /* ★ 2026-10-29.59: 宅配の数量が全部0の日報は、取り違えの相手にしない。
+     集荷事業に入っていた日は宅配の数量が0のまま日報だけ残るため、
+     そのままでは毎月この一覧に並んで雑音になる。
+     集荷事業の日報(D.pickup)が同じ日・同じ人にあれば、その理由も出す。 */
+  const hasQty = r => (kan(r) + n0(r.yakan) + n0(r.ogata) + n0(r.shukka)) > 0;
+  const _nd = d => (typeof _normDate==='function') ? _normDate(d) : String(d||'');
+  const puOn = r => (D.pickup||[]).some(x=>x && x.staff===r.staff && _nd(x.date)===_nd(r.date));
+
   const out=[]; let nMatch=0;
   Object.keys(byDay).sort().forEach(k=>{
     const g=byDay[k], rest=g.n.slice();
     g.p.forEach(p=>{
       let mi=-1;
       for(let i=0;i<rest.length;i++){
+        if(!hasQty(rest[i])) continue;              /* 0の日報は組にしない */
         if(kan(rest[i])===pkan(p) && n0(rest[i].yakan)===n0(p.postYakan)){ mi=i; break; }
       }
       const m = mi>=0 ? rest.splice(mi,1)[0] : null;
@@ -11181,6 +11190,7 @@ function _cmpMixRender(mon, off){
     });
     rest.forEach(x=>out.push({date:g.date, office:g.office, p:null, n:x}));
   });
+  const nZero = out.filter(x=>!x.p && x.n && !hasQty(x.n)).length;
 
   const sideP=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(pkan(r))+' ／ 夜間 '+fmt(n0(r.postYakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
   const sideN=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(kan(r))+' ／ 夜間 '+fmt(n0(r.yakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
@@ -11188,7 +11198,7 @@ function _cmpMixRender(mon, off){
   el.innerHTML=`
     <div class="al ${nMatch?'al-w':'al-i'} mb8"><span>${nMatch?'⚠️':'ℹ️'}</span><span>
       <b>片側しか無い行が ${nikkiOnly.length+postOnly.length}件</b>あります
-      （調書だけ ${postOnly.length} ／ 日報だけ ${nikkiOnly.length}）。
+      （調書だけ ${postOnly.length} ／ 日報だけ ${nikkiOnly.length}${nZero?`。うち ${nZero}件は宅配の数量が0`:''}）。
       ${nMatch?`<b style="color:var(--amb2);">うち ${nMatch}組は数字がそろっており、コードの取り違えの可能性があります。</b>`:''}<br>
       <span class="xs">郵便局は使用コードで氏名を決めるため、他人のコードで配達すると
       調書と日報が別の名前で立ちます。直すときは日計の<b>「局データ修正」</b>で、
@@ -11203,8 +11213,13 @@ function _cmpMixRender(mon, off){
       </tr></thead>
       <tbody>${out.map(x=>{
         const both=x.p&&x.n;
+        const zero = !x.p && x.n && !hasQty(x.n);
         const v=both ? '<b style="color:var(--amb2);">数字が一致。取り違えの可能性</b>'
-              : (x.p ? '日報が出ていません' : '調書に名前がありません');
+              : x.p ? '日報が出ていません'
+              : zero ? (puOn(x.n)
+                  ? '<span style="color:var(--txt3);">集荷事業の日。宅配の数量は0</span>'
+                  : '<span style="color:var(--txt3);">宅配の数量が0のまま</span>')
+              : '調書に名前がありません';
         return `<tr${both?' style="background:rgba(251,188,5,.07);"':''}>
           <td class="mono" style="white-space:nowrap;">${esc(x.date||'')}</td>
           <td class="xs">${esc(x.office||'')}</td>
