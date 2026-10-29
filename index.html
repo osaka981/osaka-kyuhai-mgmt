@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.61</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.62</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1071,6 +1071,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <th class="tr">大型</th>
             <th class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);">定時集荷</th>
             <th class="tr" style="color:var(--amb2);">指定事業所</th>
+            <!-- ★ 2026-10-29.62: その他1〜4。入っていても一覧に出ず、
+                 「全部0の日報」に見えていたため列を足した。合計を出し、
+                 内訳はマウスを載せると出る。 -->
+            <th class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);">その他</th>
             <th class="tr" style="color:var(--tel2)">金額</th>
             <th>検証</th><th>照合</th><th></th>
           </tr></thead>
@@ -3822,10 +3826,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <!-- ★ 2026-10-09.27: その他1〜4 は宅配事業で使わないため欄を隠す。
              入力欄そのものは残してあるので、過去に数が入っている日報は
              そのまま保存し直され、金額も変わらない。 -->
-        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
-        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
-        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
-        <th class="dd-sonota-col" style="display:none;padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
+        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
+        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
+        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
+        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
       </tr>
     </thead>
     <tbody>
@@ -3838,10 +3842,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-ogata"  class="fi" min="0" value="0" oninput="valDel();calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-shukka" class="fi" min="0" value="0" readonly tabindex="-1" title="下の「集荷」欄の合計です。そちらで入力してください" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;background:var(--bg3);color:var(--txt2);cursor:default;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s1"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s2"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s3"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s4"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:9px 8px;font-size:17px;font-weight:700;width:100%;min-width:76px;"></td>
       </tr>
       <!-- 個数行の右下：クイック保存 -->
       <tr class="no-hover" style="background:transparent !important;">
@@ -3859,10 +3863,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-ogata-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-shukka-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
-        <td class="dd-sonota-col" style="display:none;padding:4px 3px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s1-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s2-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s3-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
+        <td class="dd-sonota-col" style="padding:4px 3px;"><input type="number" id="dd-s4-u"     class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
       </tr>
       <!-- 金額行（管理者のみ表示） -->
       <tr id="del-amt-row" style="display:none;">
@@ -3873,10 +3877,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--blu2);" id="da-yakan">0</td>
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-ogata">0</td>
         <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;color:var(--grn2);" id="da-shukka">0</td>
-        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s1">0</td>
-        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s2">0</td>
-        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s3">0</td>
-        <td class="dd-sonota-col" style="display:none;padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s4">0</td>
+        <td class="dd-sonota-col" style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s1">0</td>
+        <td class="dd-sonota-col" style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s2">0</td>
+        <td class="dd-sonota-col" style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s3">0</td>
+        <td class="dd-sonota-col" style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;" id="da-s4">0</td>
       </tr>
     </tbody>
   </table>
@@ -6051,7 +6055,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.61';
+const APP_VER = '2026-10-29.62';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12501,12 +12505,18 @@ function renderDel() {
       <td class="tr">${r.ogata||0}</td>
       <td class="tr" style="border-left:2px solid var(--brd2);color:var(--grn2);" title="${_shukkaBreakdown(r,'teiji')}">${_shukkaSplit(r).teiji||0}</td>
       <td class="tr" style="color:var(--amb2);" title="${_shukkaBreakdown(r,'shitei')}">${_shukkaSplit(r).shitei||0}</td>
+      ${(()=>{ /* ★ 2026-10-29.62: その他1〜4の合計。内訳はマウスで出す */
+        const sn=[r.sonota||[]].flat().map(v=>parseInt(v)||0);
+        const tot=sn.reduce((a,v)=>a+v,0);
+        const tip=sn.map((v,i)=>`その他${i+1} ${v}`).join(' ／ ');
+        return `<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);${tot?'font-weight:700;':''}" title="${esc(tip)}">${tot||0}</td>`;
+      })()}
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
       <td style="text-align:center">${vc}</td><td>${sb}</td>
       <td><button class="btn b-gh btn-sm" onclick="editDel(${r.id})">編集</button></td>
     </tr>`;
   });
-  $('tb-del').innerHTML=h||`<tr><td colspan="17" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
+  $('tb-del').innerHTML=h||`<tr><td colspan="18" style="text-align:center;padding:20px;color:var(--txt2)">データがありません</td></tr>`;
 }
 
 // ─── 集荷日報テーブル（サイズ別完全対応）───
