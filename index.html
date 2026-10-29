@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.60</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.61</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6051,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.60';
+const APP_VER = '2026-10-29.61';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -17333,6 +17333,42 @@ async function _pubSave(){
   const empty=[], saved=[];
   const st=(D.staff||[]).find(x=>x && x.name===staff);
   const driver={ id:String(st?.empNo || st?.id || ''), name:staff, office:off };
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-29.61: 数量が0でも集荷日報を作れるようにする。
+
+     運坊から数字を起こすとき、稼働はあったのに個数が分からない日がある
+     （田中さんの月曜ルート：運坊では その他1 として1件4,000円だけが立ち、
+     品目の個数は別の日にまとめて計上されていた）。
+     ルートの定額（1便あたり）は集荷日報の件数で計算するので、
+     数量0の日報でも支払は正しく出る。請求は0のままなので、
+     個数が分かった時点であとから入れれば足りる。
+
+     勝手に作ると、画面に顧客を足しただけの行まで日報になってしまうため、
+     新規で数量0の顧客があるときだけ、保存前に1度だけ聞く。
+     既にある日報を0にした場合は、これまでどおり削除の確認を出す。
+     ══════════════════════════════════════════════════════════ */
+  const allowZero=new Set();
+  {
+    const z=[];
+    for(const cid of _pubState.custIds){
+      const cu=(D.customers||[]).find(c=>Number(c.id)===Number(cid)); if(!cu) continue;
+      const ex=exist.find(r=>Number(r.customerId)===Number(cid));
+      if(ex) continue;                                   /* 既存は従来の削除確認にまかせる */
+      const v=_pubState.vals[cid]||{items:{}};
+      if(Object.values(v.items||{}).some(q=>(parseInt(q)||0)>0)) continue;
+      z.push({cid, name:cu.name});
+    }
+    if(z.length){
+      const ok=await showDialog({ icon:'📝', title:'数量なしで記録する',
+        msg:`次の顧客は数量が0のままです。\n\n${z.map(x=>'　'+x.name).join('\n')}\n\n`
+          + `稼働だけ記録しますか。\n\n`
+          + `・ルートの定額（1便あたり）は日報の件数で計算するので、\n`
+          + `　数量が分からない日でも支払に乗ります\n`
+          + `・顧客への請求は0のままです。個数が分かったら後から入れられます`,
+        okText:'稼働だけ記録する', cancelText:'記録しない' });
+      if(ok) z.forEach(x=>allowZero.add(Number(x.cid)));
+    }
+  }
   for(const cid of _pubState.custIds){
     const cu=(D.customers||[]).find(c=>Number(c.id)===Number(cid)); if(!cu) continue;
     const ex=exist.find(r=>Number(r.customerId)===Number(cid));
@@ -17342,7 +17378,11 @@ async function _pubSave(){
     if(ex && ex._fromUnbou) continue;
     const v=_pubState.vals[cid]||{items:{},note:''};
     const items={}; Object.entries(v.items||{}).forEach(([k,q])=>{ if(q>0) items[k]=q; });
-    if(!Object.keys(items).length){ if(ex) empty.push({rec:ex, name:cu.name}); continue; }
+    if(!Object.keys(items).length){
+      if(ex){ empty.push({rec:ex, name:cu.name}); continue; }
+      /* ★ 2026-10-29.61: 上で了承したものだけ、数量0のまま作る */
+      if(!allowZero.has(Number(cid))) continue;
+    }
     const rec={
       ...(ex||{}),
       id: ex ? ex.id : (Date.now()*1000 + Math.floor(Math.random()*1000)),
