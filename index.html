@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.56</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.57</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6051,7 +6051,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.56';
+const APP_VER = '2026-10-29.57';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -46872,17 +46872,59 @@ function _calcPostBilling(locationIdOrName, monStr){
     if(r.date) agg.workDays.add(r.date);
   });
 
-  // 指定事業所集荷(D.deliveryCol)を集計
-  const delColRows = (D.deliveryCol||[]).filter(r=>
-    r.office===locName && (r.date||'').startsWith(monStr)
-  );
-  const colCompanyAgg = {}; // {会社名: 件数}
-  delColRows.forEach(r=>{
-    (r.companies||[]).forEach(c=>{
-      if(!c.name) return;
-      colCompanyAgg[c.name] = (colCompanyAgg[c.name]||0) + (c.count||0);
-    });
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-29.57: 集荷を日報(D.delivery)だけから数え、
+       拠点マスタの登録で「定時」と「指定事業所」に振り分ける。
+
+     これまでは2か所から足していた。
+       ・agg.shukka        … D.delivery の集荷「合計」をそのまま【集荷委託】へ
+       ・colCompanyAgg     … D.deliveryCol の集荷先ごとの件数を全部【指定事業所集荷】へ
+     D.deliveryCol は ypLogs(日報) の form.col を読み直しただけで、
+     D.delivery と元が同じ。つまり同じ集荷を2回足していた。
+     さらに、集荷先が定時か指定事業所かを見ずに全部【指定事業所集荷】へ入れており、
+     「【指定事業所集荷】定時集荷」という行が出ていた（単価も定時単価のまま）。
+
+     西成2026-09の実例：
+       正しい   定時 2,686 ／ 指定事業所 1,439              小計 5,659,007
+       いままで 定時 3,417 ／ 指定 1,604＋731 ＝ 5,752      小計 5,906,168
+       税込で 271,876円 の過大請求になっていた。
+
+     振り分けの決め方は _shukkaSplit と同じにする。
+       kind があればそれを信じる → 無ければ拠点マスタの指定事業所集荷先の名前で引く
+       （旧名称 prevName も見る）→ 内訳が無い／足りないぶんは定時へ。
+     ══════════════════════════════════════════════════════════ */
+  const _shiteiNames = new Set();
+  ((loc && loc.shukkaCompaniesShitei) || []).forEach(c=>{
+    if(!c || !c.name) return;
+    _shiteiNames.add(String(c.name));
+    if(c.prevName) _shiteiNames.add(String(c.prevName));
   });
+  /* 旧名称で入っている実績は、いまの名前へ寄せてから数える */
+  const _canonShitei = nm=>{
+    const s=String(nm||'');
+    const hit=((loc && loc.shukkaCompaniesShitei)||[]).find(c=>c && (c.name===s || c.prevName===s));
+    return hit ? String(hit.name) : s;
+  };
+  let shuTeiji = 0;                 // 【集荷委託】になる分
+  const colCompanyAgg = {};         // {指定事業所集荷先名: 件数}
+  delRows.forEach(r=>{
+    const total = Math.max(0, parseInt(r.shukka)||0);
+    const list  = Array.isArray(r.shukkaCompanies) ? r.shukkaCompanies : [];
+    if(!list.length){ shuTeiji += total; return; }
+    let sum = 0;
+    list.forEach(c=>{
+      const n = Math.max(0, parseInt(c && c.count)||0);
+      if(!n) return;
+      sum += n;
+      const nm = String((c && c.name) || '');
+      const isShitei = (c && c.kind==='shitei')
+        || (!(c && (c.kind==='teiji' || c.kind==='unknown')) && _shiteiNames.has(nm));
+      if(isShitei){ const k=_canonShitei(nm); colCompanyAgg[k] = (colCompanyAgg[k]||0) + n; }
+      else shuTeiji += n;
+    });
+    if(total > sum) shuTeiji += (total - sum);   // 内訳が足りないぶんは定時
+  });
+  agg.shukka = shuTeiji;            // 【集荷委託】は定時だけ
 
   // 明細項目構築
   const items = [];
