@@ -380,6 +380,9 @@ input[type="month"].fi,input[type="date"].fi{min-width:170px;width:auto;}
 .modal{background:var(--sur);border:1px solid var(--brd2);border-radius:10px;padding:22px;width:700px;max-width:97vw;max-height:94vh;overflow-y:auto;animation:mIn .18s ease;}
 .modal-w{width:920px;}
 .modal-n{width:480px;}
+/* ★ 2026-10-30.68: 照合の修正モーダルの表。横並びにしたぶん縦を詰めて1画面に収める */
+#fix-grid th,#fix-sonota th,#fix-shu-wrap th{padding:4px 7px;}
+#fix-grid td,#fix-sonota td,#fix-shu-wrap td{padding:3px 7px;}
 @keyframes mIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 .mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
 .mtt{font-size:var(--sz-mtt,15px);font-weight:700;}
@@ -975,7 +978,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.67</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.68</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1681,7 +1684,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- 照合修正モーダル -->
     <div id="m-cmp-fix" class="mbg">
-    <div class="modal modal-n" style="max-width:640px;">
+    <!-- ★ 2026-10-30.68: 横並びにしたので640pxでは足りず、行見出しが縦に割れていた -->
+    <div class="modal modal-n" style="width:1040px;max-width:97vw;padding:18px;">
       <div class="mhd"><div class="mtt">照合差異の修正</div><button class="mx" onclick="closeM('m-cmp-fix')">×</button></div>
 
       <div id="cmp-fix-info" style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;"></div>
@@ -1692,40 +1696,47 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
              項目を列、郵便局／日報／差異を行にする。中身は openCmpFix が描く。 -->
       <div id="fix-grid" style="margin-bottom:10px;"></div>
 
-      <!-- ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ直せる。
-           入っている人・月だけ出す。 -->
-      <div id="fix-sonota" style="margin-bottom:10px;"></div>
+      <!-- ★ 2026-10-30.68: その他と集荷を左右に並べる。
+           幅が足りなければ自動で上下に折り返す。中身が空の側は幅を取らない。 -->
+      <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:9px;">
+        <!-- ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ直せる。
+             入っている人・月だけ出す。 -->
+        <div id="fix-sonota" style="flex:1 1 400px;min-width:0;"></div>
 
-      <!-- ★ 2026-10-28.50: 集荷（集荷先ごと）。拠点マスタに登録した集荷先が列になる。
-           集荷を扱わない人・局では何も出さない。 -->
-      <div id="fix-shu-wrap" style="margin-bottom:10px;"></div>
-
-      <!-- ★ 2026-09-22.20: 郵便局（営業所）の選び間違いをここで直せるようにした -->
-      <div class="fg mb12">
-        <label>郵便局（営業所）<span class="xs muted" style="margin-left:6px;">担当の郵便局から選べます</span></label>
-        <select id="fix-office" class="fi"></select>
+        <!-- ★ 2026-10-28.50: 集荷（集荷先ごと）。拠点マスタに登録した集荷先が列になる。
+             集荷を扱わない人・局では何も出さない。 -->
+        <div id="fix-shu-wrap" style="flex:1 1 460px;min-width:0;"></div>
       </div>
 
-      <div id="fix-hint" style="font-size:11px;color:var(--txt2);margin-bottom:10px;"></div>
-
-      <div class="fg mb12">
-        <label>修正理由・メモ</label>
-        <input type="text" id="fix-reason" class="fi" placeholder="例：入力ミス、郵便局データ誤り、持戻の数え方の違い など">
+      <!-- ★ 2026-10-30.68: 営業所と理由を1段に並べ、縦を詰めた。
+           ★ 2026-09-22.20: 郵便局（営業所）の選び間違いをここで直せるようにした -->
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:9px;">
+        <div class="fg" style="flex:0 0 260px;margin:0;">
+          <label>郵便局（営業所）<span class="xs muted" style="margin-left:5px;">担当の局から選べます</span></label>
+          <select id="fix-office" class="fi"></select>
+        </div>
+        <div class="fg" style="flex:1 1 320px;margin:0;">
+          <label>修正理由・メモ</label>
+          <input type="text" id="fix-reason" class="fi" placeholder="例：入力ミス、郵便局データ誤り、持戻の数え方の違い など">
+        </div>
       </div>
 
-      <!-- ★ 2026-10-08.11: 修正履歴（いつ・誰が・いくつからいくつに直したか） -->
-      <div style="border-top:1px solid var(--brd2);padding-top:9px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap;">
+      <div id="fix-hint" style="font-size:11px;color:var(--txt2);margin-bottom:7px;line-height:1.5;"></div>
+
+      <!-- ★ 2026-10-08.11: 修正履歴（いつ・誰が・いくつからいくつに直したか）
+           ★ 2026-10-30.68: 畳んだ状態で開く。件数は見出しに出るので、見たいときだけ開く。 -->
+      <details style="border-top:1px solid var(--brd2);padding-top:6px;margin-bottom:7px;">
+        <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;list-style:none;">
           <span style="font-size:12.5px;font-weight:700;color:var(--txt);">修正履歴</span>
           <span id="fix-hist-n" style="font-size:11px;color:var(--txt2);"></span>
           <span style="margin-left:auto;display:flex;align-items:center;gap:6px;">
             <span style="font-size:11px;color:var(--txt2);">操作者</span>
             <span id="fix-op-name" style="font-size:11.5px;font-weight:700;color:var(--amb2);"></span>
-            <button class="btn b-gh btn-sm" onclick="setOpName()" style="padding:3px 9px;font-size:10.5px;">変更</button>
+            <button class="btn b-gh btn-sm" onclick="event.preventDefault();setOpName()" style="padding:3px 9px;font-size:10.5px;">変更</button>
           </span>
-        </div>
-        <div id="fix-hist" style="max-height:190px;overflow:auto;"></div>
-      </div>
+        </summary>
+        <div id="fix-hist" style="max-height:200px;overflow:auto;margin-top:7px;"></div>
+      </details>
 
       <div class="mft">
         <!-- ★ 2026-10-30.66: 日報そのものを消したいことがある（他人のコードで配達した日に
@@ -3856,7 +3867,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <!-- 単価行（管理者のみ表示） -->
       <tr id="del-unit-row" style="background:var(--bg3);display:none;">
         <td style="padding:5px 8px;font-weight:700;font-size:11px;">単　価</td>
-        <td style="padding:3px 4px;"></td>
+        <td style="padding:2px 4px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-kanryo-u" class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-tenso-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
         <td style="padding:4px 3px;"><input type="number" id="dd-yakan-u"  class="fi" min="0" value="0" oninput="calcDelAmt()" style="text-align:right;padding:4px 6px;"></td>
@@ -6054,7 +6065,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.67';
+const APP_VER = '2026-10-30.68';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15817,30 +15828,30 @@ function openCmpFix(id) {
      ══════════════════════════════════════════════════════════ */
   const _inp=(pre,k,v)=>`<input type="number" min="0" id="fx-${pre}-${k}" value="${v}"
       oninput="_fixCalc()" onfocus="this.select()"${pre==='p'?' placeholder="未取込"':''}
-      style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+      style="width:100%;min-width:58px;padding:4px 5px;text-align:right;font-size:14px;font-weight:700;
              font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
              background:var(--sur2);color:var(--txt);">`;
-  const _rh=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:76px;min-width:76px;font-size:12px;">${t}`
+  const _rh=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:94px;min-width:94px;font-size:12px;white-space:nowrap;">${t}`
       +(s2?`<div style="font-size:9px;font-weight:400;color:var(--txt3);line-height:1.3;">${s2}</div>`:'')+`</td>`;
   const gw=$('fix-grid');
   if(gw){
     gw.innerHTML=`<div class="tw"><table style="width:100%;">
-      <thead><tr><th style="width:76px;"></th>
+      <thead><tr><th style="width:94px;"></th>
         ${FIX_COLS.map(c=>`<th class="tr" style="color:${c.c};white-space:nowrap;">${esc(c.l)}`
           +(c.sub?`<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">${esc(c.sub)}</div>`:'')+`</th>`).join('')}
       </tr></thead>
       <tbody>
         <tr>${_rh('郵便局','調書')}${FIX_COLS.map(c=>{
           const pv=(r[c.p]===undefined||r[c.p]===null)?'':Math.max(0,parseInt(r[c.p])||0);
-          return `<td style="padding:3px 4px;">${_inp('p',c.k,pv)}</td>`; }).join('')}</tr>
+          return `<td style="padding:2px 4px;">${_inp('p',c.k,pv)}</td>`; }).join('')}</tr>
         <tr>${_rh('日報','社内')}${FIX_COLS.map(c=>{
           const nv=Math.max(0,parseInt(r[c.n])||0);
-          return `<td style="padding:3px 4px;">${_inp('n',c.k,nv)}</td>`; }).join('')}</tr>
+          return `<td style="padding:2px 4px;">${_inp('n',c.k,nv)}</td>`; }).join('')}</tr>
         <tr>${_rh('差異','局−日報')}${FIX_COLS.map(c=>
           `<td class="tr mono fw7" id="fx-d-${c.k}" style="font-size:14px;">0</td>`).join('')}</tr>
       </tbody></table></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--sur2);
-                  border:1px solid var(--brd2);border-top:none;border-radius:0 0 5px 5px;padding:7px 11px;">
+                  border:1px solid var(--brd2);border-top:none;border-radius:0 0 5px 5px;padding:5px 11px;">
         <span style="font-size:12px;font-weight:700;">完了＋転送還付
           <span style="font-size:9px;font-weight:400;color:var(--txt3);margin-left:5px;">請求根拠</span></span>
         <span class="xs muted">郵便局 <b class="mono" id="fix-sum-p" style="font-size:16px;color:var(--txt);margin-left:4px;">0</b></span>
@@ -15859,21 +15870,20 @@ function openCmpFix(id) {
       <div style="font-size:12px;font-weight:700;margin-bottom:5px;">その他
         <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:7px;">調書には無い項目です。日報だけ直せます</span></div>
       <div class="tw"><table style="width:100%;">
-        <thead><tr><th style="width:76px;"></th>
+        <thead><tr><th style="width:94px;"></th>
           ${[0,1,2,3].map(i=>`<th class="tr" style="color:var(--amb2);">その他${i+1}</th>`).join('')}
           <th class="tr" style="border-left:2px solid var(--brd2);">合計</th>
         </tr></thead>
         <tbody><tr>${_rh('日報','社内')}
-          ${[0,1,2,3].map(i=>`<td style="padding:3px 4px;"><input type="number" min="0" class="fx-son" data-i="${i}"
+          ${[0,1,2,3].map(i=>`<td style="padding:2px 4px;"><input type="number" min="0" class="fx-son" data-i="${i}"
              value="${sn[i]||0}" oninput="_fixSonCalc()" onfocus="this.select()"
-             style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+             style="width:100%;min-width:58px;padding:4px 5px;text-align:right;font-size:14px;font-weight:700;
                     font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
                     background:var(--sur2);color:var(--txt);"></td>`).join('')}
           <td class="tr mono fw7" id="fix-son-sum" style="border-left:2px solid var(--brd2);font-size:14px;">${sn.reduce((a,v)=>a+v,0)}</td>
         </tr></tbody></table></div>
-      <div class="xs muted" style="margin-top:5px;line-height:1.6;">
-        運坊の日別実績取込で入る項目です。単価は従業員台帳の「その他1〜4」を使います。<br>
-        <b>数を変えると支払が変わります。</b>使わない日は0にしてください。
+      <div class="xs muted" style="margin-top:4px;line-height:1.5;">
+        運坊の日別実績取込で入る項目です。単価は従業員台帳の「その他1〜4」を使います。<b>数を変えると支払が変わります。</b>使わない日は0に。
       </div>`;
   }
   _fixCalc();
@@ -15953,14 +15963,14 @@ function _fixShuRender(r){
     if(hasP && !hasPi && !isShi && nTei===1 && nShi===0) return pTot;
     return null;
   };
-  const _rh2=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:76px;min-width:76px;font-size:12px;">${t}`
+  const _rh2=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:94px;min-width:94px;font-size:12px;white-space:nowrap;">${t}`
       +(s2?`<div style="font-size:9px;font-weight:400;color:var(--txt3);line-height:1.3;">${s2}</div>`:'')+`</td>`;
   const nTot=Object.keys(cur).reduce((a2,k)=>a2+(cur[k]||0),0);
   wrap.innerHTML=`
     <div style="font-size:12.5px;font-weight:700;color:var(--grn2);margin-bottom:5px;">集荷
       <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:6px;">集荷先ごと。単価が違うので分けて入れてください</span></div>
     <div class="tw"><table style="width:100%;">
-      <thead><tr><th style="width:76px;"></th>
+      <thead><tr><th style="width:94px;"></th>
         ${defs.map(d=>`<th class="tr" style="color:${d.kind==='shitei'?'var(--amb2)':'var(--grn2)'};white-space:nowrap;">${esc(d.name)}
           <div style="font-size:8.5px;font-weight:400;color:var(--txt3);">${d.kind==='shitei'?'指定事業所集荷':'定時集荷'}</div></th>`).join('')}
         <th class="tr" style="border-left:2px solid var(--brd2);">合計<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">請求根拠</div></th>
@@ -15972,9 +15982,9 @@ function _fixShuRender(r){
           <td class="tr mono fw7" style="border-left:2px solid var(--brd2);font-size:15px;">${hasP?fmt(pTot):dash}</td></tr>
         <tr>${_rh2('日報','社内')}
           ${defs.map(d=>{ const pv=_pvOf(d);
-            return `<td style="padding:3px 4px;"><input type="number" min="0" class="fx-shu" data-name="${esc(d.name)}"
+            return `<td style="padding:2px 4px;"><input type="number" min="0" class="fx-shu" data-name="${esc(d.name)}"
               data-p="${pv==null?'':pv}" value="${cur[d.name]||0}" oninput="_fixShuCalc()" onfocus="this.select()"
-              style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+              style="width:100%;min-width:58px;padding:4px 5px;text-align:right;font-size:14px;font-weight:700;
                      font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
                      background:var(--sur2);color:var(--txt);"></td>`; }).join('')}
           <td class="tr mono fw7" id="fix-shu-n" style="border-left:2px solid var(--brd2);font-size:15px;">${fmt(nTot)}</td></tr>
