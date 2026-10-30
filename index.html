@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.65</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.66</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1738,6 +1738,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       </div>
 
       <div class="mft">
+        <!-- ★ 2026-10-30.66: 日報そのものを消したいことがある（他人のコードで配達した日に
+             誤って作った日報など）。気づくのはこの画面なので、ここから消せるようにした。
+             間違って押さないよう左端に離し、枠だけの赤にしてある。 -->
+        <button class="btn btn-sm" style="margin-right:auto;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+          onclick="_cmpDeleteNikki()" title="この日報を削除します">🗑 日報を削除</button>
         <button class="btn b-gh" onclick="closeM('m-cmp-fix')">キャンセル</button>
         <button class="btn b-blu" onclick="applyFix({accept:true})">差異を認めて確定</button>
         <button class="btn b-grn" onclick="applyFix()">修正を適用</button>
@@ -6055,7 +6060,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.65';
+const APP_VER = '2026-10-30.66';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16256,6 +16261,48 @@ function applyFix(opt){
     : '修正を適用しました。差異0 → 照合済みになりました';
   if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
 }
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-30.66: 照合の修正画面から宅配日報そのものを消す。
+
+   他人のコードで配達した日に誤って日報を作ってしまうことがある
+   （2026-09-15 西成：浅井さんが夏目さんのコードを使い、
+     夏目さんの日報を調書から作ってしまった）。
+   そのままだと同じ仕事が2件になり、請求も支払も二重になる。
+   気づくのはこの照合画面なので、ここから消せるようにした。
+
+   消すのは日報だけ。郵便局の調書（D.postLogs）は残す。
+   調書が残っていれば、正しい人へ付け替えるか、
+   改めて日報を作り直すかを選べる。
+   ══════════════════════════════════════════════════════════ */
+async function _cmpDeleteNikki(){
+  const r=(D.delivery||[]).find(x=>String(x.id)===String(cmpFixTargetId));
+  if(!r){ closeM('m-cmp-fix'); return; }
+  const ok=await showDialog({ icon:'🗑', title:'日報を削除する',
+    msg:`${r.date}　${r.staff}（${r.office||''}）の宅配日報を削除します。\n\n`
+      + `・請求と支払から外れます\n`
+      + `・郵便局の調書は残ります（照合の相手として残ります）\n`
+      + `・元に戻せません`,
+    okText:'削除する', cancelText:'やめる' });
+  if(!ok) return;
+  const i=(D.delivery||[]).findIndex(x=>String(x.id)===String(r.id));
+  if(i>=0) D.delivery.splice(i,1);
+  const ypLogs=lsGet(LS_KEYS.YP,[])||[];
+  const j=ypLogs.findIndex(x=>String(x.id)===String(r.id));
+  if(j>=0) ypLogs.splice(j,1);
+  try{ lsSet(LS_KEYS.YP, ypLogs); }catch(e){}
+  try{
+    if(typeof _safeSetYpLogs==='function') await _safeSetYpLogs(ypLogs, '照合からの日報削除');
+    else if(typeof fbSet==='function') await fbSet('yp_logs', ypLogs);
+    if(typeof fbSet==='function') await fbSet('delivery', D.delivery);
+  }catch(e){ console.error('[_cmpDeleteNikki] 保存エラー', e); }
+  closeM('m-cmp-fix');
+  try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
+  ['renderCmp','renderDash','renderDel'].forEach(f=>{ try{ if(typeof window[f]==='function') window[f](); }catch(e){} });
+  const msg=`${r.date} ${r.staff} の日報を削除しました。調書は残しています。`;
+  if(typeof _showSaveToast==='function') _showSaveToast(msg); else alert(msg);
+}
+window._cmpDeleteNikki=_cmpDeleteNikki;
 
 function runAutoCompare(){
   // ★ 2026/08/20: 旧実装は r.postData(完了数のみの単一値)を見ていたが、
