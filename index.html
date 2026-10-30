@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.66</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.67</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1687,26 +1687,16 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div id="cmp-fix-info" style="background:var(--bg3);border-radius:6px;padding:10px 12px;margin-bottom:10px;font-size:12px;"></div>
 
       <!-- ★ 2026/08/21: 完了数だけでなく4項目すべてを両側で直せるようにした。
-           夜間・170超は完了の内数(再掲)なので、完了＋転送とは別に突き合わせる。 -->
-      <div class="tw" style="margin-bottom:10px;">
-        <table>
-          <thead><tr>
-            <th style="width:120px;">項目</th>
-            <th class="tr" style="width:110px;">郵便局</th>
-            <th class="tr" style="width:110px;">日報</th>
-            <th class="tr" style="width:80px;">差異<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">局−日報</div></th>
-          </tr></thead>
-          <tbody id="tb-fix"></tbody>
-          <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
-            <td style="font-size:12.5px;font-weight:700;">完了＋転送還付<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">請求根拠</div></td>
-            <td class="tr mono fw7" id="fix-sum-p" style="font-size:16px;">0</td>
-            <td class="tr mono fw7" id="fix-sum-n" style="font-size:16px;">0</td>
-            <td class="tr mono fw7" id="fix-sum-d" style="font-size:16px;">0</td>
-          </tr></tfoot>
-        </table>
-      </div>
+           夜間・170超は完了の内数(再掲)なので、完了＋転送とは別に突き合わせる。
+           ★ 2026-10-30.67: 縦並びから横並びに変えた（案B）。
+             項目を列、郵便局／日報／差異を行にする。中身は openCmpFix が描く。 -->
+      <div id="fix-grid" style="margin-bottom:10px;"></div>
 
-      <!-- ★ 2026-10-28.50: 集荷（集荷先ごと）。拠点マスタに登録した集荷先が行になる。
+      <!-- ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ直せる。
+           入っている人・月だけ出す。 -->
+      <div id="fix-sonota" style="margin-bottom:10px;"></div>
+
+      <!-- ★ 2026-10-28.50: 集荷（集荷先ごと）。拠点マスタに登録した集荷先が列になる。
            集荷を扱わない人・局では何も出さない。 -->
       <div id="fix-shu-wrap" style="margin-bottom:10px;"></div>
 
@@ -1741,11 +1731,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <!-- ★ 2026-10-30.66: 日報そのものを消したいことがある（他人のコードで配達した日に
              誤って作った日報など）。気づくのはこの画面なので、ここから消せるようにした。
              間違って押さないよう左端に離し、枠だけの赤にしてある。 -->
-        <button class="btn btn-sm" style="margin-right:auto;background:transparent;border:1px solid var(--red2);color:var(--red2);"
+        <!-- ★ 2026-10-30.67: margin-right:auto だと枠の外へはみ出して左端が切れていた。
+             右側のボタンを別の箱にまとめ、削除は枠の内側に置く。 -->
+        <button class="btn btn-sm" style="background:transparent;border:1px solid var(--red2);color:var(--red2);"
           onclick="_cmpDeleteNikki()" title="この日報を削除します">🗑 日報を削除</button>
+        <div style="margin-left:auto;display:flex;gap:8px;">
         <button class="btn b-gh" onclick="closeM('m-cmp-fix')">キャンセル</button>
         <button class="btn b-blu" onclick="applyFix({accept:true})">差異を認めて確定</button>
         <button class="btn b-grn" onclick="applyFix()">修正を適用</button>
+        </div>
       </div>
     </div>
     </div>
@@ -6060,7 +6054,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.66';
+const APP_VER = '2026-10-30.67';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15816,27 +15810,71 @@ function openCmpFix(id) {
     }
   }
 
-  const tb=$('tb-fix');
-  if(tb){
-    tb.innerHTML=FIX_COLS.map(c=>{
-      const nv=Math.max(0,parseInt(r[c.n])||0);
-      const pv=(r[c.p]===undefined||r[c.p]===null)?'':Math.max(0,parseInt(r[c.p])||0);
-      return `<tr>
-        <td style="font-size:12.5px;font-weight:700;color:${c.c};">${c.l}
-          ${c.sub?`<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">${c.sub}</div>`:''}</td>
-        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-p-${c.k}" value="${pv}"
-          oninput="_fixCalc()" onfocus="this.select()" placeholder="未取込"
-          style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
-                 font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
-                 background:var(--sur2);color:var(--txt);"></td>
-        <td style="padding:3px 6px;"><input type="number" min="0" id="fx-n-${c.k}" value="${nv}"
-          oninput="_fixCalc()" onfocus="this.select()"
-          style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
-                 font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
-                 background:var(--sur2);color:var(--txt);"></td>
-        <td class="tr mono fw7" id="fx-d-${c.k}" style="font-size:14px;">0</td>
-      </tr>`;
-    }).join('');
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-30.67: 横並び（案B）。項目を列、郵便局／日報／差異を行にする。
+       入力欄の id は今までどおり fx-p-○○ / fx-n-○○ / fx-d-○○ なので、
+       _fixCalc と applyFix はそのまま動く。
+     ══════════════════════════════════════════════════════════ */
+  const _inp=(pre,k,v)=>`<input type="number" min="0" id="fx-${pre}-${k}" value="${v}"
+      oninput="_fixCalc()" onfocus="this.select()"${pre==='p'?' placeholder="未取込"':''}
+      style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+             font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
+             background:var(--sur2);color:var(--txt);">`;
+  const _rh=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:76px;min-width:76px;font-size:12px;">${t}`
+      +(s2?`<div style="font-size:9px;font-weight:400;color:var(--txt3);line-height:1.3;">${s2}</div>`:'')+`</td>`;
+  const gw=$('fix-grid');
+  if(gw){
+    gw.innerHTML=`<div class="tw"><table style="width:100%;">
+      <thead><tr><th style="width:76px;"></th>
+        ${FIX_COLS.map(c=>`<th class="tr" style="color:${c.c};white-space:nowrap;">${esc(c.l)}`
+          +(c.sub?`<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">${esc(c.sub)}</div>`:'')+`</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        <tr>${_rh('郵便局','調書')}${FIX_COLS.map(c=>{
+          const pv=(r[c.p]===undefined||r[c.p]===null)?'':Math.max(0,parseInt(r[c.p])||0);
+          return `<td style="padding:3px 4px;">${_inp('p',c.k,pv)}</td>`; }).join('')}</tr>
+        <tr>${_rh('日報','社内')}${FIX_COLS.map(c=>{
+          const nv=Math.max(0,parseInt(r[c.n])||0);
+          return `<td style="padding:3px 4px;">${_inp('n',c.k,nv)}</td>`; }).join('')}</tr>
+        <tr>${_rh('差異','局−日報')}${FIX_COLS.map(c=>
+          `<td class="tr mono fw7" id="fx-d-${c.k}" style="font-size:14px;">0</td>`).join('')}</tr>
+      </tbody></table></div>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--sur2);
+                  border:1px solid var(--brd2);border-top:none;border-radius:0 0 5px 5px;padding:7px 11px;">
+        <span style="font-size:12px;font-weight:700;">完了＋転送還付
+          <span style="font-size:9px;font-weight:400;color:var(--txt3);margin-left:5px;">請求根拠</span></span>
+        <span class="xs muted">郵便局 <b class="mono" id="fix-sum-p" style="font-size:16px;color:var(--txt);margin-left:4px;">0</b></span>
+        <span class="xs muted">日報 <b class="mono" id="fix-sum-n" style="font-size:16px;color:var(--txt);margin-left:4px;">0</b></span>
+        <span class="xs muted">差異 <b class="mono" id="fix-sum-d" style="font-size:16px;margin-left:4px;">0</b></span>
+      </div>`;
+  }
+
+  /* ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ。
+     入っている人だけ出す（ふだんは0が4つ並ぶだけなので隠す）。 */
+  const sw=$('fix-sonota');
+  if(sw){
+    const sn=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+    const has=sn.some(v=>v>0);
+    sw.innerHTML = !has ? '' : `
+      <div style="font-size:12px;font-weight:700;margin-bottom:5px;">その他
+        <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:7px;">調書には無い項目です。日報だけ直せます</span></div>
+      <div class="tw"><table style="width:100%;">
+        <thead><tr><th style="width:76px;"></th>
+          ${[0,1,2,3].map(i=>`<th class="tr" style="color:var(--amb2);">その他${i+1}</th>`).join('')}
+          <th class="tr" style="border-left:2px solid var(--brd2);">合計</th>
+        </tr></thead>
+        <tbody><tr>${_rh('日報','社内')}
+          ${[0,1,2,3].map(i=>`<td style="padding:3px 4px;"><input type="number" min="0" class="fx-son" data-i="${i}"
+             value="${sn[i]||0}" oninput="_fixSonCalc()" onfocus="this.select()"
+             style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+                    font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
+                    background:var(--sur2);color:var(--txt);"></td>`).join('')}
+          <td class="tr mono fw7" id="fix-son-sum" style="border-left:2px solid var(--brd2);font-size:14px;">${sn.reduce((a,v)=>a+v,0)}</td>
+        </tr></tbody></table></div>
+      <div class="xs muted" style="margin-top:5px;line-height:1.6;">
+        運坊の日別実績取込で入る項目です。単価は従業員台帳の「その他1〜4」を使います。<br>
+        <b>数を変えると支払が変わります。</b>使わない日は0にしてください。
+      </div>`;
   }
   _fixCalc();
   _fixShuRender(r);          /* ★ 2026-10-28.50 */
@@ -15905,41 +15943,45 @@ function _fixShuRender(r){
   const nShi=defs.filter(d=>d.kind==='shitei').length;
   const dash='<span style="color:var(--txt3);">&#8212;</span>';
 
+  /* ★ 2026-10-30.67: 横並び（案B）。集荷先を列、郵便局／日報／差異を行にする。
+     入力欄は class fx-shu のまま／data-name と data-p も今までどおりなので、
+     _fixShuCalc と applyFix はそのまま動く。 */
+  const _pvOf = d=>{
+    const isShi=d.kind==='shitei';
+    if(hasPi && isShi && nShi===1) return pShi;
+    if(hasPi && !isShi && nTei===1) return pTei;
+    if(hasP && !hasPi && !isShi && nTei===1 && nShi===0) return pTot;
+    return null;
+  };
+  const _rh2=(t,s2)=>`<td style="text-align:left;background:var(--bg3);font-weight:700;width:76px;min-width:76px;font-size:12px;">${t}`
+      +(s2?`<div style="font-size:9px;font-weight:400;color:var(--txt3);line-height:1.3;">${s2}</div>`:'')+`</td>`;
+  const nTot=Object.keys(cur).reduce((a2,k)=>a2+(cur[k]||0),0);
   wrap.innerHTML=`
     <div style="font-size:12.5px;font-weight:700;color:var(--grn2);margin-bottom:5px;">集荷
       <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:6px;">集荷先ごと。単価が違うので分けて入れてください</span></div>
-    <div class="tw"><table>
-      <thead><tr>
-        <th style="width:120px;">集荷先</th>
-        <th class="tr" style="width:110px;">郵便局</th>
-        <th class="tr" style="width:110px;">日報</th>
-        <th class="tr" style="width:80px;">差異</th>
+    <div class="tw"><table style="width:100%;">
+      <thead><tr><th style="width:76px;"></th>
+        ${defs.map(d=>`<th class="tr" style="color:${d.kind==='shitei'?'var(--amb2)':'var(--grn2)'};white-space:nowrap;">${esc(d.name)}
+          <div style="font-size:8.5px;font-weight:400;color:var(--txt3);">${d.kind==='shitei'?'指定事業所集荷':'定時集荷'}</div></th>`).join('')}
+        <th class="tr" style="border-left:2px solid var(--brd2);">合計<div style="font-size:8.5px;font-weight:400;color:var(--txt3);">請求根拠</div></th>
       </tr></thead>
-      <tbody>${defs.map(d=>{
-        const isShi=d.kind==='shitei';
-        let pv=null;
-        if(hasPi && isShi && nShi===1) pv=pShi;
-        else if(hasPi && !isShi && nTei===1) pv=pTei;
-        else if(hasP && !hasPi && !isShi && nTei===1 && nShi===0) pv=pTot;
-        return `<tr>
-          <td style="font-size:12.5px;font-weight:700;color:${isShi?'var(--amb2)':'var(--grn2)'};">${esc(d.name)}
-            <div style="font-size:9.5px;font-weight:400;color:var(--txt3);">${isShi?'指定事業所集荷':'定時集荷'}</div></td>
-          <td class="tr mono fw7" style="font-size:15px;">${pv==null?dash:fmt(pv)}</td>
-          <td style="padding:3px 6px;"><input type="number" min="0" class="fx-shu" data-name="${esc(d.name)}"
-            data-p="${pv==null?'':pv}" value="${cur[d.name]||0}" oninput="_fixShuCalc()" onfocus="this.select()"
-            style="width:100%;padding:6px 8px;text-align:right;font-size:15px;font-weight:700;
-                   font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:5px;
-                   background:var(--sur2);color:var(--txt);"></td>
-          <td class="tr mono fw7 fx-shu-d" style="font-size:14px;">0</td>
-        </tr>`;
-      }).join('')}</tbody>
-      <tfoot><tr style="background:var(--sur2);border-top:2px solid var(--brd2);">
-        <td style="font-size:12.5px;font-weight:700;">合計<div style="font-size:9.5px;font-weight:400;color:var(--txt3);">請求根拠</div></td>
-        <td class="tr mono fw7" style="font-size:16px;">${hasP?fmt(pTot):dash}</td>
-        <td class="tr mono fw7" id="fix-shu-n" style="font-size:16px;">0</td>
-        <td class="tr mono fw7" id="fix-shu-d" style="font-size:16px;">0</td>
-      </tr></tfoot>
-    </table></div>
+      <tbody>
+        <tr>${_rh2('郵便局','調書')}
+          ${defs.map(d=>{ const pv=_pvOf(d);
+            return `<td class="tr mono" style="font-size:14px;">${pv==null?dash:fmt(pv)}</td>`; }).join('')}
+          <td class="tr mono fw7" style="border-left:2px solid var(--brd2);font-size:15px;">${hasP?fmt(pTot):dash}</td></tr>
+        <tr>${_rh2('日報','社内')}
+          ${defs.map(d=>{ const pv=_pvOf(d);
+            return `<td style="padding:3px 4px;"><input type="number" min="0" class="fx-shu" data-name="${esc(d.name)}"
+              data-p="${pv==null?'':pv}" value="${cur[d.name]||0}" oninput="_fixShuCalc()" onfocus="this.select()"
+              style="width:100%;min-width:58px;padding:5px 5px;text-align:right;font-size:14px;font-weight:700;
+                     font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
+                     background:var(--sur2);color:var(--txt);"></td>`; }).join('')}
+          <td class="tr mono fw7" id="fix-shu-n" style="border-left:2px solid var(--brd2);font-size:15px;">${fmt(nTot)}</td></tr>
+        <tr>${_rh2('差異','局−日報')}
+          ${defs.map(()=>`<td class="tr mono fw7 fx-shu-d" style="font-size:14px;">0</td>`).join('')}
+          <td class="tr mono fw7" id="fix-shu-d" style="border-left:2px solid var(--brd2);font-size:15px;">0</td></tr>
+      </tbody></table></div>
     <div id="fix-shu-note" class="xs" style="color:var(--txt2);margin-top:5px;line-height:1.6;"></div>`;
   wrap.setAttribute('data-ptot', hasP?String(pTot):'');
   _fixShuCalc();
@@ -16119,6 +16161,15 @@ function _fixCalc(){
   }
 }
 
+/* ★ 2026-10-30.67: その他の合計を出し直す（数量を打つたび） */
+function _fixSonCalc(){
+  const w=$('fix-sonota'); if(!w) return;
+  let t=0;
+  w.querySelectorAll('.fx-son').forEach(el=>{ t+=Math.max(0, parseInt(el.value)||0); });
+  const el=$('fix-son-sum'); if(el) el.textContent=fmt(t);
+}
+window._fixSonCalc=_fixSonCalc;
+
 function applyFix(opt){
   opt=opt||{};
   const r=D.delivery.find(x=>String(x.id)===String(cmpFixTargetId));
@@ -16185,6 +16236,19 @@ function applyFix(opt){
     FIX_COLS.forEach(c=>{
       r[c.n]=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
     });
+    /* ★ 2026-10-30.67: その他1〜4。画面に出ているときだけ読む。
+       支払に直接ひびくので、触っていないときは何も書かない。 */
+    {
+      const w=$('fix-sonota');
+      const ins=w ? w.querySelectorAll('.fx-son') : [];
+      if(ins.length){
+        const cur=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+        const nx=[0,0,0,0];
+        ins.forEach(el=>{ const i=parseInt(el.getAttribute('data-i'))||0;
+          nx[i]=Math.max(0, parseInt(el.value)||0); });
+        if(nx.some((v,i)=>v!==(cur[i]||0))) r.sonota=nx;
+      }
+    }
     // 郵便局側は D.postLogs が保存元。表示用フィールドと両方そろえる。
     const logs=Array.isArray(D.postLogs)?D.postLogs:[];
     const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
@@ -52849,6 +52913,13 @@ async function _cmpWriteBackYp(r){
     tgt.yakan=r.yakan||0;
     tgt.ogata=r.ogata||0;
     tgt.mochimodoiri=r.mochimodoiri||0;
+    /* ★ 2026-10-30.67: その他1〜4も書き戻す。
+       照合の修正画面で直せるようにしたので、日報側へ反映しないと
+       画面上だけ変わって保存されないことになる。 */
+    if(Array.isArray(r.sonota)){
+      tgt.sonota=r.sonota.map(v=>Math.max(0,parseInt(v)||0));
+      if(f.del && f.del!==f) f.sonota=f.del.sonota;
+    }
     // ★ 2026-10-09.5: 統合形式では form.del が本体だが、提出時に
     //   Object.assign(form, form.del) で form 直下にも同じ値が写されている。
     //   ここで form.del だけを直すと form 直下が古い値のまま残り、
