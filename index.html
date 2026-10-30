@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.63</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.64</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6055,7 +6055,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.63';
+const APP_VER = '2026-10-30.64';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16779,12 +16779,12 @@ async function saveDel(){
     // ★ 2026/08/17: 全欄0＝稼働なしの日。連続入力中にアラートで止まると
     //   Enter連打で日を送れないため、保存せず静かに翌日へ進める。
     //   (「保存して続けて入力」から呼ばれた場合のみ。単発保存時は従来どおり警告)
-    if(window._delContinueMode){
-      _showSaveToast('入力なしのため保存せず次の日へ進みます');
-      return { skipped:true };
-    }
     /* ══════════════════════════════════════════════════════════
        ★ 2026-10-30.63: 編集で全部0にしたときは保存できるようにする。
+       ★ 2026-10-30.64: 編集かどうかの判定を「続けて入力」の分岐より前に出した。
+         クイック保存は confirmAndSave → saveDelContinue を通るため
+         _delContinueMode が立っており、編集で0にしても下の分岐で
+         黙って翌日へ送られ、保存されていなかった。
 
        新規入力の0は打ち間違いなので従来どおり弾く。
        だが「もともと入っていた数量を取り消したい」ときは別で、
@@ -16796,6 +16796,10 @@ async function saveDel(){
        ══════════════════════════════════════════════════════════ */
     const _edId = $('m-del')?._editId || null;
     if(!_edId){
+      if(window._delContinueMode){
+        _showSaveToast('入力なしのため保存せず次の日へ進みます');
+        return { skipped:true };
+      }
       showAlert({icon:'❌', title:'入力エラー', msg:'入力データがありません。\n少なくとも1件以上入力してから保存してください。'});
       return;
     }
