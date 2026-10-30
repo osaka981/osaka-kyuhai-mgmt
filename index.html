@@ -978,7 +978,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.68</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.69</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6065,7 +6065,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.68';
+const APP_VER = '2026-10-30.69';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15847,7 +15847,7 @@ function openCmpFix(id) {
         <tr>${_rh('日報','社内')}${FIX_COLS.map(c=>{
           const nv=Math.max(0,parseInt(r[c.n])||0);
           return `<td style="padding:2px 4px;">${_inp('n',c.k,nv)}</td>`; }).join('')}</tr>
-        <tr>${_rh('差異','局−日報')}${FIX_COLS.map(c=>
+        <tr>${_rh('差異','局データ')}${FIX_COLS.map(c=>
           `<td class="tr mono fw7" id="fx-d-${c.k}" style="font-size:14px;">0</td>`).join('')}</tr>
       </tbody></table></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--sur2);
@@ -15988,7 +15988,7 @@ function _fixShuRender(r){
                      font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
                      background:var(--sur2);color:var(--txt);"></td>`; }).join('')}
           <td class="tr mono fw7" id="fix-shu-n" style="border-left:2px solid var(--brd2);font-size:15px;">${fmt(nTot)}</td></tr>
-        <tr>${_rh2('差異','局−日報')}
+        <tr>${_rh2('差異','局データ')}
           ${defs.map(()=>`<td class="tr mono fw7 fx-shu-d" style="font-size:14px;">0</td>`).join('')}
           <td class="tr mono fw7" id="fix-shu-d" style="border-left:2px solid var(--brd2);font-size:15px;">0</td></tr>
       </tbody></table></div>
