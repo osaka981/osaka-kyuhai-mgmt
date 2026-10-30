@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-29.62</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.63</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6055,7 +6055,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-29.62';
+const APP_VER = '2026-10-30.63';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16783,8 +16783,29 @@ async function saveDel(){
       _showSaveToast('入力なしのため保存せず次の日へ進みます');
       return { skipped:true };
     }
-    showAlert({icon:'❌', title:'入力エラー', msg:'入力データがありません。\n少なくとも1件以上入力してから保存してください。'});
-    return;
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-10-30.63: 編集で全部0にしたときは保存できるようにする。
+
+       新規入力の0は打ち間違いなので従来どおり弾く。
+       だが「もともと入っていた数量を取り消したい」ときは別で、
+       ここで弾かれると直す手段が無くなっていた
+       （運坊の日別実績取込で入った その他1＝1 のように、
+         一覧に出ない項目だけが残っている日報が実在する）。
+       日報そのものを消すのは一覧の「削除」の役目なので、
+       ここでは0のまま残せるようにするだけにする。
+       ══════════════════════════════════════════════════════════ */
+    const _edId = $('m-del')?._editId || null;
+    if(!_edId){
+      showAlert({icon:'❌', title:'入力エラー', msg:'入力データがありません。\n少なくとも1件以上入力してから保存してください。'});
+      return;
+    }
+    const _ok0 = await showDialog({ icon:'📝', title:'数量がすべて0です',
+      msg:'この日報の数量がすべて0になりました。\n\n'
+        + '0のまま保存しますか。\n\n'
+        + '・請求にも支払にも乗らなくなります\n'
+        + '・日報そのものを消すなら、一覧の「削除」を使ってください',
+      okText:'0のまま保存する', cancelText:'やめる' });
+    if(!_ok0) return;
   }
   // ── 重複チェック（新規入力のみ・編集時はスキップ）──
   const editingId = $('m-del')?._editId || null;
