@@ -975,7 +975,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.64</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.65</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3766,7 +3766,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
   <!-- 基本情報 -->
   <input type="hidden" id="dd-post">
   <div style="display:grid;grid-template-columns:160px 1fr 1fr;gap:8px;margin-bottom:10px;">
-    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel();_ddWorkSync&&_ddWorkSync();try{renderDdColInputs()}catch(_){}" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
+    <div class="fg"><label>日付</label><input type="date" min="1900-01-01" max="2099-12-31" id="dd-date" class="fi date-fi" oninput="valDel();_ddWorkSync&&_ddWorkSync();try{renderDdColInputs()}catch(_){}" onchange="try{_ddDateChanged()}catch(_){}" onclick="try{this.showPicker&&this.showPicker()}catch(_){}"></div>
 
     <!-- ① 営業所コンボ：番号/名前で検索、確定で郵便局・従業員に連動 -->
     <div class="fg">
@@ -6055,7 +6055,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.64';
+const APP_VER = '2026-10-30.65';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16940,6 +16940,7 @@ async function saveDel(){
   _resetDelForm();
   // 完了トースト表示
   _showSaveToast('宅配日報を保存しました');
+  return { saved:true };   /* ★ 2026-10-30.65 日付を変える前の保存で成否を見る */
 }
 
 
@@ -17004,6 +17005,82 @@ function _resetDelForm(){
   valDel(); calcDelAmt();
   // 保存後は日付欄にフォーカス
   setTimeout(()=>{ const e=$('dd-date');if(e)e.focus(); },100);
+  try{ _ddMarkClean(); }catch(e){}   /* ★ 2026-10-30.65 */
+}
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-10-30.65: 宅配日報入力で日付を変えたら、その日の日報を読み直す。
+
+   いままでは日付欄だけが変わり、中身は前の日のままだった。
+   そのまま保存すると、開いていた日報の日付が書き換わり、
+   元の日のデータが消えて別の日に移ってしまう
+   （9/8を開いて日付を9/7にすると、9/8の日報が9/7になる）。
+
+   数量を変えている途中なら、先に保存するかを聞いてから移る。
+   その日の日報が無ければ、日付・営業所・従事員を残して空にする。
+   ══════════════════════════════════════════════════════════ */
+const _DD_WATCH = ['dd-mochi','dd-kanryo','dd-tenso','dd-yakan','dd-ogata','dd-shukka',
+                   'dd-s1','dd-s2','dd-s3','dd-s4','dd-modori','dd-yoku','dd-note'];
+let _ddSnap = null, _ddDatePrev = '';
+function _ddSnapshot(){
+  const o={}; _DD_WATCH.forEach(id=>{ o[id]=String($(id)?.value ?? ''); }); return o;
+}
+function _ddMarkClean(){
+  _ddSnap=_ddSnapshot();
+  _ddDatePrev=$('dd-date')?.value||'';
+}
+function _ddDirty(){
+  if(!_ddSnap) return false;
+  const cur=_ddSnapshot();
+  return _DD_WATCH.some(id=>String(cur[id])!==String(_ddSnap[id]));
+}
+/* その日・その従事員の日報を開く。無ければ空にして新規にする */
+function _ddLoadForDate(nd){
+  const stf=$('dd-staff')?.value||'';
+  const nn=(typeof _normDate==='function')?_normDate(nd):nd;
+  const rec=(D.delivery||[]).find(r=>r && r.staff===stf
+    && ((typeof _normDate==='function')?_normDate(r.date):r.date)===nn);
+  if(rec && typeof editDel==='function'){ editDel(rec.id); return true; }
+  /* 新規にする。日付・営業所・従事員は残す */
+  const mDel=document.getElementById('m-del'); if(mDel) mDel._editId=null;
+  window._delEditMode=false;
+  _DD_WATCH.forEach(id=>{ const e=$(id); if(e) e.value=(id==='dd-note'?'':'0'); });
+  ['dd-kanryo-u','dd-tenso-u','dd-yakan-u','dd-ogata-u','dd-shukka-u',
+   'dd-s1-u','dd-s2-u','dd-s3-u','dd-s4-u'].forEach(id=>{ const e=$(id); if(e) e.value='0'; });
+  if($('dd-date')) $('dd-date').value=nd;
+  try{ if(typeof resetDdColInputs==='function') resetDdColInputs(); }catch(e){}
+  try{ if(typeof resetDdYoko==='function') resetDdYoko(); }catch(e){}
+  try{ if(typeof _ddRefresh==='function') _ddRefresh(); }catch(e){}
+  try{ valDel(); calcDelAmt(); }catch(e){}
+  _ddMarkClean();
+  return false;
+}
+async function _ddDateChanged(){
+  const el=$('dd-date'); if(!el) return;
+  const nd=el.value||'';
+  if(!nd) return;
+  if(!_ddSnap){ _ddMarkClean(); return; }     /* まだ何も読み込んでいない */
+  if(nd===_ddDatePrev) return;
+  if(_ddDirty()){
+    const ok=await showDialog({ icon:'💾', title:'保存しますか',
+      msg:`${_ddDatePrev} の数量を変えています。\n\n`
+        + `日付を ${nd} に変えると、この変更は失われます。\n\n`
+        + `先に保存しますか。`,
+      okText:'保存してから移る', cancelText:'保存せずに移る' });
+    if(ok){
+      el.value=_ddDatePrev;                   /* 元の日に戻してから保存する */
+      let r=null;
+      try{ r=await saveDel(); }catch(e){ console.error('[日付変更] 保存エラー', e); }
+      if(!(r && r.saved)){                    /* 保存できなければ元の日に留まる */
+        _showSaveToast('保存できなかったので、日付は戻しました');
+        _ddMarkClean();
+        return;
+      }
+      el.value=nd;
+    }
+  }
+  const found=_ddLoadForDate(nd);
+  if(found) _showSaveToast(nd+' の日報を開きました');
 }
 
 function editDel(id){
@@ -17071,6 +17148,7 @@ function editDel(id){
   // 編集中のIDを記録（重複チェックスキップ用）
   const mDel = document.getElementById('m-del');
   if(mDel) mDel._editId = id;
+  try{ _ddMarkClean(); }catch(e){}   /* ★ 2026-10-30.65 読み込んだ値を控える */
   // 持出欄にフォーカス（編集モード）
   setTimeout(()=>{ const e=$('dd-mochi');if(e){e.focus();e.select();} },150);
 }
