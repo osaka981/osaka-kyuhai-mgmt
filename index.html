@@ -978,7 +978,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-30.69</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-31.70</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6065,7 +6065,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-30.69';
+const APP_VER = '2026-10-31.70';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -51711,7 +51711,34 @@ function _peResolveCol(ex, defs){
       else  out.unknown += n;   // 削除された集荷先など
     });
   }else if(ex.shukka!=null && ex.shukka!==''){
-    out.unknown = Math.max(0, parseInt(ex.shukka)||0);   // 内訳を持たない過去データ
+    /* ══════════════════════════════════════════════════════
+       ★ 2026-10-31.70: 内訳を持たないデータ。
+
+       調書CSV取込は shukka(合計) と shitei(指定事業所集荷) の2つの数字しか
+       書かず、shukkaCompanies を作らない。そのまま未分類に落とすと、
+       照合では「定165／指59」と出ているのにこの画面では「未分類 224」になり、
+       同じ日のデータが2つの画面で食い違って見えていた。
+       shitei が入っていれば、それで集荷先に割り振る。
+       定時・指定事業所がそれぞれ1つのときだけ割り当てられる。
+       （同じ種類の集荷先が複数ある局では、どちらに何個かは決められない）
+       ══════════════════════════════════════════════════════ */
+    const tot = Math.max(0, parseInt(ex.shukka)||0);
+    const hasShi = (ex.shitei!==undefined && ex.shitei!==null && ex.shitei!=='');
+    const shi = hasShi ? Math.max(0, parseInt(ex.shitei)||0) : 0;
+    const tei = Math.max(0, tot - shi);
+    const dT = (defs||[]).filter(d=>d.kind==='teiji');
+    const dS = (defs||[]).filter(d=>d.kind==='shitei');
+    if(hasShi && dT.length===1 && dS.length===1){
+      out.vals[dT[0].name] = tei;
+      out.vals[dS[0].name] = shi;
+    }else if(hasShi && dT.length===0 && dS.length===1){
+      out.vals[dS[0].name] = shi;
+      out.unknown = tei;
+    }else if(!hasShi && dT.length===1 && dS.length===0){
+      out.vals[dT[0].name] = tot;          // 指定事業所が無い局（藤井寺など）
+    }else{
+      out.unknown = tot;                   // 割り振れないので未分類のまま
+    }
   }
   return out;
 }
@@ -51969,6 +51996,11 @@ async function savePostEntry(opt){
   const rows=[...tb.querySelectorAll('tr[data-staff]')];
   const logs=_postLogsAll();
 
+  /* ★ 2026-10-31.70: この局・この日に指定事業所集荷先が登録されているか。
+     登録が無い局（藤井寺など）で shitei を書くと、照合に「指 0」の行が出て
+     しまうので書かない。行ごとに変わらないので先に1度だけ調べる。 */
+  const _hasShiteiDef = (_peShukkaDefs()||[]).some(d=>d && d.kind==='shitei');
+
   const recs=[]; let noJp=0;
   rows.forEach(tr=>{
     const obj={}; let any=false;
@@ -51982,6 +52014,20 @@ async function savePostEntry(opt){
     const col=_peReadColOfRow(tr);
     if(col.total>0) any=true;
     obj.shukkaCompanies = col.list;
+    /* ══════════════════════════════════════════════════════
+       ★ 2026-10-31.70: 指定事業所集荷の合計を shitei にも書く。
+
+       照合の郵便局側（_cmpJoinPostLogs → r.postShitei）は shitei だけを見ている。
+       ここを書かないと、手入力で振り分けた内訳が照合に出ないうえ、
+       取込時の古い shitei が {...logs[idx], ...r} のマージで残り続け、
+       ECOボールを0に直しても照合は59のまま＝差異に気づけない。
+       （請求書の指定事業所集荷は日報の内訳から出しているので、
+         金額そのものがここでずれるわけではない）
+       ══════════════════════════════════════════════════════ */
+    if(_hasShiteiDef){
+      obj.shitei = col.list.reduce((a,c)=>
+        a + (c && c.kind==='shitei' ? (parseInt(c.count)||0) : 0), 0);
+    }
     obj.shukka          = col.total;
     if(!any) return;                       // 空行=その日は稼働なし
     const emp=tr.getAttribute('data-emp')||'';
