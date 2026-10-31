@@ -978,7 +978,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-31.70</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-10-31.71</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6065,7 +6065,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-31.70';
+const APP_VER = '2026-10-31.71';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -52765,12 +52765,35 @@ function _cmpSumHeader(rows, orphans, label){
      一致／差異の判定（okN/ngN）には入れないので、上の3本の見方は変わらない。 */
   const _n0=v=>Math.max(0,parseInt(v)||0);
   let shN=0, shP=0, shHasPost=false;
+  /* ★ 2026-10-31.71: 集荷の内訳（定時／指定事業所）も月計で出す。
+     単価が違う（西成は定時132.4／指定事業所87.6）ので、合計が合っていても
+     内訳がずれていれば請求額は変わる。合計だけ見ていては気づけない。
+     ・郵便局側 … postShitei が入っている行だけ。無い行は「内訳なし」に寄せる
+     ・日報側 … _shukkaSplit が拠点マスタの集荷先で振り分ける（全行ぶん）
+     日報側は定時＋指定が必ず合計(shN)に一致する。 */
+  let shNt=0, shNs=0, shPt=0, shPs=0, shPu=0, shHasShi=false;
+  const _shAddPost=r=>{
+    if(r.postShukka==null) return;
+    shHasPost=true;
+    const tot=_n0(r.postShukka);
+    shP+=tot;
+    if(r.postShitei!=null){
+      shHasShi=true;
+      const s=_n0(r.postShitei);
+      shPs+=s; shPt+=Math.max(0, tot-s);
+    }else{
+      shPu+=tot;              // 内訳の来ていない局・月
+    }
+  };
 
   (rows||[]).forEach(r=>{
     const d=_cmpDiffs(r);
     t.nk+=d.nikki.kanryo; t.ny+=d.nikki.yakan; t.no+=d.nikki.ogata;
     shN+=_n0(r.shukka);
-    if(r.postShukka!=null){ shHasPost=true; shP+=_n0(r.postShukka); }
+    if(typeof _shukkaSplit==='function'){
+      try{ const sp=_shukkaSplit(r); shNt+=_n0(sp.teiji); shNs+=_n0(sp.shitei); }catch(e){ }
+    }
+    _shAddPost(r);
     if(d.hasPost){
       hasPost=true;
       t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
@@ -52783,7 +52806,7 @@ function _cmpSumHeader(rows, orphans, label){
   });
   (orphans||[]).forEach(r=>{
     const d=_cmpDiffs(r);
-    if(r.postShukka!=null){ shHasPost=true; shP+=_n0(r.postShukka); }
+    _shAddPost(r);
     if(d.hasPost){
       hasPost=true;
       t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
@@ -52831,6 +52854,36 @@ function _cmpSumHeader(rows, orphans, label){
                   border-top:1px dashed var(--brd);margin-top:4px;padding-top:4px;">
         <span>差異 <span style="font-size:9.5px;color:var(--txt3);">局−日報</span></span>
         <b style="font-family:'DM Mono',monospace;font-size:17px;color:${!shHasPost?'var(--txt3)':(d<0?'var(--red2)':'var(--grn2)')};">${shHasPost?((d>0?'+':'')+n(d)):'—'}</b></div>
+      ${shBreak()}
+    </div>`;
+  };
+
+  /* ★ 2026-10-31.71: 集荷カードの内訳（定時／指定事業所）。
+     指定事業所集荷のある局だけ出す。無い局で「指定 0」と並べても読む人の手間が増えるだけ。 */
+  const shBreak=()=>{
+    if(!shHasShi && !shNs) return '';
+    const mono="font-family:'DM Mono',monospace;text-align:right;";
+    const row=(lab,col,pv,nv,hasP)=>{
+      const dv=hasP?pv-nv:null;
+      const dcol = dv===null ? 'var(--txt3)' : (dv<0?'var(--red2)':(dv>0?'var(--grn2)':'var(--txt2)'));
+      return `<span style="color:${col};font-weight:700;white-space:nowrap;">${lab}</span>
+        <span style="${mono}color:${col};">${hasP?n(pv):'—'}</span>
+        <span style="${mono}color:var(--txt);">${n(nv)}</span>
+        <span style="${mono}color:${dcol};font-weight:700;">${dv===null?'—':((dv>0?'+':'')+n(dv))}</span>`;
+    };
+    return `<div style="border-top:1px dashed var(--brd);margin-top:5px;padding-top:4px;">
+      <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:2px 8px;font-size:10.5px;color:var(--txt2);">
+        <span style="font-size:9px;color:var(--txt3);">内訳</span>
+        <span style="font-size:9px;color:var(--txt3);text-align:right;">郵便局</span>
+        <span style="font-size:9px;color:var(--txt3);text-align:right;">日報</span>
+        <span style="font-size:9px;color:var(--txt3);text-align:right;">差異</span>
+        ${row('定時','var(--grn2)',shPt,shNt,shHasShi)}
+        ${row('指定事業所','var(--amb2)',shPs,shNs,shHasShi)}
+        ${shPu?`<span style="color:var(--txt3);font-weight:700;white-space:nowrap;">内訳なし</span>
+          <span style="${mono}color:var(--txt3);">${n(shPu)}</span>
+          <span style="${mono}color:var(--txt3);">—</span>
+          <span style="${mono}color:var(--txt3);">—</span>`:''}
+      </div>
     </div>`;
   };
 
