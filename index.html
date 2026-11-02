@@ -315,7 +315,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
 /* 見出しと操作ボタンを縦に */
 #cmp-side .ch{flex-direction:column;align-items:stretch;gap:8px;}
 #cmp-side .ch .fla{flex-direction:column;align-items:stretch;gap:5px;}
-#cmp-side .ch .fla .btn{width:100%;text-align:center;}
+/* ★ 2026-11-02.74: .btn は white-space:nowrap なので、サイドの幅で文字が切れていた。
+   ここだけ折り返しを許し、2行になっても枠からはみ出さないようにする。 */
+#cmp-side .ch .fla .btn{width:100%;justify-content:center;text-align:center;
+  white-space:normal;line-height:1.35;padding-left:6px;padding-right:6px;}
 #cmp-side .f3{display:block;}
 #cmp-side .fg{margin-bottom:0;}
 /* 月・営業所のタブを縦積みに */
@@ -1033,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.73</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.74</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1632,7 +1635,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="fla gap6">
             <button class="btn b-gh btn-sm" id="cmp-filter-fold-btn" onclick="toggleCmpFilter()"
               title="絞り込みを畳んで表を広く使います">▲ 畳む</button>
-            <button class="btn b-amb btn-sm" onclick="openPostEntry()">📮 郵便局データ 手入力</button>
+            <!-- ★ 2026-11-02.74: 絵文字を外した -->
+            <button class="btn b-amb btn-sm" onclick="openPostEntry()">郵便局データ 手入力</button>
             <!-- ★ 2026-11-02.72: 絵文字を外した。いま絞り込んでいる月・営業所だけが対象 -->
             <button class="btn b-blu btn-sm" onclick="runAutoCompare()">自動照合実行</button>
           </div>
@@ -6032,7 +6036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <!-- ══ 郵便局データ 手入力 (2026/08/18) ══ -->
 <div id="m-postentry" class="mbg">
 <div class="modal" style="max-width:1360px;width:96vw;">
-  <div class="mhd"><div class="mtt">📮 郵便局データ 手入力</div><button class="mx" onclick="closeM('m-postentry')">×</button></div>
+  <div class="mhd"><div class="mtt">郵便局データ 手入力</div><button class="mx" onclick="closeM('m-postentry')">×</button></div>
 
   <div class="fla gap6" style="margin-bottom:8px;flex-wrap:wrap;align-items:center;">
     <div style="font-size:11.5px;color:var(--txt2);flex:1 1 auto;">
@@ -6129,7 +6133,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-02.73';
+const APP_VER = '2026-11-02.74';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
