@@ -299,6 +299,61 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--txt)
    .tw は overflow-x:auto のため既にスクロール領域になっており、
    高さを与えないと sticky が効かない。2段見出しは上段の高さぶん下段をずらす。 */
 .tw-sticky{max-height:calc(100vh - 300px);overflow:auto;position:relative;}
+
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-11-02.73: 照合画面を「左に絞り込み・右に表」の2ペインに（案B）
+
+   月・営業所のタブは _monTabs / _offTabs が横並びで作るので、
+   左サイドの中だけ縦積みに読み替える。生成側は触らないので、
+   同じ関数を使っている他の画面（日報・集荷など）は変わらない。
+   狭い画面では元の横並びに戻す。
+   ══════════════════════════════════════════════════════════ */
+#cmp-layout{display:flex;gap:12px;align-items:flex-start;}
+#cmp-side{flex:0 0 212px;position:sticky;top:6px;max-height:calc(100vh - 16px);overflow:auto;}
+#cmp-side .card{margin-bottom:0;padding:11px 11px;}
+#cmp-main{flex:1 1 auto;min-width:0;}
+/* 見出しと操作ボタンを縦に */
+#cmp-side .ch{flex-direction:column;align-items:stretch;gap:8px;}
+#cmp-side .ch .fla{flex-direction:column;align-items:stretch;gap:5px;}
+#cmp-side .ch .fla .btn{width:100%;text-align:center;}
+#cmp-side .f3{display:block;}
+#cmp-side .fg{margin-bottom:0;}
+/* 月・営業所のタブを縦積みに */
+#cmp-side #cmp-mon-tabs>div,
+#cmp-side #cmp-off-tabs>div{display:block!important;margin-bottom:9px!important;}
+#cmp-side #cmp-mon-tabs>div>span:first-child,
+#cmp-side #cmp-off-tabs>div>span:first-child{
+  display:block;font-size:10px!important;letter-spacing:1.2px;
+  color:var(--txt3)!important;margin:0 0 5px;}
+#cmp-side #cmp-mon-tabs>div>div,
+#cmp-side #cmp-off-tabs>div>div{display:block!important;}
+#cmp-side #cmp-mon-tabs button,
+#cmp-side #cmp-off-tabs button{
+  display:block!important;width:100%;text-align:left!important;margin-bottom:4px;
+  padding:7px 11px!important;font-size:13px!important;box-shadow:none!important;}
+#cmp-side #cmp-mon-tabs input[type="month"]{width:100%;min-width:0!important;}
+#cmp-side #cmp-mon-tabs>div>div:last-child{display:block!important;margin-top:6px;}
+#cmp-side #cmp-mon-tabs>div>div:last-child>span{display:block;margin-bottom:3px;}
+/* 合計の帯（畳んだ状態が既定） */
+#cmp-sum-det>summary::-webkit-details-marker{display:none;}
+#cmp-sum-det>summary:hover{background:var(--sur2);}
+@media (max-width:1000px){
+  #cmp-layout{display:block;}
+  #cmp-side{position:static;max-height:none;margin-bottom:10px;}
+  #cmp-side .card{margin-bottom:12px;}
+  #cmp-side .ch{flex-direction:row;align-items:center;}
+  #cmp-side .ch .fla{flex-direction:row;align-items:center;}
+  #cmp-side .ch .fla .btn{width:auto;}
+  #cmp-side #cmp-mon-tabs>div,
+  #cmp-side #cmp-off-tabs>div{display:flex!important;}
+  #cmp-side #cmp-mon-tabs>div>span:first-child,
+  #cmp-side #cmp-off-tabs>div>span:first-child{display:inline;font-size:13px!important;margin:0;}
+  #cmp-side #cmp-mon-tabs>div>div,
+  #cmp-side #cmp-off-tabs>div>div{display:flex!important;}
+  #cmp-side #cmp-mon-tabs button,
+  #cmp-side #cmp-off-tabs button{display:inline-block!important;width:auto;margin-bottom:0;}
+  #cmp-side #cmp-mon-tabs input[type="month"]{width:auto;min-width:185px!important;}
+}
 /* ★ 2026/08/21: 長い一覧の最上部へ戻るボタン。
    一覧は .tw-sticky の中でスクロールするため、window ではなくこの要素を戻す。 */
 .to-top-btn{position:fixed;right:26px;bottom:26px;z-index:40;display:none;
@@ -978,7 +1033,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-10-31.71</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.73</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1563,6 +1618,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
     <!-- 郵便局照合 -->
     <div id="s-cmp" class="sec">
+     <!-- ★ 2026-11-02.73: 左に絞り込み、右を表の専用エリアにした（案B）。
+          絞り込みが縦180pxを占めていたため、表に残るのが288px＝8行しかなかった。 -->
+     <div id="cmp-layout">
+      <aside id="cmp-side">
       <div class="card mb12">
         <div class="ch">
           <div class="ct" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1574,7 +1633,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <button class="btn b-gh btn-sm" id="cmp-filter-fold-btn" onclick="toggleCmpFilter()"
               title="絞り込みを畳んで表を広く使います">▲ 畳む</button>
             <button class="btn b-amb btn-sm" onclick="openPostEntry()">📮 郵便局データ 手入力</button>
-            <button class="btn b-blu btn-sm" onclick="runAutoCompare()">🔄 自動照合実行</button>
+            <!-- ★ 2026-11-02.72: 絵文字を外した。いま絞り込んでいる月・営業所だけが対象 -->
+            <button class="btn b-blu btn-sm" onclick="runAutoCompare()">自動照合実行</button>
           </div>
         </div>
         <!-- ★ 2026-10-08.10: ここから下がまるごと畳める -->
@@ -1589,7 +1649,9 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
         </div>
       </div>
+      </aside>
 
+      <div id="cmp-main">
       <!-- 差異サマリー -->
       <div class="krow mb12" id="cmp-kpi"></div>
 
@@ -1636,6 +1698,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <tbody id="tb-cmp"></tbody>
         </table></div>
       </div>
+      </div><!-- /#cmp-main -->
+     </div><!-- /#cmp-layout ★ 2026-11-02.73 -->
     </div>
 
     <!-- CSV重複確認モーダル -->
@@ -6065,7 +6129,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-10-31.71';
+const APP_VER = '2026-11-02.73';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -16386,8 +16450,27 @@ function runAutoCompare(){
   const fbDrivers=lsGet(LS_KEYS.DRIVERS,[])||[];
   const tempDrivers=fbDrivers.filter(d=>d.isTemp&&d.tempMergeId);
 
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-11-02.72: いま画面で絞り込んでいる月・営業所だけを対象にする。
+
+     これまでは D.delivery を丸ごと見ていたため、大阪西を開いて押したつもりが
+     その月の4局すべて（さらに月タブを選んでいなければ全期間）を
+     一度に照合済にしていた。局ごとに調書を突き合わせていく作りなので、
+     押した画面の範囲だけを動かす。
+     絞り込みの条件は renderCmp と同じものを使う。
+     ══════════════════════════════════════════════════════════ */
+  const _mon = (typeof _ymNorm==='function') ? _ymNorm($('cmp-mon')?.value||'') : ($('cmp-mon')?.value||'');
+  const _off = $('cmp-off')?.value||'';
+  const _inScope = r => {
+    if(!r) return false;
+    if(_mon && (!r.date || String(r.date).substring(0,7)!==_mon)) return false;
+    if(_off && r.office!==_off) return false;
+    return true;
+  };
+
   let ok=0, ng=0, un=0;
   D.delivery.forEach(r=>{
+    if(!_inScope(r)) return;
     const d=_cmpDiffs(r);
     if(!d.hasPost){                       // 郵便局データが未着の日は触らない
       if(!r.cmpOk){ r.status='未照合'; un++; }
@@ -16432,7 +16515,9 @@ function runAutoCompare(){
   }catch(e){ console.error('[runAutoCompare] 状態保存エラー', e); }
 
   renderCmp();renderDash();
-  alert(`自動照合完了\n照合済:${ok}件 / 差異あり:${ng}件 / 郵便局データ未着:${un}件`);
+  /* ★ 2026-11-02.72: どの範囲を照合したのかを先に出す（局ごとに押すため） */
+  const _scope = (_mon||'全期間') + '　' + (_off||'全営業所');
+  alert(`自動照合完了　${_scope}\n照合済:${ok}件 / 差異あり:${ng}件 / 郵便局データ未着:${un}件`);
 }
 
 // ─── 宅配日報入力 ───
@@ -52887,24 +52972,60 @@ function _cmpSumHeader(rows, orphans, label){
     </div>`;
   };
 
-  return `<div style="background:var(--sur);border:1px solid var(--brd2);border-radius:8px;padding:11px 13px;margin-bottom:10px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:9px;">
-      <div style="font-size:14px;font-weight:700;color:var(--txt);">${esc(label||'')} 合計</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;">
-        <span class="bdg bg">照合済 ${okN}</span>
-        <span class="bdg ba">差異了承 ${accN}</span>
-        <span class="bdg br">差異 ${ngN}</span>
-        <span class="bdg bz">未照合 ${unN}</span>
-        ${(orphans&&orphans.length)?`<span class="bdg ba">日報なし ${orphans.length}</span>`:''}
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-11-02.73: 合計を1行の帯にして、4枚のカードは畳んでおく（案B）。
+
+     カード4枚で150px使っていたため、表に残るのが288px＝8行しかなかった。
+     帯だけなら38pxで済み、ふだん見たい「局・報・差」は帯で足りる。
+     内訳（定時／指定事業所や転送還付の再掲）が要るときだけ帯を押して開く。
+     開いた状態は _cmpSumOpen に覚えるので、描き直しても閉じない。
+     ══════════════════════════════════════════════════════════ */
+  const stripOne=(lab,col,pv,nv,hasP)=>{
+    const dv = hasP ? pv-nv : null;
+    const dcol = dv===null ? 'var(--txt3)' : (dv<0?'var(--red2)':'var(--grn2)');
+    return `<span style="display:inline-flex;align-items:center;gap:7px;padding:5px 13px;
+        border-right:1px solid var(--brd);white-space:nowrap;">
+      <b style="font-size:11.5px;color:${col};">${lab}</b>
+      <span style="font-size:10px;color:var(--txt3);">局<b class="mono" style="font-size:14px;color:var(--txt);margin-left:2px;">${hasP?n(pv):'—'}</b></span>
+      <span style="font-size:10px;color:var(--txt3);">報<b class="mono" style="font-size:14px;color:var(--txt);margin-left:2px;">${n(nv)}</b></span>
+      <b class="mono" style="font-size:14px;color:${dcol};">${dv===null?'—':((dv>0?'+':'')+n(dv))}</b>
+    </span>`;
+  };
+
+  return `<div style="background:var(--sur);border:1px solid var(--brd2);border-radius:8px;margin-bottom:8px;">
+    <details id="cmp-sum-det" ${window._cmpSumOpen?'open':''}
+      ontoggle="window._cmpSumOpen=this.open;try{_cmpAlignSummary()}catch(_){}">
+      <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;
+                      flex-wrap:wrap;padding:0 4px 0 0;">
+        <span style="display:inline-flex;align-items:center;gap:7px;padding:5px 11px;
+                     border-right:1px solid var(--brd);white-space:nowrap;">
+          <span style="font-size:12px;font-weight:700;color:var(--txt);">${esc(label||'')}</span>
+        </span>
+        ${stripOne('完了＋転送','var(--grn2)',t.pk,t.nk,hasPost)}
+        ${stripOne('夜間','var(--y60)',t.py,t.ny,hasPost)}
+        ${stripOne('170超','var(--pur2)',t.po,t.no,hasPost)}
+        ${stripOne('集荷','var(--grn2)',shP,shN,shHasPost)}
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
+                     flex-wrap:wrap;font-size:11px;padding:4px 6px;">
+          <span class="bdg bg">照合済 ${okN}</span>
+          <span class="bdg ba">差異了承 ${accN}</span>
+          <span class="bdg br">差異 ${ngN}</span>
+          <span class="bdg bz">未照合 ${unN}</span>
+          ${(orphans&&orphans.length)?`<span class="bdg ba">日報なし ${orphans.length}</span>`:''}
+          <span style="font-size:10.5px;color:var(--txt2);border:1px solid var(--brd2);
+                       border-radius:5px;padding:2px 8px;">内訳 ${window._cmpSumOpen?'▲':'▼'}</span>
+        </span>
+      </summary>
+      <div style="padding:2px 11px 11px;">
+        <div id="cmp-sum-cards" style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${group('完了＋転送還付','var(--grn2)',t.nk,t.pk,'請求根拠')}
+          ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
+          ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
+          ${shGroup()}
+        </div>
       </div>
-    </div>
-    <div id="cmp-sum-cards" style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${group('完了＋転送還付','var(--grn2)',t.nk,t.pk,'請求根拠')}
-      ${group('夜間','var(--y60)',t.ny,t.py,'完了の内数')}
-      ${group('170超','var(--pur2)',t.no,t.po,'完了の内数')}
-      ${shGroup()}
-    </div>
-    ${noPost?`<div style="margin-top:8px;font-size:11px;color:var(--amb2);">
+    </details>
+    ${noPost?`<div style="padding:0 11px 8px;font-size:11px;color:var(--amb2);">
       郵便局データ未取込が ${noPost} 件あります。その分の日報の数量は郵便局側に計上されないため、
       上の差異には未取込分がそのまま含まれています。取込が済むまで差異の数字は目安としてご覧ください。
     </div>`:''}
