@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.77</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.78</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -3904,10 +3904,10 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <!-- ★ 2026-10-09.27: その他1〜4 は宅配事業で使わないため欄を隠す。
              入力欄そのものは残してあるので、過去に数が入っている日報は
              そのまま保存し直され、金額も変わらない。 -->
-        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
-        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
-        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
-        <th class="dd-sonota-col" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
+        <th class="dd-sonota-col" id="dd-sn1-th" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他1</th>
+        <th class="dd-sonota-col" id="dd-sn2-th" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他2</th>
+        <th class="dd-sonota-col" id="dd-sn3-th" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他3</th>
+        <th class="dd-sonota-col" id="dd-sn4-th" style="padding:8px 6px;text-align:center;font-size:12.5px;">その他4</th>
       </tr>
     </thead>
     <tbody>
@@ -5140,10 +5140,18 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
       <div class="fg"><label style="font-size:9px;">夜間（円）<span class="tax-tog" id="tt-st-pnight" data-tax="in"><button onclick="setItemTax('st-pnight','in')" class="active-in">税込</button><button onclick="setItemTax('st-pnight','ex')" class="">税別</button></span></label><input type="number" id="st-pnight" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
       <div class="fg"><label style="font-size:9px;">大型（円）<span class="tax-tog" id="tt-st-pogata" data-tax="in"><button onclick="setItemTax('st-pogata','in')" class="active-in">税込</button><button onclick="setItemTax('st-pogata','ex')" class="">税別</button></span></label><input type="number" id="st-pogata" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
       <div class="fg"><label style="font-size:9px;">集荷（円）<span class="tax-tog" id="tt-st-pshukka" data-tax="in"><button onclick="setItemTax('st-pshukka','in')" class="active-in">税込</button><button onclick="setItemTax('st-pshukka','ex')" class="">税別</button></span></label><input type="number" id="st-pshukka" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
-      <div class="fg"><label style="font-size:9px;">その他1（円）<span class="tax-tog" id="tt-st-ps1" data-tax="in"><button onclick="setItemTax('st-ps1','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps1','ex')" class="">税別</button></span></label><input type="number" id="st-ps1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
-      <div class="fg"><label style="font-size:9px;">その他2（円）<span class="tax-tog" id="tt-st-ps2" data-tax="in"><button onclick="setItemTax('st-ps2','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps2','ex')" class="">税別</button></span></label><input type="number" id="st-ps2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
-      <div class="fg"><label style="font-size:9px;">その他3（円）<span class="tax-tog" id="tt-st-ps3" data-tax="in"><button onclick="setItemTax('st-ps3','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps3','ex')" class="">税別</button></span></label><input type="number" id="st-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
-      <div class="fg"><label style="font-size:9px;">その他4（円）<span class="tax-tog" id="tt-st-ps4" data-tax="in"><button onclick="setItemTax('st-ps4','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps4','ex')" class="">税別</button></span></label><input type="number" id="st-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01"></div>
+      <div class="fg"><label style="font-size:9px;">その他1（円）<span class="tax-tog" id="tt-st-ps1" data-tax="in"><button onclick="setItemTax('st-ps1','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps1','ex')" class="">税別</button></span></label><input type="number" id="st-ps1" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01">
+        <!-- ★ 2026-11-02.78: その他1〜4は人によって中身が違うので名称を持たせる -->
+        <input type="text" id="st-psn1" class="fi" maxlength="12" placeholder="名称（任意）" style="font-size:10.5px;padding:3px 6px;margin-top:3px;color:var(--amb2);"></div>
+      <div class="fg"><label style="font-size:9px;">その他2（円）<span class="tax-tog" id="tt-st-ps2" data-tax="in"><button onclick="setItemTax('st-ps2','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps2','ex')" class="">税別</button></span></label><input type="number" id="st-ps2" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01">
+        <!-- ★ 2026-11-02.78: その他1〜4は人によって中身が違うので名称を持たせる -->
+        <input type="text" id="st-psn2" class="fi" maxlength="12" placeholder="名称（任意）" style="font-size:10.5px;padding:3px 6px;margin-top:3px;color:var(--amb2);"></div>
+      <div class="fg"><label style="font-size:9px;">その他3（円）<span class="tax-tog" id="tt-st-ps3" data-tax="in"><button onclick="setItemTax('st-ps3','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps3','ex')" class="">税別</button></span></label><input type="number" id="st-ps3" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01">
+        <!-- ★ 2026-11-02.78: その他1〜4は人によって中身が違うので名称を持たせる -->
+        <input type="text" id="st-psn3" class="fi" maxlength="12" placeholder="名称（任意）" style="font-size:10.5px;padding:3px 6px;margin-top:3px;color:var(--amb2);"></div>
+      <div class="fg"><label style="font-size:9px;">その他4（円）<span class="tax-tog" id="tt-st-ps4" data-tax="in"><button onclick="setItemTax('st-ps4','in')" class="active-in">税込</button><button onclick="setItemTax('st-ps4','ex')" class="">税別</button></span></label><input type="number" id="st-ps4" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0" step="0.01">
+        <!-- ★ 2026-11-02.78: その他1〜4は人によって中身が違うので名称を持たせる -->
+        <input type="text" id="st-psn4" class="fi" maxlength="12" placeholder="名称（任意）" style="font-size:10.5px;padding:3px 6px;margin-top:3px;color:var(--amb2);"></div>
     </div>
     <!-- 集荷個別単価 -->
     <div style="margin-top:8px;border-top:1px solid var(--brd);padding-top:8px;">
@@ -6133,7 +6141,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-02.77';
+const APP_VER = '2026-11-02.78';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12622,7 +12630,7 @@ function renderDel() {
       ${(()=>{ /* ★ 2026-10-29.62: その他1〜4の合計。内訳はマウスで出す */
         const sn=[r.sonota||[]].flat().map(v=>parseInt(v)||0);
         const tot=sn.reduce((a,v)=>a+v,0);
-        const tip=sn.map((v,i)=>`その他${i+1} ${v}`).join(' ／ ');
+        const tip=sn.map((v,i)=>`${_sonLabelOf(r,i+1)} ${v}`).join(' ／ ');
         return `<td class="tr" style="border-left:2px solid var(--brd2);color:var(--pur2);${tot?'font-weight:700;':''}" title="${esc(tip)}">${tot||0}</td>`;
       })()}
       <td class="tr" style="color:var(--tel2)">${amt?'¥'+fmt(amt):'-'}</td>
@@ -15975,7 +15983,7 @@ function openCmpFix(id) {
         <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:7px;">調書には無い項目です。日報だけ直せます</span></div>
       <div class="tw"><table style="width:100%;">
         <thead><tr><th style="width:94px;"></th>
-          ${[0,1,2,3].map(i=>`<th class="tr" style="color:var(--amb2);">その他${i+1}</th>`).join('')}
+          ${[0,1,2,3].map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonLabelOf(r,i+1))}</th>`).join('')}
           <th class="tr" style="border-left:2px solid var(--brd2);">合計</th>
         </tr></thead>
         <tbody><tr>${_rh('日報','社内')}
@@ -16009,6 +16017,31 @@ function openCmpFix(id) {
    郵便局側は、定時／指定事業所がそれぞれ1つのときだけ行に出す。
    同じ種類の集荷先が複数ある局では割り振りようがないので「—」にして合計だけ出す。
    ════════════════════════════════════════════════════════════ */
+/* ★ 2026-11-02.78: 宅配日報入力の その他1〜4 の見出しを、選んでいる人の名前にする。
+   担当者や日付を変えるたびに呼ぶ。名前が無い人は「その他1」のまま。 */
+function _ddSonotaLabels(){
+  const nm=String($('dd-staff')?.value||'').trim();
+  const st=(D.staff||[]).find(x=>x && x.name===nm);
+  const ym=String($('dd-date')?.value||'').slice(0,7);
+  [1,2,3,4].forEach(i=>{
+    const th=$('dd-sn'+i+'-th'); if(!th) return;
+    const lab=(st && typeof _sonotaName==='function') ? _sonotaName(st,i,ym) : ('その他'+i);
+    th.textContent=lab;
+    th.style.color = (lab==='その他'+i) ? '' : 'var(--amb2)';
+    th.title = (lab==='その他'+i) ? '' : ('その他'+i+'（従業員台帳の宅配単価タブで付けた名前）');
+  });
+}
+
+/* ★ 2026-11-02.78: その日の担当者の その他i の名前。一覧・修正モーダルの見出しに使う */
+function _sonLabelOf(r, i){
+  try{
+    const st=(D.staff||[]).find(x=>x && x.name===(r&&r.staff));
+    if(st && typeof _sonotaName==='function')
+      return _sonotaName(st, i, String((r&&r.date)||'').slice(0,7));
+  }catch(e){}
+  return 'その他'+i;
+}
+
 let _fixShuBase = null;   /* {集荷先名: 個数} 初期値。触ったかどうかの判定に使う */
 let _fixShuSeen = null;   /* 行に出した集荷先の名前（旧名称も含む） */
 
@@ -17302,7 +17335,9 @@ let _ddSnap = null, _ddDatePrev = '';
 function _ddSnapshot(){
   const o={}; _DD_WATCH.forEach(id=>{ o[id]=String($(id)?.value ?? ''); }); return o;
 }
+/* ★ 2026-11-02.78: 担当者・日付が決まったら その他 の見出しを付け替える */
 function _ddMarkClean(){
+  try{ _ddSonotaLabels(); }catch(e){}
   _ddSnap=_ddSnapshot();
   _ddDatePrev=$('dd-date')?.value||'';
 }
@@ -21923,8 +21958,9 @@ function _bizCommissionDel(st, name, monStr, del){
   [{key:'kanryo',label:'完了',price:dp.kanryo},{key:'tenso',label:'転送',price:dp.tenso},
    {key:'yakan',label:'夜間',price:dp.night},{key:'ogata',label:'大型',price:dp.ogata},
    ...(hasNew?[]:[{key:'shukka',label:'集荷',price:dp.shukka}]),
-   {key:'s1',label:'その他1',price:dp.s1},{key:'s2',label:'その他2',price:dp.s2},
-   {key:'s3',label:'その他3',price:dp.s3},{key:'s4',label:'その他4',price:dp.s4}
+   /* ★ 2026-11-02.78: 名前を付けていればその名前で明細に出す */
+   {key:'s1',label:_sonotaName(st,1,monStr),price:dp.s1},{key:'s2',label:_sonotaName(st,2,monStr),price:dp.s2},
+   {key:'s3',label:_sonotaName(st,3,monStr),price:dp.s3},{key:'s4',label:_sonotaName(st,4,monStr),price:dp.s4}
   ].forEach(({key,label,price})=>{
     if(sum[key]>0 && price){
       const taxFlag=(dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
@@ -27644,7 +27680,7 @@ function saveStaff(continueAdd=false){
       // 集荷先別単価(拠点マスタ連動・宅配事業内集荷)を収集
       const shu = (typeof collectStShukkaCompanies==='function') ? collectStShukkaCompanies() : {shukkaMode:'perCustomer', shukkaCompanies:{}};
       return {
-      del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')},
+      del:{kanryo:parseFloat($('st-pkanryo')?.value)||0,tenso:parseFloat($('st-ptenso')?.value)||0,night:parseFloat($('st-pnight')?.value)||0,ogata:parseFloat($('st-pogata')?.value)||0,shukka:parseFloat($('st-pshukka')?.value)||0,s1:parseFloat($('st-ps1')?.value)||0,s2:parseFloat($('st-ps2')?.value)||0,s3:parseFloat($('st-ps3')?.value)||0,s4:parseFloat($('st-ps4')?.value)||0,colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),_names:(typeof _collectSonotaNames==='function'?_collectSonotaNames():{}),_tax:{kanryo:getItemTax('st-pkanryo'),tenso:getItemTax('st-ptenso'),night:getItemTax('st-pnight'),ogata:getItemTax('st-pogata'),shukka:getItemTax('st-pshukka'),s1:getItemTax('st-ps1'),s2:getItemTax('st-ps2'),s3:getItemTax('st-ps3'),s4:getItemTax('st-ps4')},
         // 集荷先別単価(2026/05/09 拠点マスタ連動・宅配事業内集荷)
         shukkaCompanies: shu.shukkaCompanies},
       // ★ 2026/09/12: 欄IDは 'st-c'+ck で統一されている。CK_LIST から導出し、
@@ -27900,6 +27936,7 @@ function saveStaff(continueAdd=false){
   ['st-name','st-kana','st-tel','st-tel2','st-addr','st-license','st-license-exp',
    'st-birth','st-start','st-end','st-note','st-tk',
    'st-pkanryo','st-ptenso','st-pnight','st-pogata','st-pshukka','st-ps1','st-ps2','st-ps3','st-ps4',
+   'st-psn1','st-psn2','st-psn3','st-psn4',
    'st-ptenso','st-pmodori','st-pshukka',
    'st-gas-card','st-gas-amt','st-yosha-amt','st-yosha-note','st-yokonori-unit','st-tokubetsu-unit','st-teate-other',
   ].concat(CK_LIST.map(ck=>'st-c'+ck))      // ★ 2026/09/12: 集荷単価欄は ITEMS から導出
@@ -37578,6 +37615,9 @@ function _stRateLoadForm(h){
   put('st-pkanryo', d.kanryo); put('st-ptenso', d.tenso); put('st-pnight', d.night);
   put('st-pogata', d.ogata);   put('st-pshukka', d.shukka);
   put('st-ps1', d.s1); put('st-ps2', d.s2); put('st-ps3', d.s3); put('st-ps4', d.s4);
+  /* ★ 2026-11-02.78: その他1〜4の名称 */
+  [1,2,3,4].forEach(i=>{ const e=$('st-psn'+i); if(e) e.value=((d._names||{})['s'+i])||''; });
+  if(typeof _applySonotaLabels==='function') _applySonotaLabels();
   if(d._tax && typeof setItemTax==='function'){
     [['kanryo','st-pkanryo'],['tenso','st-ptenso'],['night','st-pnight'],['ogata','st-pogata'],
      ['shukka','st-pshukka'],['s1','st-ps1'],['s2','st-ps2'],['s3','st-ps3'],['s4','st-ps4']]
@@ -37739,6 +37779,7 @@ function _stCollectDelPrices(){
     kanryo:n('st-pkanryo'), tenso:n('st-ptenso'), night:n('st-pnight'), ogata:n('st-pogata'),
     shukka:n('st-pshukka'), s1:n('st-ps1'), s2:n('st-ps2'), s3:n('st-ps3'), s4:n('st-ps4'),
     colCompanies:(typeof collectStDelColCmp==='function'?collectStDelColCmp():[]),
+    _names:(typeof _collectSonotaNames==='function'?_collectSonotaNames():{}),   /* ★ 2026-11-02.78 */
     _tax:{kanryo:tx('st-pkanryo'),tenso:tx('st-ptenso'),night:tx('st-pnight'),ogata:tx('st-pogata'),
           shukka:tx('st-pshukka'),s1:tx('st-ps1'),s2:tx('st-ps2'),s3:tx('st-ps3'),s4:tx('st-ps4')},
     shukkaCompanies: shu.shukkaCompanies||{},
@@ -37987,6 +38028,58 @@ async function saveStaffAsk(continueAdd){
 
 /* ★ 2026-10-09.46: 第2引数に年月を渡すと、その月に効いていた単価を返す。
    渡さないときは今までどおり台帳の現在値（＝いちばん新しい単価）。 */
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-02.78: その他1〜4の名称
+
+   「その他1」の中身は人によって違う。
+     田中功一さん … その他1 ＝ 月曜の東淀川ルート（4,000円/回）
+     青木克之さん … その他1 ＝ 1便（9,000円）／その他2 ＝ 2便目（7,000円）
+   「その他2に1を入れてください」では現場に伝わらないので、
+   人ごとに名前を付けられるようにした。
+
+   ・持ち場所は fixedPrices.del._names（単価と同じ場所なので履歴にも残る）
+   ・表示だけで、計算には一切関わらない
+   ・運坊CSVの取込は列の位置で読むので、名前を変えても取込は壊れない
+   ════════════════════════════════════════════════════════════ */
+function _collectSonotaNames(){
+  const o={};
+  [1,2,3,4].forEach(i=>{ o['s'+i]=String($('st-psn'+i)?.value||'').trim(); });
+  return o;
+}
+/* その人の その他i の名前。付いていなければ「その他i」 */
+function _sonotaName(st, i, ym){
+  const k='s'+i;
+  const pick=o=>{ const v=o && o._names && o._names[k]; return (v&&String(v).trim())?String(v).trim():''; };
+  try{
+    if(st && ym && typeof _rateAt==='function'){ const r=_rateAt(st,ym); const v=pick(r&&r.del); if(v) return v; }
+  }catch(e){}
+  const v2=pick(st && st.fixedPrices && st.fixedPrices.del);
+  if(v2) return v2;
+  try{
+    if(st && isKbCompany(st.kubun||'')){
+      const co=(D.companies||[]).find(c=>c.id===st.companyId);
+      const v3=pick(co && co.prices && co.prices.del);
+      if(v3) return v3;
+    }
+  }catch(e){}
+  return 'その他'+i;
+}
+/* 台帳の単価欄のラベルを、入れた名前に合わせて書き換える */
+function _applySonotaLabels(){
+  [1,2,3,4].forEach(i=>{
+    const inp=$('st-ps'+i); if(!inp) return;
+    const lab=inp.parentElement && inp.parentElement.querySelector('label'); if(!lab) return;
+    const nm=String($('st-psn'+i)?.value||'').trim();
+    const first=lab.firstChild;
+    if(first && first.nodeType===3) first.nodeValue = (nm? nm+'（円）' : 'その他'+i+'（円）');
+  });
+}
+[1,2,3,4].forEach(i=>{
+  document.addEventListener('input', ev=>{
+    if(ev.target && ev.target.id==='st-psn'+i) _applySonotaLabels();
+  });
+});
+
 function _getEffectiveDelPrices(staff, ym){
   if(!staff) return {};
   const kubun = staff.kubun || '';
@@ -38016,6 +38109,11 @@ function _getEffectiveDelPrices(staff, ym){
     ogata: pick('ogata'),
     shukka: pick('shukka'),
     s1: pick('s1'), s2: pick('s2'), s3: pick('s3'), s4: pick('s4'),
+    /* ★ 2026-11-02.78: その他の名称。本人の設定を優先し、無ければ委託会社のもの */
+    _names: Object.assign({}, companyDel._names||{}, (function(){
+      const o={}; Object.keys(driverDel._names||{}).forEach(k=>{
+        if(String(driverDel._names[k]||'').trim()) o[k]=driverDel._names[k]; });
+      return o; })()),
   };
 }
 
