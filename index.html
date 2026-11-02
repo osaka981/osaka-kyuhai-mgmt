@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.74</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.75</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1676,8 +1676,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <!-- ★ 2026-10-28.53: 片側しか無い行を集めて、コードの取り違えを見つける -->
         <div id="cmp-mix"></div>
         <button type="button" id="cmp-to-top" class="to-top-btn" onclick="_cmpScrollTop()" title="最上部へ戻る">▲ 最上部へ</button>
+        <!-- ★ 2026-11-02.75: 絵文字を外した -->
         <div class="al al-i mb8" style="font-size:11px;">
-          <span>ℹ️</span>
           <span>差異がある行の「修正」ボタンから、日報側・郵便局側どちらでも訂正できます。両方誤りの場合も同時に修正可能です。</span>
         </div>
         <div class="tw tw-sticky"><table>
@@ -6133,7 +6133,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-02.74';
+const APP_VER = '2026-11-02.75';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11272,9 +11272,26 @@ function _cmpMixRender(mon, off){
     return (D.pickup||[]).some(x=>x && _nd(x.date)===d && names.has(_nn(x.staff)));
   };
 
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-11-02.75: 郵便局データがまだ1件も来ていない日は出さない。
+
+     調書が届く前は、その日に出た人が全員「日報だけ」で並ぶ。
+     取り違えの手がかりにはならないのに一覧を埋めてしまう
+     （11/1 浜寺で5人全員が並んでいたのがこれ）。
+     同じ日・同じ局に調書が1行でもあって初めて、名前の食い違いを疑える。
+     ══════════════════════════════════════════════════════════ */
+  const hasPostDay = new Set();
+  (D.delivery||[]).forEach(r=>{
+    if(r && r.date && inR(r) && _cmpDiffs(r).hasPost)
+      hasPostDay.add(String(r.date||'')+'__'+String(r.office||''));
+  });
+  postOnly.forEach(r=>hasPostDay.add(String(r.date||'')+'__'+String(r.office||'')));
+  let nNoPost=0;
+
   const out=[]; let nMatch=0;
   Object.keys(byDay).sort().forEach(k=>{
     const g=byDay[k], rest=g.n.slice();
+    if(!hasPostDay.has(k)){ nNoPost += g.n.length; return; }   /* ★ .75 調書未取込の日 */
     g.p.forEach(p=>{
       let mi=-1;
       for(let i=0;i<rest.length;i++){
@@ -11292,16 +11309,31 @@ function _cmpMixRender(mon, off){
   const sideP=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(pkan(r))+' ／ 夜間 '+fmt(n0(r.postYakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
   const sideN=r=>r ? esc(r.staff||'')+' <span class="xs muted">完了+転送 '+fmt(kan(r))+' ／ 夜間 '+fmt(n0(r.yakan))+'</span>' : '<span style="color:var(--txt3);">&#8212;</span>';
 
+  /* ★ 2026-11-02.75: 一覧そのものを畳む。
+     ふだんは見出し1行（28px）だけにして、表を広く使う。
+     取り違えの可能性がある組が見つかった月だけ、はじめから開いておく。
+     開閉は _cmpMixOpen に覚えるので、月や局を切り替えても閉じない。 */
+  if(!out.length){ el.innerHTML = nNoPost
+    ? `<div class="xs" style="color:var(--txt3);margin-bottom:8px;">
+         日報だけの行が ${nNoPost}件ありますが、いずれも郵便局データがまだ届いていない日です。</div>`
+    : ''; return; }
+  const mixOpen = (window._cmpMixOpen===undefined) ? !!nMatch : !!window._cmpMixOpen;
+
   el.innerHTML=`
-    <div class="al ${nMatch?'al-w':'al-i'} mb8"><span>${nMatch?'⚠️':'ℹ️'}</span><span>
-      <b>片側しか無い行が ${nikkiOnly.length+postOnly.length}件</b>あります
-      （調書だけ ${postOnly.length} ／ 日報だけ ${nikkiOnly.length}${nZero?`。うち ${nZero}件は宅配の数量が0`:''}）。
-      ${nMatch?`<b style="color:var(--amb2);">うち ${nMatch}組は数字がそろっており、コードの取り違えの可能性があります。</b>`:''}<br>
-      <span class="xs">郵便局は使用コードで氏名を決めるため、他人のコードで配達すると
+  <details id="cmp-mix-det" ${mixOpen?'open':''} ontoggle="window._cmpMixOpen=this.open;setTimeout(_fitStickyTables,0);"
+    class="al ${nMatch?'al-w':'al-i'} mb8" style="display:block;padding:7px 11px;">
+    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+      <b>片側しか無い行が ${out.filter(x=>x.p).length + out.filter(x=>x.n).length}件</b>
+      <span class="xs">調書 ${out.filter(x=>x.p).length} ／ 日報 ${out.filter(x=>x.n).length}${nZero?`（うち ${nZero}件は宅配の数量が0）`:''}</span>
+      ${nMatch?`<b style="color:var(--amb2);font-size:12px;">うち ${nMatch}組は数字がそろっています。取り違えの可能性</b>`:''}
+      ${nNoPost?`<span class="xs" style="color:var(--txt3);">ほかに ${nNoPost}件は郵便局データ未取込の日なので省いています</span>`:''}
+      <span style="margin-left:auto;font-size:10.5px;color:var(--txt2);border:1px solid var(--brd2);
+                   border-radius:5px;padding:2px 8px;">${mixOpen?'閉じる ▲':'開く ▼'}</span>
+    </summary>
+    <div class="xs" style="margin:7px 0 8px;line-height:1.7;">郵便局は使用コードで氏名を決めるため、他人のコードで配達すると
       調書と日報が別の名前で立ちます。直すときは日計の<b>「局データ修正」</b>で、
-      調書の数字を正しい人へ移してください。誤って作った日報は宅配日報の一覧から削除します。</span>
-    </span></div>
-    <div class="tw" style="max-height:300px;overflow:auto;margin-bottom:10px;"><table>
+      調書の数字を正しい人へ移してください。誤って作った日報は宅配日報の一覧から削除します。</div>
+    <div class="tw" style="max-height:260px;overflow:auto;"><table>
       <thead><tr>
         <th style="white-space:nowrap;">日付</th><th>営業所</th>
         <th style="color:var(--blu);">調書だけ（郵便局）</th>
@@ -11325,7 +11357,8 @@ function _cmpMixRender(mon, off){
           <td class="xs" style="white-space:nowrap;">${v}</td>
         </tr>`;
       }).join('')}</tbody>
-    </table></div>`;
+    </table></div>
+  </details>`;
 }
 
 function renderCmp(){
