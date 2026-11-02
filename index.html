@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.75</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.77</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6133,7 +6133,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-02.75';
+const APP_VER = '2026-11-02.77';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11463,9 +11463,12 @@ function renderCmp(){
       const d=_cmpDiffs(r);
       const orph=!!r.__orphan;
       const acc=!orph && r.cmpOk && d.any;             // 差異を了承して確定した行
+      /* ★ 2026-11-02.77: 了承したあとに数字が変わった行。自動照合を回すまで
+         状態そのものは動かさず、ここでは色と文字だけで知らせる。 */
+      const stale=!orph && acc && (typeof _cmpAcceptStale==='function') && _cmpAcceptStale(r);
       const cls=orph?'tr-ng':(d.any&&!r.cmpOk)?'tr-ng':r.cmpOk?'tr-ok':'';
-      const scls=orph?'ba':acc?'ba':r.cmpOk?'bg':d.any?'br':'bz';
-      const stxt=orph?'日報なし':acc?'差異了承':r.cmpOk?'照合済':d.any?'差異':'未照合';
+      const scls=orph?'ba':stale?'br':acc?'ba':r.cmpOk?'bg':d.any?'br':'bz';
+      const stxt=orph?'日報なし':stale?'要再確認':acc?'差異了承':r.cmpOk?'照合済':d.any?'差異':'未照合';
       if(!orph){ sum.nk+=d.nikki.kanryo; sum.ny+=d.nikki.yakan; sum.no+=d.nikki.ogata; sum.ns+=(d.nShukka||0); }
       if(d.hasPost){
         hasPostAny=true;
@@ -16418,6 +16421,8 @@ function applyFix(opt){
   const d2=_cmpDiffs(r);
   r.cmpOk=true;
   r.diffAccepted=d2.any;
+  /* ★ 2026-11-02.77: 了承したときの数字を控える。あとで変わったら要再確認にする */
+  r.acceptSig = d2.any ? _cmpSig(r) : '';
   r.status=d2.any?'差異了承':'照合済';
   r.cmpCause=reason || (d2.any?'差異を了承':'修正済');
   r.cause=r.cmpCause;
@@ -16505,7 +16510,7 @@ function runAutoCompare(){
     return true;
   };
 
-  let ok=0, ng=0, un=0;
+  let ok=0, ng=0, un=0, acc=0, stale=0;
   D.delivery.forEach(r=>{
     if(!_inScope(r)) return;
     const d=_cmpDiffs(r);
@@ -16516,6 +16521,34 @@ function runAutoCompare(){
     if(!d.any){
       r.status='照合済'; r.cmpOk=true; r._diffDir=null; ok++;
       return;
+    }
+    /* ══════════════════════════════════════════════════════════
+       ★ 2026-11-02.76: 人が「差異を認めて確定」した行は戻さない。
+
+       これまでは差異のある行を無条件に cmpOk=false にしていたため、
+       自動照合を回すたびに了承の印が消えていた。しかもその状態を
+       そのまま保存するので、原因欄は「差異を了承」なのに状態は「差異」
+       という食い違いが残っていた（西成9月の松井さんがこれ）。
+       了承したかどうかは diffAccepted に入っていて自動照合では触らないので、
+       既に消えてしまった行もここで印が戻る。
+
+       なお、了承したあとに調書や日報の数字が変わっても了承は外れない。
+       そこは修正モーダルの履歴で、いつ何を了承したかを確かめてほしい。
+       ══════════════════════════════════════════════════════════ */
+    if(r.diffAccepted){
+      /* ★ 2026-11-02.77: 了承したあとに数字が変わっていれば、了承を外して差異に戻す。
+         控えの無い古い了承は、ここで今の数字を控えて次から見られるようにする。 */
+      if(_cmpAcceptStale(r)){
+        r.diffAccepted=false; r.acceptSig='';
+        r.cmpOk=false; r.status='差異あり';
+        r.cmpCause='了承後に数字が変わりました。もう一度確認してください';
+        r.cause=r.cmpCause;
+        stale++;
+      }else{
+        if(!r.acceptSig) r.acceptSig=_cmpSig(r);
+        r.cmpOk=true; r.status='差異了承'; r._diffDir=null; acc++;
+        return;
+      }
     }
     r.status='差異あり'; r.cmpOk=false; ng++;
     // 郵便局 − 日報。プラスなら局のほうが多い(日報の計上漏れ)。
@@ -16554,7 +16587,8 @@ function runAutoCompare(){
   renderCmp();renderDash();
   /* ★ 2026-11-02.72: どの範囲を照合したのかを先に出す（局ごとに押すため） */
   const _scope = (_mon||'全期間') + '　' + (_off||'全営業所');
-  alert(`自動照合完了　${_scope}\n照合済:${ok}件 / 差異あり:${ng}件 / 郵便局データ未着:${un}件`);
+  alert(`自動照合完了　${_scope}\n照合済:${ok}件 / 差異了承:${acc}件（そのまま残しました） / 差異あり:${ng}件 / 郵便局データ未着:${un}件`
+    + (stale?`\n\n※ 了承したあとに数字が変わった行が ${stale}件ありました。了承を外して差異に戻しています。`:''));
 }
 
 // ─── 宅配日報入力 ───
@@ -52879,7 +52913,7 @@ async function applyPostToNikki(){
 // ════════════════════════════════════════════════════════════
 function _cmpSumHeader(rows, orphans, label){
   const t={nk:0,pk:0,ny:0,py:0,no:0,po:0};
-  let hasPost=false, okN=0, accN=0, ngN=0, unN=0, noPost=0;
+  let hasPost=false, okN=0, accN=0, ngN=0, unN=0, noPost=0, staleN=0;
   /* ★ 2026-10-21.15: 集荷の合計をここにも出す。
      調書の集荷は1日1人の合計しか来ず、日報は集荷先ごとに入っているので、
      1行ずつ比べると集荷先の分け方が違うだけで差異が立つ。
@@ -52921,7 +52955,11 @@ function _cmpSumHeader(rows, orphans, label){
       t.pk+=d.post.kanryo; t.py+=d.post.yakan; t.po+=d.post.ogata;
     }
     if(!d.hasPost) noPost++;
-    if(r.cmpOk && d.any) accN++;
+    /* ★ 2026-11-02.77: 了承後に数字が変わった行は「要再確認」として別に数える */
+    if(r.cmpOk && d.any){
+      if(typeof _cmpAcceptStale==='function' && _cmpAcceptStale(r)) staleN++;
+      else accN++;
+    }
     else if(r.cmpOk) okN++;
     else if(d.any) ngN++;
     else unN++;
@@ -53046,6 +53084,7 @@ function _cmpSumHeader(rows, orphans, label){
                      flex-wrap:wrap;font-size:11px;padding:4px 6px;">
           <span class="bdg bg">照合済 ${okN}</span>
           <span class="bdg ba">差異了承 ${accN}</span>
+          ${staleN?`<span class="bdg br">要再確認 ${staleN}</span>`:''}
           <span class="bdg br">差異 ${ngN}</span>
           <span class="bdg bz">未照合 ${unN}</span>
           ${(orphans&&orphans.length)?`<span class="bdg ba">日報なし ${orphans.length}</span>`:''}
@@ -53130,6 +53169,32 @@ function _cmpAlignSummary(){
 // ════════════════════════════════════════════════════════════
 function _cmpStateKey(r){ return (r.date||'')+'__'+(r.staff||''); }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-02.77: 了承したときの数字を控え、あとで変わったら知らせる
+
+   「差異を認めて確定」は、そのときの数字を見て人が判断したもの。
+   あとから調書を取り込み直したり日報を直したりして数字が動けば、
+   その判断はもう当てはまらない。これまでは了承が付いたままだったので、
+   数字が変わったことに気づけなかった。
+
+   了承の時点の数字を acceptSig に文字列で控えておき、いまの数字と
+   違えば「要再確認」として扱う。控えの無い古い了承は、自動照合を
+   回したときにそのときの数字で控えを作る（そこから先は検知できる）。
+   ════════════════════════════════════════════════════════════ */
+function _cmpSig(r){
+  const n=v=>Math.max(0,parseInt(v)||0);
+  const p=v=>(v===undefined||v===null||v==='') ? '-' : String(n(v));
+  return [
+    n(r.kanryo)+n(r.tenso), n(r.yakan), n(r.ogata), n(r.shukka),
+    (r.postKanryo===undefined||r.postKanryo===null) ? '-' : String(n(r.postKanryo)+n(r.postTenso)),
+    p(r.postYakan), p(r.postOgata), p(r.postShukka), p(r.postShitei)
+  ].join('/');
+}
+/* 了承したあとに数字が変わっているか。控えが無ければ false（判断できない） */
+function _cmpAcceptStale(r){
+  return !!(r && r.diffAccepted && r.acceptSig && r.acceptSig !== _cmpSig(r));
+}
+
 function _cmpStateAll(){
   try{ const v=lsGet(LS_KEYS.CMPSTATE, {}); return (v&&typeof v==='object')?v:{}; }
   catch(e){ return {}; }
@@ -53140,6 +53205,7 @@ async function _cmpStateSave(r){
   all[_cmpStateKey(r)]={
     cmpOk:!!r.cmpOk,
     diffAccepted:!!r.diffAccepted,
+    acceptSig:r.acceptSig||'',        /* ★ 2026-11-02.77 了承したときの数字 */
     cmpCause:r.cmpCause||'',
     status:r.status||'',
     fixHistory:r.fixHistory||[],
@@ -53159,6 +53225,7 @@ function _cmpStateApply(){
     if(!v) return;
     r.cmpOk=!!v.cmpOk;
     r.diffAccepted=!!v.diffAccepted;
+    if(v.acceptSig) r.acceptSig=v.acceptSig;   /* ★ 2026-11-02.77 */
     if(v.cmpCause){ r.cmpCause=v.cmpCause; r.cause=v.cmpCause; }
     if(v.status) r.status=v.status;
     if(v.fixHistory) r.fixHistory=v.fixHistory;
