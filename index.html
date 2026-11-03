@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.82</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.84</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2374,6 +2374,25 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           </div>
         </div>
         <div id="wt-root"></div>
+      </div>
+    </div>
+
+    <!-- ══ その他1〜4 まとめ入力 (2026-11-03.84) ══
+         宅配日報の その他1〜4 を、人と月を決めて日別にまとめて入れる。
+         1日ずつ日報を開くしかなかったため（青木さんなら17日ぶん）。
+         書き込み先は宅配日報そのものなので、一覧・照合・支払すべてに効く。 -->
+    <div id="s-sonota" class="sec">
+      <div class="card" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <h2 style="margin:0;font-size:16px;font-weight:700;">その他1〜4</h2>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <input type="month" id="so-mon" class="fi" style="width:auto;font-size:12px;padding:5px 8px;" onchange="renderSonota()">
+            <button type="button" class="btn b-gh btn-sm" onclick="_soPrevNext(-1)">前の人</button>
+            <select id="so-staff" class="fi" style="width:auto;min-width:170px;font-size:12px;padding:5px 8px;" onchange="_soOnStaffChange()"></select>
+            <button type="button" class="btn b-gh btn-sm" onclick="_soPrevNext(1)">次の人</button>
+          </div>
+        </div>
+        <div id="so-root"></div>
       </div>
     </div>
 
@@ -6141,7 +6160,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.82';
+const APP_VER = '2026-11-03.84';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -10097,7 +10116,7 @@ const _TOP_TABS = {
      書類（契約書・請求書）も同じ性質なので、それぞれ1画面にまとめた。 */
   hr:       { subs: [
     { s:'worktime',    label:'月締め', badge:'new',
-      group:[{s:'worktime',label:'勤務時間'},{s:'gas-mgmt',label:'燃料代'},{s:'month-adj',label:'月締め'}] },
+      group:[{s:'worktime',label:'勤務時間'},{s:'sonota',label:'その他'},{s:'gas-mgmt',label:'燃料代'},{s:'month-adj',label:'月締め'}] },
     { s:'salary',      label:'給与計算' },
     { s:'staff',       label:'従業員管理' },
     { s:'company',     label:'委託会社管理' },
@@ -21987,10 +22006,31 @@ function _bizWorkMin(st, monStr, biz, modes){
   },0);
 }
 // 歩合の明細（宅配）: 宅配単価×件数 ＋ 宅配事業内集荷
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-11-03.84: その他1〜4 の数量の読み方
+
+   宅配日報は その他 を sonota:[a,b,c,d] の配列で持つ（saveDel も
+   日報アプリからの読み戻しもこの形）。ところが支払の計算は
+   r.s1 / r.s2 … というキーを読んでいて、そんなキーはどこにも書かれない。
+   そのため、その他に単価を入れても数量を入れても、支払は常に0だった。
+
+   古いデータに r.s1 が入っている可能性は残しつつ、無ければ配列から読む。
+   ══════════════════════════════════════════════════════════ */
+function _delSonQ(r, i){
+  if(!r) return 0;
+  const direct = Number(r['s'+i]);
+  if(direct) return Math.max(0, direct);
+  const a = [r.sonota||[]].flat();
+  return Math.max(0, parseInt(a[i-1])||0);
+}
+
 function _bizCommissionDel(st, name, monStr, del){
   const out=[]; const dp=_getEffectiveDelPrices(st, monStr);
   const sum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
-  del.forEach(r=>Object.keys(sum).forEach(k=>{ sum[k]+=r[k]||0; }));
+  del.forEach(r=>Object.keys(sum).forEach(k=>{
+    /* ★ 2026-11-03.84: その他は sonota 配列から読む */
+    sum[k] += /^s[1-4]$/.test(k) ? _delSonQ(r, Number(k.slice(1))) : (r[k]||0);
+  }));
   let dc={breakdown:[]};
   try{ dc = calcStaffDelColPayment(name, monStr) || {breakdown:[]}; }catch(e){}
   const hasNew = (dc.breakdown||[]).length>0;
@@ -22067,6 +22107,11 @@ function _calcBizPay(st, monStr, del, pu, cond){
     } else if(m.type==='定額'){
       if(R.length>0) lines.push({label:`定額 ${R.length}便×¥${fmtUnitPrice(m.rate)}`, amount:m.rate*R.length});
     }
+    /* ★ 2026-11-03.83: 単価0の行は明細に出さない。
+       給与形態を使うのをやめて単価を0にした人（ルート払いに切り替えた田中さんなど）に
+       「定額 2便×¥0 ＝ ¥0」という空の行が残っていた。
+       打刻なしの警告（warn）は金額0でも残す。 */
+    lines = lines.filter(b=>(Number(b.amount)||0)>0 || b.warn);
     let sub=lines.reduce((a,b)=>a+b.amount,0);
     // 保証・手当（業務単位）。宅配は業務別の設定が無ければ従来の人単位の設定を引き継ぐ
     const hB = m.src.hoshoB || (biz==='del' ? st.hoshoB : null);
@@ -38224,7 +38269,8 @@ function _buildDriverMonthlyByOffice(staff, monStr){
     ds.kanryo+=r.kanryo||0; ds.tenso+=r.tenso||0;
     ds.yakan+=r.yakan||0; ds.ogata+=r.ogata||0;
     ds.shukka+=r.shukka||0;
-    ds.s1+=r.s1||0; ds.s2+=r.s2||0; ds.s3+=r.s3||0; ds.s4+=r.s4||0;
+    /* ★ 2026-11-03.84: その他は sonota 配列から読む */
+    ds.s1+=_delSonQ(r,1); ds.s2+=_delSonQ(r,2); ds.s3+=_delSonQ(r,3); ds.s4+=_delSonQ(r,4);
   });
 
   // 宅配事業内集荷(新形式)の有無を判定
@@ -38457,7 +38503,9 @@ function _calcStaffPayment(name, monStr){
       delSum.kanryo+=r.kanryo||0; delSum.tenso+=r.tenso||0;
       delSum.yakan+=r.yakan||0; delSum.ogata+=r.ogata||0;
       delSum.shukka+=r.shukka||0;
-      delSum.s1+=r.s1||0; delSum.s2+=r.s2||0; delSum.s3+=r.s3||0; delSum.s4+=r.s4||0;
+      /* ★ 2026-11-03.84: その他は sonota 配列から読む */
+      delSum.s1+=_delSonQ(r,1); delSum.s2+=_delSonQ(r,2);
+      delSum.s3+=_delSonQ(r,3); delSum.s4+=_delSonQ(r,4);
     });
     // 新形式の宅配事業内集荷データがあるか判定
     let hasNewFormatDelCol = false;
@@ -48363,6 +48411,7 @@ function nav(el){
   if(s==='pay-daicho')   { if(typeof renderPayDaicho==='function') renderPayDaicho(); } // ★ 2026-10-14.66
   if(s==='hotei')        { if(typeof renderHotei==='function') renderHotei(); }       // ★ 2026-10-14.74
   if(s==='worktime')     renderWorkTime();
+  if(s==='sonota')       { if(typeof renderSonota==='function') renderSonota(); }   /* ★ 2026-11-03.84 */
   if(s==='company')      renderCompanyPage();
   if(s==='pay-history')  initPayHistPage();
   if(s==='staff')        renderStaff();
@@ -55619,6 +55668,210 @@ function _wtKey(e, inp){
   _wtOnBlur(inp);
   if(next){ next.focus(); next.select && next.select(); }
 }
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-03.84: その他1〜4 まとめ入力（月締め）
+
+   宅配日報の その他1〜4 は、これまで日報を1日ずつ開くしか
+   入れる手段がなかった。青木さんなら17日ぶんで34マス、
+   17回のモーダル開閉になる。
+
+   ここでは人と月を決めて、日 × 項目の表にまとめて打つ。
+   「稼働日すべてに 1」を押せば、毎日同じ人は1クリックで終わる。
+   書き込み先は宅配日報そのものなので、日報一覧・郵便局照合・
+   支払・帳票のすべてに今までどおり効く。
+
+   対象に出すのは「その他に単価が入っている人」。
+   単価が無い人に打たせても1円にもならないため。
+   ════════════════════════════════════════════════════════════ */
+const _soState = {mon:'', staffId:null};
+
+/* その他の単価が1つでも入っている人 */
+function _soTargets(mon){
+  return (D.staff||[]).filter(s=>s && s.status!=='終了')
+    .filter(s=>{
+      try{
+        const dp=_getEffectiveDelPrices(s, mon)||{};
+        return [1,2,3,4].some(i=>Number(dp['s'+i])>0);
+      }catch(e){ return false; }
+    })
+    .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+}
+
+function renderSonota(){
+  const root=$('so-root'); if(!root) return;
+  const monEl=$('so-mon');
+  if(monEl && !monEl.value) monEl.value=new Date().toISOString().slice(0,7);
+  const mon=_ymNorm(monEl?.value||new Date().toISOString().slice(0,7));
+  _soState.mon=mon;
+
+  const targets=_soTargets(mon);
+  const sel=$('so-staff');
+  if(sel){
+    const cur=_soState.staffId!=null ? String(_soState.staffId) : (sel.value||'');
+    sel.innerHTML = targets.length
+      ? targets.map(s=>`<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}</option>`).join('')
+      : '<option value="">対象者がいません</option>';
+    if(cur && targets.some(s=>String(s.id)===cur)) sel.value=cur;
+    _soState.staffId = sel.value || null;
+  }
+  const st=targets.find(s=>String(s.id)===String(_soState.staffId));
+  if(!st){
+    root.innerHTML='<div class="al al-i"><span>その他1〜4に単価が入っている人がいません。'
+      +'従業員台帳の<b>宅配単価タブ</b>で、その他の単価と名称を設定してください。</span></div>';
+    return;
+  }
+
+  const dp=_getEffectiveDelPrices(st, mon)||{};
+  const cols=[1,2,3,4].filter(i=>Number(dp['s'+i])>0);
+  const _nd=v=>String(v||'').replace(/\//g,'-');
+  const rows=(D.delivery||[]).filter(r=>r && r.staff===st.name && _nd(r.date).startsWith(mon))
+    .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+
+  if(!rows.length){
+    root.innerHTML=`<div class="al al-w"><span>${esc(st.name)} さんの ${esc(mon)} の宅配日報がありません。<br>
+      <span class="xs">ここは日報に書き込む画面です。先に日報を作ってください（この画面では作りません）。</span></span></div>`;
+    return;
+  }
+
+  const WD=['日','月','火','水','木','金','土'];
+  const _son=r=>[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+  let nZero=0;
+  const body=rows.map(r=>{
+    const sn=_son(r);
+    const used=cols.some(i=>sn[i-1]>0);
+    if(!used) nZero++;
+    const d=new Date(_nd(r.date)+'T00:00:00');
+    const w=isNaN(d)?'':WD[d.getDay()];
+    const amt=cols.reduce((a,i)=>a+Math.round((Number(dp['s'+i])||0)*(sn[i-1]||0)),0);
+    return `<tr${used?'':' style="background:rgba(160,96,32,.10);"'}>
+      <td class="mono" style="white-space:nowrap;">${esc(String(r.date).slice(5))}
+        <span style="color:${w==='日'?'var(--red2)':w==='土'?'var(--blu2)':'var(--txt3)'};margin-left:6px;">${w}</span></td>
+      <td class="xs" style="color:var(--amb2);white-space:nowrap;">${esc(r.office||'')}</td>
+      ${cols.map(i=>`<td style="padding:3px 5px;"><input type="number" min="0" class="so-q"
+        data-id="${esc(String(r.id))}" data-i="${i-1}" value="${sn[i-1]||0}" onfocus="this.select()"
+        oninput="_soCalc()" style="width:100%;min-width:62px;padding:5px 6px;text-align:right;
+        font-size:15px;font-weight:700;font-family:'DM Mono',monospace;border:1px solid var(--brd2);
+        border-radius:5px;background:var(--sur2);color:var(--txt);"></td>`).join('')}
+      <td class="tr mono so-amt" style="border-left:2px solid var(--brd2);color:var(--grn2);font-weight:700;">¥${fmt(amt)}</td>
+      <td class="xs" style="color:var(--txt3);white-space:nowrap;">完了 ${fmt(r.kanryo||0)}</td>
+    </tr>`;
+  }).join('');
+
+  root.innerHTML=`
+    <div class="al ${nZero?'al-w':'al-i'} mb8"><span>
+      ${nZero?`<b>この月の日報 ${rows.length}日のうち、${nZero}日が全部0です。</b>入れ忘れがないか確かめてください（薄い色の行）。`
+             :`<b>この月の日報 ${rows.length}日すべてに数量が入っています。</b>`}<br>
+      <span class="xs">打った数は宅配日報そのものに書き込みます。日報一覧・郵便局照合・支払のすべてに反映されます。
+      単価は従業員台帳の宅配単価タブのものを使います。</span>
+    </span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+      ${cols.map(i=>`<span class="bdg" style="color:var(--amb2);border-color:var(--amb);">
+        ${esc(_sonotaName(st,i,mon))} ¥${fmt(Number(dp['s'+i])||0)}</span>`).join('')}
+      <span style="margin-left:auto;display:flex;gap:6px;">
+        <button class="btn b-blu btn-sm" onclick="_soFillAll(1)">稼働日すべてに 1</button>
+        <button class="btn b-gh btn-sm" onclick="_soFillAll(0)">すべて 0</button>
+      </span>
+    </div>
+    <div class="tw tw-sticky"><table>
+      <thead><tr>
+        <th style="width:120px;">日付</th><th style="width:130px;">営業所</th>
+        ${cols.map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonotaName(st,i,mon))}
+          <div style="font-size:9px;font-weight:400;color:var(--txt3);">¥${fmt(Number(dp['s'+i])||0)}</div></th>`).join('')}
+        <th class="tr" style="border-left:2px solid var(--brd2);width:120px;">その日の支払</th>
+        <th style="width:110px;">参考</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr style="background:var(--bg3);font-weight:700;">
+        <td colspan="2">計 ${rows.length}日</td>
+        ${cols.map(i=>`<td class="tr mono so-sum" data-i="${i-1}">0</td>`).join('')}
+        <td class="tr mono" id="so-total" style="border-left:2px solid var(--brd2);color:var(--grn2);">¥0</td>
+        <td></td>
+      </tr></tfoot>
+    </table></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
+      <button class="btn b-gh" onclick="renderSonota()">取り消して読み直す</button>
+      <button class="btn b-grn" onclick="_soSave()">${rows.length}日ぶんを日報に入れる</button>
+    </div>`;
+  _soCalc();
+  try{ _fitStickyTables(); }catch(e){}
+}
+
+/* 合計を出し直す（数量を打つたび） */
+function _soCalc(){
+  const st=(D.staff||[]).find(x=>String(x.id)===String(_soState.staffId));
+  if(!st) return;
+  const dp=_getEffectiveDelPrices(st, _soState.mon)||{};
+  const sums={}; let total=0;
+  document.querySelectorAll('#so-root tbody tr').forEach(tr=>{
+    let amt=0;
+    tr.querySelectorAll('.so-q').forEach(el=>{
+      const i=parseInt(el.getAttribute('data-i'))||0;
+      const q=Math.max(0, parseInt(el.value)||0);
+      sums[i]=(sums[i]||0)+q;
+      amt += Math.round((Number(dp['s'+(i+1)])||0)*q);
+    });
+    const c=tr.querySelector('.so-amt'); if(c) c.textContent='¥'+fmt(amt);
+    total+=amt;
+  });
+  document.querySelectorAll('#so-root .so-sum').forEach(td=>{
+    const i=parseInt(td.getAttribute('data-i'))||0; td.textContent=fmt(sums[i]||0);
+  });
+  const t=$('so-total'); if(t) t.textContent='¥'+fmt(total);
+}
+
+/* 稼働日すべてに同じ数を入れる */
+function _soFillAll(v){
+  document.querySelectorAll('#so-root .so-q').forEach(el=>{ el.value=String(Math.max(0,parseInt(v)||0)); });
+  _soCalc();
+}
+
+function _soPrevNext(dir){
+  const sel=$('so-staff'); if(!sel || !sel.options.length) return;
+  let i=sel.selectedIndex + (dir>0?1:-1);
+  if(i<0) i=sel.options.length-1;
+  if(i>=sel.options.length) i=0;
+  sel.selectedIndex=i; _soOnStaffChange();
+}
+function _soOnStaffChange(){ _soState.staffId=$('so-staff')?.value||null; renderSonota(); }
+
+/* 日報へ書き込む。触っていない日は何もしない。 */
+async function _soSave(){
+  const st=(D.staff||[]).find(x=>String(x.id)===String(_soState.staffId));
+  if(!st){ alert('対象者が選ばれていません。'); return; }
+  const byId={};
+  document.querySelectorAll('#so-root .so-q').forEach(el=>{
+    const id=el.getAttribute('data-id'); if(!id) return;
+    const i=parseInt(el.getAttribute('data-i'))||0;
+    (byId[id]=byId[id]||{})[i]=Math.max(0, parseInt(el.value)||0);
+  });
+  const changed=[];
+  Object.keys(byId).forEach(id=>{
+    const r=(D.delivery||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+    const cur=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+    const nx=[0,1,2,3].map(i=>(byId[id][i]!==undefined ? byId[id][i] : (cur[i]||0)));
+    if(nx.some((v,i)=>v!==(cur[i]||0))) changed.push({r, nx, cur});
+  });
+  if(!changed.length){ showAlert({icon:'📝', title:'変わっていません', msg:'数量に変更がありません。'}); return; }
+
+  const ok=await showDialog({ icon:'📝', title:'日報に入れる',
+    msg:`${esc(st.name)} さん ${_soState.mon}\n\n${changed.length}日ぶんの その他 を宅配日報に書き込みます。\n`
+      + `数を変えると支払が変わります。\n\n入れますか。`,
+    okText:'入れる', cancelText:'やめる' });
+  if(!ok) return;
+
+  changed.forEach(c=>{ c.r.sonota=c.nx; });
+  /* 日報の保存元（yp_logs）にも書き戻す。これをしないと読み直しで消える */
+  for(const c of changed){
+    try{ if(typeof _cmpWriteBackYp==='function') await _cmpWriteBackYp(c.r); }catch(e){ console.error('[その他] 書き戻し失敗', e); }
+  }
+  try{ if(typeof _showSaveToast==='function') _showSaveToast(`${changed.length}日ぶんを日報に入れました`); }catch(e){}
+  ['renderCmp','renderDel','renderDash'].forEach(f=>{ try{ if(typeof window[f]==='function') window[f](); }catch(e){} });
+  renderSonota();
+}
+window.renderSonota=renderSonota; window._soSave=_soSave;
+window._soFillAll=_soFillAll; window._soPrevNext=_soPrevNext;
+window._soOnStaffChange=_soOnStaffChange; window._soCalc=_soCalc;
+
 function _wtPrevNext(dir){
   const sel=$('wt-staff'); if(!sel||!sel.options.length) return;
   const i=Math.max(0,Math.min(sel.options.length-1, sel.selectedIndex+dir));
