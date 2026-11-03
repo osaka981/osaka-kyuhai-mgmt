@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.85</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.86</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2387,6 +2387,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <h2 style="margin:0;font-size:16px;font-weight:700;">日報のまとめ入力</h2>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <input type="month" id="so-mon" class="fi" style="width:auto;font-size:12px;padding:5px 8px;" onchange="renderSonota()">
+            <!-- ★ 2026-11-03.86: 営業所で絞る。人数が多いので名前を探しにくかった -->
+            <select id="so-off" class="fi" style="width:auto;min-width:140px;font-size:12px;padding:5px 8px;" onchange="_soOnOffChange()"></select>
             <button type="button" class="btn b-gh btn-sm" onclick="_soPrevNext(-1)">前の人</button>
             <select id="so-staff" class="fi" style="width:auto;min-width:170px;font-size:12px;padding:5px 8px;" onchange="_soOnStaffChange()"></select>
             <button type="button" class="btn b-gh btn-sm" onclick="_soPrevNext(1)">次の人</button>
@@ -6160,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.85';
+const APP_VER = '2026-11-03.86';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -55703,17 +55705,29 @@ function _wtKey(e, inp){
    ★ 2026-11-03.85: 駐車料金・横乗もここで入れる。
    対象は「その月に宅配日報がある人」全員。駐車料金の立替は誰にでも起きるため。
    ════════════════════════════════════════════════════════════ */
-const _soState = {mon:'', staffId:null};
+const _soState = {mon:'', staffId:null, off:''};
 
 /* ★ 2026-11-03.85: 対象＝その月に宅配日報がある人。
    駐車料金の立替は誰にでも発生するので、その他の単価の有無では絞らない。 */
-function _soTargets(mon){
+function _soTargets(mon, off){
   const _nd=v=>String(v||'').replace(/\//g,'-');
   const names=new Set((D.delivery||[])
     .filter(r=>r && _nd(r.date).startsWith(mon) && r.staff)
+    .filter(r=>!off || r.office===off)      /* ★ 2026-11-03.86 */
     .map(r=>r.staff));
   return (D.staff||[]).filter(s=>s && names.has(s.name))
     .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
+}
+
+/* ★ 2026-11-03.86: その月の日報に出てくる営業所。
+   人は複数の局を回ることがあるので、台帳の所属ではなく日報の営業所で作る。 */
+function _soOffices(mon){
+  const _nd=v=>String(v||'').replace(/\//g,'-');
+  const set=new Set();
+  (D.delivery||[]).forEach(r=>{
+    if(r && _nd(r.date).startsWith(mon) && r.office) set.add(r.office);
+  });
+  return [...set].sort((a,b)=>a.localeCompare(b,'ja'));
 }
 
 function renderSonota(){
@@ -55723,7 +55737,17 @@ function renderSonota(){
   const mon=_ymNorm(monEl?.value||new Date().toISOString().slice(0,7));
   _soState.mon=mon;
 
-  const targets=_soTargets(mon);
+  /* ★ 2026-11-03.86: 営業所の選択肢。月を変えたときは、その月に無い局を選んだままにしない */
+  const offs=_soOffices(mon);
+  const offSel=$('so-off');
+  if(offSel){
+    if(_soState.off && !offs.includes(_soState.off)) _soState.off='';
+    offSel.innerHTML='<option value="">営業所すべて</option>'
+      + offs.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+    offSel.value=_soState.off||'';
+  }
+
+  const targets=_soTargets(mon, _soState.off);
   const sel=$('so-staff');
   if(sel){
     const cur=_soState.staffId!=null ? String(_soState.staffId) : (sel.value||'');
@@ -55731,11 +55755,14 @@ function renderSonota(){
       ? targets.map(s=>`<option value="${s.id}">${esc(s.empNo||'')} ${esc(s.name)}</option>`).join('')
       : '<option value="">対象者がいません</option>';
     if(cur && targets.some(s=>String(s.id)===cur)) sel.value=cur;
+    else if(targets.length) sel.selectedIndex=0;   /* ★ 2026-11-03.86: 絞り込みで外れたら先頭へ */
     _soState.staffId = sel.value || null;
   }
   const st=targets.find(s=>String(s.id)===String(_soState.staffId));
   if(!st){
-    root.innerHTML='<div class="al al-i"><span>この月に宅配日報のある人がいません。</span></div>';
+    root.innerHTML=`<div class="al al-i"><span>${_soState.off
+      ? esc(_soState.off)+' の宅配日報がこの月にありません。営業所の絞り込みを外してみてください。'
+      : 'この月に宅配日報のある人がいません。'}</span></div>`;
     return;
   }
 
@@ -55867,6 +55894,8 @@ function _soPrevNext(dir){
   sel.selectedIndex=i; _soOnStaffChange();
 }
 function _soOnStaffChange(){ _soState.staffId=$('so-staff')?.value||null; renderSonota(); }
+/* ★ 2026-11-03.86: 営業所を変えたら、その局の先頭の人から見せる */
+function _soOnOffChange(){ _soState.off=$('so-off')?.value||''; _soState.staffId=null; renderSonota(); }
 
 /* 日報へ書き込む。触っていない日は何もしない。 */
 async function _soSave(){
@@ -55936,6 +55965,7 @@ async function _soSave(){
 window.renderSonota=renderSonota; window._soSave=_soSave;
 window._soFillAll=_soFillAll; window._soPrevNext=_soPrevNext;
 window._soOnStaffChange=_soOnStaffChange; window._soCalc=_soCalc;
+window._soOnOffChange=_soOnOffChange;
 
 function _wtPrevNext(dir){
   const sel=$('wt-staff'); if(!sel||!sel.options.length) return;
