@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-02.78</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.80</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6141,7 +6141,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-02.78';
+const APP_VER = '2026-11-03.80';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -15972,22 +15972,33 @@ function openCmpFix(id) {
       </div>`;
   }
 
-  /* ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ。
-     入っている人だけ出す（ふだんは0が4つ並ぶだけなので隠す）。 */
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-30.67: その他1〜4。調書には無いので日報だけ。
+     ★ 2026-11-03.80: 条件を「数量が入っている日」から
+       「単価が入っている項目、または数量が入っている項目」に変えた。
+
+       数量が0の日は欄そのものが出ず、ここから入れられなかった。
+       青木さんのように毎日その他で払う人は、0→1 にする場所が
+       どこにも無いことになる。単価が入っていれば出すようにして、
+       この画面から入れられるようにした。
+       列は使う項目だけ。使わない項目に0が並ぶのを避ける。
+     ══════════════════════════════════════════════════════════ */
   const sw=$('fix-sonota');
   if(sw){
     const sn=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
-    const has=sn.some(v=>v>0);
-    sw.innerHTML = !has ? '' : `
+    const sp=(typeof _sonPricesOf==='function') ? _sonPricesOf(r) : [0,0,0,0];
+    const cols=[0,1,2,3].filter(i=>sp[i]>0 || sn[i]>0);
+    sw.innerHTML = !cols.length ? '' : `
       <div style="font-size:12px;font-weight:700;margin-bottom:5px;">その他
         <span style="font-size:10px;font-weight:400;color:var(--txt3);margin-left:7px;">調書には無い項目です。日報だけ直せます</span></div>
       <div class="tw"><table style="width:100%;">
         <thead><tr><th style="width:94px;"></th>
-          ${[0,1,2,3].map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonLabelOf(r,i+1))}</th>`).join('')}
+          ${cols.map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonLabelOf(r,i+1))}`
+            +(sp[i]>0?`<div style="font-size:9px;font-weight:400;color:var(--txt3);">¥${fmtUnitPrice(sp[i])}</div>`:'')+`</th>`).join('')}
           <th class="tr" style="border-left:2px solid var(--brd2);">合計</th>
         </tr></thead>
         <tbody><tr>${_rh('日報','社内')}
-          ${[0,1,2,3].map(i=>`<td style="padding:2px 4px;"><input type="number" min="0" class="fx-son" data-i="${i}"
+          ${cols.map(i=>`<td style="padding:2px 4px;"><input type="number" min="0" class="fx-son" data-i="${i}"
              value="${sn[i]||0}" oninput="_fixSonCalc()" onfocus="this.select()"
              style="width:100%;min-width:58px;padding:4px 5px;text-align:right;font-size:14px;font-weight:700;
                     font-family:'DM Mono',monospace;border:1px solid var(--brd2);border-radius:4px;
@@ -16030,6 +16041,18 @@ function _ddSonotaLabels(){
     th.style.color = (lab==='その他'+i) ? '' : 'var(--amb2)';
     th.title = (lab==='その他'+i) ? '' : ('その他'+i+'（従業員台帳の宅配単価タブで付けた名前）');
   });
+}
+
+/* ★ 2026-11-03.80: その日の担当者の その他1〜4 の単価。
+   数量が0でも単価が入っていれば欄を出すために使う（ここから入力できるように）。 */
+function _sonPricesOf(r){
+  try{
+    const st=(D.staff||[]).find(x=>x && x.name===(r&&r.staff));
+    if(!st) return [0,0,0,0];
+    const dp=(typeof _getEffectiveDelPrices==='function')
+      ? (_getEffectiveDelPrices(st, String((r&&r.date)||'').slice(0,7))||{}) : {};
+    return [1,2,3,4].map(i=>Math.max(0, parseFloat(dp['s'+i])||0));
+  }catch(e){ return [0,0,0,0]; }
 }
 
 /* ★ 2026-11-02.78: その日の担当者の その他i の名前。一覧・修正モーダルの見出しに使う */
@@ -16378,24 +16401,35 @@ function applyFix(opt){
     }
   }
 
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-10-30.67: その他1〜4。画面に出ているときだけ読む。
+     ★ 2026-11-03.80: 集荷と同じく、この読み取りだけは
+       「差異を認めて確定」でも動かすようにした。
+
+       これまでは「修正を適用」のときしか読まず、集荷（.fx-shu）だけが
+       両方で読まれていた。青木さんのように差異が無い日に その他 を
+       入れる使い方だと、押すボタンによって入ったり入らなかったりする。
+       触っていなければ何も書かないので、どちらで押しても安全。
+     ══════════════════════════════════════════════════════════ */
+  let _sonChanged=false;
+  {
+    const w=$('fix-sonota');
+    const ins=w ? w.querySelectorAll('.fx-son') : [];
+    if(ins.length){
+      const cur=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+      /* 使う項目だけ列に出すようにしたので、出ていない項目は今の値のまま残す（0で潰さない） */
+      const nx=[0,1,2,3].map(i=>cur[i]||0);
+      ins.forEach(el=>{ const i=parseInt(el.getAttribute('data-i'))||0;
+        nx[i]=Math.max(0, parseInt(el.value)||0); });
+      if(nx.some((v,i)=>v!==(cur[i]||0))){ r.sonota=nx; _sonChanged=true; }
+    }
+  }
+
   if(!opt.accept){
     // 日報側を更新
     FIX_COLS.forEach(c=>{
       r[c.n]=Math.max(0,parseInt($('fx-n-'+c.k)?.value)||0);
     });
-    /* ★ 2026-10-30.67: その他1〜4。画面に出ているときだけ読む。
-       支払に直接ひびくので、触っていないときは何も書かない。 */
-    {
-      const w=$('fix-sonota');
-      const ins=w ? w.querySelectorAll('.fx-son') : [];
-      if(ins.length){
-        const cur=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
-        const nx=[0,0,0,0];
-        ins.forEach(el=>{ const i=parseInt(el.getAttribute('data-i'))||0;
-          nx[i]=Math.max(0, parseInt(el.value)||0); });
-        if(nx.some((v,i)=>v!==(cur[i]||0))) r.sonota=nx;
-      }
-    }
     // 郵便局側は D.postLogs が保存元。表示用フィールドと両方そろえる。
     const logs=Array.isArray(D.postLogs)?D.postLogs:[];
     const st=(D.staff||[]).find(x=>x&&x.name===r.staff);
@@ -16464,7 +16498,8 @@ function applyFix(opt){
   // ★ 2026-10-08.4: 営業所だけを直した場合も書き戻す（戻らないようにする）
   /* ★ 2026-10-27.48: 集荷だけを直して「差異を認めて確定」を押した場合も書き戻す。
      これを足しておかないと、集荷の訂正が保存されずに消える。 */
-  if(!opt.accept || _offChanged || Array.isArray(r.__shukkaFix)) _cmpWriteBackYp(r);
+  /* ★ 2026-11-03.80: その他だけ直して「差異を認めて確定」を押した場合も書き戻す */
+  if(!opt.accept || _offChanged || _sonChanged || Array.isArray(r.__shukkaFix)) _cmpWriteBackYp(r);
   _cmpStateSave(r);                     // 照合状態を別テーブルに保存
 
   closeM('m-cmp-fix');
@@ -38046,6 +38081,15 @@ function _collectSonotaNames(){
   [1,2,3,4].forEach(i=>{ o['s'+i]=String($('st-psn'+i)?.value||'').trim(); });
   return o;
 }
+/* ★ 2026-11-02.79: 月を渡さずに呼ばれたときは、いちばん新しい履歴の名前も見る。
+   CSV取込した人は名前が履歴側にしか無いことがあるため。 */
+function _sonotaNameLatest(st, i){
+  const k='s'+i;
+  const pick=o=>{ const v=o && o._names && o._names[k]; return (v&&String(v).trim())?String(v).trim():''; };
+  const v1=pick(st && st.fixedPrices && st.fixedPrices.del); if(v1) return v1;
+  try{ const h=(typeof _rateLatest==='function')?_rateLatest(st):null; const v2=pick(h&&h.del); if(v2) return v2; }catch(e){}
+  return '';
+}
 /* その人の その他i の名前。付いていなければ「その他i」 */
 function _sonotaName(st, i, ym){
   const k='s'+i;
@@ -38055,6 +38099,8 @@ function _sonotaName(st, i, ym){
   }catch(e){}
   const v2=pick(st && st.fixedPrices && st.fixedPrices.del);
   if(v2) return v2;
+  /* ★ 2026-11-02.79: 履歴にしか名前が無い場合（単価CSVで入れた人）も拾う */
+  try{ const h=(typeof _rateLatest==='function')?_rateLatest(st):null; const v2b=pick(h&&h.del); if(v2b) return v2b; }catch(e){}
   try{
     if(st && isKbCompany(st.kubun||'')){
       const co=(D.companies||[]).find(c=>c.id===st.companyId);
@@ -49540,6 +49586,10 @@ function _editStaffImpl(id){
       if($('st-ps2'))$('st-ps2').value=d.s2||'';
       if($('st-ps3'))$('st-ps3').value=d.s3||'';
       if($('st-ps4'))$('st-ps4').value=d.s4||'';
+      /* ★ 2026-11-02.79: その他1〜4の名称。ここで戻していなかったため、
+         台帳を開くと名称欄が空のまま出て、そのまま保存すると名前が消えていた。 */
+      [1,2,3,4].forEach(i=>{ const e=$('st-psn'+i); if(e) e.value=((d._names||{})['s'+i])||''; });
+      if(typeof _applySonotaLabels==='function') _applySonotaLabels();
       // 集荷個別単価
       if(typeof restoreStDelColCmp==='function') restoreStDelColCmp(d.colCompanies||[], s);
       // 税込/税別トグル復元(del)
