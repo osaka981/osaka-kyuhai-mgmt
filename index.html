@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.81</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.82</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6141,7 +6141,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.81';
+const APP_VER = '2026-11-03.82';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -38360,6 +38360,65 @@ function _buildDriverMonthlyByOffice(staff, monStr){
   return node;
 }
 
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-11-03.82: 集荷ルートの支払
+
+   ルート単価はこれまで、支払計算のどこからも読まれていなかった。
+   （画面には「委託会社への集荷支払はルート単価で計算」と書いてあったが、
+     コード上は _calcCustBilling＝顧客請求の1か所でしか読んでいなかった）
+
+   従事員・委託会社に登録したルートは「この人のこの便にいくら」という
+   取り決めなので、給与形態（歩合・時間単価・日額・定額）とは別枠で加算する。
+   顧客に登録したルートは顧客へ車建で請求するためのもので、支払には入れない。
+
+   例：田中功一さん
+     ASLAJ①（堺本社→東淀川郵便局・1便）  4,000円
+     ASLAJ②（同上・2便）                7,000円
+   日報アプリで ① か ② を選べば、その単価 × 実施回数が支払に乗る。
+   ══════════════════════════════════════════════════════════ */
+function _colRoutePayLines(st, pu, monStr){
+  const out=[];
+  if(!st || !Array.isArray(pu) || !pu.length) return out;
+  /* 支払の対象になるルート＝本人のもの＋所属する委託会社のもの */
+  const defs=[];
+  (Array.isArray(st.colRoutes)?st.colRoutes:[]).forEach(r=>{ if(r && r.id!=null) defs.push(r); });
+  if(st.companyId){
+    const co=(D.companies||[]).find(c=>String(c.id)===String(st.companyId));
+    (Array.isArray(co&&co.colRoutes)?co.colRoutes:[]).forEach(r=>{ if(r && r.id!=null) defs.push(r); });
+  }
+  if(!defs.length) return out;
+
+  const agg={};
+  pu.forEach(r=>{
+    const rid = r && r.route && r.route.routeId;
+    if(!rid) return;
+    const def = defs.find(x=>String(x.id)===String(rid));
+    if(!def) return;                       /* 顧客のルートは支払に入れない */
+    const up = Number(def.routePrice || def.dailyAmt) || 0;
+    if(up<=0) return;
+    const k=String(rid);
+    if(!agg[k]) agg[k]={
+      name: def.name||'ルート',
+      up,
+      /* 税区分は保存されている taxType を読む（請求側は _tax.route / priceTax を見ており、
+         実際に保存しているキーと食い違っている。ここは保存値に合わせる） */
+      tax: def.taxType || (def._tax&&def._tax.route) || def.priceTax || 'ex',
+      rounds: 0
+    };
+    agg[k].rounds += Math.max(1, parseInt(r.route.rounds)||1);
+  });
+
+  Object.values(agg).forEach(a=>{
+    if(a.rounds<=0) return;
+    const amt=(typeof calcUnitTotal==='function')
+      ? calcUnitTotal(a.up, a.rounds, a.tax)
+      : Math.floor(a.up*a.rounds);
+    if(amt>0) out.push({label:`集荷：${a.name} ${a.rounds}回×¥${fmtUnitPrice(a.up)}`,
+                        amount:amt, biz:'col'});
+  });
+  return out;
+}
+
 function _calcStaffPayment(name, monStr){
   // ★ 2026/08/15: 呼び出し元によって月が '2026-07' と '2026/07' の2種類ある。
   //   日報の日付はハイフンに統一済みのため、スラッシュのまま比較すると
@@ -38513,6 +38572,13 @@ function _calcStaffPayment(name, monStr){
       breakdown.push({label:`エリア日額 ${areaDays.size||''}${areaDays.size?'日':''}`, amount:areaAmt});
       total+=areaAmt;
     }
+  }
+
+  /* ★ 2026-11-03.82: 集荷ルートの支払。給与形態と別枠で加算する。
+     定額（1便あたり）と併用すると二重になるので、ルートで払う人は定額を外すこと。 */
+  {
+    const _rl=(typeof _colRoutePayLines==='function') ? _colRoutePayLines(st, pu, monStr) : [];
+    _rl.forEach(b=>{ breakdown.push(b); total+=b.amount; });
   }
 
   // ── 手当（加算） ──
@@ -38779,9 +38845,14 @@ function _calcCustBilling(custName, monStr){
   rows.forEach(r=>{
     if(!r.route || !r.route.routeId) return;
     const rid = r.route.routeId;
+    // 顧客マスタから最新のルート情報を取得(変更された場合に備え)
+    const masterRt = (cu.colRoutes||[]).find(x=>x.id===rid);
+    /* ★ 2026-11-03.82: 顧客マスタに登録されたルートだけ車建として請求する。
+       これまでは見つからないとき r.route.unitPrice を拾っていたため、
+       従事員や委託会社に登録したルート（支払のためのもの）まで
+       顧客請求に車建として乗っていた。 */
+    if(!masterRt) return;
     if(!routeAgg[rid]){
-      // 顧客マスタから最新のルート情報を取得(変更された場合に備え)
-      const masterRt = (cu.colRoutes||[]).find(x=>x.id===rid);
       routeAgg[rid] = {
         routeId: rid,
         name: masterRt?.name || r.route.routeName || 'ルート',
