@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.84</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.85</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2384,7 +2384,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div id="s-sonota" class="sec">
       <div class="card" style="margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-          <h2 style="margin:0;font-size:16px;font-weight:700;">その他1〜4</h2>
+          <h2 style="margin:0;font-size:16px;font-weight:700;">日報のまとめ入力</h2>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <input type="month" id="so-mon" class="fi" style="width:auto;font-size:12px;padding:5px 8px;" onchange="renderSonota()">
             <button type="button" class="btn b-gh btn-sm" onclick="_soPrevNext(-1)">前の人</button>
@@ -6160,7 +6160,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.84';
+const APP_VER = '2026-11-03.85';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -10116,7 +10116,7 @@ const _TOP_TABS = {
      書類（契約書・請求書）も同じ性質なので、それぞれ1画面にまとめた。 */
   hr:       { subs: [
     { s:'worktime',    label:'月締め', badge:'new',
-      group:[{s:'worktime',label:'勤務時間'},{s:'sonota',label:'その他'},{s:'gas-mgmt',label:'燃料代'},{s:'month-adj',label:'月締め'}] },
+      group:[{s:'worktime',label:'勤務時間'},{s:'sonota',label:'まとめ入力'},{s:'gas-mgmt',label:'燃料代'},{s:'month-adj',label:'月締め'}] },
     { s:'salary',      label:'給与計算' },
     { s:'staff',       label:'従業員管理' },
     { s:'company',     label:'委託会社管理' },
@@ -53566,6 +53566,26 @@ async function _cmpWriteBackYp(r){
       tgt.sonota=r.sonota.map(v=>Math.max(0,parseInt(v)||0));
       if(f.del && f.del!==f) f.sonota=f.del.sonota;
     }
+    /* ★ 2026-11-03.85: 手当・立替（駐車料金・横乗）も書き戻す。
+       ここを書いていなかったため、まとめ入力で駐車代を入れても
+       読み直した時点で yp_logs の古い値（＝空）に戻っていた。
+       読む側は form.teate を先に見て、無ければ form 直下を見る作りなので、
+       両方そろえておく。 */
+    if(r.__teateFix){
+      if(!f.teate || typeof f.teate!=='object'){
+        /* teate が無い古い日報。読む側は f.teate があるとそちらだけを見るので、
+           新しく作るときは form 直下の値を先に写しておく（給油・距離が消えるのを防ぐ）。 */
+        f.teate={};
+        ['yokonori','yokonoriWith','parking','refueled','odoStart','odoEnd','distance']
+          .forEach(k=>{ if(f[k]!==undefined) f.teate[k]=f[k]; });
+      }
+      ['parking','yokonori'].forEach(k=>{
+        if(r[k]===undefined) return;
+        const v=Math.max(0, parseInt(r[k])||0);
+        f.teate[k]=v; f[k]=v;
+      });
+      delete r.__teateFix;
+    }
     // ★ 2026-10-09.5: 統合形式では form.del が本体だが、提出時に
     //   Object.assign(form, form.del) で form 直下にも同じ値が写されている。
     //   ここで form.del だけを直すと form 直下が古い値のまま残り、
@@ -55680,20 +55700,19 @@ function _wtKey(e, inp){
    書き込み先は宅配日報そのものなので、日報一覧・郵便局照合・
    支払・帳票のすべてに今までどおり効く。
 
-   対象に出すのは「その他に単価が入っている人」。
-   単価が無い人に打たせても1円にもならないため。
+   ★ 2026-11-03.85: 駐車料金・横乗もここで入れる。
+   対象は「その月に宅配日報がある人」全員。駐車料金の立替は誰にでも起きるため。
    ════════════════════════════════════════════════════════════ */
 const _soState = {mon:'', staffId:null};
 
-/* その他の単価が1つでも入っている人 */
+/* ★ 2026-11-03.85: 対象＝その月に宅配日報がある人。
+   駐車料金の立替は誰にでも発生するので、その他の単価の有無では絞らない。 */
 function _soTargets(mon){
-  return (D.staff||[]).filter(s=>s && s.status!=='終了')
-    .filter(s=>{
-      try{
-        const dp=_getEffectiveDelPrices(s, mon)||{};
-        return [1,2,3,4].some(i=>Number(dp['s'+i])>0);
-      }catch(e){ return false; }
-    })
+  const _nd=v=>String(v||'').replace(/\//g,'-');
+  const names=new Set((D.delivery||[])
+    .filter(r=>r && _nd(r.date).startsWith(mon) && r.staff)
+    .map(r=>r.staff));
+  return (D.staff||[]).filter(s=>s && names.has(s.name))
     .sort((a,b)=>String(a.empNo||'').localeCompare(String(b.empNo||'')));
 }
 
@@ -55716,8 +55735,7 @@ function renderSonota(){
   }
   const st=targets.find(s=>String(s.id)===String(_soState.staffId));
   if(!st){
-    root.innerHTML='<div class="al al-i"><span>その他1〜4に単価が入っている人がいません。'
-      +'従業員台帳の<b>宅配単価タブ</b>で、その他の単価と名称を設定してください。</span></div>';
+    root.innerHTML='<div class="al al-i"><span>この月に宅配日報のある人がいません。</span></div>';
     return;
   }
 
@@ -55735,41 +55753,46 @@ function renderSonota(){
 
   const WD=['日','月','火','水','木','金','土'];
   const _son=r=>[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
+  /* ★ 2026-11-03.85: 立替・手当の欄。駐車料金は郵便局請求書の総合計にそのまま乗る */
+  const _inp=(cls,id,i,v,ph)=>`<input type="number" min="0" class="${cls}"
+      data-id="${esc(String(id))}"${i!=null?` data-i="${i}"`:''} value="${v}" onfocus="this.select()"
+      oninput="_soCalc()" placeholder="${ph||'0'}" style="width:96px;padding:5px 6px;
+      text-align:right;font-size:15px;font-weight:700;font-family:'DM Mono',monospace;
+      border:1px solid var(--brd2);border-radius:5px;background:var(--sur2);color:var(--txt);">`;
   let nZero=0;
   const body=rows.map(r=>{
     const sn=_son(r);
-    const used=cols.some(i=>sn[i-1]>0);
-    if(!used) nZero++;
+    const used=cols.length ? cols.some(i=>sn[i-1]>0) : true;
+    if(cols.length && !used) nZero++;
     const d=new Date(_nd(r.date)+'T00:00:00');
     const w=isNaN(d)?'':WD[d.getDay()];
     const amt=cols.reduce((a,i)=>a+Math.round((Number(dp['s'+i])||0)*(sn[i-1]||0)),0);
-    return `<tr${used?'':' style="background:rgba(160,96,32,.10);"'}>
+    return `<tr${(cols.length&&!used)?' style="background:rgba(160,96,32,.10);"':''}>
       <td class="mono" style="white-space:nowrap;">${esc(String(r.date).slice(5))}
         <span style="color:${w==='日'?'var(--red2)':w==='土'?'var(--blu2)':'var(--txt3)'};margin-left:6px;">${w}</span></td>
       <td class="xs" style="color:var(--amb2);white-space:nowrap;">${esc(r.office||'')}</td>
-      ${cols.map(i=>`<td style="padding:3px 5px;"><input type="number" min="0" class="so-q"
-        data-id="${esc(String(r.id))}" data-i="${i-1}" value="${sn[i-1]||0}" onfocus="this.select()"
-        oninput="_soCalc()" style="width:100%;min-width:62px;padding:5px 6px;text-align:right;
-        font-size:15px;font-weight:700;font-family:'DM Mono',monospace;border:1px solid var(--brd2);
-        border-radius:5px;background:var(--sur2);color:var(--txt);"></td>`).join('')}
-      <td class="tr mono so-amt" style="border-left:2px solid var(--brd2);color:var(--grn2);font-weight:700;">¥${fmt(amt)}</td>
+      ${cols.map(i=>`<td style="padding:3px 5px;">${_inp('so-q',r.id,i-1,sn[i-1]||0)}</td>`).join('')}
+      ${cols.length?`<td class="tr mono so-amt" style="border-left:2px solid var(--brd2);color:var(--grn2);font-weight:700;">¥${fmt(amt)}</td>`:''}
+      <td style="padding:3px 5px;border-left:2px solid var(--brd2);">${_inp('so-park',r.id,null,Math.max(0,parseInt(r.parking)||0))}</td>
+      <td style="padding:3px 5px;">${_inp('so-yoko',r.id,null,Math.max(0,parseInt(r.yokonori)||0))}</td>
       <td class="xs" style="color:var(--txt3);white-space:nowrap;">完了 ${fmt(r.kanryo||0)}</td>
     </tr>`;
   }).join('');
 
   root.innerHTML=`
     <div class="al ${nZero?'al-w':'al-i'} mb8"><span>
-      ${nZero?`<b>この月の日報 ${rows.length}日のうち、${nZero}日が全部0です。</b>入れ忘れがないか確かめてください（薄い色の行）。`
+      ${!cols.length ? `<b>${esc(st.name)} さんは その他1〜4 に単価が入っていません。</b>駐車料金・横乗だけ入れられます。`
+        : nZero?`<b>この月の日報 ${rows.length}日のうち、${nZero}日が全部0です。</b>入れ忘れがないか確かめてください（薄い色の行）。`
              :`<b>この月の日報 ${rows.length}日すべてに数量が入っています。</b>`}<br>
       <span class="xs">打った数は宅配日報そのものに書き込みます。日報一覧・郵便局照合・支払のすべてに反映されます。
-      単価は従業員台帳の宅配単価タブのものを使います。</span>
+      その他の単価は従業員台帳の宅配単価タブのもの。<b>駐車料金</b>は立替なのでそのまま郵便局請求書の総合計に乗ります。</span>
     </span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
       ${cols.map(i=>`<span class="bdg" style="color:var(--amb2);border-color:var(--amb);">
         ${esc(_sonotaName(st,i,mon))} ¥${fmt(Number(dp['s'+i])||0)}</span>`).join('')}
       <span style="margin-left:auto;display:flex;gap:6px;">
-        <button class="btn b-blu btn-sm" onclick="_soFillAll(1)">稼働日すべてに 1</button>
-        <button class="btn b-gh btn-sm" onclick="_soFillAll(0)">すべて 0</button>
+        ${cols.length?`<button class="btn b-blu btn-sm" onclick="_soFillAll(1)">その他を稼働日すべて 1</button>
+        <button class="btn b-gh btn-sm" onclick="_soFillAll(0)">その他をすべて 0</button>`:''}
       </span>
     </div>
     <div class="tw tw-sticky"><table>
@@ -55777,14 +55800,20 @@ function renderSonota(){
         <th style="width:120px;">日付</th><th style="width:130px;">営業所</th>
         ${cols.map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonotaName(st,i,mon))}
           <div style="font-size:9px;font-weight:400;color:var(--txt3);">¥${fmt(Number(dp['s'+i])||0)}</div></th>`).join('')}
-        <th class="tr" style="border-left:2px solid var(--brd2);width:120px;">その日の支払</th>
-        <th style="width:110px;">参考</th>
+        ${cols.length?`<th class="tr" style="border-left:2px solid var(--brd2);width:120px;">その日の支払</th>`:''}
+        <th class="tr" style="border-left:2px solid var(--brd2);color:var(--blu2);width:118px;">駐車料金
+          <div style="font-size:9px;font-weight:400;color:var(--txt3);">立替・郵便局請求へ</div></th>
+        <th class="tr" style="color:var(--blu2);width:112px;">横乗
+          <div style="font-size:9px;font-weight:400;color:var(--txt3);">手当</div></th>
+        <th style="width:auto;">参考</th>
       </tr></thead>
       <tbody>${body}</tbody>
       <tfoot><tr style="background:var(--bg3);font-weight:700;">
         <td colspan="2">計 ${rows.length}日</td>
         ${cols.map(i=>`<td class="tr mono so-sum" data-i="${i-1}">0</td>`).join('')}
-        <td class="tr mono" id="so-total" style="border-left:2px solid var(--brd2);color:var(--grn2);">¥0</td>
+        ${cols.length?`<td class="tr mono" id="so-total" style="border-left:2px solid var(--brd2);color:var(--grn2);">¥0</td>`:''}
+        <td class="tr mono" id="so-park-sum" style="border-left:2px solid var(--brd2);color:var(--blu2);">¥0</td>
+        <td class="tr mono" id="so-yoko-sum" style="color:var(--blu2);">¥0</td>
         <td></td>
       </tr></tfoot>
     </table></div>
@@ -55817,6 +55846,11 @@ function _soCalc(){
     const i=parseInt(td.getAttribute('data-i'))||0; td.textContent=fmt(sums[i]||0);
   });
   const t=$('so-total'); if(t) t.textContent='¥'+fmt(total);
+  /* ★ 2026-11-03.85: 駐車料金・横乗の月計。調書の明細と突き合わせるため */
+  const _sum=cls=>Array.from(document.querySelectorAll('#so-root .'+cls))
+    .reduce((a,el)=>a+Math.max(0, parseInt(el.value)||0), 0);
+  const pk=$('so-park-sum'); if(pk) pk.textContent='¥'+fmt(_sum('so-park'));
+  const yk=$('so-yoko-sum'); if(yk) yk.textContent='¥'+fmt(_sum('so-yoko'));
 }
 
 /* 稼働日すべてに同じ数を入れる */
@@ -55838,28 +55872,59 @@ function _soOnStaffChange(){ _soState.staffId=$('so-staff')?.value||null; render
 async function _soSave(){
   const st=(D.staff||[]).find(x=>String(x.id)===String(_soState.staffId));
   if(!st){ alert('対象者が選ばれていません。'); return; }
-  const byId={};
+  const byId={}, teateById={};
   document.querySelectorAll('#so-root .so-q').forEach(el=>{
     const id=el.getAttribute('data-id'); if(!id) return;
     const i=parseInt(el.getAttribute('data-i'))||0;
     (byId[id]=byId[id]||{})[i]=Math.max(0, parseInt(el.value)||0);
   });
+  /* ★ 2026-11-03.85: 駐車料金・横乗を拾う */
+  [['so-park','parking'],['so-yoko','yokonori']].forEach(([cls,key])=>{
+    document.querySelectorAll('#so-root .'+cls).forEach(el=>{
+      const id=el.getAttribute('data-id'); if(!id) return;
+      (teateById[id]=teateById[id]||{})[key]=Math.max(0, parseInt(el.value)||0);
+    });
+  });
+
   const changed=[];
-  Object.keys(byId).forEach(id=>{
+  const ids=new Set([...Object.keys(byId), ...Object.keys(teateById)]);
+  ids.forEach(id=>{
     const r=(D.delivery||[]).find(x=>String(x.id)===String(id)); if(!r) return;
     const cur=[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
-    const nx=[0,1,2,3].map(i=>(byId[id][i]!==undefined ? byId[id][i] : (cur[i]||0)));
-    if(nx.some((v,i)=>v!==(cur[i]||0))) changed.push({r, nx, cur});
+    const q=byId[id]||{};
+    const nx=[0,1,2,3].map(i=>(q[i]!==undefined ? q[i] : (cur[i]||0)));
+    const sonChanged = nx.some((v,i)=>v!==(cur[i]||0));
+    const tt=teateById[id]||{};
+    const te={};
+    ['parking','yokonori'].forEach(k=>{
+      if(tt[k]===undefined) return;
+      if(tt[k]!==Math.max(0, parseInt(r[k])||0)) te[k]=tt[k];
+    });
+    const teChanged=Object.keys(te).length>0;
+    if(sonChanged || teChanged) changed.push({r, nx, cur, te, sonChanged, teChanged});
   });
-  if(!changed.length){ showAlert({icon:'📝', title:'変わっていません', msg:'数量に変更がありません。'}); return; }
+  if(!changed.length){ showAlert({icon:'📝', title:'変わっていません', msg:'数量・金額に変更がありません。'}); return; }
+
+  const nSon=changed.filter(c=>c.sonChanged).length;
+  const nTe=changed.filter(c=>c.teChanged).length;
+  const pkDelta=changed.reduce((a,c)=>a+(c.te.parking!==undefined ? (c.te.parking-Math.max(0,parseInt(c.r.parking)||0)) : 0), 0);
+  const lines=[];
+  if(nSon) lines.push(`その他：${nSon}日`);
+  if(nTe)  lines.push(`駐車料金・横乗：${nTe}日`+(pkDelta ? `（駐車 ${pkDelta>0?'+':''}¥${fmt(pkDelta)}）` : ''));
 
   const ok=await showDialog({ icon:'📝', title:'日報に入れる',
-    msg:`${esc(st.name)} さん ${_soState.mon}\n\n${changed.length}日ぶんの その他 を宅配日報に書き込みます。\n`
-      + `数を変えると支払が変わります。\n\n入れますか。`,
+    msg:`${esc(st.name)} さん ${_soState.mon}\n\n${lines.join('\n')}\n\n`
+      + `その他は支払が変わります。駐車料金は郵便局請求書の総合計に乗ります。\n\n入れますか。`,
     okText:'入れる', cancelText:'やめる' });
   if(!ok) return;
 
-  changed.forEach(c=>{ c.r.sonota=c.nx; });
+  changed.forEach(c=>{
+    if(c.sonChanged) c.r.sonota=c.nx;
+    if(c.teChanged){
+      Object.keys(c.te).forEach(k=>{ c.r[k]=c.te[k]; });
+      c.r.__teateFix=true;   /* _cmpWriteBackYp が teate を書き戻す目印 */
+    }
+  });
   /* 日報の保存元（yp_logs）にも書き戻す。これをしないと読み直しで消える */
   for(const c of changed){
     try{ if(typeof _cmpWriteBackYp==='function') await _cmpWriteBackYp(c.r); }catch(e){ console.error('[その他] 書き戻し失敗', e); }
