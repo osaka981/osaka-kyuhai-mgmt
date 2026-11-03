@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.80</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.81</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -1649,7 +1649,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           <div class="f3">
             <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
             <div class="fg" id="cmp-off-holder" hidden><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
-            <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option></select></div>
+            <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option><option>手当・立替あり</option><option>手当・立替なし</option></select></div>
           </div>
         </div>
       </div>
@@ -6141,7 +6141,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.80';
+const APP_VER = '2026-11-03.81';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -11412,11 +11412,15 @@ function renderCmp(){
     if(st==='差異あり'&&(!d.any||r.cmpOk)) return false;   // 了承済みは差異一覧から外す
     if(st==='照合済'&&!r.cmpOk) return false;
     if(st==='未照合'&&r.cmpOk) return false;
+    /* ★ 2026-11-03.81: 手当・立替で絞る。駐車の入れ忘れを探すため。 */
+    if(st==='手当・立替あり'&&!(typeof _teateOf==='function'&&_teateOf(r).any)) return false;
+    if(st==='手当・立替なし'&&(typeof _teateOf==='function'&&_teateOf(r).any)) return false;
     return true;
   });
   // ★ 2026/08/20: 郵便局側だけあって日報が無い日を拾い、同じ一覧に混ぜる
   let orphans=_cmpOrphanPostLogs(mon, off);
   if(st==='照合済'||st==='未照合') orphans=[];   // 「日報なし」は差異扱い
+  if(st==='手当・立替あり'||st==='手当・立替なし') orphans=[];   /* ★ 2026-11-03.81 日報が無い行に手当は無い */
   const ok=rows.filter(function(r){return r.cmpOk;}).length;
   const ng=rows.filter(function(r){return _cmpDiffs(r).any && !r.cmpOk;}).length + orphans.length;
   const un=rows.filter(function(r){return !r.cmpOk&&!_cmpDiffs(r).hasPost;}).length;
@@ -53076,6 +53080,8 @@ function _cmpSumHeader(rows, orphans, label){
      ・日報側 … _shukkaSplit が拠点マスタの集荷先で振り分ける（全行ぶん）
      日報側は定時＋指定が必ず合計(shN)に一致する。 */
   let shNt=0, shNs=0, shPt=0, shPs=0, shPu=0, shHasShi=false;
+  /* ★ 2026-11-03.81: 手当・立替の月計。駐車は請求書の総合計に乗る */
+  const te={yoko:0, park:0, parkDays:0, gasDays:0, dist:0, days:0};
   const _shAddPost=r=>{
     if(r.postShukka==null) return;
     shHasPost=true;
@@ -53097,6 +53103,12 @@ function _cmpSumHeader(rows, orphans, label){
     if(typeof _shukkaSplit==='function'){
       try{ const sp=_shukkaSplit(r); shNt+=_n0(sp.teiji); shNs+=_n0(sp.shitei); }catch(e){ }
     }
+    /* ★ 2026-11-03.81: 手当・立替を足す（日報のある行だけ。日報なしの行には無い） */
+    { const tt=_teateOf(r);
+      te.yoko+=tt.yoko; te.park+=tt.park; te.dist+=tt.dist;
+      if(tt.park>0) te.parkDays++;
+      if(tt.gas) te.gasDays++;
+      if(tt.any) te.days++; }
     _shAddPost(r);
     if(d.hasPost){
       hasPost=true;
@@ -53166,6 +53178,24 @@ function _cmpSumHeader(rows, orphans, label){
     </div>`;
   };
 
+  /* ★ 2026-11-03.81: 手当・立替。郵便局側に相手がいないので 局/報/差 の形にしない。
+     ぜんぶ0なら「なし」と出す。駐車が0かどうかを月単位で一目で見るための帯。 */
+  const teStrip=()=>{
+    const has=(te.yoko>0||te.park>0||te.gasDays>0||te.dist>0);
+    const bits=[];
+    if(te.park>0) bits.push(`<span style="color:var(--amb2);">駐 ¥${n(te.park)}<span style="color:var(--txt3);font-size:9px;margin-left:2px;">${te.parkDays}日</span></span>`);
+    if(te.yoko>0) bits.push(`<span style="color:var(--grn2);">横乗 ${n(te.yoko)}</span>`);
+    if(te.gasDays>0) bits.push(`<span style="color:var(--tel2);">給油 ${n(te.gasDays)}日</span>`);
+    if(te.dist>0) bits.push(`<span style="color:var(--blu2);">${n(te.dist)}km</span>`);
+    return `<span style="display:inline-flex;align-items:center;gap:8px;padding:5px 13px;
+        border-right:1px solid var(--brd);white-space:nowrap;"
+        title="横乗・駐車の立替・給油・走行距離。駐車料金は郵便局請求書の総合計にそのまま乗ります">
+      <b style="font-size:11.5px;color:${has?'var(--txt2)':'var(--txt3)'};">手当・立替</b>
+      ${has ? `<span class="mono" style="font-size:13px;font-weight:700;display:inline-flex;gap:9px;">${bits.join('')}</span>`
+            : `<span style="font-size:12px;color:var(--txt3);">なし</span>`}
+    </span>`;
+  };
+
   /* ★ 2026-10-31.71: 集荷カードの内訳（定時／指定事業所）。
      指定事業所集荷のある局だけ出す。無い局で「指定 0」と並べても読む人の手間が増えるだけ。 */
   const shBreak=()=>{
@@ -53228,6 +53258,7 @@ function _cmpSumHeader(rows, orphans, label){
         ${stripOne('夜間','var(--y60)',t.py,t.ny,hasPost)}
         ${stripOne('170超','var(--pur2)',t.po,t.no,hasPost)}
         ${stripOne('集荷','var(--grn2)',shP,shN,shHasPost)}
+        ${teStrip()}
         <span style="margin-left:auto;display:flex;align-items:center;gap:6px;
                      flex-wrap:wrap;font-size:11px;padding:4px 6px;">
           <span class="bdg bg">照合済 ${okN}</span>
@@ -53315,6 +53346,19 @@ function _cmpAlignSummary(){
 //   そこに書いた cmpOk / cmpCause は次回起動で必ず消える。
 //   日付×従事員をキーに別テーブルへ保存し、読み込み後に貼り直す。
 // ════════════════════════════════════════════════════════════
+/* ★ 2026-11-03.81: その日の手当・立替（横乗・駐車・給油・走行距離）があるか。
+   駐車料金は郵便局請求書の総合計にそのまま乗るので、入れ忘れると請求が足りなくなる。
+   手当・立替は宅配日報（D.delivery）にしか無い。集荷日報には欄が無い。 */
+function _teateOf(r){
+  if(!r) return {yoko:0, park:0, gas:false, dist:0, any:false};
+  const n=v=>Math.max(0, parseInt(v)||0);
+  const yoko=n(r.yokonori), park=n(r.parking), gas=!!r.refueled;
+  let d=(r.distance!=null)?parseInt(r.distance):null;
+  if(d==null && r.odoStart!=null && r.odoEnd!=null) d=parseInt(r.odoEnd)-parseInt(r.odoStart);
+  const dist=(d!=null && !isNaN(d) && d>0) ? d : 0;
+  return {yoko, park, gas, dist, any:(yoko>0||park>0||gas||dist>0)};
+}
+
 function _cmpStateKey(r){ return (r.date||'')+'__'+(r.staff||''); }
 
 /* ════════════════════════════════════════════════════════════
