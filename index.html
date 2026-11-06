@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.91</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.92</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6162,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-06.91';
+const APP_VER = '2026-11-06.92';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -22130,6 +22130,68 @@ function _bizCommissionDel(st, name, monStr, del){
   return out;
 }
 // 歩合の明細（集荷）: 集荷品目単価×個数
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-06.92: 顧客別カスタム品目の支払
+
+   集荷日報はカスタム品目（顧客台帳「その他・立替」）の数量を
+   items['__custom__品目名'] に持ち、顧客請求（_calcCustBilling）は
+   これを読んでいる。ところが支払の計算は固定品目（IK）しか回って
+   いなかったため、従業員台帳の集荷単価タブで入れた
+   fixedPrices.customItems[顧客ID][品目名] がどこからも使われず、
+   カスタム品目で払う約束の人が0円になっていた。
+
+   単位の扱いは顧客請求とそろえる。ただし月額だけは支払の性格が違う。
+     件・個 … 数量 × 単価
+     日額   … その顧客を担当した日数 × 単価
+     月額   … その月にその顧客の日報が1件でもあれば 1 × 単価
+              （請求は契約が生きていれば毎月立てるが、支払は
+                担当していない月に払う筋がないため）
+   ════════════════════════════════════════════════════════════ */
+function _colCustomItemPayLines(st, pu){
+  const out=[];
+  if(!st || !Array.isArray(pu) || !pu.length) return out;
+  const map=(typeof _normalizeCustomItemsMap==='function')
+    ? _normalizeCustomItemsMap(st.fixedPrices && st.fixedPrices.customItems)
+    : ((st.fixedPrices && st.fixedPrices.customItems) || {});
+  if(!map || !Object.keys(map).length) return out;
+
+  const agg={};
+  pu.forEach(r=>{
+    if(!r) return;
+    const cid=String(r.customerId||0);
+    if(!cid || cid==='0') return;
+    const set=map[cid] || map[Number(cid)] || null;
+    if(!set) return;
+    Object.keys(set).forEach(nm=>{
+      const cfg=set[nm]||{};
+      const up=Number(cfg.amt)||0;
+      if(up<=0) return;
+      const k=cid+'\u0000'+nm;
+      if(!agg[k]) agg[k]={ nm, up, unit:cfg.unit||'月額', tax:cfg._tax||'in',
+                           cust:r.customerName||'', qty:0, days:new Set() };
+      agg[k].qty += Number((r.items||{})['__custom__'+nm])||0;
+      if(r.date) agg[k].days.add(String(r.date));
+      if(!agg[k].cust && r.customerName) agg[k].cust=r.customerName;
+    });
+  });
+
+  Object.keys(agg).forEach(k=>{
+    const a=agg[k];
+    const isMonthly=(a.unit==='月額'), isDaily=(a.unit==='日額');
+    const useQty = isMonthly ? 1 : (isDaily ? a.days.size : a.qty);
+    if(useQty<=0) return;
+    const amt=(typeof calcUnitTotal==='function')
+      ? calcUnitTotal(a.up, useQty, a.tax) : Math.floor(a.up*useQty);
+    if(amt<=0) return;
+    out.push({
+      label:`${a.cust?a.cust+' ':''}${a.nm}（${a.unit}）${useQty}×¥${fmtUnitPrice(a.up)}`,
+      amount:amt, biz:'col'
+    });
+  });
+  return out;
+}
+window._colCustomItemPayLines=_colCustomItemPayLines;
+
 function _bizCommissionCol(st, pu){
   const out=[]; const cp=st.fixedPrices?.col||{}; const puSum={};
   pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
@@ -22141,6 +22203,8 @@ function _bizCommissionCol(st, pu){
       out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:calcUnitTotal(up, q, taxFlag)});
     }
   });
+  /* ★ 2026-11-06.92 */
+  _colCustomItemPayLines(st, pu).forEach(b=>out.push(b));
   return out;
 }
 // 業務別の基本支給（手当・控除は含まない）
@@ -38626,6 +38690,11 @@ function _calcStaffPayment(name, monStr){
         total+=amt;
       }
     });
+    /* ★ 2026-11-06.92: 顧客別カスタム品目。新しい計算経路（_bizCommissionCol）と
+       同じ関数を使うので、どちらの経路でも同じ金額になる。 */
+    if(typeof _colCustomItemPayLines==='function'){
+      _colCustomItemPayLines(st, pu).forEach(b=>{ breakdown.push(b); total+=b.amount; });
+    }
     // 宅配事業内集荷(郵便局の定時集荷先・項目名別)
     try {
       const dc = calcStaffDelColPayment(name, monStr);
