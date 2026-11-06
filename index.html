@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.90</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.91</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6162,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-06.90';
+const APP_VER = '2026-11-06.91';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -38396,10 +38396,13 @@ function _buildDriverMonthlyByOffice(staff, monStr){
       {key:'ogata',  label:'大型', price:dp.ogata},
       // 新形式集荷がある場合は旧shukkaを明細に含めない(集荷は新形式で計上)
       ...(hasNewFormatDelCol ? [] : [{key:'shukka', label:'集荷', price:dp.shukka}]),
-      {key:'s1', label:'その他1', price:dp.s1},
-      {key:'s2', label:'その他2', price:dp.s2},
-      {key:'s3', label:'その他3', price:dp.s3},
-      {key:'s4', label:'その他4', price:dp.s4},
+      /* ★ 2026-11-06.91: 台帳で名前を付けていればその名前で出す。
+         支払明細と請求書代行はそのまま本人に渡す書類なので、
+         「その他1」のままだと何の代金か分からない（青木さん＝1便・2便）。 */
+      {key:'s1', label:_sonotaName(staff,1,monStr), price:dp.s1},
+      {key:'s2', label:_sonotaName(staff,2,monStr), price:dp.s2},
+      {key:'s3', label:_sonotaName(staff,3,monStr), price:dp.s3},
+      {key:'s4', label:_sonotaName(staff,4,monStr), price:dp.s4},
     ];
     delItems.forEach(({key,label,price})=>{
       const q = delSum[key] || 0;
@@ -38592,8 +38595,9 @@ function _calcStaffPayment(name, monStr){
       {key:'yakan',label:'夜間',price:dp.night},{key:'ogata',label:'大型',price:dp.ogata},
       // 新形式がある場合は旧shukkaを明細に含めない(集荷は新形式で計上)
       ...(hasNewFormatDelCol ? [] : [{key:'shukka',label:'集荷',price:dp.shukka}]),
-      {key:'s1',label:'その他1',price:dp.s1},{key:'s2',label:'その他2',price:dp.s2},
-      {key:'s3',label:'その他3',price:dp.s3},{key:'s4',label:'その他4',price:dp.s4},
+      /* ★ 2026-11-06.91: 名前を付けていればその名前で明細に出す */
+      {key:'s1',label:_sonotaName(st,1,monStr),price:dp.s1},{key:'s2',label:_sonotaName(st,2,monStr),price:dp.s2},
+      {key:'s3',label:_sonotaName(st,3,monStr),price:dp.s3},{key:'s4',label:_sonotaName(st,4,monStr),price:dp.s4},
     ];
     delItems.forEach(({key,label,price})=>{
       if(delSum[key]>0&&price){
