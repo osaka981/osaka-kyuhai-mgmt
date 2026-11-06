@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-03.86</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.87</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6162,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-03.86';
+const APP_VER = '2026-11-06.87';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8657,6 +8657,12 @@ function applyFirebaseData() {
               yokonori:     _n(t.yokonori) || 0,
               yokonoriWith: Array.isArray(t.yokonoriWith) ? t.yokonoriWith.map(x=>String(x||'')) : [],
               parking:      _n(t.parking) || 0,
+              /* ★ 2026-11-06.87: 1日に駐車場の領収書が2枚以上ある日の内訳。
+                 合計は parking と同じ。別紙「駐車場領収書明細」を領収書の枚数どおりに
+                 出すためだけに持つ（支払・請求の金額には一切影響しない）。 */
+              parkSplit:    Array.isArray(t.parkSplit)
+                              ? t.parkSplit.map(v=>Math.max(0,parseInt(v)||0)).filter(v=>v>0)
+                              : null,
               refueled:     !!t.refueled,
               odoStart:     _n(t.odoStart),
               odoEnd:       _n(t.odoEnd),
@@ -47729,8 +47735,13 @@ function _calcPostBilling(locationIdOrName, monStr){
      別紙「駐車場領収書明細」もこの明細から作る。 */
   const parkingRows=[];
   delRows.forEach(r=>{
-    const pk=parseInt(r.parking)||0;
-    if(pk>0) parkingRows.push({date:r.date||'', amount:pk, staff:r.staff||'', id:r.id});
+    /* ★ 2026-11-06.87: 領収書が複数枚の日は、その枚数どおりに行を分ける。
+       合計は変わらない（_parkRowsOf が合わない内訳を捨てるため）。 */
+    const list=(typeof _parkRowsOf==='function') ? _parkRowsOf(r)
+             : ((parseInt(r.parking)||0)>0 ? [parseInt(r.parking)||0] : []);
+    list.forEach(amt=>{
+      parkingRows.push({date:r.date||'', amount:amt, staff:r.staff||'', id:r.id});
+    });
   });
   parkingRows.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const parking = parkingRows.reduce((n,x)=>n+x.amount, 0);
@@ -53471,6 +53482,40 @@ function _cmpAlignSummary(){
 /* ★ 2026-11-03.81: その日の手当・立替（横乗・駐車・給油・走行距離）があるか。
    駐車料金は郵便局請求書の総合計にそのまま乗るので、入れ忘れると請求が足りなくなる。
    手当・立替は宅配日報（D.delivery）にしか無い。集荷日報には欄が無い。 */
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-06.87: 駐車料金の内訳（1日に領収書が複数枚ある日）
+
+   日報は「1日・1人につき駐車代ひとつ」しか持てないため、同じ日に
+   2枚の領収書があると合算した1行になり、別紙の行数が領収書の枚数と
+   合わなくなる（2026年9月の松永さん 9/8：¥1,200＋¥800＝¥2,000）。
+
+   まとめ入力の欄に「1200+800」と打てるようにし、内訳を parkSplit に
+   持つ。合計は必ず parking と一致させる（ずれたら内訳は捨てる）。
+   支払・照合・請求金額はどれも parking しか見ないので影響しない。
+   ════════════════════════════════════════════════════════════ */
+function _parkParse(str){
+  const parts=String(str==null?'':str).split(/[+＋,、\s]+/)
+    .map(x=>x.trim()).filter(x=>x!=='')
+    .map(x=>Math.max(0, parseInt(String(x).replace(/[^0-9]/g,''))||0))
+    .filter(v=>v>0);
+  return {total: parts.reduce((a,b)=>a+b,0), parts};
+}
+function _parkText(r){
+  if(!r) return '0';
+  const sp=Array.isArray(r.parkSplit) ? r.parkSplit.filter(v=>v>0) : null;
+  const pk=Math.max(0, parseInt(r.parking)||0);
+  if(sp && sp.length>1 && sp.reduce((a,b)=>a+b,0)===pk) return sp.join('+');
+  return String(pk);
+}
+/* 請求書の別紙に出す行。内訳があれば領収書の枚数どおりに分ける */
+function _parkRowsOf(r){
+  const pk=Math.max(0, parseInt(r && r.parking)||0);
+  if(pk<=0) return [];
+  const sp=Array.isArray(r.parkSplit) ? r.parkSplit.filter(v=>v>0) : null;
+  if(sp && sp.length>1 && sp.reduce((a,b)=>a+b,0)===pk) return sp.slice();
+  return [pk];
+}
+
 function _teateOf(r){
   if(!r) return {yoko:0, park:0, gas:false, dist:0, any:false};
   const n=v=>Math.max(0, parseInt(v)||0);
@@ -53586,6 +53631,16 @@ async function _cmpWriteBackYp(r){
         const v=Math.max(0, parseInt(r[k])||0);
         f.teate[k]=v; f[k]=v;
       });
+      /* ★ 2026-11-06.87: 駐車の内訳。1枚だけの日は消す（古い内訳が残らないように） */
+      {
+        const sp=Array.isArray(r.parkSplit) ? r.parkSplit.filter(v=>v>0) : null;
+        const pk=Math.max(0, parseInt(r.parking)||0);
+        if(sp && sp.length>1 && sp.reduce((a,b)=>a+b,0)===pk){
+          f.teate.parkSplit=sp.slice(); f.parkSplit=sp.slice();
+        }else{
+          delete f.teate.parkSplit; delete f.parkSplit;
+        }
+      }
       delete r.__teateFix;
     }
     // ★ 2026-10-09.5: 統合形式では form.del が本体だが、提出時に
@@ -55781,9 +55836,9 @@ function renderSonota(){
   const WD=['日','月','火','水','木','金','土'];
   const _son=r=>[r.sonota||[]].flat().map(v=>Math.max(0,parseInt(v)||0));
   /* ★ 2026-11-03.85: 立替・手当の欄。駐車料金は郵便局請求書の総合計にそのまま乗る */
-  const _inp=(cls,id,i,v,ph)=>`<input type="number" min="0" class="${cls}"
+  const _inp=(cls,id,i,v,ph,wide)=>`<input type="${wide?'text':'number'}"${wide?' inputmode="numeric"':' min="0"'} class="${cls}"
       data-id="${esc(String(id))}"${i!=null?` data-i="${i}"`:''} value="${v}" onfocus="this.select()"
-      oninput="_soCalc()" placeholder="${ph||'0'}" style="width:96px;padding:5px 6px;
+      oninput="_soCalc()" placeholder="${ph||'0'}" style="width:${wide?126:96}px;padding:5px 6px;
       text-align:right;font-size:15px;font-weight:700;font-family:'DM Mono',monospace;
       border:1px solid var(--brd2);border-radius:5px;background:var(--sur2);color:var(--txt);">`;
   let nZero=0;
@@ -55800,7 +55855,7 @@ function renderSonota(){
       <td class="xs" style="color:var(--amb2);white-space:nowrap;">${esc(r.office||'')}</td>
       ${cols.map(i=>`<td style="padding:3px 5px;">${_inp('so-q',r.id,i-1,sn[i-1]||0)}</td>`).join('')}
       ${cols.length?`<td class="tr mono so-amt" style="border-left:2px solid var(--brd2);color:var(--grn2);font-weight:700;">¥${fmt(amt)}</td>`:''}
-      <td style="padding:3px 5px;border-left:2px solid var(--brd2);">${_inp('so-park',r.id,null,Math.max(0,parseInt(r.parking)||0))}</td>
+      <td style="padding:3px 5px;border-left:2px solid var(--brd2);">${_inp('so-park',r.id,null,esc(_parkText(r)),'0',true)}<span class="so-park-n xs" style="margin-left:5px;color:var(--txt3);"></span></td>
       <td style="padding:3px 5px;">${_inp('so-yoko',r.id,null,Math.max(0,parseInt(r.yokonori)||0))}</td>
       <td class="xs" style="color:var(--txt3);white-space:nowrap;">完了 ${fmt(r.kanryo||0)}</td>
     </tr>`;
@@ -55812,7 +55867,8 @@ function renderSonota(){
         : nZero?`<b>この月の日報 ${rows.length}日のうち、${nZero}日が全部0です。</b>入れ忘れがないか確かめてください（薄い色の行）。`
              :`<b>この月の日報 ${rows.length}日すべてに数量が入っています。</b>`}<br>
       <span class="xs">打った数は宅配日報そのものに書き込みます。日報一覧・郵便局照合・支払のすべてに反映されます。
-      その他の単価は従業員台帳の宅配単価タブのもの。<b>駐車料金</b>は立替なのでそのまま郵便局請求書の総合計に乗ります。</span>
+      その他の単価は従業員台帳の宅配単価タブのもの。<b>駐車料金</b>は立替なのでそのまま郵便局請求書の総合計に乗ります。
+      1日に領収書が2枚ある日は <b>1200+800</b> のように足し算で打つと、別紙の明細が領収書の枚数どおりに分かれます。</span>
     </span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
       ${cols.map(i=>`<span class="bdg" style="color:var(--amb2);border-color:var(--amb);">
@@ -55828,8 +55884,8 @@ function renderSonota(){
         ${cols.map(i=>`<th class="tr" style="color:var(--amb2);white-space:nowrap;">${esc(_sonotaName(st,i,mon))}
           <div style="font-size:9px;font-weight:400;color:var(--txt3);">¥${fmt(Number(dp['s'+i])||0)}</div></th>`).join('')}
         ${cols.length?`<th class="tr" style="border-left:2px solid var(--brd2);width:120px;">その日の支払</th>`:''}
-        <th class="tr" style="border-left:2px solid var(--brd2);color:var(--blu2);width:118px;">駐車料金
-          <div style="font-size:9px;font-weight:400;color:var(--txt3);">立替・郵便局請求へ</div></th>
+        <th class="tr" style="border-left:2px solid var(--brd2);color:var(--blu2);width:160px;">駐車料金
+          <div style="font-size:9px;font-weight:400;color:var(--txt3);">領収書2枚なら 1200+800</div></th>
         <th class="tr" style="color:var(--blu2);width:112px;">横乗
           <div style="font-size:9px;font-weight:400;color:var(--txt3);">手当</div></th>
         <th style="width:auto;">参考</th>
@@ -55876,7 +55932,17 @@ function _soCalc(){
   /* ★ 2026-11-03.85: 駐車料金・横乗の月計。調書の明細と突き合わせるため */
   const _sum=cls=>Array.from(document.querySelectorAll('#so-root .'+cls))
     .reduce((a,el)=>a+Math.max(0, parseInt(el.value)||0), 0);
-  const pk=$('so-park-sum'); if(pk) pk.textContent='¥'+fmt(_sum('so-park'));
+  /* ★ 2026-11-06.87: 駐車は「1200+800」と打てるので足し算で読む。
+     複数枚の日は欄の右に枚数を出す（打ち間違いにその場で気づけるように） */
+  let pkTotal=0, pkCount=0;
+  document.querySelectorAll('#so-root .so-park').forEach(el=>{
+    const r=_parkParse(el.value);
+    pkTotal+=r.total; pkCount+=(r.parts.length||0);
+    const tag=el.parentNode && el.parentNode.querySelector('.so-park-n');
+    if(tag) tag.textContent = r.parts.length>1 ? ('='+fmt(r.total)+'／'+r.parts.length+'枚') : '';
+  });
+  const pk=$('so-park-sum');
+  if(pk) pk.innerHTML='¥'+fmt(pkTotal)+(pkCount?`<div style="font-size:9px;font-weight:400;color:var(--txt3);">${pkCount}枚</div>`:'');
   const yk=$('so-yoko-sum'); if(yk) yk.textContent='¥'+fmt(_sum('so-yoko'));
 }
 
@@ -55908,11 +55974,17 @@ async function _soSave(){
     (byId[id]=byId[id]||{})[i]=Math.max(0, parseInt(el.value)||0);
   });
   /* ★ 2026-11-03.85: 駐車料金・横乗を拾う */
-  [['so-park','parking'],['so-yoko','yokonori']].forEach(([cls,key])=>{
-    document.querySelectorAll('#so-root .'+cls).forEach(el=>{
-      const id=el.getAttribute('data-id'); if(!id) return;
-      (teateById[id]=teateById[id]||{})[key]=Math.max(0, parseInt(el.value)||0);
-    });
+  document.querySelectorAll('#so-root .so-yoko').forEach(el=>{
+    const id=el.getAttribute('data-id'); if(!id) return;
+    (teateById[id]=teateById[id]||{}).yokonori=Math.max(0, parseInt(el.value)||0);
+  });
+  /* ★ 2026-11-06.87: 駐車は「1200+800」を足して合計に、内訳は parkSplit に */
+  document.querySelectorAll('#so-root .so-park').forEach(el=>{
+    const id=el.getAttribute('data-id'); if(!id) return;
+    const v=_parkParse(el.value);
+    const o=(teateById[id]=teateById[id]||{});
+    o.parking=v.total;
+    o.parkSplit=(v.parts.length>1) ? v.parts : null;
   });
 
   const changed=[];
@@ -55929,7 +56001,14 @@ async function _soSave(){
       if(tt[k]===undefined) return;
       if(tt[k]!==Math.max(0, parseInt(r[k])||0)) te[k]=tt[k];
     });
-    const teChanged=Object.keys(te).length>0;
+    /* ★ 2026-11-06.87: 金額が同じでも内訳の分け方だけ変わることがある */
+    let splitChanged=false;
+    if(tt.parkSplit!==undefined){
+      const now=(Array.isArray(r.parkSplit)?r.parkSplit.filter(v=>v>0):[]).join('+');
+      const nx=(tt.parkSplit||[]).join('+');
+      if(now!==nx){ splitChanged=true; te.__parkSplit = tt.parkSplit; }
+    }
+    const teChanged=Object.keys(te).length>0 || splitChanged;
     if(sonChanged || teChanged) changed.push({r, nx, cur, te, sonChanged, teChanged});
   });
   if(!changed.length){ showAlert({icon:'📝', title:'変わっていません', msg:'数量・金額に変更がありません。'}); return; }
@@ -55939,7 +56018,8 @@ async function _soSave(){
   const pkDelta=changed.reduce((a,c)=>a+(c.te.parking!==undefined ? (c.te.parking-Math.max(0,parseInt(c.r.parking)||0)) : 0), 0);
   const lines=[];
   if(nSon) lines.push(`その他：${nSon}日`);
-  if(nTe)  lines.push(`駐車料金・横乗：${nTe}日`+(pkDelta ? `（駐車 ${pkDelta>0?'+':''}¥${fmt(pkDelta)}）` : ''));
+  if(nTe)  lines.push(`駐車料金・横乗：${nTe}日`+(pkDelta ? `（駐車 ${pkDelta>0?'+':''}¥${fmt(pkDelta)}）` : '')
+           + (changed.some(c=>c.te.__parkSplit!==undefined) ? '／領収書の分け方も直します' : ''));
 
   const ok=await showDialog({ icon:'📝', title:'日報に入れる',
     msg:`${esc(st.name)} さん ${_soState.mon}\n\n${lines.join('\n')}\n\n`
@@ -55950,7 +56030,10 @@ async function _soSave(){
   changed.forEach(c=>{
     if(c.sonChanged) c.r.sonota=c.nx;
     if(c.teChanged){
-      Object.keys(c.te).forEach(k=>{ c.r[k]=c.te[k]; });
+      Object.keys(c.te).forEach(k=>{
+        if(k==='__parkSplit'){ c.r.parkSplit=c.te[k]; return; }
+        c.r[k]=c.te[k];
+      });
       c.r.__teateFix=true;   /* _cmpWriteBackYp が teate を書き戻す目印 */
     }
   });
