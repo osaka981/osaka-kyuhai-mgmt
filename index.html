@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.89</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-06.90</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6162,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-06.89';
+const APP_VER = '2026-11-06.90';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -12104,6 +12104,65 @@ function _findUnregisteredDrivers(){
   return unregistered;
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-06.90: 未登録ドライバーをその場で登録する
+
+   これまで警告には「従業員管理へ」しか無く、押しても従業員管理の画面が
+   開くだけだった。あの画面の「フリート未登録ドライバー」はフリート管理に
+   登録のある人だけを出すので、フリートにも居ない人（福留兼太郎さん）は
+   どこにも出てこず、登録のしようが無かった。
+   警告の一人ひとりに「登録」を付け、氏名と営業所を入れた状態で
+   従業員登録の画面を開く。
+   ════════════════════════════════════════════════════════════ */
+function _unregOfficeOf(name){
+  const key=String(name||'').replace(/[\s　]/g,'');
+  if(!key) return '';
+  const cnt={};
+  [D.delivery||[], D.pickup||[]].forEach(arr=>{
+    (arr||[]).forEach(r=>{
+      if(!r || !r.staff) return;
+      if(String(r.staff).replace(/[\s　]/g,'')!==key) return;
+      const o=String(r.office||'').trim();
+      if(o) cnt[o]=(cnt[o]||0)+1;
+    });
+  });
+  let best='', n=0;
+  Object.keys(cnt).forEach(o=>{ if(cnt[o]>n){ n=cnt[o]; best=o; } });
+  return best;
+}
+function _regUnregDriver(name){
+  if(typeof openNewStaff!=='function'){ alert('登録画面を開けませんでした。'); return; }
+  openNewStaff();
+  setTimeout(()=>{
+    const parts=String(name||'').trim().split(/[\s　]+/).filter(Boolean);
+    if($('st-sei')) $('st-sei').value=parts[0]||'';
+    if($('st-mei')) $('st-mei').value=parts.slice(1).join(' ')||'';
+    try{ if(typeof syncStName==='function') syncStName(); }catch(e){}
+    try{ if(typeof _checkStaffDuplicate==='function') _checkStaffDuplicate(); }catch(e){}
+    _setStOffice(_unregOfficeOf(name));
+  }, 180);
+}
+/* 営業所の select に入れる。日報の局名と台帳の表記が少し違っても拾えるように
+   完全一致 → 部分一致 の順で探す。 */
+function _setStOffice(off){
+  if(!off) return false;
+  const o=$('st-off'); if(!o) return false;
+  if(o.tagName!=='SELECT'){ o.value=off; return true; }
+  const key=String(off).replace(/[\s　]/g,'');
+  const opts=[...o.options];
+  let hit=opts.find(x=>String(x.value).replace(/[\s　]/g,'')===key)
+         || opts.find(x=>String(x.textContent).replace(/[\s　]/g,'')===key)
+         || opts.find(x=>key && String(x.value).replace(/[\s　]/g,'').indexOf(key)>=0)
+         || opts.find(x=>key && key.indexOf(String(x.value).replace(/[\s　]/g,''))>=0 && String(x.value).trim()!=='');
+  if(!hit) return false;
+  o.value=hit.value;
+  try{ o.dispatchEvent(new Event('change')); }catch(e){}
+  try{ if(typeof prevEmpNo==='function') prevEmpNo(); }catch(e){}
+  return true;
+}
+window._regUnregDriver=_regUnregDriver; window._setStOffice=_setStOffice;
+window._unregOfficeOf=_unregOfficeOf;
+
 // ══════════════════════════════════════════════════
 // 単価未登録ドライバー検出 (2026/05/21)
 // 日報に件数/数量があるのに、その業務の支払単価が0/未登録のドライバーを検出
@@ -12268,15 +12327,21 @@ function _renderUnregisteredDriversAlert(){
     const sections = typeOrder.filter(t => byType[t]).map(t => {
       const list = byType[t];
       return `<div style="margin-top:8px;">
-        <div style="font-size:11px;font-weight:700;color:var(--txt);margin-bottom:4px;">${t} (${list.length}名)</div>
+        <div style="font-size:11px;font-weight:700;color:#7c2d12;margin-bottom:4px;">${t} (${list.length}名)</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${list.map(it => `
-            <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 8px;font-size:11px;">
-              <span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
-              ${it.name ? ' <span style="color:var(--txt);">'+esc(it.name)+'</span>' : ' <span style="color:var(--txt3);">(氏名不明)</span>'}
-              ${it.count ? ' <span style="color:var(--txt3);font-size:10px;">日報'+it.count+'件</span>' : ''}
+          ${list.map(it => {
+            /* ★ 2026-11-06.90: 一人ずつその場で登録できるように */
+            const _off = (it.name && typeof _unregOfficeOf==='function') ? _unregOfficeOf(it.name) : '';
+            return `
+            <span style="background:#fff;border:1px solid rgba(230,126,34,.4);border-radius:4px;padding:3px 4px 3px 8px;font-size:11px;display:inline-flex;align-items:center;gap:6px;">
+              <span><span style="font-family:monospace;color:#c2410c;font-weight:700;">${esc(it.id)}</span>
+              ${it.name ? ' <span style="color:#1f2937;font-weight:700;">'+esc(it.name)+'</span>' : ' <span style="color:#6b7280;">(氏名不明)</span>'}
+              ${_off ? ' <span style="color:#6b7280;font-size:10px;">'+esc(_off)+'</span>' : ''}
+              ${it.count ? ' <span style="color:#6b7280;font-size:10px;">日報'+it.count+'件</span>' : ''}</span>
+              ${it.name ? `<button class="btn b-grn" style="font-size:10px;padding:2px 9px;flex-shrink:0;"
+                 onclick="_regUnregDriver('${esc(String(it.name).replace(/'/g,"\\'"))}')">登録</button>` : ''}
             </span>
-          `).join('')}
+          `;}).join('')}
         </div>
       </div>`;
     }).join('');
@@ -12286,7 +12351,7 @@ function _renderUnregisteredDriversAlert(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;font-weight:700;color:#c2410c;margin-bottom:4px;">⚠️ 日報提出があるが従業員マスタに未登録のドライバー (${items.length}名)</div>
-            <div style="font-size:11px;color:var(--txt2);">明細・給与計算が正しく行われない可能性があります。下記から登録してください。</div>
+            <div style="font-size:11px;color:#57534e;">明細・給与計算が正しく行われない可能性があります。各人の「登録」から、氏名と営業所を入れた状態で登録画面が開きます。</div>
           </div>
           <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
         </div>
@@ -12300,8 +12365,8 @@ function _renderUnregisteredDriversAlert(){
   if(priceIssues.length > 0){
     const rows = priceIssues.map(it => `
       <div style="margin-top:6px;padding:6px 8px;background:#fff;border:1px solid rgba(220,38,38,.3);border-radius:4px;">
-        <span style="font-size:12px;font-weight:700;color:var(--txt);">${esc(it.name)}</span>
-        ${it.kubun?`<span style="font-size:10px;color:var(--txt3);margin-left:6px;">${esc(it.kubun)}</span>`:''}
+        <span style="font-size:12px;font-weight:700;color:#1f2937;">${esc(it.name)}</span>
+        ${it.kubun?`<span style="font-size:10px;color:#6b7280;margin-left:6px;">${esc(it.kubun)}</span>`:''}
         <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:5px;">
           ${it.items.map(label => `<span style="background:#fef2f2;border:1px solid rgba(220,38,38,.25);border-radius:3px;padding:2px 7px;font-size:10.5px;color:#b91c1c;">${esc(label)}</span>`).join('')}
         </div>
@@ -12313,7 +12378,7 @@ function _renderUnregisteredDriversAlert(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
           <div style="flex:1;min-width:0;">
             <div style="font-size:13px;font-weight:700;color:#b91c1c;margin-bottom:4px;">⚠️ 単価が未登録の業務があります (${priceIssues.length}名・当月)</div>
-            <div style="font-size:11px;color:var(--txt2);">日報に件数があるのに支払単価が0円です。入力ミスか、単価登録漏れかご確認ください。</div>
+            <div style="font-size:11px;color:#57534e;">日報に件数があるのに支払単価が0円です。入力ミスか、単価登録漏れかご確認ください。</div>
           </div>
           <button class="btn b-amb btn-sm" onclick="nav(document.querySelector('.ni[data-s=\\'staff\\']'))" style="font-size:11px;flex-shrink:0;">従業員管理へ</button>
         </div>
@@ -45690,14 +45755,10 @@ function _pcRegister(i){
     if(mei) mei.value=m.mei||'';
     try{ if(typeof syncStName==='function') syncStName(); }catch(e){}
     try{ if(typeof _checkStaffDuplicate==='function') _checkStaffDuplicate(); }catch(e){}
-    /* 調書の営業所をメイン郵便局に入れておく */
-    if(m.off){
-      const o=$('st-office'); 
-      if(o && o.tagName==='SELECT'){
-        const hit=[...o.options].find(x=>String(x.value).indexOf(m.off)>=0 || String(x.textContent).indexOf(m.off)>=0);
-        if(hit){ o.value=hit.value; try{ o.dispatchEvent(new Event('change')); }catch(e){} }
-      } else if(o){ o.value=m.off; }
-    }
+    /* 調書の営業所をメイン郵便局に入れておく。
+       ★ 2026-11-06.90: ここは存在しない st-office を見ていたため、ずっと
+          効いていなかった。正しい id は st-off。共通の _setStOffice に寄せた。 */
+    try{ if(typeof _setStOffice==='function') _setStOffice(m.off); }catch(e){}
     m.done=true; m.doneMsg='登録画面を開きました';
     _pcRefreshNew();
   }, 160);
