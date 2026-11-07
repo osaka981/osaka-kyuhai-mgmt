@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.95</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.96</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -5376,12 +5376,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div style="margin-bottom:10px;border-top:1px solid var(--brd);padding-top:8px;">
       <div class="xs fw7 mb6" style="color:var(--grn2);">💰 手当</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-        <div class="fg"><label style="font-size:9px;">通勤手当（円/月）</label><input type="number" id="st-commute" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">経歴手当（円/月）</label><input type="number" id="st-career" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">役職手当（円/月）</label><input type="number" id="st-position" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">横乗手当（円/回）</label><input type="number" id="st-yokonori-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">特別手当（円/回）</label><input type="number" id="st-tokubetsu-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-        <div class="fg"><label style="font-size:9px;">その他手当（円/月）</label><input type="number" id="st-teate-other" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
+        <div class="fg"><label style="font-size:9px;">通勤手当（円/月）</label><input type="number" id="st-commute" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-commute" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+        <div class="fg"><label style="font-size:9px;">経歴手当（円/月）</label><input type="number" id="st-career" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-career" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+        <div class="fg"><label style="font-size:9px;">役職手当（円/月）</label><input type="number" id="st-position" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-position" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+        <div class="fg"><label style="font-size:9px;">横乗手当（円/回）</label><input type="number" id="st-yokonori-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-yokonoriUnit" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+        <div class="fg"><label style="font-size:9px;">特別手当（円/回）</label><input type="number" id="st-tokubetsu-unit" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-tokubetsuUnit" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+        <div class="fg"><label style="font-size:9px;">その他手当（円/月）</label><input type="number" id="st-teate-other" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0">
+          <select id="st-tx-teateOther" class="fi" style="font-size:10px;padding:2px 4px;margin-top:2px;"><option value="in">税込</option><option value="ex">税別</option><option value="nt">不課税</option></select></div>
+      </div>
+      <div class="xs muted" style="margin-top:5px;line-height:1.5;">
+        税区分は請求書・支払明細の消費税の出し方に使います。<b>税別</b>にすると合計に10%が足されます。
+        <b>税込</b>は単価に消費税が含まれているものとして内税で表示します（未設定はこれ）。
+        社員の給与の手当など、消費税の対象外のものは<b>不課税</b>にしてください。
       </div>
     </div>
     <!-- 社保・税（社員・パートのみ） -->
@@ -6162,7 +6173,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-07.95';
+const APP_VER = '2026-11-07.96';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -22115,8 +22126,9 @@ function _bizCommissionDel(st, name, monStr, del){
    {key:'s3',label:_sonotaName(st,3,monStr),price:dp.s3},{key:'s4',label:_sonotaName(st,4,monStr),price:dp.s4}
   ].forEach(({key,label,price})=>{
     if(sum[key]>0 && price){
-      const taxFlag=(dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
-      out.push({label:`${label} ${sum[key]}件×¥${fmtUnitPrice(price)}`, amount:calcUnitTotal(price, sum[key], taxFlag)});
+      const taxFlag=_taxOf(dp, key==='yakan'?'night':key);
+      out.push({label:`${label} ${sum[key]}件×¥${fmtUnitPrice(price)}`,
+                amount:calcUnitTotal(price, sum[key], taxFlag), taxType:taxFlag});
     }
   });
   const byLabel={};
@@ -22130,6 +22142,47 @@ function _bizCommissionDel(st, name, monStr, del){
   return out;
 }
 // 歩合の明細（集荷）: 集荷品目単価×個数
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-07.96: 消費税の扱い
+
+   台帳の「税込／税別」は保存されていたが、金額にも書類にも
+   まったく効いていなかった（calcUnitTotal は変換モードを渡さないと
+   税区分を捨てる作りで、全11か所の呼び出しのどれも渡していなかった）。
+   請求書の税の行も、台帳ではなく明細のラベル文字列から
+   「手当」「保証」を探して推測していた。
+
+   直し方は郵便局への請求書と同じにする。
+     ・明細の金額は単価×数量のまま（税抜でも税込でも額面どおり）
+     ・合計のところで税区分ごとにまとめ、税別のぶんだけ10%を足す
+   行ごとに10%を足すと端数が項目数ぶん積み上がってずれるため。
+
+   未設定は「税込」とみなす。これまで全員が税込で運用してきたので、
+   この既定なら金額が1円も変わらない。
+   ════════════════════════════════════════════════════════════ */
+function _taxOf(src, key){
+  const t = (src && src._tax) ? src._tax[key] : null;
+  return (t==='ex' || t==='in' || t==='nt') ? t : 'in';
+}
+/* 支給・控除の行から税区分別の合計を出す。
+   控除（マイナス）は額面のまま差し引く（税の対象にしない）。 */
+function _payTotals(lines){
+  let inclSub=0, exclSub=0, ntSub=0, ded=0;
+  (lines||[]).forEach(b=>{
+    const a = Number(b && b.amount) || 0;
+    if(a < 0){ ded += a; return; }
+    if(a === 0) return;
+    const t = (b && b.taxType) || 'in';
+    if(t === 'ex')      exclSub += a;
+    else if(t === 'nt') ntSub   += a;
+    else                inclSub += a;
+  });
+  const inclTax = Math.floor(inclSub * 10 / 110);
+  const exclTax = Math.floor(exclSub * 0.1);
+  const gross   = inclSub + exclSub + exclTax + ntSub;
+  return {inclSub, inclTax, exclSub, exclTax, ntSub, gross, ded, net: gross + ded};
+}
+window._taxOf=_taxOf; window._payTotals=_payTotals;
+
 /* ════════════════════════════════════════════════════════════
    ★ 2026-11-07.94: 支払明細の行を作る共通関数
 
@@ -22161,9 +22214,9 @@ function _colItemPayLines(st, pu, monStr){
     const ck = IK_COL_MAP[k];
     const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
     if(q>0 && up>0){
-      const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
+      const taxFlag = _taxOf(cp, ck);
       const amt = calcUnitTotal(up, q, taxFlag);
-      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:amt, biz:'col'});
+      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:amt, biz:'col', taxType:taxFlag});
     }
   });
   return out;
@@ -22184,27 +22237,30 @@ function _teatePayLines(st, monStr, del){
   const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
           : {yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit,
              commute:off.commute, career:off.career, position:off.position, teateOther:off.teateOther};
-  if(_tu.commute>0)  out.push({label:'通勤手当', amount:_tu.commute, teate:true});
-  if(_tu.career>0)   out.push({label:'経歴手当', amount:_tu.career, teate:true});
-  if(_tu.position>0) out.push({label:'役職手当', amount:_tu.position, teate:true});
+  /* ★ 2026-11-07.96: 手当も台帳で税込／税別／不課税を選べる */
+  const _tt = (typeof _teateTaxAt==='function') ? _teateTaxAt(st, monStr) : {};
+  const _tx = k => (_tt[k]==='ex' || _tt[k]==='nt') ? _tt[k] : 'in';
+  if(_tu.commute>0)  out.push({label:'通勤手当', amount:_tu.commute, teate:true, taxType:_tx('commute')});
+  if(_tu.career>0)   out.push({label:'経歴手当', amount:_tu.career, teate:true, taxType:_tx('career')});
+  if(_tu.position>0) out.push({label:'役職手当', amount:_tu.position, teate:true, taxType:_tx('position')});
   if(yokonoriCnt>0 && _tu.yokonoriUnit){
     out.push({label:`横乗手当 ${yokonoriCnt}回×¥${_tu.yokonoriUnit}`,
-              amount:yokonoriCnt*_tu.yokonoriUnit, teate:true});
+              amount:yokonoriCnt*_tu.yokonoriUnit, teate:true, taxType:_tx('yokonoriUnit')});
   }
   if(yokonoriCnt>0 && !_tu.yokonoriUnit){
     out.push({label:`横乗手当 ${yokonoriCnt}回（単価が台帳に未設定）`, amount:0, teate:true, warn:true});
   }
   if(tokubetsuCnt>0 && _tu.tokubetsuUnit){
     out.push({label:`特別手当 ${tokubetsuCnt}回×¥${_tu.tokubetsuUnit}`,
-              amount:tokubetsuCnt*_tu.tokubetsuUnit, teate:true});
+              amount:tokubetsuCnt*_tu.tokubetsuUnit, teate:true, taxType:_tx('tokubetsuUnit')});
   }
   if(tokubetsuCnt>0 && !_tu.tokubetsuUnit){
     out.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0, teate:true, warn:true});
   }
-  if(_tu.teateOther>0) out.push({label:'その他手当', amount:_tu.teateOther, teate:true});
+  if(_tu.teateOther>0) out.push({label:'その他手当', amount:_tu.teateOther, teate:true, taxType:_tx('teateOther')});
   // 駐車料金の立替（実費。同額をそのまま郵便局へ請求する）
   if(_mAdj.park>0){
-    out.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park, teate:true});
+    out.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park, teate:true, taxType:'in'});
   }
   return out;
 }
@@ -22247,7 +22303,8 @@ function _colCustomItemPayLines(st, pu){
       const up=Number(cfg.amt)||0;
       if(up<=0) return;
       const k=cid+'\u0000'+nm;
-      if(!agg[k]) agg[k]={ nm, up, unit:cfg.unit||'月額', tax:cfg._tax||'in',
+      if(!agg[k]) agg[k]={ nm, up, unit:cfg.unit||'月額',
+                           tax:(cfg._tax==='ex'||cfg._tax==='nt') ? cfg._tax : 'in',
                            cust:r.customerName||'', qty:0, days:new Set() };
       agg[k].qty += Number((r.items||{})['__custom__'+nm])||0;
       if(r.date) agg[k].days.add(String(r.date));
@@ -22265,7 +22322,7 @@ function _colCustomItemPayLines(st, pu){
     if(amt<=0) return;
     out.push({
       label:`${a.cust?a.cust+' ':''}${a.nm}（${a.unit}）${useQty}×¥${fmtUnitPrice(a.up)}`,
-      amount:amt, biz:'col'
+      amount:amt, biz:'col', taxType:a.tax
     });
   });
   return out;
@@ -22279,8 +22336,9 @@ function _bizCommissionCol(st, pu){
     const ck=IK_COL_MAP[k];
     const up=(ck && ck!=='charter') ? Number(cp[ck])||0 : 0;
     if(q>0 && up>0){
-      const taxFlag=(cp._tax && cp._tax[ck]) || 'ex';
-      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:calcUnitTotal(up, q, taxFlag)});
+      const taxFlag=_taxOf(cp, ck);
+      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`,
+                amount:calcUnitTotal(up, q, taxFlag), taxType:taxFlag});
     }
   });
   /* ★ 2026-11-06.92 */
@@ -28029,6 +28087,8 @@ function saveStaff(continueAdd=false){
       yokonoriUnit:parseInt($('st-yokonori-unit')?.value)||0,
       tokubetsuUnit:parseInt($('st-tokubetsu-unit')?.value)||0,
       teateOther:parseInt($('st-teate-other')?.value)||0,
+      /* ★ 2026-11-07.96: 手当の税区分 */
+      _tax:(typeof _stCollectTeate==='function') ? (_stCollectTeate()._tax||{}) : {},
       commute:parseInt($('st-commute')?.value)||0,
       career:parseInt($('st-career')?.value)||0,
       position:parseInt($('st-position')?.value)||0,
@@ -37745,6 +37805,22 @@ function _teateUnitsAt(st, ym){
            commute: pick('commute'), career: pick('career'),
            position: pick('position'), teateOther: pick('teateOther') };
 }
+/* ★ 2026-11-07.96: その月に効いている手当の税区分。
+   保存先は offset._tax（給与履歴があればそちらの teate._tax を優先）。
+   未設定は税込。 */
+function _teateTaxAt(st, ym){
+  const r=(typeof _rateAt==='function') ? _rateAt(st, ym) : null;
+  const o=((st&&st.offset)||{})._tax || {};
+  const t=((r && r.teate) ? r.teate._tax : null) || {};
+  const out={};
+  ['yokonoriUnit','tokubetsuUnit','commute','career','position','teateOther'].forEach(k=>{
+    const v = (t[k]!=null && t[k]!=='') ? t[k] : o[k];
+    out[k] = (v==='ex' || v==='nt') ? v : 'in';
+  });
+  return out;
+}
+window._teateTaxAt=_teateTaxAt;
+
 /* その月に効いている日額保証・日額手当 */
 function _hoshoAt(st, ym){
   const r=_rateAt(st, ym);
@@ -37938,6 +38014,7 @@ function _stRateLoadForm(h){
   if(t.career!=null)    put('st-career', t.career);
   if(t.position!=null)  put('st-position', t.position);
   if(t.teateOther!=null)put('st-teate-other', t.teateOther);
+  if(typeof _stRestoreTeateTax==='function') _stRestoreTeateTax(t);     /* ★ 2026-11-07.96 */
   if(h.hosho){
     const hb=h.hosho.B||{}, hc=h.hosho.C||{};
     if($('st-hosho-b-on')){ $('st-hosho-b-on').checked=!!hb.on; if(typeof toggleHoshoB==='function') toggleHoshoB(!!hb.on); }
@@ -37973,10 +38050,26 @@ function _stRateLoadForm(h){
 /* 画面から手当を集める（★ 2026-10-09.55） */
 function _stCollectTeate(){
   const n=id=>parseInt($(id)?.value)||0;
+  /* ★ 2026-11-07.96: 手当の税区分も一緒に持つ */
+  const _tx={};
+  ['yokonoriUnit','tokubetsuUnit','commute','career','position','teateOther'].forEach(k=>{
+    const v=$('st-tx-'+k)?.value;
+    _tx[k]=(v==='ex'||v==='nt') ? v : 'in';
+  });
   return { yokonoriUnit:n('st-yokonori-unit'), tokubetsuUnit:n('st-tokubetsu-unit'),
            commute:n('st-commute'), career:n('st-career'),
-           position:n('st-position'), teateOther:n('st-teate-other') };
+           position:n('st-position'), teateOther:n('st-teate-other'), _tax:_tx };
 }
+/* 台帳を開いたとき税区分のセレクトを戻す */
+function _stRestoreTeateTax(off){
+  const t=(off && off._tax) || {};
+  ['yokonoriUnit','tokubetsuUnit','commute','career','position','teateOther'].forEach(k=>{
+    const e=$('st-tx-'+k); if(!e) return;
+    const v=t[k];
+    e.value=(v==='ex'||v==='nt') ? v : 'in';
+  });
+}
+window._stRestoreTeateTax=_stRestoreTeateTax;
 /* 画面から社保・税を集める（★ 2026-10-13.64）
    ★ 2026-10-14.71: 標準報酬月額と、マスタで足した項目（items）も一緒に集める。
      既定の7項目は従来のキーのまま書き続けるので、給与明細など読む側は変えなくてよい。 */
@@ -38440,14 +38533,19 @@ function buildCompanyPaySlipData(coName, monStr){
     return 0;
   });
 
-  const result = {total:0, deductTotal:0, net:0, drivers:[]};
+  const result = {total:0, gross:0, deductTotal:0, net:0, drivers:[],
+                  inclSub:0, inclTax:0, exclSub:0, exclTax:0, ntSub:0};
   drivers.forEach(d=>{
     const dNode = _buildDriverMonthlyByOffice(d, monStr);
     result.drivers.push(dNode);
-    result.total += dNode.total;
-    result.deductTotal += (Number(dNode.deductTotal)||0);   /* ★ 2026-11-07.95: 負の値 */
+    result.total += dNode.total;                            // 額面の小計
+    result.gross += (Number(dNode.gross)||dNode.total);     // ★ .96: 税別の10%を足した支給額
+    result.deductTotal += (Number(dNode.deductTotal)||0);   /* ★ .95: 負の値 */
+    const t=dNode.tax;
+    if(t){ result.inclSub+=t.inclSub; result.inclTax+=t.inclTax;
+           result.exclSub+=t.exclSub; result.exclTax+=t.exclTax; result.ntSub+=t.ntSub; }
   });
-  result.net = result.total + result.deductTotal;
+  result.net = result.gross + result.deductTotal;
   return result;
 }
 
@@ -38555,10 +38653,10 @@ function _buildDriverMonthlyByOffice(staff, monStr){
       if(q > 0 && price){
         /* ★ 2026-11-07.94: 個人あてと同じ端数処理（1円未満切り捨て）にする。
            ここだけ素の掛け算だったため、小数単価の人で1円ずれていた。 */
-        const taxFlag = (dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
+        const taxFlag = _taxOf(dp, key==='yakan'?'night':key);
         const amt = (typeof calcUnitTotal==='function')
           ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
-        items.push({label, count:q, unitPrice:price, amount:amt});
+        items.push({label, count:q, unitPrice:price, amount:amt, taxType:taxFlag});
       }
     });
 
@@ -38607,7 +38705,8 @@ function _buildDriverMonthlyByOffice(staff, monStr){
       if(!use.length) return;
       /* ラベルに「5個×¥200」のように数量と単価が入っているので、
          欄のほうは空にする（1×1,000 と出ると紛らわしいため） */
-      const items = use.map(b=>({label:b.label, count:null, unitPrice:null, amount:b.amount}));
+      const items = use.map(b=>({label:b.label, count:null, unitPrice:null, amount:b.amount,
+                                 taxType:b.taxType||'in'}));   /* ★ .96: 税区分も持ち越す */
       const t = items.reduce((a,it)=>a+it.amount, 0);
       node.offices.push({postOffice:po, total:t, items});
       node.total += t;
@@ -38628,7 +38727,14 @@ function _buildDriverMonthlyByOffice(staff, monStr){
     node.deductTotal = _ded.reduce((a,b)=>a+(Number(b.amount)||0), 0);   // 負の値
   }catch(e){ console.error('[_buildDriverMonthlyByOffice] 集荷・手当・控除の集計に失敗', e); }
   if(!Array.isArray(node.deductions)){ node.deductions=[]; node.deductTotal=0; }
-  node.net = node.total + node.deductTotal;
+  /* ★ 2026-11-07.96: 税区分ごとの内訳。支給の行だけを見る（控除は額面で引く） */
+  {
+    const _all=[];
+    (node.offices||[]).forEach(o=>(o.items||[]).forEach(it=>_all.push(it)));
+    node.tax = (typeof _payTotals==='function') ? _payTotals(_all) : null;
+    node.gross = node.tax ? node.tax.gross : node.total;
+  }
+  node.net = node.gross + node.deductTotal;
 
   /* ★ 2026-10-17.20: 時間単価・日額のドライバーを会社あての明細に出す。
      ここまでの集計は「月給」と「歩合（単価×件数）」しか見ていないため、
@@ -38735,7 +38841,8 @@ function _colRoutePayLines(st, pu, monStr){
       ? calcUnitTotal(a.up, a.rounds, a.tax)
       : Math.floor(a.up*a.rounds);
     if(amt>0) out.push({label:`集荷：${a.name} ${a.rounds}回×¥${fmtUnitPrice(a.up)}`,
-                        amount:amt, biz:'col'});
+                        amount:amt, biz:'col',
+                        taxType:(a.tax==='ex'||a.tax==='nt') ? a.tax : 'in'});
   });
   return out;
 }
@@ -38940,9 +39047,9 @@ function _calcStaffPayment(name, monStr){
     delItems.forEach(({key,label,price})=>{
       if(delSum[key]>0&&price){
         // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
-        const taxFlag = (dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
+        const taxFlag = _taxOf(dp, key==='yakan'?'night':key);
         const amt = calcUnitTotal(price, delSum[key], taxFlag);
-        breakdown.push({label:`${label} ${delSum[key]}件×¥${fmtUnitPrice(price)}`, amount:amt});
+        breakdown.push({label:`${label} ${delSum[key]}件×¥${fmtUnitPrice(price)}`, amount:amt, taxType:taxFlag});
         total+=amt;
       }
     });
@@ -39046,7 +39153,12 @@ function _calcStaffPayment(name, monStr){
     breakdown.push(b); total += (Number(b.amount)||0);
   });
 
-  return {total:Math.max(total,0), breakdown, staff:st, noAtt, kyuyo};
+  /* ★ 2026-11-07.96: 税区分ごとにまとめ直す。
+     税別の行があればそのぶんだけ10%を足す（行ごとではなく合計で足す）。
+     全員が税込のうちは tt.net が従来の total と同じになる。 */
+  const tt = (typeof _payTotals==='function') ? _payTotals(breakdown) : null;
+  if(tt) total = tt.net;
+  return {total:Math.max(total,0), breakdown, staff:st, noAtt, kyuyo, tax:tt};
 }
 
 function _calcCustBilling(custName, monStr){
@@ -39705,26 +39817,23 @@ function _buildInvoiceItems(pay, st){
       return;
     }
 
+    /* ★ 2026-11-07.96: 税区分は行が持っているものを使う。
+       これまではラベルに「手当」「保証」「経歴」が入っているかどうかで
+       推測しており、台帳の設定を見ていなかった。未設定は税込。 */
+    const _tt = (b.taxType==='ex' || b.taxType==='nt') ? b.taxType : 'in';
     // label例: "完了 180件×¥100" / "ゆうパック_60 25個×¥100" / "基本給（月給）" / "経歴手当"
-    const m = b.label.match(/^(.+?)\s+([\d,]+)[件個回日]×¥([\d,]+)$/);
+    const m = b.label.match(/^(.+?)\s+([\d,]+)[件個回日]×¥([\d,.]+)$/);
     if(m){
-      const label = m[1].trim();
-      const qty = parseInt(m[2].replace(/,/g,''),0);
-      const unit = parseInt(m[3].replace(/,/g,''),0);
-      // 非課税扱いの項目(手当系)
-      const isHoshou = /保証|手当|経歴/.test(label);
       items.push({
-        label, qty, unit, amount: b.amount,
-        taxType: isHoshou ? 'nt' : 'in',
-        customerName: ''
+        label: m[1].trim(),
+        qty: parseInt(m[2].replace(/,/g,''),10),
+        unit: parseFloat(m[3].replace(/,/g,'')),
+        amount: b.amount, taxType:_tt, customerName: ''
       });
     } else {
-      // パース不能(基本給・手当単独・保証)は qty=1 / unit=amount 扱い
-      const isTeate = /手当|経歴|通勤|役職|保証|違約/.test(b.label);
       items.push({
         label: b.label, qty: 1, unit: b.amount, amount: b.amount,
-        taxType: isTeate ? 'nt' : 'in',
-        customerName: ''
+        taxType:_tt, customerName: ''
       });
     }
   });
@@ -42308,8 +42417,8 @@ function generateCompanyPaySlipSummary(coName, monStr){
       driverBody += `
         <table style="margin:0 0 12px;">
           <tr style="background:#f9fafb; font-weight:700;">
-            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 支給 合計</td>
-            <td class="tr" style="width:180px;">¥${dr.total.toLocaleString()}</td>
+            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 支給 合計${(dr.tax&&dr.tax.exclSub>0)?'（税込）':''}</td>
+            <td class="tr" style="width:180px;">¥${(Number(dr.gross)||dr.total).toLocaleString()}</td>
           </tr>
         </table>`;
       /* ★ 2026-11-07.95: 控除。委託会社所属のぶんは会社に請求する取り決め。 */
@@ -42353,9 +42462,17 @@ function generateCompanyPaySlipSummary(coName, monStr){
     </div>
     ${sections}
     <table style="margin-top:14px;">
+      ${(data.inclSub>0)?`
+      <tr><td>税込対象 小計</td><td class="tr" style="width:180px;">¥${data.inclSub.toLocaleString()}</td></tr>
+      <tr><td style="padding-left:18px; color:#555;">内 消費税(10%)</td><td class="tr" style="color:#555;">¥${data.inclTax.toLocaleString()}</td></tr>`:''}
+      ${(data.exclSub>0)?`
+      <tr><td>税別対象 小計</td><td class="tr" style="width:180px;">¥${data.exclSub.toLocaleString()}</td></tr>
+      <tr><td style="padding-left:18px; color:#555;">別途 消費税(10%)</td><td class="tr" style="color:#555;">¥${data.exclTax.toLocaleString()}</td></tr>`:''}
+      ${(data.ntSub>0)?`
+      <tr><td>不課税 小計</td><td class="tr" style="width:180px;">¥${data.ntSub.toLocaleString()}</td></tr>`:''}
       <tr style="font-weight:700;">
-        <td>${_esc(coName)} 支給 合計</td>
-        <td class="tr" style="width:180px;">¥${data.total.toLocaleString()}</td>
+        <td>${_esc(coName)} 支給 合計（税込）</td>
+        <td class="tr" style="width:180px;">¥${(Number(data.gross)||data.total).toLocaleString()}</td>
       </tr>
       ${(Number(data.deductTotal)||0)!==0?`
       <tr style="font-weight:700; color:#991b1b;">
@@ -42390,7 +42507,9 @@ function generateCompanyInvoiceProxy(coName, monStr){
   if(!data.drivers || data.drivers.length === 0){
     showAlert({msg:`${coName} 所属ドライバーがいません`}); return;
   }
-  let total = data.total;
+  /* ★ 2026-11-07.96: 支給（税込）を請求額にする。控除は載せない
+     （委託会社から当社への請求書で、控除は受け取る側が差し引くもの）。 */
+  let total = Number(data.gross) || data.total;
 
   // ドライバーごとのセクション
   let sections = '';
@@ -42465,8 +42584,17 @@ function generateCompanyInvoiceProxy(coName, monStr){
     ${sections}
     ${stampFeeRow}
     <table style="margin-top:14px;">
+      ${(data.inclSub>0)?`
+      <tr><td>税込対象 小計</td><td class="tr" style="width:180px;">¥${data.inclSub.toLocaleString()}</td></tr>
+      <tr><td style="padding-left:18px; color:#555;">内 消費税(10%)</td><td class="tr" style="color:#555;">¥${data.inclTax.toLocaleString()}</td></tr>`:''}
+      ${(data.exclSub>0)?`
+      <tr><td>税別対象 小計</td><td class="tr" style="width:180px;">¥${data.exclSub.toLocaleString()}</td></tr>
+      <tr><td style="padding-left:18px; color:#555;">別途 消費税(10%)</td><td class="tr" style="color:#555;">¥${data.exclTax.toLocaleString()}</td></tr>`:''}
+      ${(data.ntSub>0)?`
+      <tr><td>不課税 小計</td><td class="tr" style="width:180px;">¥${data.ntSub.toLocaleString()}</td></tr>`:''}
+      ${stampFeeRow?`<tr><td>電子印制作費（初回のみ）</td><td class="tr">¥${(sysInfo.stampFee||0).toLocaleString()}</td></tr>`:''}
       <tr style="background:#fef3c7; font-weight:800; font-size:13px;">
-        <td>総合計</td>
+        <td>総合計（税込）</td>
         <td class="tr" style="width:180px;">¥${total.toLocaleString()}</td>
       </tr>
     </table>
@@ -50157,6 +50285,7 @@ function _editStaffImpl(id){
   if($('st-commute'))$('st-commute').value=off.commute||'';
   if($('st-career'))$('st-career').value=off.career||'';
   if($('st-position'))$('st-position').value=off.position||'';
+  if(typeof _stRestoreTeateTax==='function') _stRestoreTeateTax(off);   /* ★ 2026-11-07.96 */
   // 社保・税 復元
   const si=s.socialIns||{};
   if($('st-si-health'))$('st-si-health').value=si.health||'';
