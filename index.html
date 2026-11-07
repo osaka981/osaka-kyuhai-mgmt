@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.98</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.99</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6173,7 +6173,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-07.98';
+const APP_VER = '2026-11-07.99';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -6460,10 +6460,71 @@ function findStaffByEmpNo(id){
       || null;
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-07.99: 共有ドライバー名簿（nikki/drivers）への書き出し
+
+   nikki_drivers は日報アプリ・委託会社オーナーページと共有する
+   「簡略版の名簿」で、_buildFbDriverEntry が作る決まった形しか
+   入れてはいけない。ところが5か所で D.staff（＝台帳そのもの）を
+   そのまま書き込んでいた。台帳には単価・給与履歴・口座情報・
+   PINハッシュが入っているため、共有先へ流れる。
+
+   さらに _mergeKeepUnknownDrivers は「経営管理に無いドライバー」を
+   id で見分けるが、簡略版の id は社員番号、台帳の id は作成時の
+   タイムスタンプなので一致せず、台帳の全件が「知らないドライバー」と
+   みなされて Firebase へ書き出されていた。
+
+   ここでは3つ手当てする。
+     ・共有名簿を作る口を1つにする（_drvLiteList）
+     ・D.staff を直接書いていた5か所をそれに通す
+     ・混ざってしまった台帳レコードを書き出し前に弾く
+   ════════════════════════════════════════════════════════════ */
+/* ★ 2026-11-07.99: 台帳を保存する唯一の口。
+   保存先が nikki_staff / nikki_staff_full / nikki_drivers の3つあり、
+   取り違えや書き忘れが起きていた。ここに集める。 */
+function _saveStaffAll(tag){
+  try{ lsSet('nikki_staff_full', D.staff); }catch(e){}
+  try{ lsSet(LS_KEYS.STAFF||'nikki_staff', D.staff); }catch(e){}
+  try{
+    if(typeof fbSet==='function'){
+      fbSet('staff_full', D.staff);
+      const lite=_drvLiteList(D.staff);
+      fbSet('drivers', _mergeKeepUnknownDrivers(lite));
+      lsSet(LS_KEYS.DRIVERS, lite);
+    }
+  }catch(e){ console.warn('[台帳保存] Firebase書き込みに失敗', tag, e); }
+}
+window._saveStaffAll=_saveStaffAll;
+
+function _drvLiteList(list){
+  return (list||[])
+    .filter(s=>s && s.status!=='終了')
+    .map(s=>{
+      try{ return _buildFbDriverEntry(s); }catch(e){ return null; }
+    })
+    .filter(Boolean);
+}
+/* 共有名簿に入ってよい形か。台帳レコードが混ざっていたら弾く */
+function _isDrvLite(d){
+  if(!d || typeof d!=='object') return false;
+  // 台帳にしかない項目が付いていたら台帳レコード
+  if(d.fixedPrices || d.payHistory || d.rateHistory || d.offset
+     || d.advances || d.repairRows || d.socialIns || d.bank) return false;
+  return true;
+}
+window._drvLiteList=_drvLiteList; window._isDrvLite=_isDrvLite;
+
 function _mergeKeepUnknownDrivers(fbDrivers){
   try{
     const cur = lsGet(LS_KEYS.DRIVERS, []) || [];
-    const arr = Array.isArray(cur) ? cur : Object.values(cur || {});
+    const arr0 = Array.isArray(cur) ? cur : Object.values(cur || {});
+    /* ★ .99: 過去に混ざった台帳レコードはここで落とす。
+       放っておくと書き出すたびに共有先へ出続ける。 */
+    const arr = arr0.filter(_isDrvLite);
+    if(arr0.length !== arr.length){
+      console.warn('[drivers書出] 共有名簿に台帳レコードが'
+        + (arr0.length-arr.length) + '件混ざっていたため除きました');
+    }
     if(!arr.length) return fbDrivers;
     const known = new Set((fbDrivers||[]).map(d => String(d && d.id)));
     const kept = arr.filter(d => d && d.id != null && !known.has(String(d.id)));
@@ -20452,8 +20513,22 @@ async function saveCust(){
     visitFrom:cu.visitFrom||'',
     visitTo:cu.visitTo||'',
     visitNote:cu.visitNote||'',
+    /* ★ 2026-11-07.99: 書き落としていた項目。
+       ここは項目を1つずつ書き写す作りなので、書き忘れると保存のたびに消える。
+       読む側は 2026-09-26.2 で丸ごと引き継ぐよう直っていたが、保存側が
+       許可リストのままだった。lat/lng は住所から取り直せるが、
+       puAddr と rateHistory（顧客の単価履歴）は取り直せない。 */
+    lat: (cu.lat===0||cu.lat) ? cu.lat : null,
+    lng: (cu.lng===0||cu.lng) ? cu.lng : null,
+    puSameAsAddr: !!cu.puSameAsAddr,
+    puZip: cu.puZip||'',
+    puAddr: cu.puAddr||'',
+    rateHistory: Array.isArray(cu.rateHistory) ? cu.rateHistory : [],
   }));
-  lsSet(LS_KEYS.CUSTOMERS, fbCusts);
+  /* ★ 2026-11-07.99: ローカルの控えは削ぎ落とさない。
+     Firebase 用に絞った版で上書きすると、ここに無い項目が
+     リロードのたびに消えていく。 */
+  lsSet(LS_KEYS.CUSTOMERS, (D.customers||[]).filter(c=>c.status!=='終了'));
   fbSet('customers',fbCusts);
   closeM('m-cust');renderCustTbl();updOffSels();
 }
@@ -21732,7 +21807,7 @@ function archiveRestore(kind, id){
       renderCustTbl && renderCustTbl();
     }
     else if(kind==='staff'){
-      lsSet(LS_KEYS.DRIVERS, D.staff);
+      lsSet(LS_KEYS.DRIVERS, _drvLiteList(D.staff));   /* ★ .99 */
       if(typeof fbSet==='function'){
         fbSet('staff_full', D.staff);
         const fbDrivers = D.staff.filter(s=>s.status!=='終了').map(s=>_buildFbDriverEntry(s));
@@ -34551,7 +34626,17 @@ function saveCompany(){
   }
   if(_coEditId){
     const idx=D.companies.findIndex(x=>x.id===_coEditId);
-    if(idx>=0)D.companies[idx]=newCo;else D.companies.push(newCo);
+    /* ★ 2026-11-07.99: ここは newCo で丸ごと置き換えるため、画面に無い項目が
+       保存のたびに消えていた。とくにオーナーのログインID・PIN
+       （ownerLoginId / ownerInitialPinHash / ownerPinHash など）が消え、
+       委託会社のオーナーが日報アプリにログインできなくなっていた。
+       「元を土台に、画面で作った項目だけ上書きする」形にする。
+       項目が増えても書き落とさない。 */
+    if(idx>=0){
+      D.companies[idx]=Object.assign({}, D.companies[idx], newCo);
+    } else {
+      D.companies.push(newCo);
+    }
     // ドライバーの fixedPrices を会社単価で上書き(任意)
     /* ★ 2026-10-19.6: ここは意図して直していない。'委託ドライバー' は旧表記のため
        この処理は長らく空振りしていたが、ver 2026-10-19.1 で単価は会社優先にしたので
@@ -34613,21 +34698,30 @@ function openDriverModal(drvId,coId){
   let drvNo='';
   if(drv){drvNo=drv.driverNo||'';}
   else{
-    /* ★ 2026-10-19.6: '委託ドライバー' は旧表記のため常に0名で、
-       同じ会社で登録するたび「会社コード-001」が振られていた。 */
-    const ex=D.staff.filter(s=>isKbCompany(s.kubun)&&s.companyId===coId);
-    // 3桁採番: 001〜998(999は管理者予約)
-    const mx=ex.reduce((m,d)=>{
-      const p=(d.driverNo||'').split('-');
-      const n=parseInt(p[1])||0;
-      return (n>=1 && n<=998) ? Math.max(m,n) : m;
-    },0);
-    const next = mx + 1;
-    if(next > 998){
-      alert('この会社の連番が上限(998)に達しました');
-      return;
+    /* ★ 2026-11-07.99: ここは driverNo しか見ず、companyId も型まで一致を求めていた。
+       従業員管理から登録した人やオーナー登録から取り込んだ人は empNo にしか
+       番号が入らず、companyId が文字列のこともあるため、既存の人を1人も数えられず
+       「会社コード-001」を何度でも振り直していた。
+       両方を見る genCoDriverNo に寄せる（同じ番号の付け方）。 */
+    drvNo = (typeof genCoDriverNo==='function') ? genCoDriverNo(coId) : '';
+    if(!drvNo){
+      /* 会社コードが分からない会社のときだけ、従来の作り方で補う */
+      const ex=D.staff.filter(s=>isKbCompany(s.kubun)&&String(s.companyId)===String(coId));
+      const mx=ex.reduce((m,d)=>{
+        let n=0;
+        [d.driverNo, d.empNo].forEach(v=>{
+          const mm=/^(\d+)-(\d{3})$/.exec(String(v==null?'':v).trim());
+          if(mm) n=Math.max(n, parseInt(mm[2],10)||0);
+        });
+        return (n>=1 && n<=998) ? Math.max(m,n) : m;
+      },0);
+      const next = mx + 1;
+      if(next > 998){
+        alert('この会社の連番が上限(998)に達しました');
+        return;
+      }
+      drvNo=`${co?.companyCode||coId}-${String(next).padStart(3,'0')}`;
     }
-    drvNo=`${co?.companyCode||coId}-${String(next).padStart(3,'0')}`;
   }
   if($('drv-id-disp'))$('drv-id-disp').textContent=drvNo;
   if($('drv-name'))$('drv-name').value=drv?.name||'';
@@ -34659,7 +34753,21 @@ function openDriverModal(drvId,coId){
 function saveDriver(){
   const name=($('drv-name')?.value||'').trim();
   if(!name){alert('氏名を入力してください');return;}
-  const drvNo=$('drv-id-disp')?.textContent||'';
+  let drvNo=$('drv-id-disp')?.textContent||'';
+  /* ★ 2026-11-07.99: 番号は画面に出したきりで押さえていないため、
+     2枚開いた・保存せずに閉じて開き直した、などで同じ番号になる。
+     保存の直前にもう一度ぶつかりを見て、ぶつかっていたら採り直す。 */
+  if(drvNo && !_drvEditId){
+    const dup=(D.staff||[]).some(x=>x &&
+      (String(x.driverNo||'')===drvNo || String(x.empNo||'')===drvNo));
+    if(dup){
+      const re=(typeof genCoDriverNo==='function') ? genCoDriverNo(_drvCoId) : '';
+      if(!re){ alert('この会社のドライバー番号を採れませんでした。会社コードを確認してください。'); return; }
+      if(!confirm(`番号 ${drvNo} はすでに使われています。\n${re} で登録しますか？`)) return;
+      drvNo = re;
+      if($('drv-id-disp')) $('drv-id-disp').textContent = re;
+    }
+  }
   const workType = document.querySelector('input[name="drv-worktype"]:checked')?.value || 'delivery';
   const driverOffices=[...document.querySelectorAll('.drv-off-chk:checked')].map(el=>parseInt(el.dataset.id));
   // 集荷専従でない場合、営業所が1つは必要(警告のみ)
@@ -35102,6 +35210,7 @@ function deletePhItem(sid, from){
   const s = D.staff.find(x=>x.id===sid); if(!s) return;
   showConfirm(`${from} からの給与条件を削除しますか？`, ()=>{
     s.payHistory=(s.payHistory||[]).filter(h=>h.from!==from);
+    _saveStaffAll('deletePhItem');   /* ★ .99: 保存していなかった */
     renderPhHistArea();
     renderPhStaffList();
   });
@@ -35251,6 +35360,7 @@ function deletePayHistoryItem(sid, from){
   const s = D.staff.find(x => x.id === sid); if(!s) return;
   showConfirm(`${from} からの給与条件を削除しますか？`, () => {
     s.payHistory = (s.payHistory||[]).filter(h => h.from !== from);
+    _saveStaffAll('deletePayHistoryItem');   /* ★ .99: 保存していなかった */
     renderPayHistory();
   });
 }
@@ -35381,6 +35491,7 @@ function savePayHistItem(){
   s.payHistory = s.payHistory.filter(h => h.from !== from);
   s.payHistory.push(newItem);
   s.payHistory.sort((a,b) => a.from.localeCompare(b.from));
+  _saveStaffAll('savePayHistItem');   /* ★ .99: 保存していなかった */
 
   closeM('m-pay-hist');
   renderPayHistory();
@@ -37586,7 +37697,13 @@ function saveCompanyFromFS(){
   co.addr=$('fs-co-addr').value;
   _fsId=co.name;
   $('fs-title').textContent=co.name;
-  syncToSheet();
+  /* ★ 2026-11-07.99: ここは syncToSheet() というどこにも無い関数を呼んでいて、
+     その場でエラーになり、保存も「保存しました」も実行されていなかった。
+     画面の表示だけ変わって、リロードで元に戻っていた。 */
+  try{
+    lsSet(LS_KEYS.COMPANIES, D.companies);
+    if(typeof fbSet==='function') fbSet('companies', D.companies);
+  }catch(e){ console.warn('[委託会社] 保存に失敗', e); }
   showAlert({msg:'保存しました'});
 }
 
@@ -41487,7 +41604,7 @@ function generateInvoiceProxy(staffName, monStr){
     st.docs.stampFeeCharged=true;
     st.docs.stampFeeChargedAt=new Date().toISOString();
     st.docs.stampFeeChargedMonth=monStr;
-    lsSet(LS_KEYS.DRIVERS, D.staff);
+    lsSet(LS_KEYS.DRIVERS, _drvLiteList(D.staff));   /* ★ .99 */
   }
 
   renderStaffFSTab('docs');
@@ -42013,7 +42130,10 @@ function saveFSLedgerEdit(name){
   st.birth=$('fsl-birth')?.value||'';
   st.addr=$('fsl-addr')?.value||'';
   st.note=$('fsl-note')?.value||'';
-  lsSet(LS_KEYS.DRIVERS, D.staff);
+  /* ★ 2026-11-07.99: 共有名簿だけを書いていて、台帳本体（nikki_staff_full）を
+     書いていなかった。ここで編集した区分・電話・メール・生年月日・住所・備考は
+     「保存しました」と出るのにリロードで消えていた。 */
+  _saveStaffAll('saveFSLedgerEdit');
   const s=$('fsl-save-status');
   if(s){s.textContent='保存しました ('+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})+')'; s.style.color='var(--grn2)';}
 }
@@ -43274,7 +43394,7 @@ function importAllData(inputEl){
       }).then(ok=>{
         if(!ok)return;
         if(data.systemInfo) _saveSystemInfoLS(data.systemInfo);
-        if(data.staff){ D.staff=data.staff; lsSet(LS_KEYS.DRIVERS,D.staff); }
+        if(data.staff){ D.staff=data.staff; lsSet(LS_KEYS.DRIVERS,_drvLiteList(D.staff)); }   /* ★ .99 */
         if(data.customers){ D.customers=data.customers; lsSet(LS_KEYS.CUSTOMERS,D.customers); }
         if(data.companies){ D.companies=data.companies; lsSet(LS_KEYS.COMPANIES,D.companies); }
         if(data.offices){ D.offices=data.offices; lsSet(LS_KEYS.OFFICES,D.offices); }
@@ -43467,7 +43587,7 @@ function resetStampFeeCharged(ctx){
         st.docs.stampFeeCharged=false;
         st.docs.stampFeeChargedAt=null;
         st.docs.stampFeeChargedMonth=null;
-        lsSet(LS_KEYS.DRIVERS, D.staff);
+        lsSet(LS_KEYS.DRIVERS, _drvLiteList(D.staff));   /* ★ .99 */
         updateStampFeeStatus('staff');
         showAlert({msg:'リセットしました'});
       }
