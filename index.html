@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.96</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.98</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6173,7 +6173,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-07.96';
+const APP_VER = '2026-11-07.98';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -18762,7 +18762,7 @@ function getDelColPayEntry(staff, companyName, officeName, ym){
         const key = `${loc.id}::${companyName}`;
         const entry = shuCompanies[key];
         if(entry && entry.price != null && entry.price !== ''){
-          return {price: Number(entry.price)||0, label: entry.type==='shitei'?'指定事業所集荷':'集荷', subLabel: companyName, isDefault:false, taxFlag: entry._tax || 'ex'};
+          return {price: Number(entry.price)||0, label: entry.type==='shitei'?'指定事業所集荷':'集荷', subLabel: companyName, isDefault:false, taxFlag: entry._tax || 'in'};   /* ★ .97: 未設定は税込 */
         }
       }
     }
@@ -18804,14 +18804,14 @@ function getDelColPayEntry(staff, companyName, officeName, ym){
     // 指定事業所集荷先(会社別単価)
     const shiteiHit = (loc.shukkaCompaniesShitei||[]).find(c=>c && c.name===companyName);
     if(shiteiHit && shiteiHit.price != null && Number(shiteiHit.price) > 0){
-      return {price: Number(shiteiHit.price)||0, label: '指定事業所集荷', subLabel: companyName, isDefault:false, taxFlag: shiteiHit._tax || 'ex'};
+      return {price: Number(shiteiHit.price)||0, label: '指定事業所集荷', subLabel: companyName, isDefault:false, taxFlag: shiteiHit._tax || 'in'};   /* ★ .97: 未設定は税込 */
     }
     // 定時集荷先(拠点共通の集荷単価)
     const teijiHit = (loc.shukkaCompaniesTeiji||[]).find(c=>c && c.name===companyName);
     if(teijiHit){
       const shukkaPrice = loc.prices?.shukka;
       if(shukkaPrice != null && Number(shukkaPrice) > 0){
-        return {price: Number(shukkaPrice)||0, label:'集荷', subLabel: companyName, isDefault:true, taxFlag: loc.prices?._tax?.shukka || 'ex'};
+        return {price: Number(shukkaPrice)||0, label:'集荷', subLabel: companyName, isDefault:true, taxFlag: loc.prices?._tax?.shukka || 'in'};   /* ★ .97: 未設定は税込 */
       }
     }
     return null;
@@ -18848,14 +18848,17 @@ function calcStaffDelColPayment(staffName, monStr){
   entries.forEach(e=>{
     const res = getDelColPayEntry(st, e.company, e.postOffice, ym);
     // 契約書準拠: 単価×個数で1円未満切り捨て(0より大なら最低1円)
+    /* ★ 2026-11-07.97: getDelColPayEntry が税区分を返しているのに
+       'ex' を直書きして捨てていた。未設定は税込とみなす。 */
+    const _tf = (res.taxFlag==='ex'||res.taxFlag==='nt') ? res.taxFlag : 'in';
     const amount = (typeof calcUnitTotal === 'function')
-      ? calcUnitTotal(res.price, e.count||0, 'ex')
+      ? calcUnitTotal(res.price, e.count||0, _tf)
       : Math.floor((e.count||0) * res.price);
     total += amount;
     breakdown.push({
       date: e.date,
       company: e.company, count: e.count,
-      unitPrice: res.price, amount,
+      unitPrice: res.price, amount, taxFlag:_tf,   /* ★ .97 */
       postOffice: e.postOffice,
       label: res.label, isDefault: res.isDefault,
     });
@@ -22034,7 +22037,7 @@ function _calcHourlyPay(st, monStr, cond){
     const ck = IK_COL_MAP[k];
     const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
     if(q>0&&up>0){
-      const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
+      const taxFlag = _taxOf(cp, ck);   /* ★ .97: 未設定は税込 */
       const camt = calcUnitTotal(up, q, taxFlag);
       breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:camt});
       colAmt += camt;
@@ -22160,7 +22163,16 @@ function _bizCommissionDel(st, name, monStr, del){
    この既定なら金額が1円も変わらない。
    ════════════════════════════════════════════════════════════ */
 function _taxOf(src, key){
-  const t = (src && src._tax) ? src._tax[key] : null;
+  let t = (src && src._tax) ? src._tax[key] : null;
+  /* ★ 2026-11-07.97: 単価CSVの取込だけ _taxType という別のキーに書いていて、
+     読む側（ここ）は _tax しか見ていなかったため、CSVで入れた税区分が
+     どこからも使われていなかった。取込は _tax に書くよう直したが、
+     すでに _taxType で入っているぶんも拾えるようにしておく。
+     拠点マスタ・委託会社の _taxType は「全体の税区分」を表す文字列なので、
+     オブジェクトのときだけ見る。 */
+  if((t==null || t==='') && src && src._taxType && typeof src._taxType==='object'){
+    t = src._taxType[key];
+  }
   return (t==='ex' || t==='in' || t==='nt') ? t : 'in';
 }
 /* 支給・控除の行から税区分別の合計を出す。
@@ -26535,7 +26547,7 @@ function showPayDetail(staffName){
   const dp   = (typeof _getEffectiveDelPrices==='function' && st) ? _getEffectiveDelPrices(st, monStr) : {};
   const _ut  = (price, qty, key) => {
     if(!price || !qty) return 0;
-    const tf = (dp._tax && dp._tax[key]) || 'ex';
+    const tf = _taxOf(dp, key==='yakan'?'night':key);   /* ★ .97: 読み替えも入れる */
     return (typeof calcUnitTotal==='function') ? calcUnitTotal(price, qty, tf) : Math.floor(price*qty);
   };
   const yUnit = Number(_tu0.yokonoriUnit)||0;
@@ -30851,12 +30863,15 @@ function _qmAggregateByCustomer(ymPrefix, unit){
   // COL_LOGS(集荷事業)
   (D.pickup||[]).forEach(r => {
     if(!r.date || !r.date.startsWith(ymPrefix)) return;
+    /* ★ 2026-11-07.98: 運坊から取り込んだ記録は運坊側の実績。
+       ここで数えると照合が二重になる（請求側は前から除外していた）。 */
+    if(r._fromUnbou) return;
     const dateKey = unit === 'month' ? ymPrefix : r.date;
-    const blocks = _qmNormalizeBlocks(r.blocks);
+    const blocks = _qmNormalizeBlocks(r.blocks, r);   /* ★ .98 */
     blocks.forEach(b => {
       if(b.type === 'indiv' && !b.rest){
         const items = b.items || {};
-        const totalCnt = Object.values(items).reduce((a,v) => a + (parseInt(v)||0), 0);
+        const totalCnt = _qmItemCount(items);
         // ★ 2026/08/29: 数量0でも確定していれば稼働日として記録する。
         //   車建て(日額)の顧客は荷物0の日があり、ここで落とすと請求書一覧から消える。
         if(true){
@@ -30870,7 +30885,7 @@ function _qmAggregateByCustomer(ymPrefix, unit){
         (b.customers || []).forEach(c => {
           if(c.rest) return;
           const items = c.items || {};
-          const totalCnt = Object.values(items).reduce((a,v) => a + (parseInt(v)||0), 0);
+          const totalCnt = _qmItemCount(items);   /* ★ .98 */
           if(true){
             const custName = c.custName || c.name || '(顧客不明)';
             const k = `${custName}__${dateKey}`;
@@ -30941,17 +30956,18 @@ function _qmAggregateByContractor(ymPrefix, unit){
   // COL_LOGS
   (D.pickup||[]).forEach(r => {
     if(!r.date || !r.date.startsWith(ymPrefix)) return;
-    const blocks = _qmNormalizeBlocks(r.blocks);
+    if(r._fromUnbou) return;                           /* ★ .98 */
+    const blocks = _qmNormalizeBlocks(r.blocks, r);   /* ★ .98 */
     blocks.forEach(b => {
       if(b.type === 'indiv' && !b.rest){
         const items = b.items || {};
-        const totalCnt = Object.values(items).reduce((a,v) => a + (parseInt(v)||0), 0);
+        const totalCnt = _qmItemCount(items);
         _addRow(r, b.custName || '(顧客不明)', 'collection', totalCnt);
       } else if(b.type === 'route'){
         (b.customers || []).forEach(c => {
           if(c.rest) return;
           const items = c.items || {};
-          const totalCnt = Object.values(items).reduce((a,v) => a + (parseInt(v)||0), 0);
+          const totalCnt = _qmItemCount(items);   /* ★ .98 */
           _addRow(r, c.custName || c.name || '(顧客不明)', 'collection', totalCnt);
         });
       }
@@ -30966,10 +30982,44 @@ function _qmAggregateByContractor(ymPrefix, unit){
 }
 
 /** ブロック正規化(nikki側との整合) */
-function _qmNormalizeBlocks(blocks){
-  if(!blocks) return [];
-  if(Array.isArray(blocks)) return blocks;
-  if(typeof blocks === 'object') return Object.values(blocks);
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-07.98: 集荷日報の blocks
+
+   数量照合と請求書一覧の概算は r.blocks（1日のなかの顧客ごとのかたまり）を
+   読んでいたが、いまの集荷日報は blocks を持っていない。
+   日報アプリから取り込むとき 1件＝1日・1人・1顧客 に開いてしまい、
+   items を直接持つ形になっているため。
+   そのせいで数量照合の集荷と、請求書一覧の集荷数が全顧客で0になっていた。
+   （請求書そのものは _calcCustBilling が items を読むので正しい。
+     ずれていたのは照合画面と一覧の表示だけ。）
+
+   blocks が無いときは、その1件から1ブロックを組み立てて返す。
+   ════════════════════════════════════════════════════════════ */
+/* ★ 2026-11-07.98: 荷物の個数。カスタム品目（顧客ごとの作業料・立替）は
+   郵便局へ持ち込む荷物ではないので、個数の合計には入れない。
+   請求の計算（_calcCustBilling）でも品目と別に扱っている。 */
+function _qmItemCount(items){
+  let n = 0;
+  Object.entries(items || {}).forEach(([k, v]) => {
+    if(String(k).startsWith('__custom__')) return;
+    n += parseInt(v) || 0;
+  });
+  return n;
+}
+function _qmNormalizeBlocks(blocks, row){
+  if(Array.isArray(blocks) && blocks.length) return blocks;
+  if(blocks && typeof blocks === 'object'){
+    const v = Object.values(blocks);
+    if(v.length) return v;
+  }
+  if(row && (row.customerName || row.items)){
+    return [{
+      type: 'indiv',
+      custName: row.customerName || '',
+      items: row.items || {},
+      rest: !!row.rest,
+    }];
+  }
   return [];
 }
 
@@ -31320,7 +31370,7 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
     /* ★ 2026-10-22.27: 運坊の顧客請求から取り込んだ記録は請求に乗せない。
        _calcCustBilling 側と同じ除外。片方だけだと発行代行請求書に出てしまう。 */
     if(r._fromUnbou) return;
-    const blocks = _qmNormalizeBlocks(r.blocks);
+    const blocks = _qmNormalizeBlocks(r.blocks, r);   /* ★ .98 */
     blocks.forEach(b => {
       const collectFrom = (cust) => {
         const cn = cust.custName || cust.name || '';
@@ -31333,7 +31383,8 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
           const cnt = parseInt(v) || 0;
           if(cnt > 0){
             result.collection.items[k] = (result.collection.items[k] || 0) + cnt;
-            result.collection.total += cnt;
+            /* ★ .98: カスタム品目は荷物の個数ではないので合計に入れない */
+            if(!String(k).startsWith('__custom__')) result.collection.total += cnt;
           }
         });
       };
@@ -31345,7 +31396,8 @@ function _getCustomerMonthlyData(customerName, ymPrefix){
             const cnt = parseInt(v) || 0;
             if(cnt > 0){
               result.collection.items[k] = (result.collection.items[k] || 0) + cnt;
-              result.collection.total += cnt;
+              /* ★ .98: カスタム品目は荷物の個数ではないので合計に入れない */
+              if(!String(k).startsWith('__custom__')) result.collection.total += cnt;
             }
           });
         }
@@ -38499,11 +38551,17 @@ function _getEffectiveDelPrices(staff, ym){
   const _coAt = (ym && co && typeof _coRateAt==='function') ? _coRateAt(co, ym) : null;
   const companyDel = (_coAt && _coAt.del) ? _coAt.del : (co?.prices?.del || {});
 
+  /* ★ 2026-11-07.97: 税区分も一緒に持ち帰る。
+     ここは委託会社所属の人だけ必要な項目を組み直しており、そのときに
+     _tax を落としていたため、委託会社のドライバーだけ税区分が効かなかった。
+     採用した単価がどちらから来たかで、その税区分を使う。 */
+  const _tx = {};
+  const _tf = (src,key)=>(typeof _taxOf==='function') ? _taxOf(src,key) : 'in';
   const pick = (key)=>{
     const cv = companyDel[key];
-    if(cv != null && cv !== '' && Number(cv) > 0) return cv;
+    if(cv != null && cv !== '' && Number(cv) > 0){ _tx[key]=_tf(companyDel,key); return cv; }
     const dv = driverDel[key];
-    if(dv != null && dv !== '' && Number(dv) > 0) return dv;
+    if(dv != null && dv !== '' && Number(dv) > 0){ _tx[key]=_tf(driverDel,key); return dv; }
     return 0;
   };
 
@@ -38514,6 +38572,7 @@ function _getEffectiveDelPrices(staff, ym){
     ogata: pick('ogata'),
     shukka: pick('shukka'),
     s1: pick('s1'), s2: pick('s2'), s3: pick('s3'), s4: pick('s4'),
+    _tax: _tx,
     /* ★ 2026-11-02.78: その他の名称。本人の設定を優先し、無ければ委託会社のもの */
     _names: Object.assign({}, companyDel._names||{}, (function(){
       const o={}; Object.keys(driverDel._names||{}).forEach(k=>{
@@ -38829,7 +38888,7 @@ function _colRoutePayLines(st, pu, monStr){
       up,
       /* 税区分は保存されている taxType を読む（請求側は _tax.route / priceTax を見ており、
          実際に保存しているキーと食い違っている。ここは保存値に合わせる） */
-      tax: def.taxType || (def._tax&&def._tax.route) || def.priceTax || 'ex',
+      tax: def.taxType || (def._tax&&def._tax.route) || def.priceTax || 'in',   /* ★ .97 */
       rounds: 0
     };
     agg[k].rounds += Math.max(1, parseInt(r.route.rounds)||1);
@@ -39284,7 +39343,9 @@ function _calcCustBilling(custName, monStr){
         stopCount: masterRt?.stopCount || r.route.stopCount || 1,
         unitPrice: (masterRt?.routePrice || masterRt?.dailyAmt || r.route.unitPrice || 0),
         // ルート単価の税モード(マスタの_tax.route or 既定'ex')
-        taxFlag: masterRt?._tax?.route || masterRt?.priceTax || 'ex',
+        /* ★ 2026-11-07.97: 保存は taxType。これまで請求側は別のキーだけを
+           見ていたため、ルートの税区分が常に既定になっていた。 */
+        taxFlag: masterRt?.taxType || masterRt?._tax?.route || masterRt?.priceTax || 'in',
         totalRounds: 0,
         workDays: new Set(),
         dates: [],
@@ -39323,7 +39384,7 @@ function _calcCustBilling(custName, monStr){
     const ch = r.charter;
     const amount = Number(ch.amount)||0;
     // チャーターは金額直接入力、税モードはchの_tax(default 'ex')
-    const chTax = ch._tax || ch.taxFlag || 'ex';
+    const chTax = ch._tax || ch.taxFlag || 'in';   /* ★ .97 */
     total += amount;
     if(chTax==='in') subtotalIn += amount;
     else subtotalEx += amount;
@@ -40383,7 +40444,9 @@ function _buildInvoiceProxyHTML(staffName, monStr){
     html: body,
     amount: totals.grandTotal,
     invoiceNo,
-    taxEx: totals.inclSub + totals.exclSub,  // 税抜相当
+    /* ★ 2026-11-07.97: ここは「税抜相当」と書きながら税込小計を足していた。
+       税抜は 税込小計から内税を抜いたもの ＋ 税別小計 ＋ 不課税。 */
+    taxEx: (totals.inclSub - totals.inclTax) + totals.exclSub + totals.nontaxSub,
     taxAmt: totals.inclTax + totals.exclTax
   };
 }
@@ -45409,7 +45472,7 @@ function importRateCSV(txt, fn){
     }
 
     const cur=(st.fixedPrices && st.fixedPrices.del) || {};
-    const curTax=(cur._taxType)||{};
+    const curTax=(cur._tax)||(cur._taxType)||{};   /* ★ .97: 読む側と同じキーに */
     const ym=hYm ? String(r[hYm]||'').trim() : '';
     const taxCsv=hTax ? String(r[hTax]||'').trim() : '';
     const taxVal = taxCsv==='税込' ? 'in' : (taxCsv==='税別' ? 'ex' : '');
@@ -45550,7 +45613,8 @@ async function applyRateCSV(){
       if(!row){ row={..._rateSnapOf(st), ym:_rateYm(p.ym), note:'単価CSVから'}; st.rateHistory.push(row); }
       row.del = {...(row.del||{})};
       Object.keys(p.del).forEach(k=>{ row.del[k]=p.del[k]; });
-      if(Object.keys(p.tax).length){ row.del._taxType={...(row.del._taxType||{}), ...p.tax}; }
+      /* ★ 2026-11-07.97: 読む側は _tax を見るので、取込もそちらに書く */
+      if(Object.keys(p.tax).length){ row.del._tax={...(row.del._tax||{}), ...p.tax}; }
       if(Object.keys(p.pm).length){ row.payMode={...(row.payMode||{}), ...p.pm}; }
       st.rateHistory.sort((a,b)=>String(a.ym||'').localeCompare(String(b.ym||'')));
     } else {
@@ -45558,7 +45622,7 @@ async function applyRateCSV(){
       st.fixedPrices.del = {...(st.fixedPrices.del||{})};
       Object.keys(p.del).forEach(k=>{ st.fixedPrices.del[k]=p.del[k]; });
       if(Object.keys(p.tax).length){
-        st.fixedPrices.del._taxType={...(st.fixedPrices.del._taxType||{}), ...p.tax};
+        st.fixedPrices.del._tax={...(st.fixedPrices.del._tax||{}), ...p.tax};   /* ★ .97 */
       }
       if(Object.keys(p.pm).length){ st.payMode={...(st.payMode||{}), ...p.pm}; }
     }
