@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.93</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.95</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6162,7 +6162,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-07.93';
+const APP_VER = '2026-11-07.95';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -22130,6 +22130,86 @@ function _bizCommissionDel(st, name, monStr, del){
   return out;
 }
 // 歩合の明細（集荷）: 集荷品目単価×個数
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-07.94: 支払明細の行を作る共通関数
+
+   個人あての支払（_calcStaffPayment）と、委託会社あての書類
+   （_buildDriverMonthlyByOffice）が、別々のコードで同じ金額を
+   出そうとしていた。そのため会社あての書類には
+     ・集荷事業の個建品目
+     ・集荷ルート単価
+     ・顧客別カスタム品目
+     ・手当（通勤・経歴・役職・横乗・特別・その他）
+     ・駐車料金の立替
+   が1円も入らず、委託会社への請求・支払が不足していた。
+   さらに会社あては単価×個数を素の掛け算でやっており、小数単価の人は
+   個人あてと1円ずれていた（個人あては1円未満を切り捨て）。
+
+   ここに行を作る関数をまとめ、両方が同じ関数を呼ぶようにする。
+   計算は個人あて（これまで正しかったほう）に合わせてあるので、
+   個人あての金額は1円も変わらない。
+   ════════════════════════════════════════════════════════════ */
+
+/* 集荷事業の個建品目 */
+function _colItemPayLines(st, pu, monStr){
+  const out=[];
+  if(!st || !Array.isArray(pu) || !pu.length) return out;
+  const cp=(typeof _colPricesAt==='function') ? _colPricesAt(st, monStr) : (st.fixedPrices?.col||{});
+  const puSum={};
+  pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
+  Object.entries(puSum).forEach(([k,q])=>{
+    const ck = IK_COL_MAP[k];
+    const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
+    if(q>0 && up>0){
+      const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
+      const amt = calcUnitTotal(up, q, taxFlag);
+      out.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:amt, biz:'col'});
+    }
+  });
+  return out;
+}
+
+/* 手当（加算）と駐車料金の立替。del を渡さなければその月の宅配日報から数える */
+function _teatePayLines(st, monStr, del){
+  const out=[];
+  if(!st) return out;
+  const off = st.offset || {};
+  const _nd = v => String(v||'').replace(/\//g,'-');
+  const _del = Array.isArray(del) ? del
+    : (D.delivery||[]).filter(r=>r && r.staff===st.name && _nd(r.date).startsWith(monStr));
+  const _mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr)
+            : {tokubetsuCnt:0, park:0, parkDays:0};
+  const yokonoriCnt=_del.reduce((a,r)=>a+(r.yokonori||0),0);
+  const tokubetsuCnt=_del.reduce((a,r)=>a+(r.tokubetsu||0),0) + (_mAdj.tokubetsuCnt||0);
+  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
+          : {yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit,
+             commute:off.commute, career:off.career, position:off.position, teateOther:off.teateOther};
+  if(_tu.commute>0)  out.push({label:'通勤手当', amount:_tu.commute, teate:true});
+  if(_tu.career>0)   out.push({label:'経歴手当', amount:_tu.career, teate:true});
+  if(_tu.position>0) out.push({label:'役職手当', amount:_tu.position, teate:true});
+  if(yokonoriCnt>0 && _tu.yokonoriUnit){
+    out.push({label:`横乗手当 ${yokonoriCnt}回×¥${_tu.yokonoriUnit}`,
+              amount:yokonoriCnt*_tu.yokonoriUnit, teate:true});
+  }
+  if(yokonoriCnt>0 && !_tu.yokonoriUnit){
+    out.push({label:`横乗手当 ${yokonoriCnt}回（単価が台帳に未設定）`, amount:0, teate:true, warn:true});
+  }
+  if(tokubetsuCnt>0 && _tu.tokubetsuUnit){
+    out.push({label:`特別手当 ${tokubetsuCnt}回×¥${_tu.tokubetsuUnit}`,
+              amount:tokubetsuCnt*_tu.tokubetsuUnit, teate:true});
+  }
+  if(tokubetsuCnt>0 && !_tu.tokubetsuUnit){
+    out.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0, teate:true, warn:true});
+  }
+  if(_tu.teateOther>0) out.push({label:'その他手当', amount:_tu.teateOther, teate:true});
+  // 駐車料金の立替（実費。同額をそのまま郵便局へ請求する）
+  if(_mAdj.park>0){
+    out.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park, teate:true});
+  }
+  return out;
+}
+window._colItemPayLines=_colItemPayLines; window._teatePayLines=_teatePayLines;
+
 /* ════════════════════════════════════════════════════════════
    ★ 2026-11-06.92: 顧客別カスタム品目の支払
 
@@ -38360,12 +38440,14 @@ function buildCompanyPaySlipData(coName, monStr){
     return 0;
   });
 
-  const result = {total:0, drivers:[]};
+  const result = {total:0, deductTotal:0, net:0, drivers:[]};
   drivers.forEach(d=>{
     const dNode = _buildDriverMonthlyByOffice(d, monStr);
     result.drivers.push(dNode);
     result.total += dNode.total;
+    result.deductTotal += (Number(dNode.deductTotal)||0);   /* ★ 2026-11-07.95: 負の値 */
   });
+  result.net = result.total + result.deductTotal;
   return result;
 }
 
@@ -38471,7 +38553,12 @@ function _buildDriverMonthlyByOffice(staff, monStr){
     delItems.forEach(({key,label,price})=>{
       const q = delSum[key] || 0;
       if(q > 0 && price){
-        items.push({label, count:q, unitPrice:price, amount:q*price});
+        /* ★ 2026-11-07.94: 個人あてと同じ端数処理（1円未満切り捨て）にする。
+           ここだけ素の掛け算だったため、小数単価の人で1円ずれていた。 */
+        const taxFlag = (dp._tax && dp._tax[key==='yakan'?'night':key]) || 'ex';
+        const amt = (typeof calcUnitTotal==='function')
+          ? calcUnitTotal(price, q, taxFlag) : Math.floor(q*price);
+        items.push({label, count:q, unitPrice:price, amount:amt});
       }
     });
 
@@ -38494,6 +38581,54 @@ function _buildDriverMonthlyByOffice(staff, monStr){
       node.total += officeTotal;
     }
   });
+
+  /* ══════════════════════════════════════════════════════════
+     ★ 2026-11-07.94: 集荷事業と手当を会社あての書類にも出す。
+
+     ここまでの集計は宅配日報と宅配事業内集荷しか見ていないため、
+     委託会社所属のドライバーが集荷事業（顧客からの荷物）をしていても、
+     手当が付いていても、会社あての支払明細・請求書代行には
+     1円も出ていなかった。個人あてと同じ関数を呼んで足す。
+     郵便局ごとの仕事ではないので、専用の枠にまとめて並べる。
+     ══════════════════════════════════════════════════════════ */
+  try{
+    const _nd = v => String(v||'').replace(/\//g,'-');
+    const _pu = (D.pickup||[]).filter(r=>r && r.staff===name && _nd(r.date).startsWith(monStr));
+    const _delM = (D.delivery||[]).filter(r=>r && r.staff===name && _nd(r.date).startsWith(monStr));
+
+    const _colLines = []
+      .concat((typeof _colItemPayLines==='function') ? _colItemPayLines(staff, _pu, monStr) : [])
+      .concat((typeof _colCustomItemPayLines==='function') ? _colCustomItemPayLines(staff, _pu) : [])
+      .concat((typeof _colRoutePayLines==='function') ? _colRoutePayLines(staff, _pu, monStr) : []);
+    const _teateLines = (typeof _teatePayLines==='function') ? _teatePayLines(staff, monStr, _delM) : [];
+
+    [['(集荷事業)', _colLines], ['(手当・立替)', _teateLines]].forEach(([po, lines])=>{
+      const use = (lines||[]).filter(b=>b && (Number(b.amount)||0) > 0);
+      if(!use.length) return;
+      /* ラベルに「5個×¥200」のように数量と単価が入っているので、
+         欄のほうは空にする（1×1,000 と出ると紛らわしいため） */
+      const items = use.map(b=>({label:b.label, count:null, unitPrice:null, amount:b.amount}));
+      const t = items.reduce((a,it)=>a+it.amount, 0);
+      node.offices.push({postOffice:po, total:t, items});
+      node.total += t;
+    });
+
+    /* ★ 2026-11-07.95: 控除（燃料代・違約金・庸車・修理・前払い）。
+       委託会社所属のぶんは委託会社に請求する取り決めなので、
+       会社あての支払明細でも差し引く。node.total（支給）はそのままにし、
+       別枠で持つ。請求書代行は支給だけを使い、支払明細は net を使う。 */
+    const _wd = new Set(_delM.map(r=>r.date).filter(Boolean)).size;
+    const _cond = (typeof getActivePayCondition==='function')
+      ? (getActivePayCondition(staff, monStr.replace('-','/')) || {}) : {};
+    const _mAdj = (typeof _adjPayroll==='function') ? _adjPayroll(staff, monStr)
+                : {penaltyRows:[], tokubetsuCnt:0, park:0, parkDays:0};
+    const _ded = (typeof _dedPayLines==='function')
+      ? _dedPayLines(staff, monStr, _wd, _cond, _mAdj) : [];
+    node.deductions = _ded.map(b=>({label:b.label, amount:b.amount, ref:b.ref}));
+    node.deductTotal = _ded.reduce((a,b)=>a+(Number(b.amount)||0), 0);   // 負の値
+  }catch(e){ console.error('[_buildDriverMonthlyByOffice] 集荷・手当・控除の集計に失敗', e); }
+  if(!Array.isArray(node.deductions)){ node.deductions=[]; node.deductTotal=0; }
+  node.net = node.total + node.deductTotal;
 
   /* ★ 2026-10-17.20: 時間単価・日額のドライバーを会社あての明細に出す。
      ここまでの集計は「月給」と「歩合（単価×件数）」しか見ていないため、
@@ -38605,6 +38740,145 @@ function _colRoutePayLines(st, pu, monStr){
   return out;
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-07.95: 控除の行を作る共通関数
+
+   燃料代・違約金・庸車・修理・前払いは個人の台帳に入っているが、
+   委託会社所属のドライバーのぶんは委託会社に請求する取り決めなので、
+   会社あての支払明細でも差し引く必要がある。これまで会社あての書類は
+   控除を1円も見ておらず、支払額が過大になっていた。
+
+   金額は負の値で返す（個人あての明細と同じ形）。
+   「(参考)燃料費 会社負担」だけは金額0の記録行。
+   請求書代行には載せない（委託会社から大阪急配への請求書であり、
+   控除は受け取る側が差し引くものなので）。
+   ════════════════════════════════════════════════════════════ */
+function _dedPayLines(st, monStr, workDays, cond, mAdj){
+  const out=[];
+  if(!st) return out;
+  monStr = String(monStr||'').replace(/\//g,'-').slice(0,7);
+  const off = st.offset || {};
+  cond = cond || {};
+  mAdj = mAdj || {penaltyRows:[]};
+  workDays = Number(workDays)||0;
+  const name = st.name;
+  // ── 控除（減算） ──
+  // ── 燃料費(2026/05/10 改修): gasType別に処理 ──
+  // カード貸出 → D.gasRecords から実費控除
+  // 自己負担   → off.gasAmt を補填(プラス)
+  // 会社負担   → 給与計算に反映しない(記録のみ表示)
+  // なし       → 何もしない
+  const gasMonthKey = String(monStr||'').replace(/\//g, '-').slice(0, 7);
+  // ★ 2026/08/11: 給油元の併用に対応。
+  //   従来は find で1件しか拾わず、ENEOS＋A1石油＋エネフリを併用すると
+  //   最初の1件しか控除されなかった。全件を対象にする。
+  const gasRecList = (D.gasRecords||[]).filter(g =>
+    g.staffId && String(g.staffId) === String(st.id) && g.ym === gasMonthKey
+  );
+  const gasRec = gasRecList[0] || null;
+  // ★ 2026/08/12: カード貸出／費用負担の2軸で判定する。
+  //   控除するのは「カード貸出あり × 自己負担」だけ。
+  //   ・貸出なし×自己負担 … 給与にも明細にも一切反映しない
+  //   ・会社負担(貸出の有無を問わず) … 給与では控除しない(収支集計用に記録は残す)
+  const _gp = (typeof _gasPairOf==='function') ? _gasPairOf(off) : {lend:'',burden:''};
+  if(_gp.lend==='あり' && _gp.burden==='自己負担'){
+    if(gasRecList.length > 0 && gasRecList.some(g=>(g.amount||0)>0)){
+      // 給油元ごとに1行ずつ出す(金額が合わないときに原因を追えるようにする)
+      gasRecList.forEach(g=>{
+        if(!(g.amount>0)) return;
+        const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
+        const vlabel = g.vendorLabel || (g.isManual ? '手入力' : 'カード貸出');
+        out.push({
+          label: `燃料費(${vlabel}) ${(marked.qty||0).toFixed(1)}L`,
+          amount: -marked.amount,
+        });
+      });
+    } else if(off.gasAmt > 0){
+      // 燃料代が未取込でも、暫定的に固定額があれば使う(後方互換)
+      out.push({label:'燃料費(固定額・要 燃料代入力)', amount:-off.gasAmt});
+    }
+  } else if(_gp.burden==='会社負担'){
+    // 給与には反映しないが、実績があれば参考として表示(金額は0)
+    const coTotal = gasRecList.reduce((a,g)=>a+(g.amount||0),0);
+    if(coTotal > 0){
+      const coQty = gasRecList.reduce((a,g)=>a+(g.qty||0),0);
+      out.push({
+        label: `(参考)燃料費 会社負担 ${coQty.toFixed(1)}L ¥${coTotal.toLocaleString()}`,
+        amount: 0,
+        ref: coTotal,
+      });
+    }
+  }
+  // 貸出なし×自己負担 は何もしない(明細に出さない)
+
+  // ★ 2026/08/12: 違約金(ドライバー請求)を明細にも出す
+  (off.penalties||[]).forEach(p=>{
+    const due=(typeof _penaltyDueFor==='function') ? _penaltyDueFor(p, monStr) : 0;
+    if(due<=0) return;
+    const times=Math.max(1, Number(p.times)||1);
+    const idx=(()=>{ const st=String(p.startYM || String(p.date||'').slice(0,7)).replace(/\//g,'-').slice(0,7);
+      const cu=String(monStr||'').replace(/\//g,'-').slice(0,7);
+      const [sy,sm]=st.split('-').map(Number), [cy,cm]=cu.split('-').map(Number);
+      return (cy-sy)*12+(cm-sm)+1; })();
+    const label='違約金'+(p.reason?`（${p.reason}）`:'')+(times>1?` ${idx}/${times}回目`:'');
+    out.push({label, amount:-due});
+  });
+
+  /* ★ 2026-10-09.42: 月締め画面で入れた違約金。
+     「本人から回収する月」がこの月のものだけを引く（郵便局への請求で相殺する月とは別）。 */
+  (mAdj.penaltyRows||[]).forEach(r=>{
+    const lab='違約金'+(r.reason?`（${r.reason}）`:'')
+      + (r.from && r.from!==String(monStr||'').replace(/\//g,'-').slice(0,7) ? `　${r.from} 発生` : '')
+      + (r.office?`　${r.office}`:'');
+    out.push({label:lab, amount:-r.amt});
+  });
+
+  // ★ 2026-09-22.3: 庸車は控除で確定。種別が「なし」のときは金額が残っていても控除しない。
+  //   給与履歴に庸車条件があればそちらを使う（一覧側と統一）
+  {
+    const yt = cond.yoshaType || off.yoshaType || 'なし';
+    const ya = Number(cond.yoshaAmt || off.yoshaAmt) || 0;
+    if(ya>0 && (yt==='日額' || yt==='月額')){
+      const yoshaTotal = yt==='月額' ? ya : ya*workDays;
+      const yoshaLabel = yt==='月額' ? '庸車両（月額）' : `庸車両 ${workDays}日×¥${ya}`;
+      out.push({label:yoshaLabel, amount:-yoshaTotal});
+    }
+  }
+  // ★ 2026-09-22.3: 修理・損害代の天引き（従業員台帳 repairRows の該当月）を明細にも計上（一覧側と統一）
+  {
+    const repairDeduct=(st.repairRows||[]).filter(r=>{
+      if(!r.month||!r.total) return false;
+      const startYM=String(r.month).replace(/\//g,'-').slice(0,7);
+      const remaining=(r.times||1)-(r.paid||0);
+      if(remaining<=0) return false;
+      const diffMonths=Math.round((new Date(monStr+'-01')-new Date(startYM+'-01'))/(1000*60*60*24*30.44));
+      return diffMonths>=0 && diffMonths<remaining;
+    }).reduce((sum,r)=>sum+Math.ceil((r.total||0)/(r.times||1)),0);
+    if(repairDeduct>0){
+      out.push({label:'修理・損害代 天引き', amount:-repairDeduct});
+    }
+  }
+  // ── 前払い控除 ──
+  // ★ 2026/08/11: 分割払いに対応。
+  //   旧実装は未相殺の前払いを翌月に全額控除しており、12回払いの取り決めがあっても
+  //   1回で全額引かれていた。当月に控除すべき額だけを計算する。
+  const advMonthKey = String(monStr||'').replace(/\//g,'-').slice(0,7);
+  (st.advances||[]).forEach(a=>{
+    const due = (typeof _advDueFor==='function') ? _advDueFor(a, advMonthKey) : 0;
+    if(due <= 0) return;
+    const remainAfter = (typeof _advRemain==='function') ? Math.max(0,_advRemain(a)-due) : 0;
+    const isInst = a.plan === 'installment';
+    const cnt = ((a.payments||[]).length) + 1;
+    const label = isInst
+      ? `前払い返済 ${cnt}/${a.times||'?'}回目` + (remainAfter>0?`（残 ¥${fmt(remainAfter)}）`:'（完済）')
+      : `前払い相殺` + (a.reason?`（${a.reason}）`:'');
+    out.push({label, amount:-due});
+  });
+
+  return out;
+}
+window._dedPayLines=_dedPayLines;
+
 function _calcStaffPayment(name, monStr){
   // ★ 2026/08/15: 呼び出し元によって月が '2026-07' と '2026/07' の2種類ある。
   //   日報の日付はハイフンに統一済みのため、スラッシュのまま比較すると
@@ -38672,24 +38946,8 @@ function _calcStaffPayment(name, monStr){
         total+=amt;
       }
     });
-    // 集荷：品目別（★ 2026-10-09.46: その月に効いていた単価）
-    const cp=(typeof _colPricesAt==='function') ? _colPricesAt(st, monStr) : (st.fixedPrices?.col||{});
-    const puSum={};
-    pu.forEach(r=>IK.forEach(k=>{ puSum[k]=(puSum[k]||0)+(iq(r,k)||0); }));
-    // ★ 2026/09/12: fixedPrices.col は単価キー(ck: p60/pk1/cp...)で保存されているが、
-    //   ここは品目キー(masterKey: 'ゆうパック_60'...)で引いていたため常に未設定扱いだった。
-    //   IK_COL_MAP で ck に変換して引く。税区分も同じく ck で保存されている。
-    Object.entries(puSum).forEach(([k,q])=>{
-      const ck = IK_COL_MAP[k];
-      const up = (ck && ck !== 'charter') ? Number(cp[ck])||0 : 0;
-      if(q>0&&up>0){
-        // 契約書準拠の計算
-        const taxFlag = (cp._tax && cp._tax[ck]) || 'ex';
-        const amt = calcUnitTotal(up, q, taxFlag);
-        breakdown.push({label:`${ITEMS[k]?.label||k} ${q}個×¥${fmtUnitPrice(up)}`, amount:amt});
-        total+=amt;
-      }
-    });
+    /* 集荷：品目別（★ 2026-11-07.94: 会社あての書類と同じ関数にした） */
+    _colItemPayLines(st, pu, monStr).forEach(b=>{ breakdown.push(b); total+=b.amount; });
     /* ★ 2026-11-06.92: 顧客別カスタム品目。新しい計算経路（_bizCommissionCol）と
        同じ関数を使うので、どちらの経路でも同じ金額になる。 */
     if(typeof _colCustomItemPayLines==='function'){
@@ -38780,152 +39038,12 @@ function _calcStaffPayment(name, monStr){
      古い日報に入っている分（実績ゼロだが念のため）と足して計算する。
      駐車料金の立替も、ここで本人へ支払う。 */
   const _mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr) : {tokubetsuCnt:0,park:0,penalty:0,penaltyRows:[],parkDays:0};
-  const yokonoriCnt=del.reduce((a,r)=>a+(r.yokonori||0),0);
-  const tokubetsuCnt=del.reduce((a,r)=>a+(r.tokubetsu||0),0) + (_mAdj.tokubetsuCnt||0);
-  /* ★ 2026-10-09.46: 手当の単価もその月に効いていたものを使う */
-  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
-            : {yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
-  if(_tu.commute>0){breakdown.push({label:'通勤手当', amount:_tu.commute}); total+=_tu.commute;}
-  if(_tu.career>0){breakdown.push({label:'経歴手当', amount:_tu.career}); total+=_tu.career;}
-  if(_tu.position>0){breakdown.push({label:'役職手当', amount:_tu.position}); total+=_tu.position;}
-  if(yokonoriCnt>0&&_tu.yokonoriUnit){
-    const amt=yokonoriCnt*_tu.yokonoriUnit;
-    breakdown.push({label:`横乗手当 ${yokonoriCnt}回×¥${_tu.yokonoriUnit}`, amount:amt}); total+=amt;
-  }
-  if(yokonoriCnt>0&&!_tu.yokonoriUnit){
-    breakdown.push({label:`横乗手当 ${yokonoriCnt}回（単価が台帳に未設定）`, amount:0});
-  }
-  if(tokubetsuCnt>0&&_tu.tokubetsuUnit){
-    const amt=tokubetsuCnt*_tu.tokubetsuUnit;
-    breakdown.push({label:`特別手当 ${tokubetsuCnt}回×¥${_tu.tokubetsuUnit}`, amount:amt}); total+=amt;
-  }
-  if(tokubetsuCnt>0&&!_tu.tokubetsuUnit){
-    breakdown.push({label:`特別手当 ${tokubetsuCnt}回（単価が台帳に未設定）`, amount:0});
-  }
-  if(_tu.teateOther>0){breakdown.push({label:'その他手当', amount:_tu.teateOther}); total+=_tu.teateOther;}
-  // 駐車料金の立替（実費。同額をそのまま郵便局へ請求する）
-  if(_mAdj.park>0){
-    breakdown.push({label:`駐車料金 立替 ${_mAdj.parkDays}日分`, amount:_mAdj.park});
-    total+=_mAdj.park;
-  }
+  /* ★ 2026-11-07.94: 会社あての書類と同じ関数にした */
+  _teatePayLines(st, monStr, del).forEach(b=>{ breakdown.push(b); total+=b.amount; });
 
-  // ── 控除（減算） ──
-  // ── 燃料費(2026/05/10 改修): gasType別に処理 ──
-  // カード貸出 → D.gasRecords から実費控除
-  // 自己負担   → off.gasAmt を補填(プラス)
-  // 会社負担   → 給与計算に反映しない(記録のみ表示)
-  // なし       → 何もしない
-  const gasMonthKey = String(monStr||'').replace(/\//g, '-').slice(0, 7);
-  // ★ 2026/08/11: 給油元の併用に対応。
-  //   従来は find で1件しか拾わず、ENEOS＋A1石油＋エネフリを併用すると
-  //   最初の1件しか控除されなかった。全件を対象にする。
-  const gasRecList = (D.gasRecords||[]).filter(g =>
-    g.staffId && String(g.staffId) === String(st.id) && g.ym === gasMonthKey
-  );
-  const gasRec = gasRecList[0] || null;
-  // ★ 2026/08/12: カード貸出／費用負担の2軸で判定する。
-  //   控除するのは「カード貸出あり × 自己負担」だけ。
-  //   ・貸出なし×自己負担 … 給与にも明細にも一切反映しない
-  //   ・会社負担(貸出の有無を問わず) … 給与では控除しない(収支集計用に記録は残す)
-  const _gp = _gasPairOf(off);
-  if(_gp.lend==='あり' && _gp.burden==='自己負担'){
-    if(gasRecList.length > 0 && gasRecList.some(g=>(g.amount||0)>0)){
-      // 給油元ごとに1行ずつ出す(金額が合わないときに原因を追えるようにする)
-      gasRecList.forEach(g=>{
-        if(!(g.amount>0)) return;
-        const marked = (typeof _applyGasMarkup==='function') ? _applyGasMarkup(g) : g;
-        const vlabel = g.vendorLabel || (g.isManual ? '手入力' : 'カード貸出');
-        breakdown.push({
-          label: `燃料費(${vlabel}) ${(marked.qty||0).toFixed(1)}L`,
-          amount: -marked.amount,
-        });
-        total -= marked.amount;
-      });
-    } else if(off.gasAmt > 0){
-      // 燃料代が未取込でも、暫定的に固定額があれば使う(後方互換)
-      breakdown.push({label:'燃料費(固定額・要 燃料代入力)', amount:-off.gasAmt});
-      total -= off.gasAmt;
-    }
-  } else if(_gp.burden==='会社負担'){
-    // 給与には反映しないが、実績があれば参考として表示(金額は0)
-    const coTotal = gasRecList.reduce((a,g)=>a+(g.amount||0),0);
-    if(coTotal > 0){
-      const coQty = gasRecList.reduce((a,g)=>a+(g.qty||0),0);
-      breakdown.push({
-        label: `(参考)燃料費 会社負担 ${coQty.toFixed(1)}L ¥${coTotal.toLocaleString()}`,
-        amount: 0,
-        ref: coTotal,
-      });
-    }
-  }
-  // 貸出なし×自己負担 は何もしない(明細に出さない)
-
-  // ★ 2026/08/12: 違約金(ドライバー請求)を明細にも出す
-  (off.penalties||[]).forEach(p=>{
-    const due=(typeof _penaltyDueFor==='function') ? _penaltyDueFor(p, monStr) : 0;
-    if(due<=0) return;
-    const times=Math.max(1, Number(p.times)||1);
-    const idx=(()=>{ const st=String(p.startYM || String(p.date||'').slice(0,7)).replace(/\//g,'-').slice(0,7);
-      const cu=String(monStr||'').replace(/\//g,'-').slice(0,7);
-      const [sy,sm]=st.split('-').map(Number), [cy,cm]=cu.split('-').map(Number);
-      return (cy-sy)*12+(cm-sm)+1; })();
-    const label='違約金'+(p.reason?`（${p.reason}）`:'')+(times>1?` ${idx}/${times}回目`:'');
-    breakdown.push({label, amount:-due});
-    total -= due;
-  });
-
-  /* ★ 2026-10-09.42: 月締め画面で入れた違約金。
-     「本人から回収する月」がこの月のものだけを引く（郵便局への請求で相殺する月とは別）。 */
-  (_mAdj.penaltyRows||[]).forEach(r=>{
-    const lab='違約金'+(r.reason?`（${r.reason}）`:'')
-      + (r.from && r.from!==String(monStr||'').replace(/\//g,'-').slice(0,7) ? `　${r.from} 発生` : '')
-      + (r.office?`　${r.office}`:'');
-    breakdown.push({label:lab, amount:-r.amt});
-    total -= r.amt;
-  });
-
-  // ★ 2026-09-22.3: 庸車は控除で確定。種別が「なし」のときは金額が残っていても控除しない。
-  //   給与履歴に庸車条件があればそちらを使う（一覧側と統一）
-  {
-    const yt = cond.yoshaType || off.yoshaType || 'なし';
-    const ya = Number(cond.yoshaAmt || off.yoshaAmt) || 0;
-    if(ya>0 && (yt==='日額' || yt==='月額')){
-      const yoshaTotal = yt==='月額' ? ya : ya*workDays;
-      const yoshaLabel = yt==='月額' ? '庸車両（月額）' : `庸車両 ${workDays}日×¥${ya}`;
-      breakdown.push({label:yoshaLabel, amount:-yoshaTotal}); total-=yoshaTotal;
-    }
-  }
-  // ★ 2026-09-22.3: 修理・損害代の天引き（従業員台帳 repairRows の該当月）を明細にも計上（一覧側と統一）
-  {
-    const repairDeduct=(st.repairRows||[]).filter(r=>{
-      if(!r.month||!r.total) return false;
-      const startYM=String(r.month).replace(/\//g,'-').slice(0,7);
-      const remaining=(r.times||1)-(r.paid||0);
-      if(remaining<=0) return false;
-      const diffMonths=Math.round((new Date(monStr+'-01')-new Date(startYM+'-01'))/(1000*60*60*24*30.44));
-      return diffMonths>=0 && diffMonths<remaining;
-    }).reduce((sum,r)=>sum+Math.ceil((r.total||0)/(r.times||1)),0);
-    if(repairDeduct>0){
-      breakdown.push({label:'修理・損害代 天引き', amount:-repairDeduct});
-      total-=repairDeduct;
-    }
-  }
-  // ── 前払い控除 ──
-  // ★ 2026/08/11: 分割払いに対応。
-  //   旧実装は未相殺の前払いを翌月に全額控除しており、12回払いの取り決めがあっても
-  //   1回で全額引かれていた。当月に控除すべき額だけを計算する。
-  const advMonthKey = String(monStr||'').replace(/\//g,'-').slice(0,7);
-  (st.advances||[]).forEach(a=>{
-    const due = (typeof _advDueFor==='function') ? _advDueFor(a, advMonthKey) : 0;
-    if(due <= 0) return;
-    const remainAfter = (typeof _advRemain==='function') ? Math.max(0,_advRemain(a)-due) : 0;
-    const isInst = a.plan === 'installment';
-    const cnt = ((a.payments||[]).length) + 1;
-    const label = isInst
-      ? `前払い返済 ${cnt}/${a.times||'?'}回目` + (remainAfter>0?`（残 ¥${fmt(remainAfter)}）`:'（完済）')
-      : `前払い相殺` + (a.reason?`（${a.reason}）`:'');
-    breakdown.push({label, amount:-due});
-    total -= due;
+  /* ★ 2026-11-07.95: 控除。会社あての書類と同じ関数にした */
+  _dedPayLines(st, monStr, workDays, cond, _mAdj).forEach(b=>{
+    breakdown.push(b); total += (Number(b.amount)||0);
   });
 
   return {total:Math.max(total,0), breakdown, staff:st, noAtt, kyuyo};
@@ -42169,7 +42287,7 @@ function generateCompanyPaySlipSummary(coName, monStr){
     } else {
       dr.offices.forEach(off=>{
         const rows = off.items.map(it=>
-          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count.toLocaleString()}</td><td class="tr">¥${it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
+          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count==null?'':it.count.toLocaleString()}</td><td class="tr">${it.unitPrice==null?'':'¥'+it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
         ).join('');
         driverBody += `
           <table style="margin:6px 0 4px;">
@@ -42190,10 +42308,29 @@ function generateCompanyPaySlipSummary(coName, monStr){
       driverBody += `
         <table style="margin:0 0 12px;">
           <tr style="background:#f9fafb; font-weight:700;">
-            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 合計</td>
+            <td>${_esc(dr.name)}${dr.empNo?' (No.'+_esc(dr.empNo)+')':''} 支給 合計</td>
             <td class="tr" style="width:180px;">¥${dr.total.toLocaleString()}</td>
           </tr>
         </table>`;
+      /* ★ 2026-11-07.95: 控除。委託会社所属のぶんは会社に請求する取り決め。 */
+      const _dd = (dr.deductions||[]).filter(x=>x && (Number(x.amount)||0)!==0);
+      if(_dd.length){
+        driverBody += `
+        <table style="margin:0 0 12px;">
+          <thead><tr><th colspan="2" style="background:#fee2e2; color:#991b1b; text-align:left;">控除</th></tr></thead>
+          <tbody>
+            ${_dd.map(x=>`<tr><td>${_esc(x.label)}</td><td class="tr" style="width:180px; color:#b91c1c;">-¥${Math.abs(Number(x.amount)||0).toLocaleString()}</td></tr>`).join('')}
+            <tr style="background:#fef2f2; font-weight:700; color:#991b1b;">
+              <td>控除 合計</td>
+              <td class="tr">-¥${Math.abs(Number(dr.deductTotal)||0).toLocaleString()}</td>
+            </tr>
+            <tr style="background:#f0fdf4; font-weight:800; color:#065f46;">
+              <td>${_esc(dr.name)} 差引支払額</td>
+              <td class="tr">¥${(Number(dr.net)||0).toLocaleString()}</td>
+            </tr>
+          </tbody>
+        </table>`;
+      }
     }
     sections += `
       <div style="background:#e0e7ff; font-weight:700; color:#1e3a8a; padding:6px 10px; margin-top:14px; border-left:4px solid #2563eb;">
@@ -42212,21 +42349,30 @@ function generateCompanyPaySlipSummary(coName, monStr){
     <div class="doc-to">${_esc(coName)} 御中</div>
     <div class="doc-amount-box">
       <div class="doc-amount-label">お支払金額</div>
-      <div class="doc-amount">¥${data.total.toLocaleString()}</div>
+      <div class="doc-amount">¥${(Number(data.net)||data.total).toLocaleString()}</div>
     </div>
     ${sections}
     <table style="margin-top:14px;">
-      <tr style="background:#fef3c7; font-weight:800; font-size:13px;">
-        <td>${_esc(coName)} 総合計</td>
+      <tr style="font-weight:700;">
+        <td>${_esc(coName)} 支給 合計</td>
         <td class="tr" style="width:180px;">¥${data.total.toLocaleString()}</td>
+      </tr>
+      ${(Number(data.deductTotal)||0)!==0?`
+      <tr style="font-weight:700; color:#991b1b;">
+        <td>控除 合計</td>
+        <td class="tr">-¥${Math.abs(Number(data.deductTotal)||0).toLocaleString()}</td>
+      </tr>`:''}
+      <tr style="background:#fef3c7; font-weight:800; font-size:13px;">
+        <td>${_esc(coName)} 差引お支払額</td>
+        <td class="tr" style="width:180px;">¥${(Number(data.net)||data.total).toLocaleString()}</td>
       </tr>
     </table>
     ${_buildCompanyFromBlock(true)}
     ${_buildBankInfoBlock()}
-    <div class="doc-footer">※ ドライバー別・営業所別の明細を記載しています。</div>`;
+    <div class="doc-footer">※ ドライバー別・営業所別の明細を記載しています。${(Number(data.deductTotal)||0)!==0?'控除は貴社所属ドライバーに生じたもので、貴社へのお支払から差し引いております。':''}</div>`;
 
   _printDocWindow('支払明細書（会社）', html);
-  _saveIssuedDoc({type:'companyPaySlip', target:coName, month:monStr, amount:data.total, issuedAt:new Date().toISOString()});
+  _saveIssuedDoc({type:'companyPaySlip', target:coName, month:monStr, amount:(Number(data.net)||data.total), issuedAt:new Date().toISOString()});
   renderCompanyFSTab('docs');
 }
 
@@ -42255,7 +42401,7 @@ function generateCompanyInvoiceProxy(coName, monStr){
     } else {
       dr.offices.forEach(off=>{
         const rows = off.items.map(it=>
-          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count.toLocaleString()}</td><td class="tr">¥${it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
+          `<tr><td>${_esc(it.label)}</td><td class="tr">${it.count==null?'':it.count.toLocaleString()}</td><td class="tr">${it.unitPrice==null?'':'¥'+it.unitPrice.toLocaleString()}</td><td class="tr">¥${it.amount.toLocaleString()}</td></tr>`
         ).join('');
         driverBody += `
           <table style="margin:6px 0 4px;">
