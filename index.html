@@ -3567,7 +3567,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
           新しい版を上げたあとにボタンを押すと、それより古い版で開いているドライバーの画面に赤い帯が出ます。<br>
           ドライバーが帯をタップすると最新版に入れ替わります。毎回押す必要はありません。必ず新しい版で使ってほしいときだけ押してください。
         </div>
-        <div id="ver-state" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:11px;margin-bottom:12px;"></div>
+        <div id="ver-state" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:11px;margin-bottom:10px;"></div>
+        <div id="ver-devices" style="margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <button class="btn b-pri btn-sm" onclick="_verDistribute()">いまの版を全員に配る</button>
           <button class="btn b-gh btn-sm" onclick="_verLoadState()">読み直す</button>
@@ -6208,7 +6209,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-09.104';
+const APP_VER = '2026-11-09.105';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -43076,6 +43077,58 @@ function _verRow(k, v, note){
        + (note ? ' <span style="color:var(--txt2);font-size:10px;">' + esc(note) + '</span>' : '')
        + '</div>';
 }
+/* 端末ごとの版（日報アプリ 2026-11-09.14 以降が書く）。
+   30日より前に使われたきりの端末は、機種変更などで消えたものとして数えない。 */
+async function _verReadSeen(){
+  const { ref, get } = window._fbImports || {};
+  if(!fbDB || !ref || !get) return [];
+  const snap = await get(ref(fbDB, 'nikki/app_seen'));
+  if(!snap.exists()) return [];
+  const v = snap.val() || {};
+  const cut = Date.now() - 30*24*3600*1000;
+  return Object.keys(v).map(k=>{
+    const r = v[k] || {};
+    return { id:k, ver:String(r.ver||''), name:String(r.name||''), at:String(r.at||'') };
+  }).filter(r=>{
+    const t = Date.parse(r.at);
+    return r.ver && !isNaN(t) && t >= cut;
+  }).sort((a,b)=> (a.at < b.at ? 1 : -1));
+}
+function _verSeenHtml(seen, minVer){
+  if(!seen.length){
+    return '<div style="color:var(--txt2);font-size:10.5px;">まだ記録がありません。'
+         + 'ドライバーが日報アプリ（2026-11-09.14 以降）を開くと、ここに出ます。</div>';
+  }
+  const old = minVer ? seen.filter(r=>_verCmpMgmt(r.ver, minVer) < 0) : [];
+  let h = '<div style="font-size:11px;margin-bottom:6px;">'
+        + '30日以内に使われた端末 <span class="fw7">' + seen.length + '台</span>'
+        + '　／　古い版のまま <span class="fw7" style="color:' + (old.length?'var(--bad)':'var(--ok)') + ';">'
+        + old.length + '台</span></div>';
+  if(old.length){
+    h += '<div style="border:1px solid var(--brd);border-radius:6px;overflow:hidden;">';
+    old.slice(0,20).forEach(r=>{
+      h += '<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;padding:4px 8px;'
+         + 'border-bottom:1px solid var(--brd);font-size:10.5px;">'
+         + '<div>' + esc(r.name || '（ログイン前）') + '</div>'
+         + '<div class="mono">' + esc(r.ver) + '</div>'
+         + '<div style="color:var(--txt2);">' + esc(String(r.at).slice(0,10)) + '</div>'
+         + '</div>';
+    });
+    if(old.length > 20) h += '<div style="padding:4px 8px;font-size:10px;color:var(--txt2);">ほか ' + (old.length-20) + '台</div>';
+    h += '</div>';
+  }
+  return h;
+}
+/* 日報アプリ側と同じ比べかた（日付と番号を分ける） */
+function _verCmpMgmt(a, b){
+  const pa = String(a==null?'':a).trim().split('.');
+  const pb = String(b==null?'':b).trim().split('.');
+  const da = pa[0]||'', db = pb[0]||'';
+  if(da !== db) return da < db ? -1 : 1;
+  const na = parseInt(pa[1]||'0', 10) || 0;
+  const nb = parseInt(pb[1]||'0', 10) || 0;
+  return na === nb ? 0 : (na < nb ? -1 : 1);
+}
 async function _verLoadState(){
   const el = document.getElementById('ver-state');
   const msg = document.getElementById('ver-msg');
@@ -43092,6 +43145,18 @@ async function _verLoadState(){
     html += _verRow('状態', same ? '最新版を配っています' : 'まだ配っていない版があります');
   }
   el.innerHTML = html;
+  /* 端末の一覧は時間がかかることがあるので、状態を出したあとに足す */
+  const dev = document.getElementById('ver-devices');
+  if(dev){
+    dev.innerHTML = '<div style="color:var(--txt2);font-size:10.5px;">端末を数えています…</div>';
+    try{
+      const seen = await _verReadSeen();
+      dev.innerHTML = _verSeenHtml(seen, _verNow || _verLatest);
+    }catch(e){
+      dev.innerHTML = '<div style="color:var(--txt2);font-size:10.5px;">端末を数えられませんでした（'
+                    + esc((e&&e.message)||String(e)) + '）</div>';
+    }
+  }
 }
 async function _verDistribute(){
   const msg = document.getElementById('ver-msg');
