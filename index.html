@@ -3558,6 +3558,23 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         <div style="font-size:10px;color:var(--txt2);">請求・精算 › システム設定</div></div>
         <button class="btn b-gh btn-sm" style="margin-left:auto;" onclick="lockTS()">ログアウト</button>
       </div>
+      <!-- ★ 2026-11-09.103: 日報アプリの版 -->
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>日報アプリの版
+          <span style="font-size:9px;color:var(--txt2);margin-left:8px;">古い版のまま使っている端末に知らせます</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;">
+          新しい版を上げたあとにボタンを押すと、それより古い版で開いているドライバーの画面に赤い帯が出ます。<br>
+          ドライバーが帯をタップすると最新版に入れ替わります。毎回押す必要はありません。必ず新しい版で使ってほしいときだけ押してください。
+        </div>
+        <div id="ver-state" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:11px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn b-pri btn-sm" onclick="_verDistribute()">いまの版を全員に配る</button>
+          <button class="btn b-gh btn-sm" onclick="_verLoadState()">読み直す</button>
+          <button class="btn b-gh btn-sm" onclick="_verStopDistribute()">配信をやめる</button>
+        </div>
+        <div id="ver-msg" style="font-size:10.5px;color:var(--txt2);margin-top:8px;"></div>
+      </div>
       <!-- ★ 2026/09/12(第4段階): 品目マスタ -->
       <div class="card mb12">
         <div class="ct mb12"><div class="cbar"></div>集荷品目マスタ
@@ -6191,7 +6208,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-09.102';
+const APP_VER = '2026-11-09.103';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -43028,6 +43045,78 @@ async function sendCompMail(){
   }
 }
 
+/* ══════════════════════════════════════════════════════════
+   ★ 2026-11-09.103: 日報アプリの版を配る
+
+   差し替えても、ドライバーの端末が古い版のままかどうかを
+   こちらから知る手段が無かった。nikki/app_min_ver に
+   「この版以降を使う」を置くと、日報アプリ側(2026-11-09.13以降)が
+   自分の版と比べて、古ければ赤い帯を出す。
+   ══════════════════════════════════════════════════════════ */
+const _NIKKI_URL = '/report/';
+let _verLatest = '', _verNow = '';
+/* 日報アプリの中身を読んで APP_VER を取り出す。同じドメインなので読める。 */
+async function _verFetchLatest(){
+  const res = await fetch(_NIKKI_URL + '?v=' + Date.now(), {cache:'no-store'});
+  if(!res.ok) throw new Error('日報アプリを読めません（' + res.status + '）');
+  const txt = await res.text();
+  const m = txt.match(/APP_VER\s*=\s*['"]([^'"]+)['"]/);
+  if(!m) throw new Error('版の記載が見つかりません');
+  return m[1];
+}
+async function _verReadNow(){
+  const { ref, get } = window._fbImports || {};
+  if(!fbDB || !ref || !get) return '';
+  const snap = await get(ref(fbDB, 'nikki/app_min_ver'));
+  return snap.exists() ? String(snap.val()||'') : '';
+}
+function _verRow(k, v, note){
+  return '<div style="color:var(--txt2);">' + esc(k) + '</div>'
+       + '<div><span class="mono fw7">' + esc(v||'—') + '</span>'
+       + (note ? ' <span style="color:var(--txt2);font-size:10px;">' + esc(note) + '</span>' : '')
+       + '</div>';
+}
+async function _verLoadState(){
+  const el = document.getElementById('ver-state');
+  const msg = document.getElementById('ver-msg');
+  if(el) el.innerHTML = '<div style="color:var(--txt2);">読み込み中…</div><div></div>';
+  if(msg) msg.textContent = '';
+  let err = '';
+  try{ _verLatest = await _verFetchLatest(); }catch(e){ _verLatest = ''; err = (e && e.message) || String(e); }
+  try{ _verNow = await _verReadNow(); }catch(e){ _verNow = ''; }
+  if(!el) return;
+  let html = _verRow('上がっている最新版', _verLatest, err ? '（' + err + '）' : '')
+           + _verRow('いま配っている版', _verNow, _verNow ? '' : '（配っていません）');
+  if(_verLatest && _verNow){
+    const same = (_verLatest === _verNow);
+    html += _verRow('状態', same ? '最新版を配っています' : 'まだ配っていない版があります');
+  }
+  el.innerHTML = html;
+}
+async function _verDistribute(){
+  const msg = document.getElementById('ver-msg');
+  try{
+    if(!_verLatest) _verLatest = await _verFetchLatest();
+    if(!confirm('日報アプリの「' + _verLatest + '」より古い端末に、更新をうながす帯を出します。\n\nよろしいですか。')) return;
+    await fbSet('app_min_ver', _verLatest);
+    await _verLoadState();
+    if(msg) msg.textContent = _verLatest + ' を配りました。古い版の端末に帯が出ます。';
+  }catch(e){
+    if(msg) msg.textContent = '配れませんでした：' + ((e && e.message) || e);
+  }
+}
+async function _verStopDistribute(){
+  const msg = document.getElementById('ver-msg');
+  if(!confirm('帯を出すのをやめます。よろしいですか。')) return;
+  try{
+    await fbSet('app_min_ver', '');
+    await _verLoadState();
+    if(msg) msg.textContent = '配信をやめました。帯は出なくなります。';
+  }catch(e){
+    if(msg) msg.textContent = 'やめられませんでした：' + ((e && e.message) || e);
+  }
+}
+
 // ═══════════════════════════════════════════════
 // ─── システム設定（自社情報・電子印制作費・代表印） ───
 // ═══════════════════════════════════════════════
@@ -47717,7 +47806,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}},100); // ★ 2026-10-14.70
+    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}},100); // ★ 2026-10-14.70 / .103 日報アプリの版
     // ★ 2026-10-08.17: 郵便局請求書は開いた時点で当月の売上を出す
     if(section==='ts-inv') setTimeout(()=>{ try{ renderTSInv(); }catch(e){ console.error('[renderTSInv]', e); } },100);
     return;
