@@ -1038,7 +1038,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-09.101</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-09.102</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6191,7 +6191,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-09.101';
+const APP_VER = '2026-11-09.102';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8291,16 +8291,27 @@ window._isLogNode=_isLogNode;
 async function syncFromFirebase() {
   if (!fbDB) return;
   const { ref, get } = window._fbImports;
-  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state','monthly_adj','month_close','deduct_defs'];
+  /* ★ 2026-11-09.102: ここに無いものは「変更の受信（リスナー）」だけが頼りで、
+     それが起動時に発火しないと画面が空のままになる。実際に計数データ
+     （jet_scan）が空になり、計数照合が0件と出ていた。
+     起動時に必ず読むものをここに足す。
+     ただし jet_scan_nos（5.5MB）と jet_photos（1.9MB）は大きすぎるので
+     絶対に入れない。端末の保存容量が尽きて、ほかのデータごと保存に
+     失敗するようになる。 */
+  const keys = ['yp_logs','col_logs','att_logs','drivers','customers','offices','regions','departments','locations','staff_full','companies','oil_state','monthly_adj','month_close','deduct_defs',
+                'jet_scan','jet_adjust','jet_customers','jet_settings','col_cmp','settings','att_fix_requests'];
   for (const k of keys) {
     try {
       const snap = await get(ref(fbDB, 'nikki/' + k));
       if (snap.exists()) {
         const val = snap.val();
         /* ★ 2026-11-08.100: IDキーで来ても配列にそろえる */
-        lsSet('nikki_' + k, _isLogNode(k) ? _toLogArray(val) : val);
+        const ok = lsSet('nikki_' + k, _isLogNode(k) ? _toLogArray(val) : val);
+        /* ★ 2026-11-09.102: 保存に失敗しても今まで黙っていた。
+           容量が尽きるとここが静かに落ち、画面だけが空になる。 */
+        if(ok === false) console.warn('[同期] 保存できませんでした:', k);
       }
-    } catch(e) {}
+    } catch(e) { console.warn('[同期] 読めませんでした:', k, e && (e.code||e.message)); }
   }
   applyFirebaseData();
   renderAll();
