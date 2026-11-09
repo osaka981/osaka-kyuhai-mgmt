@@ -1038,7 +1038,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-09.102</div>
+      <div class="tn-logo-sub" id="app-ver">ver —</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6209,8 +6209,15 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-09.105';
+const APP_VER = '2026-11-09.106';
 console.log('[経営管理] APP_VER', APP_VER);
+/* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
+   差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
+try{
+  const _setVer = ()=>{ const e=document.getElementById('app-ver'); if(e) e.textContent='ver '+APP_VER; };
+  _setVer();
+  document.addEventListener('DOMContentLoaded', _setVer);
+}catch(e){}
 
 /* ══════════════════════════════════════════════════════════
    ★ 2026-10-17.10: 従事員の区分（kubun）の選択肢をここ1か所にまとめる。
