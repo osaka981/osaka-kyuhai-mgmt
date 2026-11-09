@@ -874,13 +874,15 @@ window._loadPdfLib = function(){
 <!-- Firebase SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 // ★ 2026/09/12: 顧客・社内アカウントの発行に使う関数を追加。
 //   発行は別インスタンス(secondary)で行い、いま開いているセッションを奪われないようにする。
 import { getAuth, signInAnonymously, onIdTokenChanged,
          createUserWithEmailAndPassword, signInWithEmailAndPassword,
          signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue, getAuth, signInAnonymously, onIdTokenChanged,
+window._fbImports = { initializeApp, getDatabase, ref, set, get, onValue,
+         update,   /* ★ 2026-11-09.101: 日報を1件ずつ書く・古いキーを消すため */
+         getAuth, signInAnonymously, onIdTokenChanged,
   createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut };
 window._fbReady = true;
 document.dispatchEvent(new Event('fb-sdk-ready'));
@@ -1036,7 +1038,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-08.100</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-09.101</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -2360,6 +2362,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
       <div id="dc-kpi" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px;"></div>
       <div id="dc-body"></div>
+
+      <!-- ══ ★ 2026-11-09.101: 日報の保存の形を移す ══ -->
+      <div class="card mt12">
+        <h3 style="margin:0 0 6px;font-size:13px;font-weight:700;">日報の保存の形を移す</h3>
+        <div class="xs" style="color:var(--txt2);line-height:1.6;margin-bottom:8px;">
+          日報を「まとめて1つ」から「1件ずつ」の形に移します。これで、ドライバーの端末が
+          自分のぶんだけを持っていても、他の人の日報を消さなくなります。<br>
+          <b>新しい形で書いてから古いほうを消す</b>ので、途中で止まっても減りません。
+          まず「調べる」で今どうなっているか見てください。
+        </div>
+        <div class="fla gap6" style="flex-wrap:wrap;">
+          <button class="btn b-gh btn-sm" onclick="_migCheck()">調べる</button>
+          <button class="btn b-blu btn-sm" onclick="_migRun()">移す</button>
+        </div>
+        <div id="mig-out" class="xs mono mt8" style="white-space:pre-wrap;color:var(--txt2);"></div>
+      </div>
     </div>
 
     <div id="s-worktime" class="sec">
@@ -6173,7 +6191,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-08.100';
+const APP_VER = '2026-11-09.101';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8094,7 +8112,12 @@ async function fbSet(key, value) {
   try {
     // 書込前にフラグを立て、リスナーが自分の書込結果で逆同期するのを防ぐ
     window._fbWritingGuard[key] = Date.now();
-    await set(ref(fbDB, 'nikki/' + key), clean);
+    /* ★ 2026-11-09.101: 日報はIDをキーにした形で書く。
+       経営管理は全件を手元に持っているので、ノードごと置き換えてよい
+       （日報アプリ側は自分のぶんしか持たないので update で1件ずつ足す）。
+       形をそろえておかないと、片方が書いた形をもう片方が消してしまう。 */
+    const _payload = (_isLogNode(key) && Array.isArray(clean)) ? _logToObj(clean) : clean;
+    await set(ref(fbDB, 'nikki/' + key), _payload);
     /* ★ 2026-10-17.6: 名前だけの写しも一緒に書き出す。
        台帳の1件には単価・口座・生年月日が同居しているので、そのままでは
        日報アプリや計数アプリへ渡せない（渡すと48人分の個人情報が端末に落ちる）。
@@ -8123,6 +8146,93 @@ async function fbSet(key, value) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   ★ 2026-11-09.101: 日報の保存の形を移す
+
+   古い形: nikki/yp_logs = { "0":{...}, "1":{...} }      ← 配列。まとめて1つ
+   新しい形: nikki/yp_logs = { "r_<id>":{...}, ... }      ← 1件ずつ
+
+   手順は「新しい形で書く」→「読み直して数を確かめる」→「古いほうを消す」。
+   途中で止まっても二重になるだけで、1件も減らない（読む側は新しいほうを使う）。
+   ════════════════════════════════════════════════════════════ */
+const _MIG_NODES = ['yp_logs','col_logs','att_logs','edit_logs'];
+function _migLog(msg){
+  const el=document.getElementById('mig-out');
+  if(el) el.textContent += (el.textContent?'\n':'') + msg;
+  console.log('[移行]', msg);
+}
+function _migClear(){ const el=document.getElementById('mig-out'); if(el) el.textContent=''; }
+
+async function _migCheck(){
+  _migClear();
+  if(!fbDB){ _migLog('Firebaseにつながっていません。'); return; }
+  const { ref, get } = window._fbImports;
+  for(const node of _MIG_NODES){
+    try{
+      const snap = await get(ref(fbDB, 'nikki/'+node));
+      if(!snap.exists()){ _migLog(`${node}: データなし`); continue; }
+      const v = snap.val();
+      const keys = Array.isArray(v) ? v.map((_,i)=>String(i)) : Object.keys(v||{});
+      const old = keys.filter(k=>!String(k).startsWith('r_'));
+      const neo = keys.filter(k=>String(k).startsWith('r_'));
+      _migLog(`${node}: 全${keys.length}件　古い形 ${old.length}件 / 新しい形 ${neo.length}件`
+            + (old.length ? '　→ 移す必要あり' : '　→ 済み'));
+    }catch(e){ _migLog(`${node}: 読めませんでした（${e&&e.message||e}）`); }
+  }
+}
+
+async function _migRun(){
+  if(!fbDB){ alert('Firebaseにつながっていません。'); return; }
+  const ok = await showDialog({ icon:'📦', title:'日報の形を移す',
+    msg:'日報・集荷・打刻・修正履歴を「1件ずつ」の形に移します。\n\n'
+      + '新しい形で書いてから古いほうを消すので、途中で止まっても減りません。\n'
+      + 'Firebaseのバックアップは取ってありますか。\n\n始めますか。',
+    okText:'始める', cancelText:'やめる' });
+  if(!ok) return;
+  _migClear();
+  const { ref, get, set, update } = window._fbImports;
+  for(const node of _MIG_NODES){
+    try{
+      const snap = await get(ref(fbDB, 'nikki/'+node));
+      if(!snap.exists()){ _migLog(`${node}: データなし`); continue; }
+      const v = snap.val();
+      const keys = Array.isArray(v) ? v.map((_,i)=>String(i)) : Object.keys(v||{});
+      const oldKeys = keys.filter(k=>!String(k).startsWith('r_'));
+      if(!oldKeys.length){ _migLog(`${node}: 済み（${keys.length}件）`); continue; }
+
+      // ① 古いぶんを新しい形で書く
+      const rows = _toLogArray(v);
+      const before = rows.length;
+      const patch = _logToObj(rows);
+      await update(ref(fbDB, 'nikki/'+node), patch);
+      _migLog(`${node}: 新しい形で ${Object.keys(patch).length}件 書きました`);
+
+      // ② 読み直して数を確かめる（ここで合わなければ古いほうは消さない）
+      const snap2 = await get(ref(fbDB, 'nikki/'+node));
+      const v2 = snap2.val() || {};
+      const neo2 = Object.keys(v2).filter(k=>String(k).startsWith('r_'));
+      if(neo2.length < before){
+        _migLog(`${node}: ★中止　新しい形が ${neo2.length}件しかありません（元 ${before}件）。古いほうは残します。`);
+        continue;
+      }
+
+      // ③ 古いキーだけ消す
+      const del = {};
+      oldKeys.forEach(k=>{ del[k] = null; });
+      await update(ref(fbDB, 'nikki/'+node), del);
+
+      const snap3 = await get(ref(fbDB, 'nikki/'+node));
+      const after = _toLogArray(snap3.val()||{}).length;
+      _migLog(`${node}: 古い ${oldKeys.length}件を消しました　→ いま ${after}件`
+            + (after===before ? '　✔ 数が合っています' : `　★数が合いません（元 ${before}件）`));
+    }catch(e){
+      _migLog(`${node}: 失敗（${e&&e.message||e}）。古いほうは残っているので、もう一度押せます。`);
+    }
+  }
+  _migLog('\n終わりました。画面を再読み込みして、日報一覧の件数を確かめてください。');
+}
+window._migCheck=_migCheck; window._migRun=_migRun;
+
+/* ════════════════════════════════════════════════════════════
    ★ 2026-11-08.100: 日報のFirebase上の形を2通り受け付ける
 
    いまは nikki/yp_logs などに「配列まるごと」を書いている。そのため
@@ -8139,11 +8249,36 @@ async function fbSet(key, value) {
    どちらで来ても最後は配列にそろえる。
    ════════════════════════════════════════════════════════════ */
 function _toLogArray(v){
-  if(Array.isArray(v)) return v.filter(x=>x!=null);
-  if(v && typeof v==='object') return Object.keys(v).map(k=>v[k]).filter(x=>x!=null);
-  return [];
+  const arr = Array.isArray(v) ? v.filter(x=>x!=null)
+            : (v && typeof v==='object') ? Object.keys(v).map(k=>v[k]).filter(x=>x!=null)
+            : [];
+  /* ★ 2026-11-09.101: 移行の途中は「古い配列のぶん」と「新しいIDキーのぶん」が
+     同じノードに並ぶ。同じ id が2つ出たら後に見つかったほうを使う
+     （移行は新しい形で書いてから古いほうを消すので、後勝ちで正しい）。 */
+  const seen = {};
+  const out = [];
+  arr.forEach(r=>{
+    const id = (r && r.id!=null) ? String(r.id) : '';
+    if(!id){ out.push(r); return; }
+    if(seen[id]!==undefined) out[seen[id]] = r;
+    else { seen[id] = out.length; out.push(r); }
+  });
+  return out;
 }
 window._toLogArray=_toLogArray;
+/* 日報の1件をFirebaseのキーにする。
+   13桁の数字をそのままキーにすると Firebase が巨大な配列と誤解することが
+   あるので、必ず接頭辞を付ける。日報アプリと同じ付け方にすること。 */
+function _logKey(rec, i){
+  const id = (rec && rec.id!=null && String(rec.id)!=='') ? String(rec.id) : ('x'+i);
+  return 'r_' + id.replace(/[.$#\[\]\/]/g,'_');
+}
+function _logToObj(arr){
+  const o = {};
+  (Array.isArray(arr)?arr:[]).forEach((r,i)=>{ if(r) o[_logKey(r,i)] = r; });
+  return o;
+}
+window._logKey=_logKey; window._logToObj=_logToObj;
 /* 日報のように「一覧」で持つノードかどうか */
 const _LOG_NODES = ['yp_logs','col_logs','att_logs','edit_logs'];
 function _isLogNode(k){
