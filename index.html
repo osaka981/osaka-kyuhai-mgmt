@@ -1036,7 +1036,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
     <div>
       <div class="tn-logo-sub">OSAKA KYUHAI CO.,LTD.</div>
       大阪急配
-      <div class="tn-logo-sub" id="app-ver">ver 2026-11-07.99</div>
+      <div class="tn-logo-sub" id="app-ver">ver 2026-11-08.100</div>
     </div>
   </div>
   <div class="tn-tabs">
@@ -6173,7 +6173,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-07.99';
+const APP_VER = '2026-11-08.100';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -8122,6 +8122,36 @@ async function fbSet(key, value) {
   }
 }
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-08.100: 日報のFirebase上の形を2通り受け付ける
+
+   いまは nikki/yp_logs などに「配列まるごと」を書いている。そのため
+   1件出すたびに全員分を上書きしており、端末が自分の分しか持って
+   いない状態では他人の日報を消してしまう。
+   これを「IDをキーにしたもの」に変えて1件ずつ書けるようにするが、
+   両アプリを同時に切り替えないと壊れるので、まず読む側を
+   どちらの形でも読めるようにしておく（この版では書き方は変えない）。
+
+     配列      [ {id:'A',...}, {id:'B',...} ]
+     IDキー    { 'A':{...}, 'B':{...} }
+
+   Firebase は配列も { 0:…, 1:… } として持つため、
+   どちらで来ても最後は配列にそろえる。
+   ════════════════════════════════════════════════════════════ */
+function _toLogArray(v){
+  if(Array.isArray(v)) return v.filter(x=>x!=null);
+  if(v && typeof v==='object') return Object.keys(v).map(k=>v[k]).filter(x=>x!=null);
+  return [];
+}
+window._toLogArray=_toLogArray;
+/* 日報のように「一覧」で持つノードかどうか */
+const _LOG_NODES = ['yp_logs','col_logs','att_logs','edit_logs'];
+function _isLogNode(k){
+  const s=String(k||'');
+  return _LOG_NODES.some(n => s===n || s==='nikki_'+n || s.endsWith('/'+n));
+}
+window._isLogNode=_isLogNode;
+
 // Firebaseから全データをロードしてDに反映
 async function syncFromFirebase() {
   if (!fbDB) return;
@@ -8132,7 +8162,8 @@ async function syncFromFirebase() {
       const snap = await get(ref(fbDB, 'nikki/' + k));
       if (snap.exists()) {
         const val = snap.val();
-        lsSet('nikki_' + k, val);
+        /* ★ 2026-11-08.100: IDキーで来ても配列にそろえる */
+        lsSet('nikki_' + k, _isLogNode(k) ? _toLogArray(val) : val);
       }
     } catch(e) {}
   }
@@ -9041,13 +9072,13 @@ function setupRealtimeSync() {
   const { ref, onValue } = window._fbImports;
   subscribeNode('nikki/yp_logs', snap => {
     if (!snap.exists()) return;
-    lsSet(LS_KEYS.YP, snap.val());
+    lsSet(LS_KEYS.YP, _toLogArray(snap.val()));   /* ★ .100 */
     applyFirebaseData();
     renderDash(); renderDel(); renderCmp(); renderSalary();
   });
   subscribeNode('nikki/col_logs', snap => {
     if (!snap.exists()) return;
-    lsSet(LS_KEYS.COL, snap.val());
+    lsSet(LS_KEYS.COL, _toLogArray(snap.val()));   /* ★ .100 */
     applyFirebaseData();
     renderDash(); renderPU(); renderSum(); renderPUInv();
   });
@@ -9222,7 +9253,7 @@ function setupRealtimeSync() {
   });
   subscribeNode('nikki/att_logs', snap => {
     if (!snap.exists()) return;
-    lsSet(LS_KEYS.ATT, snap.val());
+    lsSet(LS_KEYS.ATT, _toLogArray(snap.val()));   /* ★ .100 */
     renderSalary(); // 勤怠データ更新時は給与計算を再描画
   });
   // ★ 2026-09-22.29: 日報アプリからの打刻修正依頼
