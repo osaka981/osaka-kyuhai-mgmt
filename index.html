@@ -6208,7 +6208,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-09.103';
+const APP_VER = '2026-11-09.104';
 console.log('[経営管理] APP_VER', APP_VER);
 
 /* ══════════════════════════════════════════════════════════
@@ -47880,7 +47880,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}},100); // ★ 2026-10-14.70
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}},100); // ★ 2026-10-14.70 / .104 日報アプリの版
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
