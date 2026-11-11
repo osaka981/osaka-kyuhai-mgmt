@@ -849,6 +849,15 @@ html[data-wide="1"] .tw-sticky{max-height:calc(100vh - 215px);}
 .card.cmp-full .al{display:none!important;}
 .card.cmp-full .ch{margin-bottom:6px;}
 #cmp-full-btn.on{color:#ffd27a;border-color:rgba(255,210,122,.45);background:rgba(255,210,122,.12);}
+/* ★ 2026-11-11.114: 全画面の使い勝手
+   ・サマリー帯（月・局・差異の数）は全画面でも出す。これが見えないと
+     何を見ているのか分からなくなる
+   ・営業所の選び直しは一覧の左上の「戻る」から。全画面の帯に同じタブを
+     並べると場所を取るだけで、戻る動線も分かりにくかった */
+.card.cmp-full #cmp-sum{display:block!important;}
+#cmp-back-btn{display:none;}
+.card.cmp-full #cmp-back-btn{display:inline-flex!important;}
+.card.cmp-full #cmp-full-btn{display:none!important;}
 </style>
 
 <!-- PDF-lib (契約書ページ抽出用)
@@ -1663,7 +1672,11 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 
       <div class="card" id="cmp-card">
         <div class="ch">
-          <div class="ct"><div class="cbar"></div>照合結果</div>
+          <div class="ct" style="display:flex;align-items:center;gap:8px;">
+            <!-- ★ 2026-11-11.114: 全画面のときだけ出る。押すと絞り込みの画面に戻る -->
+            <button class="btn b-gh btn-sm" id="cmp-back-btn" onclick="toggleCmpFull(false)">← 営業所を選び直す</button>
+            <div class="cbar"></div>照合結果
+          </div>
           <div class="fla gap6">
             <!-- ★ 2026-10-08.10: 一覧だけを画面いっぱいに出す -->
             <button class="btn b-gh btn-sm" id="cmp-full-btn" onclick="toggleCmpFull()">全画面</button>
@@ -6248,7 +6261,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.113';
+const APP_VER = '2026-11-11.114';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -12043,7 +12056,7 @@ function renderCmp(){
   if(_ot) _ot.innerHTML=_offTabs(off, mon);
   // ★ 2026-10-08.10: 全画面のときは、同じ絞り込みを一覧の上にも出す
   const _fsb=$('cmp-fs-bar');
-  if(_fsb && !_fsb.hidden) _fsb.innerHTML=_monTabs('cmp-fs-mon-tab',mon,"_cmpMonSync()",{label:'対象月'})+_offTabs(off, mon);
+  if(_fsb && !_fsb.hidden) _fsb.innerHTML=_monTabs('cmp-fs-mon-tab',mon,"_cmpMonSync()",{label:'対象月'});
   const st=$('cmp-st')?.value||'全件';
   _cmpFilterBrief();          // ★ 2026-10-08.10: 畳んでいるときの表示を今の絞り込みに合わせる
   // ★ 2026-10-08.10: 全画面のときは、この帯から月・営業所・状況を切り替える
@@ -12051,9 +12064,10 @@ function renderCmp(){
   {
     const _fsBar=$('cmp-fs-bar');
     if(_fsBar && !_fsBar.hidden){
+      /* ★ 2026-11-11.114: 営業所タブは外した。選び直すのは左上の「戻る」から。
+         いま見ている営業所は、下のサマリー帯に月と一緒に出る。 */
       _fsBar.innerHTML =
         _monTabs('cmp-mon-tab-fs', mon, "_cmpMonSyncFs()", {label:'月'})
-        + _offTabs(off, mon)
         + `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
              <span style="font-size:13px;font-weight:700;color:var(--txt2);">状況</span>
              <select id="cmp-st-fs" class="fi" style="max-width:190px;" onchange="_cmpStSyncFs()">
@@ -55618,6 +55632,16 @@ function _cmpOffPick(name){
     }
     sel.value=name||'';
   }
+  /* ★ 2026-11-11.114: 営業所を選んだら、そのまま一覧を全画面で出す。
+     選んだあとにもう一度「全画面」を押す手間をなくす。
+     「全営業所」は見比べる場面なので、全画面にはしない。 */
+  try{
+    const card=document.getElementById('cmp-card');
+    if(name && card && !card.classList.contains('cmp-full') && typeof toggleCmpFull==='function'){
+      toggleCmpFull(true);
+      return;              // toggleCmpFull の中で renderCmp を呼ぶ
+    }
+  }catch(e){}
   renderCmp();
 }
 
