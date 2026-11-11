@@ -6232,7 +6232,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.108';
+const APP_VER = '2026-11-11.109';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -7110,8 +7110,56 @@ try{
   });
 }catch(e){}
 
+/* ★ 2026-11-11.109: IndexedDB移行 第2段階（読み込みを切り替え）
+
+   lsGet の読み先を IndexedDB にする。localStorage にも書き続けるので、
+   問題があれば .108 に差し替えるだけで元に戻る。容量もまだ減らない。
+
+   中身は localStorage と同じ「文字列のまま」持つ。lsGet が毎回
+   JSON.parse する形を変えないため。オブジェクトをそのまま配ると、
+   受け取った側が書き換えたときに元の控えまで変わってしまう。
+
+   経営管理は起動時に変数へ直接読まず、ログイン後の
+   applyFirebaseData() が lsGet で読む。読み込みが終わるまで
+   そこを待たせれば足りる（_bootReady）。 */
+const _mem = Object.create(null);
+let _memReady = false, _memMs = 0;
+async function _idbLoad(){
+  const t0 = (performance && performance.now) ? performance.now() : Date.now();
+  const db = await _idbOpen();
+  if(!db){
+    console.warn('[IndexedDB] 読み込みできません。localStorageを使います（E-04）', _idbState);
+    return false;
+  }
+  const ok = await new Promise(res=>{
+    try{
+      const rq = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).openCursor();
+      rq.onsuccess = e=>{
+        const c = e.target.result;
+        if(!c) return res(true);
+        try{
+          const v = c.value;
+          _mem[String(c.key)] = (typeof v === 'string') ? v : JSON.stringify(v);
+        }catch(e2){}
+        c.continue();
+      };
+      rq.onerror = ()=>res(false);
+    }catch(e){ res(false); }
+  });
+  _memReady = ok;
+  _memMs = Math.round(((performance && performance.now) ? performance.now() : Date.now()) - t0);
+  console.log('[IndexedDB] 読み込み ' + (ok ? Object.keys(_mem).length + 'キー / ' + _memMs + 'ms'
+                                            : '失敗（localStorageを使います・E-04）'));
+  return ok;
+}
+const _bootReady = _idbLoad().catch(()=>false);
+window._bootReady = _bootReady;
+
 // localStorage read/write
 const lsGet = (k, def) => {
+  if(_memReady && _mem[k] !== undefined){
+    try { const v = _mem[k]; return v ? JSON.parse(v) : def; } catch(e) { /* 壊れていたら下へ */ }
+  }
   try {
     const v = localStorage.getItem(k);
     return v ? JSON.parse(v) : def;
@@ -7127,6 +7175,7 @@ const lsGet = (k, def) => {
 window._lsFailedKeys = window._lsFailedKeys || {};
 const lsSet = (k, v) => {
   try{ _idbPut(k, v); }catch(e){}        /* ★ .108: IndexedDBにも書く */
+  try{ if(_idbMine(k)) _mem[k] = JSON.stringify(v); }catch(e){}   /* ★ .109: 読み先も合わせる */
   try {
     localStorage.setItem(k, JSON.stringify(v));
     if(window._lsFailedKeys[k]) delete window._lsFailedKeys[k];
@@ -8546,6 +8595,7 @@ async function syncFromFirebase() {
       }
     } catch(e) { console.warn('[同期] 読めませんでした:', k, e && (e.code||e.message)); }
   }
+  try{ await _bootReady; }catch(e){}     /* ★ .109: IndexedDBを読み終えてから反映する */
   applyFirebaseData();
   renderAll();
   showFbStatus(true);
