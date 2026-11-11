@@ -6248,7 +6248,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.111';
+const APP_VER = '2026-11-11.112';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -7243,6 +7243,21 @@ window._lsFailedKeys = window._lsFailedKeys || {};
 const lsSet = (k, v) => {
   try{ _idbPut(k, v); }catch(e){}        /* ★ .108: IndexedDBにも書く */
   try{ if(_idbMine(k)) _mem[k] = JSON.stringify(v); }catch(e){}   /* ★ .109: 読み先も合わせる */
+  /* ★ .112: 片付けたあとは localStorage に書き戻さない。
+     .111 では片付けたそばから起動時のFirebase同期が書き戻していて、
+     706KB が 3,915KB に戻っていた。読み先は IndexedDB なので、
+     ここに控える必要はもう無い。
+     前の版に戻したいときは、その版が起動時に Firebase から
+     読み直して localStorage を作り直すので、失われるものはない。 */
+  try{
+    /* IndexedDBを読めていないときは localStorage に残す。
+       控えがどこにも無い状態を作らないため。 */
+    if(_idbMine(k) && _idbPurged() && _memReady){
+      try{ localStorage.removeItem(k); }catch(e){}
+      if(window._lsFailedKeys[k]) delete window._lsFailedKeys[k];
+      return true;
+    }
+  }catch(e){}
   try {
     localStorage.setItem(k, JSON.stringify(v));
     if(window._lsFailedKeys[k]) delete window._lsFailedKeys[k];
