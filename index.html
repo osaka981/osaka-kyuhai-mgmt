@@ -6232,7 +6232,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.109';
+const APP_VER = '2026-11-11.110';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -6948,7 +6948,7 @@ let _idb = null, _idbState = 'まだ開いていない', _idbWrites = 0, _idbFai
    計数アプリと同じ localStorage を共有しているので、全部写すと
    よその分まで入ってしまう。 */
 const IDB_KEYS = [
-  'nikki_acl_user', 'nikki_app_min_ver', 'nikki_att_fix',
+  'nikki_app_min_ver', 'nikki_att_fix',
   'nikki_att_fix_requests', 'nikki_att_logs', 'nikki_busy_seasons',
   'nikki_charters', 'nikki_cmp_state', 'nikki_col_cmp',
   'nikki_col_logs', 'nikki_col_routes', 'nikki_companies',
@@ -6959,13 +6959,13 @@ const IDB_KEYS = [
   'nikki_jet_settings', 'nikki_locations', 'nikki_maintenance',
   'nikki_month_close', 'nikki_monthly_adj', 'nikki_monthly_confirmations',
   'nikki_notifications', 'nikki_offices', 'nikki_oil_state',
-  'nikki_payments', 'nikki_pd_payday', 'nikki_pe_row_order',
+  'nikki_payments', 'nikki_pd_payday', 
   'nikki_pickup', 'nikki_post_logs', 'nikki_regions',
   'nikki_salary_paid', 'nikki_schedule_logs', 'nikki_schedule_overrides',
   'nikki_schedule_surveys', 'nikki_settings', 'nikki_staff',
   'nikki_staff_full', 'nikki_survey_responses', 'nikki_system_info',
-  'nikki_theme', 'nikki_ts_pin', 'nikki_ts_pin_h',
-  'nikki_ts_session', 'nikki_work_round', 'nikki_yp_logs',
+  
+  'nikki_work_round', 'nikki_yp_logs',
   'systemInfo'
 ];
 function _idbMine(k){ return IDB_KEYS.indexOf(k) >= 0; }
@@ -9596,14 +9596,13 @@ function setupRealtimeSync() {
   subscribeNode('nikki/jet_customers', snap => {
     if(window._fbWritingGuard && window._fbWritingGuard['jet_customers']) return;
     try{
-      localStorage.setItem('nikki_jet_customers',
-        JSON.stringify(snap.exists() ? (snap.val()||{}) : {}));
+      lsSet('nikki_jet_customers', snap.exists() ? (snap.val()||{}) : {});
     }catch(e){}
     if(typeof renderJetCustList==='function') renderJetCustList();
   }, '計数顧客マスタ');
   // ★ 2026/09/14: ログインアカウントの権限表
   subscribeNode('nikki/_acl/user', snap => {
-    try{ localStorage.setItem(ACL_LS, JSON.stringify(snap.exists() ? (snap.val()||{}) : {})); }catch(e){}
+    try{ lsSet(ACL_LS, snap.exists() ? (snap.val()||{}) : {}); }catch(e){}
     if(typeof renderAclList==='function') renderAclList();
   }, 'ログインアカウント');
   subscribeNode('nikki/jet_settings', snap => {
@@ -9776,6 +9775,8 @@ function applyTheme(mode){
     html.removeAttribute('data-theme');
     if(btn){ btn.textContent='🌙'; btn.title='通常モードに切り替え'; }
   }
+  /* ★ .110: テーマは localStorage だけで完結している（読みも
+     localStorage.getItem）。IndexedDBに持たせない。 */
   localStorage.setItem('nikki_theme',mode);
 }
 function toggleTheme(){
@@ -11323,7 +11324,7 @@ function applyUserItemDefs(defs){
   rebuildItems();
 }
 function saveUserItemDefs(defs){
-  try{ localStorage.setItem(ITEM_DEFS_LS, JSON.stringify(defs)); }
+  try{ lsSet(ITEM_DEFS_LS, defs); }
   catch(e){ console.error('[saveUserItemDefs] localStorage', e); }
   applyUserItemDefs(defs);
   try{ if(typeof fbSet==='function') fbSet('item_defs', defs); }
@@ -11337,7 +11338,7 @@ async function loadUserItemDefsFromFB(){
     if(!snap.exists()) return;
     const v = snap.val();
     if(!Array.isArray(v)) return;
-    localStorage.setItem(ITEM_DEFS_LS, JSON.stringify(v));
+    lsSet(ITEM_DEFS_LS, v);
     applyUserItemDefs(v);
     if(typeof renderItemDefList==='function') renderItemDefList();
   }catch(e){ console.error('[loadUserItemDefsFromFB]', e); }
@@ -11473,7 +11474,7 @@ function getItemGroups(){
 function saveItemGroupsData(groups){
   // ★ 2026/08/29: この端末にしか保存されず、他端末では未設定のままだった。
   //   請求書・明細の表示に関わるため、端末間で揃える必要がある。
-  localStorage.setItem('nikki_item_groups',JSON.stringify(groups));
+  lsSet('nikki_item_groups', groups);
   try{ if(typeof fbSet==='function') fbSet('item_groups', groups); }
   catch(e){ console.error('[saveItemGroupsData] FB保存エラー', e); }
 }
@@ -11486,7 +11487,7 @@ async function loadItemGroupsFromFB(){
     const snap = await get(ref(fbDB, 'nikki/item_groups'));
     if(!snap.exists()) return;
     const v = snap.val();
-    if(v) localStorage.setItem('nikki_item_groups', JSON.stringify(v));
+    if(v) lsSet('nikki_item_groups', v);
   }catch(e){ console.error('[loadItemGroupsFromFB]', e); }
 }
 
@@ -13355,7 +13356,7 @@ function _jetPinNew(){
   return Array.from(a).map(n=>cs[n%cs.length]).join('');
 }
 async function _jetCustsSave(map){
-  try{ localStorage.setItem(JETCUST_LS, JSON.stringify(map)); }catch(e){}
+  try{ lsSet(JETCUST_LS, map); }catch(e){}
   try{
     if(typeof fbSet==='function') await fbSet('jet_customers', map);
   }catch(e){ console.error('[jet_customers] 保存失敗', e); }
@@ -13784,7 +13785,7 @@ function _aclUsers(){
   }catch(e){ return {}; }
 }
 function _aclSaveLocal(map){
-  try{ localStorage.setItem(ACL_LS, JSON.stringify(map)); }catch(e){}
+  try{ lsSet(ACL_LS, map); }catch(e){}
 }
 /* ★ 2026-10-17.16: 入れられたIDを正式な形にする。
    経営管理のIDは全部 @work.local なので、@ が無ければ付ける。
@@ -27332,7 +27333,7 @@ function savePaymentMgmt(){
   // localStorage + Firebase 保存(自己エコー対策)
   try {
     if(typeof lsSet === 'function') lsSet('nikki_payments', D.payments);
-    else localStorage.setItem('nikki_payments', JSON.stringify(D.payments));
+    else lsSet('nikki_payments', D.payments);
   } catch(e){ console.error('LS保存エラー', e); }
 
   if(typeof fbSet === 'function'){
@@ -43503,7 +43504,7 @@ function _saveSystemInfoLS(info){
   // ★ 2026/08/29: この端末のブラウザにしか保存しておらず、
   //   別端末に反映されないうえ、保存データを消すと失われていた。
   //   Firebase にも書き、起動時に読み戻す。
-  try{ localStorage.setItem('systemInfo', JSON.stringify(info)); }catch(e){}
+  try{ lsSet('systemInfo', info); }catch(e){}
   try{ if(typeof fbSet==='function') fbSet('system_info', info); }
   catch(e){ console.error('[_saveSystemInfoLS] FB保存エラー', e); }
 }
@@ -43522,7 +43523,7 @@ async function loadSystemInfoFromFB(){
     Object.keys(remote).forEach(k=>{
       if(local[k] === undefined || local[k] === '') merged[k] = remote[k];
     });
-    try{ localStorage.setItem('systemInfo', JSON.stringify(merged)); }catch(e){}
+    try{ lsSet('systemInfo', merged); }catch(e){}
     if(typeof loadSystemInfoToForm==='function') loadSystemInfoToForm();
     if(typeof loadRoundSettings==='function') loadRoundSettings();
   }catch(e){ console.error('[loadSystemInfoFromFB]', e); }
