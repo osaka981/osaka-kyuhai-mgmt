@@ -3576,6 +3576,22 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <div id="ver-msg" style="font-size:10.5px;color:var(--txt2);margin-top:8px;"></div>
       </div>
+      <!-- ★ 2026-11-11.111: 端末の保存領域 -->
+      <div class="card mb12">
+        <div class="ct mb12"><div class="cbar"></div>端末の保存領域
+          <span style="font-size:9px;color:var(--txt2);margin-left:8px;">localStorage から IndexedDB へ</span>
+        </div>
+        <div style="font-size:10px;color:var(--txt2);margin-bottom:10px;">
+          データは IndexedDB に移してあります。localStorage に残っている古い控えを片付けると、容量が空きます。<br>
+          消す前に IndexedDB の中身と1キーずつ突き合わせ、一致したものだけ消します。合わないものは残します。
+        </div>
+        <div id="purge-state" style="display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:11px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <button class="btn b-gh btn-sm" onclick="_purgeCheck()">調べる（消しません）</button>
+          <button class="btn b-red btn-sm" onclick="_purgeRun()">localStorageを片付ける</button>
+        </div>
+        <div id="purge-msg" style="font-size:10.5px;color:var(--txt2);margin-top:8px;white-space:pre-wrap;"></div>
+      </div>
       <!-- ★ 2026-11-10.107: メンテナンス -->
       <div class="card mb12">
         <div class="ct mb12"><div class="cbar"></div>日報アプリのメンテナンス
@@ -6232,7 +6248,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.110';
+const APP_VER = '2026-11-11.111';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -7027,6 +7043,9 @@ const IDB_SEED_KEY = 'nikki_idb_seeded_mgmt';
 let _idbSeedAt = 0;
 async function _idbSeed(force){
   try{
+    /* ★ .111: 片付けたあとは写さない。localStorage は日報アプリと
+       共有で、向こうが自分用に絞ったものを書くことがある。 */
+    if(_idbPurged()) return;
     if(!force && localStorage.getItem(IDB_SEED_KEY) === APP_VER) return;
     if(Date.now() - _idbSeedAt < 60000) return;
     _idbSeedAt = Date.now();
@@ -7078,6 +7097,54 @@ async function _idbSweep(){
     tx.oncomplete = ()=>console.log('[IndexedDB] 経営管理のものでないキーを片付けました ' + drop.length + '件');
   }catch(e){}
 }
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-11.111: IndexedDB移行 第3段階（localStorageを片付ける）
+
+   ここで初めて容量が減る。消す前に、IndexedDB に同じ中身が
+   あることを1キーずつ突き合わせる。合わないものは消さない。
+   読み込みに失敗している端末（_memReady が false）では何もしない。
+
+   片付けたあとは写し（_idbSeed）を止める。localStorage は
+   日報アプリ・計数アプリと共有で、片付けたあとに向こうが
+   自分用に絞った nikki_yp_logs を書くことがある。それを写すと
+   経営管理の控えが131件に化ける。
+   ════════════════════════════════════════════════════════════ */
+const IDB_PURGED_KEY = 'nikki_idb_purged_mgmt';
+function _idbPurged(){ try{ return !!localStorage.getItem(IDB_PURGED_KEY); }catch(e){ return false; } }
+function _lsBytes(){
+  let n = 0;
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    n += (k.length + (localStorage.getItem(k)||'').length) * 2; } }catch(e){}
+  return n;
+}
+async function _idbPurge(dry){
+  const out = { 消した:[], 消さなかった:[], 減ったKB:0, 前KB:Math.round(_lsBytes()/1024), 後KB:0, 可否:'' };
+  if(!_memReady){ out.可否 = 'IndexedDBを読めていないので片付けません（E-04）'; out.後KB = out.前KB; return out; }
+  const n = Object.keys(_mem).length;
+  if(n < 5){ out.可否 = 'IndexedDBの中身が少なすぎます（' + n + 'キー）。片付けません'; out.後KB = out.前KB; return out; }
+  IDB_KEYS.forEach(k=>{
+    let raw = null;
+    try{ raw = localStorage.getItem(k); }catch(e){}
+    if(raw == null) return;
+    const mine = _mem[k];
+    if(mine === undefined){ out.消さなかった.push(k + '（控えが無い）'); return; }
+    let a, b;
+    try{ a = JSON.stringify(JSON.parse(raw)); }catch(e){ a = raw; }
+    try{ b = JSON.stringify(JSON.parse(mine)); }catch(e){ b = mine; }
+    if(a !== b){ out.消さなかった.push(k + '（中身がちがう）'); return; }
+    out.減ったKB += Math.round((k.length + raw.length) * 2 / 1024);
+    out.消した.push(k);
+    if(!dry){ try{ localStorage.removeItem(k); }catch(e){} }
+  });
+  if(!dry && out.消した.length){
+    try{ localStorage.setItem(IDB_PURGED_KEY, APP_VER); }catch(e){}
+  }
+  out.後KB = Math.round(_lsBytes()/1024);
+  out.可否 = dry ? '試算しただけです（消していません）' : '片付けました';
+  return out;
+}
+window._idbPurge=_idbPurge;
+
 /* 確認用。コンソールで _idbStats() と打つと中身が見える。 */
 async function _idbStats(){
   const db = await _idbOpen();
@@ -43395,6 +43462,39 @@ function _verCmpMgmt(a, b){
   const nb = parseInt(pb[1]||'0', 10) || 0;
   return na === nb ? 0 : (na < nb ? -1 : 1);
 }
+/* ── 端末の保存領域（第3段階） ── */
+async function _purgeShow(r){
+  const el = document.getElementById('purge-state');
+  const msg = document.getElementById('purge-msg');
+  if(el){
+    const idb = await _idbStats();
+    el.innerHTML = _verRow('localStorage', r.前KB + 'KB' + (r.後KB !== r.前KB ? '　→　' + r.後KB + 'KB' : ''))
+                 + _verRow('IndexedDB', idb.件数 + 'キー / ' + idb.合計KB + 'KB'
+                           + (idb.失敗 ? '（失敗 ' + idb.失敗 + '件）' : ''))
+                 + _verRow('片付けられるもの', r.消した.length + 'キー / ' + r.減ったKB + 'KB');
+  }
+  if(msg){
+    let t = r.可否;
+    if(r.消さなかった.length) t += '\n残したもの: ' + r.消さなかった.join('、');
+    msg.textContent = t;
+  }
+}
+async function _purgeCheck(){
+  try{ await _bootReady; }catch(e){}
+  try{ await _idbFlush(); }catch(e){}
+  await _purgeShow(await _idbPurge(true));
+}
+async function _purgeRun(){
+  try{ await _bootReady; }catch(e){}
+  try{ await _idbFlush(); }catch(e){}
+  const dry = await _idbPurge(true);
+  if(!dry.消した.length){ await _purgeShow(dry); return; }
+  if(!confirm('localStorage から ' + dry.消した.length + 'キー（約' + dry.減ったKB + 'KB）を消します。\n\n'
+            + '中身は IndexedDB に入っていることを確認済みです。\n'
+            + '元に戻したいときは、前の版に差し替えれば起動時に Firebase から読み直します。\n\n'
+            + 'よろしいですか。')) return;
+  await _purgeShow(await _idbPurge(false));
+}
 /* ── メンテナンス（日報アプリ 2026-11-10.15 以降が見る） ── */
 async function _maintRead(){
   const { ref, get } = window._fbImports || {};
@@ -48183,7 +48283,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}},100); // ★ 2026-10-14.70 / .103 日報アプリの版
+    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}},100); // ★ 2026-10-14.70 / .103 日報アプリの版
     // ★ 2026-10-08.17: 郵便局請求書は開いた時点で当月の売上を出す
     if(section==='ts-inv') setTimeout(()=>{ try{ renderTSInv(); }catch(e){ console.error('[renderTSInv]', e); } },100);
     return;
@@ -48257,7 +48357,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}},100); // ★ 2026-10-14.70 / .104 日報アプリの版
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}},100); // ★ 2026-10-14.70 / .104 日報アプリの版
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
