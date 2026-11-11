@@ -1661,6 +1661,8 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
             <div class="fg" id="cmp-mon-holder" hidden><input type="month" id="cmp-mon" class="fi" onchange="renderCmp()"></div>
             <div class="fg" id="cmp-off-holder" hidden><select id="cmp-off" class="fi" onchange="renderCmp()"><option value="">全局</option></select></div>
             <div class="fg"><label>状況</label><select id="cmp-st" class="fi" onchange="renderCmp()"><option>全件</option><option>差異あり</option><option>未照合</option><option>照合済</option><option>手当・立替あり</option><option>手当・立替なし</option></select></div>
+            <!-- ★ 2026-11-11.115: 何でまとめて見るか -->
+            <div class="fg"><label>表示</label><select id="cmp-view" class="fi" onchange="_cmpViewSync('side')"><option>日付別</option><option>個人別</option><option>委託会社別</option><option>委託会社→個人別</option></select></div>
           </div>
         </div>
       </div>
@@ -6261,7 +6263,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.114';
+const APP_VER = '2026-11-11.115';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -12063,15 +12065,20 @@ function renderCmp(){
   //   （全画面はフィルターのカードごと覆い隠すため、帯が空だと絞り込めない）
   {
     const _fsBar=$('cmp-fs-bar');
+    const _vmNow=(typeof _cmpViewMode==='function')?_cmpViewMode():'日付別';
     if(_fsBar && !_fsBar.hidden){
       /* ★ 2026-11-11.114: 営業所タブは外した。選び直すのは左上の「戻る」から。
          いま見ている営業所は、下のサマリー帯に月と一緒に出る。 */
       _fsBar.innerHTML =
         _monTabs('cmp-mon-tab-fs', mon, "_cmpMonSyncFs()", {label:'月'})
-        + `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;">
+        + `<div style="display:flex;align-items:center;gap:9px;margin-bottom:10px;flex-wrap:wrap;">
              <span style="font-size:13px;font-weight:700;color:var(--txt2);">状況</span>
              <select id="cmp-st-fs" class="fi" style="max-width:190px;" onchange="_cmpStSyncFs()">
-               ${['全件','差異あり','未照合','照合済'].map(o=>`<option${o===st?' selected':''}>${o}</option>`).join('')}
+               ${['全件','差異あり','未照合','照合済','手当・立替あり','手当・立替なし'].map(o=>`<option${o===st?' selected':''}>${o}</option>`).join('')}
+             </select>
+             <span style="font-size:13px;font-weight:700;color:var(--txt2);margin-left:10px;">表示</span>
+             <select id="cmp-view-fs" class="fi" style="max-width:210px;" onchange="_cmpViewSync('fs')">
+               ${['日付別','個人別','委託会社別','委託会社→個人別'].map(o=>`<option${o===_vmNow?' selected':''}>${o}</option>`).join('')}
              </select>
            </div>`;
     }
@@ -12111,17 +12118,38 @@ function renderCmp(){
   const tbody=$('tb-cmp'); if(!tbody) return;
   if(!rows.length&&!orphans.length){tbody.innerHTML='<tr><td colspan="19" style="text-align:center;color:var(--txt2);">データなし</td></tr>';return;}
 
+  /* ★ 2026-11-11.115: 何でまとめるかを切り替える。
+     日付別は従来どおり。個人別・委託会社別は、その人／その会社の
+     1か月を続けて見られるように並べ直す。 */
+  const _vm = (typeof _cmpViewMode==='function') ? _cmpViewMode() : '日付別';
+  const _co = r => (typeof _cmpCompanyOf==='function') ? _cmpCompanyOf(r.staff) : '';
+  const _keyOf = r =>
+      _vm==='個人別'            ? String(r.staff||'（氏名なし）')
+    : _vm==='委託会社別'        ? _co(r)
+    : _vm==='委託会社→個人別'  ? (_co(r)+'\u0000'+String(r.staff||'（氏名なし）'))
+    :                             String(r.date||'');
+  const _labelOf = r =>
+      _vm==='個人別'            ? (String(r.staff||'（氏名なし）')+'　'+esc(_co(r)))
+    : _vm==='委託会社別'        ? _co(r)
+    : _vm==='委託会社→個人別'  ? (_co(r)+'　/　'+String(r.staff||'（氏名なし）'))
+    :                             String(r.date||'');
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
   const sorted=rows.concat(orphans).sort(function(a,b){
+    if(_vm!=='日付別'){
+      const ka=_keyOf(a), kb=_keyOf(b);
+      if(ka!==kb) return ka.localeCompare(kb,'ja');
+      return String(a.date||'').localeCompare(String(b.date||''));
+    }
     return String(a.date||'').localeCompare(String(b.date||''))
         || String(a.office||'').localeCompare(String(b.office||''),'ja')
         || String(a.staff||'').localeCompare(String(b.staff||''),'ja');
   });
   const groups=[];
   sorted.forEach(function(r){
+    const k=_keyOf(r);
     const g=groups[groups.length-1];
-    if(g && g.date===r.date) g.rows.push(r);
-    else groups.push({date:r.date, rows:[r]});
+    if(g && g.key===k) g.rows.push(r);
+    else groups.push({key:k, date:r.date, label:_labelOf(r), rows:[r]});
   });
 
   const WD=['日','月','火','水','木','金','土'];
@@ -12139,6 +12167,13 @@ function renderCmp(){
     if(gi>0) html.push('<tr class="no-hover"><td colspan="19" style="height:8px;padding:0;'
       +'border:none;border-bottom:2px solid var(--brd2);background:transparent;"></td></tr>'
       +'<tr class="no-hover"><td colspan="19" style="height:8px;padding:0;border:none;background:transparent;"></td></tr>');
+    if(_vm!=='日付別'){
+      html.push('<tr class="no-hover" style="background:var(--bg3);">'
+        +'<td colspan="19" style="padding:6px 10px;font-size:13.5px;font-weight:700;'
+        +'border-top:2px solid var(--brd2);">'+esc(g.label||'')
+        +'<span style="font-size:11.5px;font-weight:600;color:var(--txt2);margin-left:10px;">'
+        +g.rows.length+'日</span></td></tr>');
+    }
     const m=String(g.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
     const dow=m?WD[new Date(+m[1],+m[2]-1,+m[3]).getDay()]:'';
     const dowCol=dow==='日'?'var(--red2)':dow==='土'?'var(--blu)':'var(--txt2)';
@@ -12167,6 +12202,14 @@ function renderCmp(){
       if(orph) orphInDay=true;
       html.push('<tr class="'+cls+'">');
       // 日付は先頭行だけ表示。日が変わったことが分かるよう少し大きく、曜日を色分けする。
+      if(_vm!=='日付別'){
+        /* 個人別・会社別のときは、どの日の行かが分からないと意味がないので毎行出す */
+        const rm=String(r.date||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        const rdow=rm?WD[new Date(+rm[1],+rm[2]-1,+rm[3]).getDay()]:'';
+        const rcol=rdow==='日'?'var(--red2)':rdow==='土'?'var(--blu)':'var(--txt2)';
+        html.push('<td class="mono" style="font-size:12.5px;color:var(--txt);">'+esc(r.date||'')
+          +(rdow?' <span style="color:'+rcol+';font-weight:700;">'+rdow+'</span>':'')+'</td>');
+      } else
       html.push('<td class="mono" style="'+(ri===0
           ? 'font-weight:700;font-size:13.5px;color:var(--txt);'
           : 'color:transparent;')+'">'+esc(g.date||'')
@@ -12250,9 +12293,12 @@ function renderCmp(){
     // ★ 2026/08/27: 影は立体的に見えて落ち着かないため使わない。
     //   区切りは背景色と1本の罫線、そして日の間の余白だけで表す。
     html.push('<tr class="no-hover" style="background:var(--sur2);border-top:1px solid var(--brd2);">');
-    html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'+esc(g.date||'')+'</td>');
-    html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">日計'
-      +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'+g.rows.length+'人</span>'
+    html.push('<td class="mono" style="font-size:12px;color:var(--txt3);">'
+      +esc(_vm==='日付別' ? (g.date||'') : '')+'</td>');
+    html.push('<td colspan="2" style="font-size:13.5px;font-weight:700;">'
+      +(_vm==='日付別' ? '日計' : _vm==='委託会社別' ? '会社計' : '個人計')
+      +'<span style="font-size:12px;font-weight:600;color:var(--txt2);margin-left:6px;">'
+      +g.rows.length+(_vm==='日付別'?'人':'日')+'</span>'
       +(orphInDay?'<span style="font-size:11px;color:var(--amb2);margin-left:6px;">日報なしを含む</span>':'')+'</td>');
     html.push('<td class="tr fw7" style="border-left:2px solid var(--brd2);font-size:15px;">'+(hasPostAny?fmt(sum.pk):'&#8212;')+'</td>');
     html.push('<td class="tr fw7" style="font-size:15px;">'+fmt(sum.nk)+'</td>');
@@ -55596,6 +55642,52 @@ function _cmpOffList(mon){
   return [...names].filter(Boolean)
     .sort((a,b)=>(cnt[b]||0)-(cnt[a]||0) || String(a).localeCompare(String(b),'ja'))
     .map(n=>({name:n, n:cnt[n]||0}));
+}
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-11.115: 照合を個人別・委託会社別でも見られるようにする
+
+   日報の一覧と郵便局照合が同じ行を2回出していたので、照合に一本化する。
+   そのために足りなかったのが「誰の分か」「どの会社の分か」でまとめる
+   見かた。日付別のままでは、1人の1か月を追うのに画面を上から下まで
+   目で拾う必要があった。
+   ════════════════════════════════════════════════════════════ */
+let _cmpCoMapAt = 0, _cmpCoMap = null;
+function _cmpCompanyOf(staffName){
+  const nm = String(staffName||'').trim();
+  if(!nm) return '';
+  /* 台帳は編集されるので、少し間を置いて作り直す */
+  if(!_cmpCoMap || Date.now() - _cmpCoMapAt > 30000){
+    _cmpCoMap = Object.create(null);
+    const co = Object.create(null);
+    (D.companies||[]).forEach(c=>{ if(c && c.id!=null) co[String(c.id)] = String(c.name||''); });
+    (D.staff||[]).forEach(st=>{
+      if(!st || !st.name) return;
+      const k = String(st.name).trim();
+      /* companyId は自社だと 0 や空。0 を会社IDとして扱わない。 */
+      const cid = st.companyId;
+      const hasCo = (cid!=null && cid!=='' && String(cid)!=='0' && Number(cid)>0);
+      _cmpCoMap[k] = hasCo ? (co[String(cid)] || ('会社ID ' + cid)) : '自社';
+      /* 氏名の空白ゆれを吸収 */
+      _cmpCoMap[k.replace(/[\s\u3000]+/g,'')] = _cmpCoMap[k];
+    });
+    _cmpCoMapAt = Date.now();
+  }
+  return _cmpCoMap[nm] || _cmpCoMap[nm.replace(/[\s\u3000]+/g,'')] || '（台帳になし）';
+}
+/* 表示のしかた。状況の隣で切り替える。 */
+function _cmpViewMode(){
+  const a = $('cmp-view'), b = $('cmp-view-fs');
+  const card = document.getElementById('cmp-card');
+  const v = (card && card.classList.contains('cmp-full') && b) ? b.value : (a ? a.value : '');
+  return v || '日付別';
+}
+function _cmpViewSync(from){
+  const a = $('cmp-view'), b = $('cmp-view-fs');
+  const v = (from==='fs' ? (b&&b.value) : (a&&a.value)) || '日付別';
+  if(a) a.value = v;
+  if(b) b.value = v;
+  renderCmp();
 }
 
 function _offTabs(cur, mon){
