@@ -6263,7 +6263,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.115';
+const APP_VER = '2026-11-11.116';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -12128,16 +12128,26 @@ function renderCmp(){
     : _vm==='委託会社別'        ? _co(r)
     : _vm==='委託会社→個人別'  ? (_co(r)+'\u0000'+String(r.staff||'（氏名なし）'))
     :                             String(r.date||'');
-  const _labelOf = r =>
-      _vm==='個人別'            ? (String(r.staff||'（氏名なし）')+'　'+esc(_co(r)))
+  /* ★ 2026-11-11.116: 人は社員番号の若い順に並べる（氏名の五十音ではなく）。
+     番号が無い人は最後。 */
+  const _no = r => (typeof _cmpEmpNoOf==='function') ? _cmpEmpNoOf(r.staff) : '';
+  const _nat = v => (typeof _cmpNatKey==='function') ? _cmpNatKey(v) : String(v||'');
+  const _sortKeyOf = r =>
+      _vm==='個人別'            ? (_nat(_no(r))+'\u0000'+String(r.staff||''))
     : _vm==='委託会社別'        ? _co(r)
-    : _vm==='委託会社→個人別'  ? (_co(r)+'　/　'+String(r.staff||'（氏名なし）'))
+    : _vm==='委託会社→個人別'  ? (_co(r)+'\u0000'+_nat(_no(r))+'\u0000'+String(r.staff||''))
+    :                             String(r.date||'');
+  const _withNo = r => { const n=_no(r); return (n?n+'　':'')+String(r.staff||'（氏名なし）'); };
+  const _labelOf = r =>
+      _vm==='個人別'            ? (_withNo(r)+'　'+_co(r))
+    : _vm==='委託会社別'        ? _co(r)
+    : _vm==='委託会社→個人別'  ? (_co(r)+'　/　'+_withNo(r))
     :                             String(r.date||'');
   // ★ 2026/08/20: 入力順ではなく日付順に並べ、日ごとに小計を挟む
   const sorted=rows.concat(orphans).sort(function(a,b){
     if(_vm!=='日付別'){
-      const ka=_keyOf(a), kb=_keyOf(b);
-      if(ka!==kb) return ka.localeCompare(kb,'ja');
+      const sa=_sortKeyOf(a), sb=_sortKeyOf(b);
+      if(sa!==sb) return sa.localeCompare(sb,'ja');
       return String(a.date||'').localeCompare(String(b.date||''));
     }
     return String(a.date||'').localeCompare(String(b.date||''))
@@ -55652,13 +55662,28 @@ function _cmpOffList(mon){
    見かた。日付別のままでは、1人の1か月を追うのに画面を上から下まで
    目で拾う必要があった。
    ════════════════════════════════════════════════════════════ */
-let _cmpCoMapAt = 0, _cmpCoMap = null;
+let _cmpCoMapAt = 0, _cmpCoMap = null, _cmpNoMap = null;
+/* 社員番号は 5342 のような数字と 10004-002 のような枝番がある。
+   そのまま文字で比べると 10004-002 が 5089 より前に来るので、
+   数字のかたまりを桁ぞろえしてから比べる。 */
+function _cmpNatKey(v){
+  const t = String(v==null?'':v).trim();
+  if(!t) return '\uffff';                      // 番号が無い人は最後
+  return t.replace(/\d+/g, m => m.padStart(10,'0'));
+}
+function _cmpEmpNoOf(staffName){
+  if(typeof _cmpCompanyOf==='function') _cmpCompanyOf(staffName);   // 対応表を作らせる
+  const nm = String(staffName||'').trim();
+  if(!nm || !_cmpNoMap) return '';
+  return _cmpNoMap[nm] || _cmpNoMap[nm.replace(/[\s\u3000]+/g,'')] || '';
+}
 function _cmpCompanyOf(staffName){
   const nm = String(staffName||'').trim();
   if(!nm) return '';
   /* 台帳は編集されるので、少し間を置いて作り直す */
   if(!_cmpCoMap || Date.now() - _cmpCoMapAt > 30000){
     _cmpCoMap = Object.create(null);
+    _cmpNoMap = Object.create(null);
     const co = Object.create(null);
     (D.companies||[]).forEach(c=>{ if(c && c.id!=null) co[String(c.id)] = String(c.name||''); });
     (D.staff||[]).forEach(st=>{
@@ -55668,8 +55693,10 @@ function _cmpCompanyOf(staffName){
       const cid = st.companyId;
       const hasCo = (cid!=null && cid!=='' && String(cid)!=='0' && Number(cid)>0);
       _cmpCoMap[k] = hasCo ? (co[String(cid)] || ('会社ID ' + cid)) : '自社';
+      _cmpNoMap[k] = String(st.empNo==null?'':st.empNo).trim();
       /* 氏名の空白ゆれを吸収 */
       _cmpCoMap[k.replace(/[\s\u3000]+/g,'')] = _cmpCoMap[k];
+      _cmpNoMap[k.replace(/[\s\u3000]+/g,'')] = _cmpNoMap[k];
     });
     _cmpCoMapAt = Date.now();
   }
