@@ -6232,7 +6232,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-10.107';
+const APP_VER = '2026-11-11.108';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -6926,6 +6926,190 @@ let CUSTOMER_NOTES = [];
 let fbDB = null;
 let fbOnline = false;
 
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-11-11.108: IndexedDB移行 第1段階（書くだけ）
+
+   localStorage は 5〜10MB で止まる。この端末はすでに 6,752KB で、
+   上限に当たると fbSet が共有への書き込みを自分から止める
+   （古い控えで上書きしてデータを消すのを防ぐ守り）。
+   入れ物を IndexedDB に移して上限そのものを無くす。
+
+   この版は【読み込みを一切変えない】。lsGet はこれまでどおり
+   localStorage から読む。lsSet が書いたあと、同じ内容を
+   IndexedDB にも書く。表示も動作も変わらない。容量もまだ減らない。
+
+   日報アプリ（2026-11-11.18）と同じ作りだが、入れ物は分ける。
+   同じ localStorage を共有していたことが、日報アプリの絞り込みが
+   経営管理の控えを削る問題の原因だった。
+   ════════════════════════════════════════════════════════════ */
+const IDB_NAME = 'nikki_mgmt', IDB_STORE = 'kv', IDB_VER = 1;
+let _idb = null, _idbState = 'まだ開いていない', _idbWrites = 0, _idbFails = 0;
+/* 経営管理が使うキーだけを写す。osaka981.github.io は日報アプリ・
+   計数アプリと同じ localStorage を共有しているので、全部写すと
+   よその分まで入ってしまう。 */
+const IDB_KEYS = [
+  'nikki_acl_user', 'nikki_app_min_ver', 'nikki_att_fix',
+  'nikki_att_fix_requests', 'nikki_att_logs', 'nikki_busy_seasons',
+  'nikki_charters', 'nikki_cmp_state', 'nikki_col_cmp',
+  'nikki_col_logs', 'nikki_col_routes', 'nikki_companies',
+  'nikki_customer_notes', 'nikki_customers', 'nikki_deduct_defs',
+  'nikki_delivery', 'nikki_departments', 'nikki_drivers',
+  'nikki_gas_records', 'nikki_item_defs', 'nikki_item_groups',
+  'nikki_jet_adjust', 'nikki_jet_customers', 'nikki_jet_scan',
+  'nikki_jet_settings', 'nikki_locations', 'nikki_maintenance',
+  'nikki_month_close', 'nikki_monthly_adj', 'nikki_monthly_confirmations',
+  'nikki_notifications', 'nikki_offices', 'nikki_oil_state',
+  'nikki_payments', 'nikki_pd_payday', 'nikki_pe_row_order',
+  'nikki_pickup', 'nikki_post_logs', 'nikki_regions',
+  'nikki_salary_paid', 'nikki_schedule_logs', 'nikki_schedule_overrides',
+  'nikki_schedule_surveys', 'nikki_settings', 'nikki_staff',
+  'nikki_staff_full', 'nikki_survey_responses', 'nikki_system_info',
+  'nikki_theme', 'nikki_ts_pin', 'nikki_ts_pin_h',
+  'nikki_ts_session', 'nikki_work_round', 'nikki_yp_logs',
+  'systemInfo'
+];
+function _idbMine(k){ return IDB_KEYS.indexOf(k) >= 0; }
+function _idbOpen(){
+  return new Promise(res=>{
+    if(_idb) return res(_idb);
+    let req;
+    try{ req = indexedDB.open(IDB_NAME, IDB_VER); }
+    catch(e){ _idbState = '使えない（' + (e&&e.name) + '）'; return res(null); }
+    req.onupgradeneeded = ()=>{
+      try{
+        const db = req.result;
+        if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      }catch(e){}
+    };
+    req.onsuccess = ()=>{ _idb = req.result; _idbState = '使える';
+      try{ _idb.onversionchange = ()=>{ try{ _idb.close(); }catch(e){} _idb = null; }; }catch(e){}
+      res(_idb); };
+    req.onerror   = ()=>{ _idbState = '開けない（' + ((req.error&&req.error.name)||'不明') + '）';
+      console.warn('[IndexedDB] 開けません（E-04）', _idbState); res(null); };
+    req.onblocked = ()=>{ _idbState = '他のタブが開いている（E-05）';
+      console.warn('[IndexedDB] 他のタブを閉じてください（E-05）'); res(null); };
+  });
+}
+/* 書き込みはまとめる。lsSet は何度も呼ばれるので 0.4秒ぶん貯めて、
+   同じキーは最後の1回だけ書く。中身は localStorage と同じ文字列のまま。 */
+const _idbQ = new Map(); const _idbSeen = new Set();
+let _idbTimer = null;
+function _idbPut(k, v){
+  try{
+    if(!_idbMine(k)) return;
+    _idbSeen.add(k);
+    _idbQ.set(k, (typeof v === 'string') ? v : JSON.stringify(v));
+    if(_idbTimer) return;
+    _idbTimer = setTimeout(_idbFlush, 400);
+  }catch(e){}
+}
+async function _idbFlush(){
+  _idbTimer = null;
+  if(!_idbQ.size) return;
+  const batch = Array.from(_idbQ.entries());
+  _idbQ.clear();
+  const db = await _idbOpen();
+  if(!db){ _idbFails += batch.length; return; }
+  try{
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const st = tx.objectStore(IDB_STORE);
+    batch.forEach(([k, v])=>{ try{ st.put(v, k); }catch(e){} });
+    tx.oncomplete = ()=>{ _idbWrites += batch.length; };
+    tx.onerror    = ()=>{ _idbFails  += batch.length;
+      console.warn('[IndexedDB] 書き込みに失敗', tx.error && tx.error.name); };
+    tx.onabort    = ()=>{ _idbFails  += batch.length; };
+  }catch(e){ _idbFails += batch.length; console.warn('[IndexedDB] 書き込みに失敗', e && e.name); }
+}
+/* 起動後に一度、localStorage の中身を丸ごと写す。
+   lsSet を通らず localStorage を直接書いている所が39か所あり、
+   それらは _idbPut を通らないため。画面を閉じるときにも写す。 */
+const IDB_SEED_KEY = 'nikki_idb_seeded_mgmt';
+let _idbSeedAt = 0;
+async function _idbSeed(force){
+  try{
+    if(!force && localStorage.getItem(IDB_SEED_KEY) === APP_VER) return;
+    if(Date.now() - _idbSeedAt < 60000) return;
+    _idbSeedAt = Date.now();
+    const db = await _idbOpen();
+    if(!db) return;
+    const keys = [];
+    for(let i=0;i<localStorage.length;i++){
+      const k = localStorage.key(i);
+      if(k && _idbMine(k)) keys.push(k);
+    }
+    if(!keys.length){ try{ localStorage.setItem(IDB_SEED_KEY, APP_VER); }catch(e){} return; }
+    await new Promise(res=>{
+      try{
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const st = tx.objectStore(IDB_STORE);
+        keys.forEach(k=>{
+          try{ const raw = localStorage.getItem(k); if(raw != null) st.put(raw, k); }catch(e){}
+        });
+        tx.oncomplete = ()=>{ _idbWrites += keys.length;
+          try{ localStorage.setItem(IDB_SEED_KEY, APP_VER); }catch(e){}
+          console.log('[IndexedDB] 写しました ' + keys.length + '件'); _idbSweep(); res(); };
+        tx.onerror = ()=>{ _idbFails += keys.length;
+          console.warn('[IndexedDB] 写しに失敗（E-02）', tx.error && tx.error.name); res(); };
+        tx.onabort = ()=>{ _idbFails += keys.length; res(); };
+      }catch(e){ console.warn('[IndexedDB] 写しに失敗（E-02）', e && e.name); res(); }
+    });
+  }catch(e){ console.warn('[IndexedDB] 写しに失敗（E-02）', e && e.name); }
+}
+/* 経営管理のものでないキーを片付ける */
+async function _idbSweep(){
+  try{
+    const db = await _idbOpen();
+    if(!db) return;
+    const drop = [];
+    await new Promise(res=>{
+      try{
+        const rq = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).getAllKeys();
+        rq.onsuccess = ()=>{ (rq.result||[]).forEach(k=>{
+            const key = String(k);
+            if(!_idbMine(key) && !_idbSeen.has(key)) drop.push(key);
+          }); res(); };
+        rq.onerror = ()=>res();
+      }catch(e){ res(); }
+    });
+    if(!drop.length) return;
+    const tx = db.transaction(IDB_STORE,'readwrite');
+    const st = tx.objectStore(IDB_STORE);
+    drop.forEach(k=>{ try{ st.delete(k); }catch(e){} });
+    tx.oncomplete = ()=>console.log('[IndexedDB] 経営管理のものでないキーを片付けました ' + drop.length + '件');
+  }catch(e){}
+}
+/* 確認用。コンソールで _idbStats() と打つと中身が見える。 */
+async function _idbStats(){
+  const db = await _idbOpen();
+  const out = { 状態:_idbState, 書けた:_idbWrites, 失敗:_idbFails, 件数:0, 合計KB:0, 中身:[] };
+  if(!db) return out;
+  await new Promise(res=>{
+    try{
+      const rq = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).openCursor();
+      rq.onsuccess = e=>{
+        const c = e.target.result;
+        if(!c) return res();
+        let kb = 0;
+        try{ const v=c.value; kb = ((typeof v==='string')?v.length:JSON.stringify(v).length)*2/1024; }catch(e2){}
+        out.件数++; out.合計KB += kb;
+        if(kb >= 10) out.中身.push({キー:c.key, KB:Math.round(kb)});
+        c.continue();
+      };
+      rq.onerror = ()=>res();
+    }catch(e){ res(); }
+  });
+  out.合計KB = Math.round(out.合計KB);
+  out.中身.sort((a,b)=>b.KB-a.KB);
+  return out;
+}
+window._idbStats=_idbStats; window._idbSeed=_idbSeed; window._idbSweep=_idbSweep; window._idbFlush=_idbFlush;
+try{
+  setTimeout(()=>{ _idbSeed(); }, 5000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'hidden'){ try{ _idbSeed(true); }catch(e){} }
+  });
+}catch(e){}
+
 // localStorage read/write
 const lsGet = (k, def) => {
   try {
@@ -6942,6 +7126,7 @@ const lsGet = (k, def) => {
    失敗を記録し、その控えを使う書き戻しを止める。 */
 window._lsFailedKeys = window._lsFailedKeys || {};
 const lsSet = (k, v) => {
+  try{ _idbPut(k, v); }catch(e){}        /* ★ .108: IndexedDBにも書く */
   try {
     localStorage.setItem(k, JSON.stringify(v));
     if(window._lsFailedKeys[k]) delete window._lsFailedKeys[k];
