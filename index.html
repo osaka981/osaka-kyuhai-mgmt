@@ -6263,7 +6263,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.116';
+const APP_VER = '2026-11-11.117';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -13394,8 +13394,16 @@ function renderDel() {
      列と同じ _shukkaSplit で割るので、表の数字をそのまま足したものになる。 */
   const sh=rows.reduce((a,r)=>{ const x=(typeof _shukkaSplit==='function')?_shukkaSplit(r):{teiji:0,shitei:0};
     return {teiji:a.teiji+(x.teiji||0), shitei:a.shitei+(x.shitei||0)}; },{teiji:0,shitei:0});
+  /* ★ 2026-11-11.117: 持出は入力している営業所と、していない営業所がある。
+     （運坊のCSVから取り込んだ行には持出が無い）
+     合計だけ出すと、配達完了と桁が合わずに「数が合わない」ように見えるので、
+     何日ぶんの数なのかを添える。 */
+  const _mdDays=rows.reduce((a,r)=>a+((parseInt(r.mochidashi)||0)>0?1:0),0);
+  const _mdSub=rows.length
+    ? ('入力あり '+fmt(_mdDays)+' 日 / 全 '+fmt(rows.length)+' 日')
+    : '';
   $('del-kpi').innerHTML=[
-    {l:'持出（合計）',v:fmt(s.mochidashi),u:'個',c:'--red'},
+    {l:'持出（入力のある分）',v:fmt(s.mochidashi),u:'個',c:'--red',sub:_mdSub},
     {l:'配達完了',v:fmt(s.kanryo),u:'個',c:'--grn'},
     /* ★ 2026-10-29.54: 請求は完了＋転送還付の合計なので、その数も添える */
     {l:'転送・還付',v:fmt(s.tenso),u:'個',c:'--tel',sub:'完了＋転送 '+fmt(s.kanryo+s.tenso)+' 個'},
@@ -13411,8 +13419,16 @@ function renderDel() {
   let h='';
   rows.sort((a,b)=>b.date.localeCompare(a.date)).forEach(r=>{
     const sm=delSum(r);
-    const vok=r.mochidashi>0&&sm===r.mochidashi;
-    const vc=vok?'<span style="color:var(--grn2)">✓ OK</span>':`<span style="color:var(--red2)" title="完了+転送+持戻+翌日=${sm}≠${r.mochidashi}">✗ NG</span>`;
+    /* ★ 2026-11-11.117: 持出が入っていない行を ✗NG にしない。
+       運坊のCSVから取り込んだ行には持出が無く、入力していないだけで
+       赤くなっていた（全1,459件のうち644件・44%）。本当に合わない行が
+       そこに埋もれるので、入っている行だけ検証する。 */
+    const _md=parseInt(r.mochidashi)||0;
+    const vc = _md<=0
+      ? '<span style="color:var(--txt3)" title="持出が入っていないため検証していません">&#8212;</span>'
+      : (sm===_md
+          ? '<span style="color:var(--grn2)">✓ OK</span>'
+          : `<span style="color:var(--red2)" title="完了+転送+持戻+翌日=${sm}≠${_md}">✗ NG</span>`);
     const sb=r.status==='照合済'?'<span class="bdg bg">照合済</span>':r.status==='差異あり'?'<span class="bdg br">差異あり</span>':'<span class="bdg bz">未照合</span>';
     const kb=kbBadgeHtml(r.kubun);
     // 金額計算
