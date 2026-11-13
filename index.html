@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.121';
+const APP_VER = '2026-11-13.122';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -36816,6 +36816,8 @@ function openStaffFS(nameOrId){
     ? (D.staff||[]).find(s=>s.id===nameOrId)
     : (D.staff||[]).find(s=>s.name===nameOrId);
   if(!st){ showAlert({msg:'従事員が見つかりません'}); closeFS(); return; }
+  // ★ 2026-11-13.122: 別の人を開いたら、役員報酬の表示許可は捨てる
+  window._execShownFor = null;
   _fsId = st.name;
   $('fs-title').textContent = st.name;
   $('fs-subtitle').textContent = `${st.kubun||''} ─ ${st.office||''}`;
@@ -42380,6 +42382,9 @@ function renderStaffDocs(el, name){
   if(chk.detail !== undefined){ chk.detailDel = chk.detailDel || chk.detail; delete chk.detail; }
   if(chk.detailDel===undefined) chk.detailDel = false;
   if(chk.detailCol===undefined) chk.detailCol = false;
+  // ★ 2026-11-13.122: 役員はPINを入れるまで金額を伏せる
+  const _execShow = (typeof _execVisible==='function') ? _execVisible(name) : true;
+
   // 発行不可項目は常にfalseに
   if(!paySlipOn) chk.paySlip = false;
   if(!invProxyOn || !isExternal) chk.invoice = false;
@@ -42435,7 +42440,10 @@ function renderStaffDocs(el, name){
     <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;padding:12px;background:var(--bg3);border-radius:6px;margin-bottom:12px;">
       <div>
         <div class="xs muted">支払金額</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>
+        ${_execShow
+          ? `<div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--amb2);line-height:1;">¥${pay.total.toLocaleString()}</div>`
+          : `<div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--txt3);line-height:1;">•••</div>
+             <div class="mt8">${_execMaskBtn(name)}</div>`}
       </div>
     </div>
 
@@ -42458,7 +42466,7 @@ function renderStaffDocs(el, name){
       </div>
     </div>
 
-    ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">¥${b.amount.toLocaleString()}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
+    ${pay.breakdown.length?`<div class="tw mt12"><table><thead><tr><th>内訳</th><th class="tr">金額</th></tr></thead><tbody>${pay.breakdown.map(b=>`<tr><td>${esc(b.label)}</td><td class="tr mono">${_execShow?'¥'+b.amount.toLocaleString():'•••'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="xs muted mt8">該当月のデータがありません</div>'}
   </div>
 
   <div class="fs-card">
@@ -42471,7 +42479,7 @@ function renderStaffDocs(el, name){
         <td class="mono xs">${(h.issuedAt||'').slice(0,10)}</td>
         <td><span class="bdg">${typeLabel}</span></td>
         <td class="mono">${h.month||''}</td>
-        <td class="tr mono fw7">¥${(h.amount||0).toLocaleString()}</td>
+        <td class="tr mono fw7">${_execShow?'¥'+(h.amount||0).toLocaleString():'•••'}</td>
         <td><button class="btn b-gh btn-sm" onclick="${h.type==='paySlip'?'generatePaySlip':'generateInvoiceProxy'}('${esc(name)}','${h.month}')">再発行</button></td>
       </tr>`;
     });
@@ -48522,6 +48530,22 @@ function _isExecStaff(st){
 function _isExecName(name){
   try{ return _isExecStaff((D.staff||[]).find(s=>s && s.name===name)); }catch(e){ return false; }
 }
+/* ★ 2026-11-13.122: 個人ページで役員報酬をいま表示してよいか。
+   「表示」を押してPINを通した1人だけ。別の人を開くと捨てる。 */
+function _execVisible(name){
+  if(typeof _isExecName!=='function' || !_isExecName(name)) return true;   // 役員でなければ常に見える
+  return window._execShownFor === name;
+}
+async function _execReveal(name){
+  if(typeof _execGate!=='function' || !(await _execGate(name))) return;
+  window._execShownFor = name;
+  try{ renderStaffFSTab('docs'); }catch(e){ console.error('[役員報酬] 再描画', e); }
+}
+/* 伏せ字のときに出すボタン */
+function _execMaskBtn(name){
+  return `<button class="btn b-gh btn-sm" onclick="_execReveal('${String(name).replace(/'/g,"\\'")}')">PINを入れて表示</button>`;
+}
+
 /* ★ 2026-11-13.121: 役員報酬の額（数字だけ取り出す） */
 function _execPayOf(st){
   if(!_isExecStaff(st)) return 0;
