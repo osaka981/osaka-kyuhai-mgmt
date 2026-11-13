@@ -6263,7 +6263,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-11.117';
+const APP_VER = '2026-11-13.118';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -28328,8 +28328,19 @@ function collectPayHistory(){
 }
 // 指定月に有効な給与条件を返す（履歴優先、なければ現在設定）
 function getActivePayCondition(s, monStr){
-  // monStr: "2024/06" 形式
-  const hist=(s.payHistory||[]).filter(h=>h.from&&h.from.replace(/-/g,'/')<=monStr+'/' );
+  /* monStr: "2024/06" でも "2024-06" でも通る。
+     ★ 2026-11-13.118: 日付の比べかたを直した。
+       これまでは from を '2026/10/01'、monStr を '2026/10/' にして
+       文字で比べていたため、'2026/10/01' <= '2026/10/' が false になり、
+       【適用開始日を当月1日にするとその月に効かない】（1か月ずれる）。
+       年月（YYYY-MM）どうしで比べれば、日が何日でも当月から効く。
+     ★ 並べ替えも足した。これまでは payHistory が古い順に入っている前提で
+       最後の1件を取っていたが、順番が崩れていると違う単価を拾う。 */
+  const _ym = v => String(v||'').replace(/\//g,'-').slice(0,7);
+  const tgt = _ym(monStr);
+  const hist=(s.payHistory||[])
+    .filter(h=>h && h.from && _ym(h.from) <= tgt)
+    .sort((a,b)=>_ym(a.from).localeCompare(_ym(b.from)));
   if(hist.length){
     // 適用開始日がmonStr以前の中で最新のもの
     return hist[hist.length-1];
@@ -40400,15 +40411,38 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const reiwa=_mm?(parseInt(_mm[1],10)-2018):0;
   const monLabel=_mm?`令和${reiwa}年　${parseInt(_mm[2],10)}月分`:'';
 
-  // 支給項目
-  const basePay=st.tanka||0;
-  const commute=off.commute||0;
-  const career=off.career||0;
-  const position=off.position||0;
-  const teateOther=off.teateOther||0;
+  /* 支給項目
+     ★ 2026-11-13.118: その月の値を使う。
+       これまでは台帳のいまの値（st.tanka / st.offset）を直に読んでいたため、
+       基本給や手当を改定すると【過去月の明細まで新しい額で出て】いた。
+       委託・個人事業主の支払はすでに月ごとの値を見ている
+       （_rateAt / _teateUnitsAt）。社員の明細だけが取り残されていた。 */
+  const _cond=(typeof getActivePayCondition==='function')
+    ? (getActivePayCondition(st, String(monStr||'').replace('-','/')) || {}) : {};
+  const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
+    : {commute:off.commute, career:off.career, position:off.position,
+       teateOther:off.teateOther, yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
+  const basePay=Number(_cond.tanka!=null ? _cond.tanka : st.tanka)||0;
+  const commute=Number(_tu.commute)||0;
+  const career=Number(_tu.career)||0;
+  const position=Number(_tu.position)||0;
+  const teateOther=Number(_tu.teateOther)||0;
+  /* ★ 2026-11-13.118: 横乗手当・特別手当を足した。
+     月締めの画面では「＋本人へ支払う」に出るのに、社員の明細では
+     総支給額にも欄にも入っていなかった。件数の数え方は委託側
+     （_teatePayLines）と同じにしてある。 */
+  const _ndate = v => String(v||'').replace(/\//g,'-');
+  const _delRows=(D.delivery||[]).filter(r=>r && r.staff===st.name
+    && _ndate(r.date).startsWith(String(monStr||'').replace('/','-')));
+  const _mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr) : {tokubetsuCnt:0};
+  const yokonoriCnt=_delRows.reduce((a,r)=>a+(Number(r.yokonori)||0),0);
+  const tokubetsuCnt=_delRows.reduce((a,r)=>a+(Number(r.tokubetsu)||0),0)+(Number(_mAdj.tokubetsuCnt)||0);
+  const yokonoriPay=yokonoriCnt*(Number(_tu.yokonoriUnit)||0);
+  const tokubetsuPay=tokubetsuCnt*(Number(_tu.tokubetsuUnit)||0);
   const overtimePay=st._monthlyPay?.overtimePay||0;
   const absenceDeduct=st._monthlyPay?.absenceDeduct||0;
-  const totalPay=basePay+overtimePay+commute+career+position+teateOther-absenceDeduct;
+  const totalPay=basePay+overtimePay+commute+career+position+teateOther
+                +yokonoriPay+tokubetsuPay-absenceDeduct;
 
   /* 控除項目
      ★ 2026-10-14.72: 7項目の直書きをやめ、控除項目マスタから作る。
@@ -40485,10 +40519,10 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
       <table style="width:100%;border-collapse:collapse;border:2px solid #333;border-top:none;margin-top:-1px;">
         <tr>
           <td rowspan="2" style="border:1px solid #aaa;padding:3px;font-size:10px;text-align:center;width:24px;background:#f0f0f0;writing-mode:vertical-rl;">支<br>給<br>額</td>
-          ${th('基 本 給')} ${td(f(basePay),'tr')} ${th('経歴手当')} ${td(f(career),'tr')} ${th('役職手当')} ${td(f(position),'tr')} ${th('')} ${td('')}
+          ${th('基 本 給')} ${td(f(basePay),'tr')} ${th('経歴手当')} ${td(f(career),'tr')} ${th('役職手当')} ${td(f(position),'tr')} ${th('その他手当')} ${td(f(teateOther),'tr')}
         </tr>
         <tr>
-          ${th('')} ${td('')} ${th('')} ${td('')} ${th('時間外手当')} ${td(f(overtimePay),'tr')} ${th('通 勤 手 当')} ${td(f(commute),'tr')} ${th('不就労控除')} ${td(f(absenceDeduct),'tr')} ${th('総 支 給 額')} ${td('<b>'+f(totalPay)+'</b>','tr')}
+          ${th(yokonoriCnt?'横乗手当 '+yokonoriCnt+'回':'横乗手当')} ${td(f(yokonoriPay),'tr')} ${th(tokubetsuCnt?'特別手当 '+tokubetsuCnt+'回':'特別手当')} ${td(f(tokubetsuPay),'tr')} ${th('時間外手当')} ${td(f(overtimePay),'tr')} ${th('通 勤 手 当')} ${td(f(commute),'tr')} ${th('不就労控除')} ${td(f(absenceDeduct),'tr')} ${th('総 支 給 額')} ${td('<b>'+f(totalPay)+'</b>','tr')}
         </tr>
       </table>
 
@@ -43774,12 +43808,27 @@ function saveSystemInfo(){
 /* 給与明細と同じやり方で総支給額を出す（雇用保険の対象額に使う） */
 function _htTotalPay(st, monStr){
   if(!st) return 0;
+  /* ★ 2026-11-13.118: 明細（_buildPaySlipHTMLEmployee）と同じ出し方にそろえた。
+     ここだけ台帳のいまの値を読んでいると、画面の総支給額と紙の総支給額が
+     食い違う。横乗・特別手当も同じように足す。 */
   const off=st.offset||{};
-  const basePay=Number(st.tanka)||0;
+  const cond=(typeof getActivePayCondition==='function')
+    ? (getActivePayCondition(st, String(monStr||'').replace('-','/')) || {}) : {};
+  const tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
+    : {commute:off.commute, career:off.career, position:off.position,
+       teateOther:off.teateOther, yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
+  const basePay=Number(cond.tanka!=null ? cond.tanka : st.tanka)||0;
   const mp=st._monthlyPay||{};
+  const nd=v=>String(v||'').replace(/\//g,'-');
+  const rows=(D.delivery||[]).filter(r=>r && r.staff===st.name
+    && nd(r.date).startsWith(String(monStr||'').replace('/','-')));
+  const mAdj=(typeof _adjPayroll==='function') ? _adjPayroll(st, monStr) : {tokubetsuCnt:0};
+  const yCnt=rows.reduce((a,r)=>a+(Number(r.yokonori)||0),0);
+  const tCnt=rows.reduce((a,r)=>a+(Number(r.tokubetsu)||0),0)+(Number(mAdj.tokubetsuCnt)||0);
   return basePay + (Number(mp.overtimePay)||0)
-       + (Number(off.commute)||0) + (Number(off.career)||0)
-       + (Number(off.position)||0) + (Number(off.teateOther)||0)
+       + (Number(tu.commute)||0) + (Number(tu.career)||0)
+       + (Number(tu.position)||0) + (Number(tu.teateOther)||0)
+       + yCnt*(Number(tu.yokonoriUnit)||0) + tCnt*(Number(tu.tokubetsuUnit)||0)
        - (Number(mp.absenceDeduct)||0);
 }
 function _htStaffList(){
