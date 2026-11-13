@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.122';
+const APP_VER = '2026-11-13.123';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -22934,6 +22934,33 @@ function _payTotals(lines){
 }
 window._taxOf=_taxOf; window._payTotals=_payTotals;
 
+/* ★ 2026-11-13.123: 庸車代の消費税
+   庸車（車両の貸付）は課税取引。これまで税区分は保存されるだけで
+   どこの計算にも使われておらず、税込でも税別でも引く額が同じだった。
+
+   控除の決まり（控除は額面のまま引き、税の対象にしない）には手を付けない。
+   かわりに庸車の金額そのものを作るときに、税別のぶんだけ10%を足す。
+   こうすれば他の控除（ガソリン・修理・前払いなど）には影響しない。
+
+   端数は _payTotals と同じ切り捨てにそろえる。
+   未設定は税込（これまでどおり）。いまの2名はどちらも税込なので金額は変わらない。 */
+function _yoshaDeduct(cond, off, workDays){
+  const c = cond||{}, o = off||{};
+  const type = c.yoshaType || o.yoshaType || 'なし';
+  const unit = Number(c.yoshaAmt || o.yoshaAmt) || 0;
+  const tax  = c.yoshaTax || o.yoshaTax || 'in';
+  if(!(unit>0 && (type==='日額' || type==='月額'))){
+    return {amount:0, type:type, unit:0, tax:tax, base:0, note:''};
+  }
+  const days = Number(workDays)||0;
+  const base = (type==='月額') ? unit : unit*days;
+  const amount = (tax==='ex') ? (base + Math.floor(base*0.1)) : base;
+  const note = ((type==='月額') ? '月額' : (days+'日×¥'+unit.toLocaleString()))
+             + (tax==='ex' ? '（税別＋10%）' : '');
+  return {amount:amount, type:type, unit:unit, tax:tax, base:base, note:note};
+}
+window._yoshaDeduct=_yoshaDeduct;
+
 /* ════════════════════════════════════════════════════════════
    ★ 2026-11-07.94: 支払明細の行を作る共通関数
 
@@ -26615,11 +26642,11 @@ function _adjExtras(st, ym, tokuCnt, off){
   // 庸車
   try{
     const cond=(typeof getActivePayCondition==='function') ? (getActivePayCondition(st, ym.replace('-','/'))||{}) : {};
-    const yt=cond.yoshaType || offs.yoshaType || 'なし';
-    const ya=Number(cond.yoshaAmt || offs.yoshaAmt)||0;
-    if(ya>0 && (yt==='日額' || yt==='月額')){
-      out.yosha = (yt==='月額') ? ya : ya*out.days;
-      out.yoshaNote = (yt==='月額') ? '月額' : (out.days+'日×¥'+fmt(ya));
+    /* ★ 2026-11-13.123: 税区分を効かせる（税別なら10%を足して引く） */
+    const _y = _yoshaDeduct(cond, offs, out.days);
+    if(_y.amount>0){
+      out.yosha = _y.amount;
+      out.yoshaNote = _y.note;
     }
   }catch(e){}
 
@@ -36095,8 +36122,16 @@ function openPayHistModal(sid, editFrom){
             </select></div>
           <div class="fg"><label id="mph-yosha-lbl" style="font-size:9px;">金額（円）</label>
             <input type="number" id="mph-yosha-amt" class="fi" style="font-size:11px;padding:4px 6px;" placeholder="0"></div>
-          <div class="fg" style="align-self:flex-end;">
-            <span id="mph-yosha-hint" style="font-size:9px;color:var(--amb2);padding-bottom:6px;display:block;"></span>
+          <!-- ★ 2026-11-13.123: 税区分の欄が無く、ここで編集すると消えていた -->
+          <div class="fg"><label style="font-size:9px;">税区分</label>
+            <select id="mph-yosha-tax" class="fi" style="font-size:11px;padding:4px 6px;" onchange="onMphYoshaChange()">
+              <option value="in">税込</option>
+              <option value="ex">税別</option>
+            </select></div>
+        </div>
+        <div class="f3">
+          <div class="fg" style="grid-column:1/-1;">
+            <span id="mph-yosha-hint" style="font-size:9px;color:var(--amb2);display:block;"></span>
           </div>
         </div>
       </div>
@@ -36119,8 +36154,11 @@ function openPayHistModal(sid, editFrom){
   if($('mph-note')) $('mph-note').value = existing?.note || '';
   if($('mph-add-del')) $('mph-add-del').checked = existing ? existing.addDel : (s.addDelPrice||false);
   if($('mph-add-col')) $('mph-add-col').checked = existing ? existing.addCol : (s.addColPrice||false);
-  if($('mph-yosha-type')) { $('mph-yosha-type').value = existing?.yoshaType || s.offset?.yoshaType || 'なし'; onMphYoshaChange(); }
+  if($('mph-yosha-type')) { $('mph-yosha-type').value = existing?.yoshaType || s.offset?.yoshaType || 'なし'; }
   if($('mph-yosha-amt')) $('mph-yosha-amt').value = existing?.yoshaAmt ?? (s.offset?.yoshaAmt||0);
+  // ★ 2026-11-13.123: 税区分も読み込む（既存の履歴に無ければ台帳の値）
+  if($('mph-yosha-tax')) $('mph-yosha-tax').value = existing?.yoshaTax || s.offset?.yoshaTax || 'in';
+  onMphYoshaChange();
 
   modal.classList.add('on');
   setTimeout(()=>{ $('mph-from')?.focus(); },80);
@@ -36139,7 +36177,16 @@ function onMphYoshaChange(){
   const lbl = $('mph-yosha-lbl');
   const hint = $('mph-yosha-hint');
   if(lbl) lbl.textContent = t==='月額' ? '月額（円）' : '日額（円/日）';
-  if(hint) hint.textContent = t==='なし' ? '' : t==='日額' ? '×稼働日数で自動計算' : '月額固定';
+  /* ★ 2026-11-13.123: 税別のときは引く額が10%増えることを、その場で見せる */
+  const tax = $('mph-yosha-tax')?.value || 'in';
+  const amt = parseInt($('mph-yosha-amt')?.value)||0;
+  let msg = t==='なし' ? '' : (t==='日額' ? '×稼働日数で自動計算' : '月額固定');
+  if(t!=='なし' && tax==='ex' && amt>0){
+    msg += (t==='月額')
+      ? `　税別なので ¥${amt.toLocaleString()} → ¥${(amt+Math.floor(amt*0.1)).toLocaleString()} を引きます`
+      : '　税別なので、日数をかけた合計に10%を足して引きます';
+  }
+  if(hint) hint.textContent = msg;
 }
 
 function savePayHistItem(){
@@ -36159,6 +36206,8 @@ function savePayHistItem(){
     addCol: $('mph-add-col')?.checked||false,
     yoshaType: $('mph-yosha-type')?.value||'なし',
     yoshaAmt: parseInt($('mph-yosha-amt')?.value)||0,
+    /* ★ 2026-11-13.123: 税区分が抜けていたため、この画面で1度編集すると消えていた */
+    yoshaTax: $('mph-yosha-tax')?.value||'in',
   };
 
   if(!s.payHistory) s.payHistory = [];
@@ -39810,12 +39859,12 @@ function _dedPayLines(st, monStr, workDays, cond, mAdj){
   // ★ 2026-09-22.3: 庸車は控除で確定。種別が「なし」のときは金額が残っていても控除しない。
   //   給与履歴に庸車条件があればそちらを使う（一覧側と統一）
   {
-    const yt = cond.yoshaType || off.yoshaType || 'なし';
-    const ya = Number(cond.yoshaAmt || off.yoshaAmt) || 0;
-    if(ya>0 && (yt==='日額' || yt==='月額')){
-      const yoshaTotal = yt==='月額' ? ya : ya*workDays;
-      const yoshaLabel = yt==='月額' ? '庸車両（月額）' : `庸車両 ${workDays}日×¥${ya}`;
-      out.push({label:yoshaLabel, amount:-yoshaTotal});
+    /* ★ 2026-11-13.123: 税区分を効かせる（税別なら10%を足して引く） */
+    const _y = _yoshaDeduct(cond, off, workDays);
+    if(_y.amount>0){
+      const yoshaLabel = (_y.type==='月額' ? '庸車両（月額）' : `庸車両 ${workDays}日×¥${_y.unit}`)
+                       + (_y.tax==='ex' ? '（税別＋10%）' : '');
+      out.push({label:yoshaLabel, amount:-_y.amount});
     }
   }
   // ★ 2026-09-22.3: 修理・損害代の天引き（従業員台帳 repairRows の該当月）を明細にも計上（一覧側と統一）
