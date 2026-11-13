@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.124';
+const APP_VER = '2026-11-13.125';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -7266,6 +7266,31 @@ async function _idbLoad(){
 }
 const _bootReady = _idbLoad().catch(()=>false);
 window._bootReady = _bootReady;
+
+/* ★ 2026-11-13.125: 読み込みの早いうちに作られるものを、IndexedDBを読み終えてから入れ直す。
+   ここより前に動く初期化は、まだ IndexedDB を読めていないので空のまま。
+   すでに中身が入っているもの（Firebaseが先に届いた場合）は触らない。 */
+_bootReady.then(()=>{
+  try{
+    if(typeof USER_ITEMS==='object' && !Object.keys(USER_ITEMS).length
+       && typeof applyUserItemDefs==='function' && typeof getUserItemDefs==='function'){
+      const defs = getUserItemDefs();
+      if(defs.length){
+        applyUserItemDefs(defs);
+        console.log('[品目] 追加品目を読み込みました ' + defs.length + '件');
+      }
+    }
+  }catch(e){ console.warn('[品目] 読み込み直しに失敗', e); }
+  try{
+    if(typeof D!=='undefined' && D && (!D.salaryPaid || !Object.keys(D.salaryPaid).length)){
+      const v = lsGet('nikki_salary_paid', {});
+      if(v && typeof v==='object' && Object.keys(v).length){
+        D.salaryPaid = v;
+        console.log('[給与] 支払済みを読み込みました ' + Object.keys(v).length + 'か月分');
+      }
+    }
+  }catch(e){ console.warn('[給与] 支払済みの読み込み直しに失敗', e); }
+}).catch(()=>{});
 
 // localStorage read/write
 const lsGet = (k, def) => {
@@ -11428,8 +11453,13 @@ function otherTaxFields(){
 //   際限なく増えるのを避けるため、既定品目には昇格させない。
 const ITEM_DEFS_LS = 'nikki_item_defs';
 function getUserItemDefs(){
+  /* ★ 2026-11-13.125: localStorage を直接読んでいた。
+     このキーは IndexedDB へ移してあり localStorage からは片付け済みなので、
+     いつも空になり、追加した品目がどこにも出なくなっていた
+     （集荷日報CSVの取込が「不明な品目」で弾くのもこれ）。lsGet を通す。 */
   try{
-    const v = JSON.parse(localStorage.getItem(ITEM_DEFS_LS) || '[]');
+    const v = (typeof lsGet==='function') ? lsGet(ITEM_DEFS_LS, [])
+                                          : JSON.parse(localStorage.getItem(ITEM_DEFS_LS) || '[]');
     return Array.isArray(v) ? v : [];
   }catch(e){ return []; }
 }
@@ -11598,6 +11628,11 @@ function deleteItemDef(key){
 // 品目グループ設定（localStorage永続化）
 // デフォルト：全サイズ個別表示
 function getItemGroups(){
+  /* ★ 2026-11-13.125: 同上。IndexedDB へ移したキーを直接読んでいた */
+  try{
+    const v = (typeof lsGet==='function') ? lsGet('nikki_item_groups', null) : null;
+    if(Array.isArray(v)) return v;
+  }catch(e){}
   const saved = localStorage.getItem('nikki_item_groups');
   if(saved){try{return JSON.parse(saved);}catch{}}
   // デフォルト：空（グループ化なし＝全サイズ個別表示）
@@ -11797,6 +11832,8 @@ const D = {
   pickup: [],
   // ★ 2026/08/12: 給与の支払状態 { '2026-07': { staffId: {amount,at,by} } }
   //   従来は表示上 i%2 で1人おきに「済」としており、実データが存在しなかった。
+  /* ★ 2026-11-13.125: ここは読み込みのいちばん最初（IndexedDBを読み終える前）に
+     動くので、lsGet でも空になる。下の _bootReady のあとで入れ直す。 */
   salaryPaid: (()=>{ try{ return JSON.parse(localStorage.getItem('nikki_salary_paid')||'{}'); }catch(e){ return {}; } })(),
   // 委託会社マスタ
   // ★ 2026/06/25: サンプル(株式会社○○運輸)を削除。実データはFirebase/localStorageから読む。
@@ -13523,8 +13560,10 @@ const JETCUST_LS   = 'nikki_jet_customers';
 const JSCAN_BASE_URL = 'https://osaka981.github.io/j-scan/';
 
 function _jetCusts(){
+  /* ★ 2026-11-13.125: 同上。IndexedDB へ移したキーを直接読んでいた */
   try{
-    const v = JSON.parse(localStorage.getItem(JETCUST_LS) || '{}');
+    const v = (typeof lsGet==='function') ? lsGet(JETCUST_LS, {})
+                                          : JSON.parse(localStorage.getItem(JETCUST_LS) || '{}');
     return (v && typeof v === 'object') ? v : {};
   }catch(e){ return {}; }
 }
@@ -43858,6 +43897,12 @@ async function _verStopDistribute(){
 // ─── システム設定（自社情報・電子印制作費・代表印） ───
 // ═══════════════════════════════════════════════
 function _getSystemInfo(){
+  /* ★ 2026-11-13.125: 同上。IndexedDB へ移したキーを直接読んでいたため、
+     社名・消費税率・電子印制作費・代表印が空になっていた。 */
+  try{
+    const v = (typeof lsGet==='function') ? lsGet('systemInfo', null) : null;
+    if(v && typeof v==='object') return v;
+  }catch(e){}
   try{ return JSON.parse(localStorage.getItem('systemInfo')||'{}'); }catch(e){ return {}; }
 }
 function _saveSystemInfoLS(info){
