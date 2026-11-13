@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.120';
+const APP_VER = '2026-11-13.121';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -10474,7 +10474,11 @@ function getResidentTaxMonthly(st, ym){
 }
 function getEmploymentIns(st, totalPay, ym){
   const si=(ym && typeof _siAt==='function') ? _siAt(st, ym) : (st?.socialIns||{});
+  /* ★ 2026-11-13.121: 役員は原則として雇用保険の対象外。自動計算から外す。
+     兼務役員など引きたい方がいる場合は、台帳の雇用保険を「固定額」にして
+     金額を入れてください（その場合は下の fixed が先に効きます）。 */
   if(si.empInsType==='fixed') return si.empInsFixed||0;
+  if(typeof _isExecStaff==='function' && _isExecStaff(st)) return 0;
   const rate=parseFloat(lsGet('sys_emp_ins_rate','0.006'))||0.006;
   return Math.round(totalPay*rate);
 }
@@ -36313,7 +36317,7 @@ function _openGasFor(staffName, ym){
 function renderSalary(){
   // ★ 2026-10-08.13: 照合の印を出すため、郵便局データを1回だけ突き合わせておく
   try{ if(typeof _cmpJoinPostLogs==='function') _cmpJoinPostLogs(); }catch(e){}
-  let h='',tot=0,paid=0,unpaid=0,gasNeed=0,gasTarget=0;
+  let h='',tot=0,paid=0,unpaid=0,gasNeed=0,gasTarget=0,execCnt=0;   /* ★ .121 execCnt: 役員の人数 */
   // 表示月を取得
   const salMon=_ymNorm($('sal-mon')?.value||'');
   const salMonStr=salMon||_ymNorm(new Date().toISOString().slice(0,7));
@@ -36347,7 +36351,9 @@ function renderSalary(){
     if(_isExec){
       breakdown=`<span style="font-size:9px;color:var(--txt3);">― 非公開 ―</span>`;
     }
-    tot+=pay;
+    /* ★ 2026-11-13.121: 役員の分は総支払額に足さない。
+       他の人の金額が全部見えているので、合計に入れると引き算で分かってしまう。 */
+    if(!((typeof _isExecStaff==='function') && _isExecStaff(s))){ tot+=pay; } else { execCnt++; }
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
     const isPaid=_isSalaryPaid(s.id, salMonStr);
     if(isPaid)paid++;else unpaid++;
@@ -36378,7 +36384,7 @@ function renderSalary(){
   });
   $('tb-sal').innerHTML=h||'<tr><td colspan="10" style="text-align:center;padding:18px;color:var(--txt2)">データがありません</td></tr>';
   $('sal-kpi').innerHTML=[
-    {l:'総支払額',v:'¥'+fmt(tot),u:'',c:'--red'},
+    {l:execCnt?'総支払額（役員を除く）':'総支払額',v:'¥'+fmt(tot),u:'',c:'--red'},
     {l:'支払済',v:paid,u:'名',c:'--grn'},
     {l:'未払い',v:unpaid,u:'名',c:'--amb'},
     {l:gasNeed>0?'⚠ 燃料代 未入力':'✓ 燃料代 入力済',
@@ -38547,6 +38553,11 @@ function _ddAmountsFor(st, monStr, totalPay){
       // 雇用保険は「月額を入力」に切り替えられる（従来の作りを残す）
       if(d.id==='empins' && si.empInsType==='fixed'){
         emp=Number(si.empInsFixed)||0;
+      } else if(d.id==='empins' && typeof _isExecStaff==='function' && _isExecStaff(st)){
+        /* ★ 2026-11-13.121: 役員は原則として雇用保険の対象外。本人も会社も引かない。
+           兼務役員など引きたい方は、台帳の雇用保険を「月額を入力」にして金額を入れると
+           上の分岐が先に効きます。 */
+        emp=0; co=0;
       } else {
         const base = (d.base==='hyojun') ? hyojun : (Number(totalPay)||0);
         emp=Math.round(base*(r.rate||0));
@@ -39869,8 +39880,9 @@ function _calcStaffPayment(name, monStr){
     total=bp.total; noAtt=bp.noAtt;
     bp.breakdown.forEach(b=>breakdown.push(b));
   } else if(kyuyo==='月給'){
-    total=tanka;
-    breakdown.push({label:'基本給（月給）', amount:total});
+    /* ★ 2026-11-13.121: 役員は役員報酬を基本給として使う */
+    total=(typeof _basePayOf==='function') ? _basePayOf(st, cond) : tanka;
+    breakdown.push({label:(typeof _isExecStaff==='function' && _isExecStaff(st))?'役員報酬':'基本給（月給）', amount:total});
   } else if(kyuyo==='個数制（歩合）'){
     const dp = _getEffectiveDelPrices(st, monStr);   // ★ 2026-10-09.46: その月の単価
     const delSum={kanryo:0,tenso:0,yakan:0,ogata:0,shukka:0,s1:0,s2:0,s3:0,s4:0};
@@ -40442,7 +40454,9 @@ function _buildPaySlipHTMLEmployee(pay, monStr){
   const _tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
     : {commute:off.commute, career:off.career, position:off.position,
        teateOther:off.teateOther, yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
-  const basePay=Number(_cond.tanka!=null ? _cond.tanka : st.tanka)||0;
+  /* ★ 2026-11-13.121: 役員は役員報酬を基本給として使う */
+  const basePay=(typeof _basePayOf==='function') ? _basePayOf(st, _cond)
+                                                 : (Number(_cond.tanka!=null ? _cond.tanka : st.tanka)||0);
   const commute=Number(_tu.commute)||0;
   const career=Number(_tu.career)||0;
   const position=Number(_tu.position)||0;
@@ -43846,7 +43860,9 @@ function _htTotalPay(st, monStr){
   const tu=(typeof _teateUnitsAt==='function') ? _teateUnitsAt(st, monStr)
     : {commute:off.commute, career:off.career, position:off.position,
        teateOther:off.teateOther, yokonoriUnit:off.yokonoriUnit, tokubetsuUnit:off.tokubetsuUnit};
-  const basePay=Number(cond.tanka!=null ? cond.tanka : st.tanka)||0;
+  /* ★ 2026-11-13.121: 役員は役員報酬を基本給として使う */
+  const basePay=(typeof _basePayOf==='function') ? _basePayOf(st, cond)
+                                                 : (Number(cond.tanka!=null ? cond.tanka : st.tanka)||0);
   const mp=st._monthlyPay||{};
   const nd=v=>String(v||'').replace(/\//g,'-');
   const rows=(D.delivery||[]).filter(r=>r && r.staff===st.name
@@ -48505,6 +48521,21 @@ function _isExecStaff(st){
 }
 function _isExecName(name){
   try{ return _isExecStaff((D.staff||[]).find(s=>s && s.name===name)); }catch(e){ return false; }
+}
+/* ★ 2026-11-13.121: 役員報酬の額（数字だけ取り出す） */
+function _execPayOf(st){
+  if(!_isExecStaff(st)) return 0;
+  return Number(String(st.execPay).replace(/[^0-9.\-]/g,''))||0;
+}
+/* ★ 2026-11-13.121: 月給の人の基本給を1か所から出す。
+   役員（役員報酬に金額がある人）は役員報酬を優先する。
+   それ以外は、これまでどおり給与履歴 → 台帳の単価 の順。
+   ※ 役員報酬は期間で持っていないので、変えると過去の月も変わります。 */
+function _basePayOf(st, cond){
+  if(!st) return 0;
+  if(_isExecStaff(st)) return _execPayOf(st);
+  const c = cond || {};
+  return Number((c.tanka!=null && c.tanka!=='') ? c.tanka : st.tanka)||0;
 }
 /* 役員の明細を開くときの関門。セッションは使い回さず毎回聞く。
    役員でない人は素通り（いままでどおり）。 */
