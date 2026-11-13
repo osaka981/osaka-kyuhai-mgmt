@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.123';
+const APP_VER = '2026-11-13.124';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -42372,7 +42372,11 @@ function generateInvoiceProxy(staffName, monStr){
     st.docs.stampFeeCharged=true;
     st.docs.stampFeeChargedAt=new Date().toISOString();
     st.docs.stampFeeChargedMonth=monStr;
-    lsSet(LS_KEYS.DRIVERS, _drvLiteList(D.staff));   /* ★ .99 */
+    /* ★ 2026-11-13.124: ここは共有名簿（lite）だけを保存していた。
+       lite には docs が入らないので、請求済みの印がどこにも残らず、
+       読み込み直すと false に戻って電子印制作費が毎回加算されていた。
+       台帳ごと保存する。 */
+    _saveStaffAll('stampFee:invoiceProxy');
   }
 
   renderStaffFSTab('docs');
@@ -43579,7 +43583,10 @@ function generateCompanyInvoiceProxy(coName, monStr){
     co.docs.stampFeeCharged=true;
     co.docs.stampFeeChargedAt=new Date().toISOString();
     co.docs.stampFeeChargedMonth=monStr;
+    /* ★ 2026-11-13.124: この端末にしか残らず、他の端末では請求済みにならなかった */
     lsSet(LS_KEYS.COMPANIES, D.companies);
+    try{ if(typeof fbSet==='function') fbSet('companies', D.companies); }
+    catch(e){ console.warn('[電子印制作費] 委託会社の保存に失敗', e); }
   }
 
   renderCompanyFSTab('docs');
@@ -44600,7 +44607,8 @@ function resetStampFeeCharged(ctx){
         st.docs.stampFeeCharged=false;
         st.docs.stampFeeChargedAt=null;
         st.docs.stampFeeChargedMonth=null;
-        lsSet(LS_KEYS.DRIVERS, _drvLiteList(D.staff));   /* ★ .99 */
+        /* ★ 2026-11-13.124: 共有名簿だけ保存していたため、リセットが残らなかった */
+        _saveStaffAll('stampFee:reset');
         updateStampFeeStatus('staff');
         showAlert({msg:'リセットしました'});
       }
@@ -44611,7 +44619,10 @@ function resetStampFeeCharged(ctx){
         co.docs.stampFeeCharged=false;
         co.docs.stampFeeChargedAt=null;
         co.docs.stampFeeChargedMonth=null;
+        /* ★ 2026-11-13.124: この端末にしか残らなかった */
         lsSet(LS_KEYS.COMPANIES, D.companies);
+        try{ if(typeof fbSet==='function') fbSet('companies', D.companies); }
+        catch(e){ console.warn('[電子印制作費] 委託会社の保存に失敗', e); }
         updateStampFeeStatus('company');
         showAlert({msg:'リセットしました'});
       }
