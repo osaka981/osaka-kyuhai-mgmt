@@ -6275,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.119';
+const APP_VER = '2026-11-13.120';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -27358,7 +27358,9 @@ function showPayDetail(staffName){
 }
 
 // ── 支払明細書プレビュー ──
-function showPayslipPreview(staffName, ymArg){
+async function showPayslipPreview(staffName, ymArg){
+  // ★ 2026-11-13.120: 役員の明細は専用PINを通してから
+  if(typeof _execGate==='function' && !(await _execGate(staffName))) return;
   // ★ 2026/08/12: 給与計算タブなど、bl-mon以外から呼ぶ場合に月を直接渡せるようにする
   // ★ 2026/08/15: 日報の日付は 2026-07-02（ハイフン）に統一済み。
   //   ここでスラッシュに変換すると startsWith('2026/07') が1件も一致せず、
@@ -36340,6 +36342,11 @@ function renderSalary(){
       breakdown=`<span style="font-size:9px;color:var(--txt2);">${_p.join(' ／ ')} ${condLabel}</span>`;
       if(noAtt) breakdown+=`<div style="font-size:10px;font-weight:700;color:var(--red2);">打刻なし（勤務時間を入力してください）</div>`;
     }
+    // ★ 2026-11-13.120: 役員は一覧に金額を出さない。明細ボタンからPINを入れて見る。
+    const _isExec = (typeof _isExecStaff==='function') && _isExecStaff(s);
+    if(_isExec){
+      breakdown=`<span style="font-size:9px;color:var(--txt3);">― 非公開 ―</span>`;
+    }
     tot+=pay;
     // ★ 2026/08/12: 支払状態を実データに。従来は i%2 で1人おきに「済」と表示する偽装だった。
     const isPaid=_isSalaryPaid(s.id, salMonStr);
@@ -36361,7 +36368,7 @@ function renderSalary(){
       <td class="tr">${puTot?fmt(puTot):'−'}</td>
       <td style="font-size:10px;">${gasCell.html}</td>
       <td class="tr" style="font-size:10px;">${breakdown}</td>
-      <td class="tr fw7" style="color:var(--tel2);">¥${fmt(pay)}</td>
+      <td class="tr fw7" style="color:${_isExec?'var(--txt3)':'var(--tel2)'};">${_isExec?'•••':'¥'+fmt(pay)}</td>
       <td>${isPaid?'<span class="bdg bg">済</span>':'<span class="bdg br">未払</span>'}</td>
       <td style="white-space:nowrap;">
         <button class="btn b-gh btn-sm" style="font-size:10px;padding:2px 8px;" onclick="_openStaffPaySlip('${esc(s.name)}','${salMonStr}')">明細</button>
@@ -42275,7 +42282,9 @@ function _printDocWindow(title, html){
   w.document.close();
 }
 
-function generatePaySlip(staffName, monStr){
+async function generatePaySlip(staffName, monStr){
+  // ★ 2026-11-13.120: 役員の明細は専用PINを通してから
+  if(typeof _execGate==='function' && !(await _execGate(staffName))) return;
   const doc=_buildPaySlipHTML(staffName, monStr);
   if(!doc){ showAlert({msg:'従事員データなし'}); return; }
   _printDocWindow(doc.title, doc.html);
@@ -42886,6 +42895,9 @@ async function sendStaffMail(name){
 
   if(!to){showAlert({msg:'宛先メールアドレスが未入力です'});return;}
 
+  // ★ 2026-11-13.120: 給与明細を添付するときだけ、役員は専用PINを通してから
+  if(att1 && mon && typeof _execGate==='function' && !(await _execGate(name))) return;
+
   btn.disabled=true; btn.textContent='送信中...';
   status.textContent=''; status.style.color='';
 
@@ -42953,16 +42965,20 @@ window._staffDocSelectClear = function(name){
 };
 
 // 選択された書類を連結してプレビュー(発行はしない)
-window._staffDocPreview = function(name, mon){
+window._staffDocPreview = async function(name, mon){
   const chk = (window._staffDocCheck||{})[name] || {};
+  // ★ 2026-11-13.120: 給与明細を含むときだけ、役員は専用PINを通してから
+  if(chk.paySlip && typeof _execGate==='function' && !(await _execGate(name))) return;
   const htmlParts = _staffDocBuildParts(name, mon, chk);
   if(htmlParts.length === 0){ showAlert({msg:'選択された書類がありません'}); return; }
   _printDocWindow('書類プレビュー', htmlParts.join('<div style="page-break-after:always;"></div>'));
 };
 
 // 選択された書類を発行(プレビュー+履歴記録)
-window._staffDocIssue = function(name, mon){
+window._staffDocIssue = async function(name, mon){
   const chk = (window._staffDocCheck||{})[name] || {};
+  // ★ 2026-11-13.120: 給与明細を含むときだけ、役員は専用PINを通してから
+  if(chk.paySlip && typeof _execGate==='function' && !(await _execGate(name))) return;
   const parts = _staffDocBuildPartsWithMeta(name, mon, chk);
   if(parts.length === 0){ showAlert({msg:'選択された書類がありません'}); return; }
   // プレビュー(連結)
@@ -48479,6 +48495,27 @@ async function verifyExecPin(pin){
     if(!stored) return String(pin) === '000000';   // 保存できていないときの逃げ道
     return stored === await _execPinHash(pin);
   }catch(e){ return false; }
+}
+
+/* ★ 2026-11-13.120: 役員かどうか（役員報酬に金額が入っている人を役員とみなす） */
+function _isExecStaff(st){
+  if(!st) return false;
+  const v = Number(String(st.execPay==null?'':st.execPay).replace(/[^0-9.\-]/g,''));
+  return isFinite(v) && v > 0;
+}
+function _isExecName(name){
+  try{ return _isExecStaff((D.staff||[]).find(s=>s && s.name===name)); }catch(e){ return false; }
+}
+/* 役員の明細を開くときの関門。セッションは使い回さず毎回聞く。
+   役員でない人は素通り（いままでどおり）。 */
+async function _execGate(name){
+  try{
+    if(!_isExecName(name)) return true;
+    const pin = prompt('役員報酬PIN（6桁）を入力してください');
+    if(!pin) return false;
+    if(!(await verifyExecPin(pin))){ alert('PINが違います'); return false; }
+    return true;
+  }catch(e){ console.error('[役員報酬] 関門', e); return false; }
 }
 
 function isExecPinDefault(){
