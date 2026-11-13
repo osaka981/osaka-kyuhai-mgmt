@@ -3907,6 +3907,18 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
         </div>
         <button class="btn b-red btn-sm" onclick="changeTSPin()">PIN変更</button>
       </div>
+
+      <!-- ★ 2026-11-13.119: 役員報酬だけの専用PIN -->
+      <div class="card mt12" style="max-width:400px;">
+        <div class="ct mb12"><div class="cbar"></div>役員報酬PIN変更</div>
+        <div class="xs muted mb8">役員報酬を見るときだけに使うコードです。上の管理者PINとは別のものです。</div>
+        <div id="exec-pin-state" class="xs mb8" style="font-weight:700;"></div>
+        <div class="f2 mb8">
+          <div class="fg"><label>新しいPIN（6桁）</label><input type="password" id="exec-new-pin1" class="fi" maxlength="6" placeholder="●●●●●●"></div>
+          <div class="fg"><label>確認入力</label><input type="password" id="exec-new-pin2" class="fi" maxlength="6" placeholder="●●●●●●"></div>
+        </div>
+        <button class="btn b-red btn-sm" onclick="changeExecPin()">PIN変更</button>
+      </div>
     </div>
 
   </div>
@@ -6263,7 +6275,7 @@ document.dispatchEvent(new Event('fb-sdk-ready'));
 <script>
 'use strict';
 // ★ 版の文字列（差し替えのたびに必ず上げる。ヘッダー左の表示と一致させる）
-const APP_VER = '2026-11-13.118';
+const APP_VER = '2026-11-13.119';
 console.log('[経営管理] APP_VER', APP_VER);
 /* ★ 2026-11-09.106: 画面の版表示がHTMLに直書きで、中身を変えても .102 のままだった。
    差し替えたかどうかを画面で確かめられるよう、APP_VER から出す。 */
@@ -10471,10 +10483,11 @@ function getEmploymentIns(st, totalPay, ym){
 // ★ 2026/09/12: LS_KEYS.TS_PIN という定義されていないキーを読んでいたため、
 //   lsGet が既定値を返し、PINを変更しても '000000' でしか解除できなかった。
 //   TS-PIN の照合関数(verifyTSPin)に統一した。
+// ★ 2026-11-13.119: 管理者PINではなく、役員報酬専用のPINで開ける
 async function unlockExecPay(){
-  const pin=prompt('PIN（6桁）を入力してください');
+  const pin=prompt('役員報酬PIN（6桁）を入力してください');
   if(!pin) return;
-  if(!(await verifyTSPin(pin))){ alert('PINが違います'); return; }
+  if(!(await verifyExecPin(pin))){ alert('PINが違います'); return; }
   const locked=$('st-exec-pay-locked');
   const unlocked=$('st-exec-pay-unlocked');
   if(locked) locked.style.display='none';
@@ -48437,6 +48450,74 @@ async function verifyTSPin(input){
 // PIN が初期値のままかどうか（注意表示に使う）
 function isTSPinDefault(){ return !localStorage.getItem(TS_PIN_HASH_KEY); }
 
+/* ★ 2026-11-13.119: 役員報酬だけの専用PIN
+   いまの6桁（管理者PIN）は営業所単価・システム設定・郵便局請求書にも使っていて、
+   事務の方が知っている可能性がある。役員報酬は入れ物から分けておく。
+   初期値は 000000。システム設定からいつでも変えられる。
+   変えた時点から、管理者PINでは役員報酬を開けなくなる。 */
+const EXEC_PIN_HASH_KEY = 'nikki_exec_pin_h';
+const EXEC_PIN_SALT = 'osq-mgmt-exec-v1';   // 端末間で同じ値にする必要があるため固定
+let _execPinDefHash = '';
+
+async function _execPinHash(pin){ return _sha256Hex(EXEC_PIN_SALT + '|' + String(pin)); }
+
+/* 未設定なら 000000 で作る（1回だけ） */
+async function _execPinSeed(){
+  try{
+    _execPinDefHash = await _execPinHash('000000');
+    if(!localStorage.getItem(EXEC_PIN_HASH_KEY)){
+      localStorage.setItem(EXEC_PIN_HASH_KEY, _execPinDefHash);
+      console.log('[役員報酬PIN] 初期値 000000 で作りました');
+    }
+    try{ _execPinStateRender(); }catch(e){}
+  }catch(e){ console.warn('[役員報酬PIN] 作れませんでした', e); }
+}
+
+async function verifyExecPin(pin){
+  try{
+    const stored = localStorage.getItem(EXEC_PIN_HASH_KEY);
+    if(!stored) return String(pin) === '000000';   // 保存できていないときの逃げ道
+    return stored === await _execPinHash(pin);
+  }catch(e){ return false; }
+}
+
+function isExecPinDefault(){
+  try{
+    const v = localStorage.getItem(EXEC_PIN_HASH_KEY);
+    return !v || (!!_execPinDefHash && v === _execPinDefHash);
+  }catch(e){ return true; }
+}
+
+function _execPinStateRender(){
+  const el = document.getElementById('exec-pin-state');
+  if(!el) return;
+  const def = isExecPinDefault();
+  el.textContent = def ? 'いまは初期値（000000）のままです' : '変更済みです';
+  el.style.color = def ? 'var(--amb2)' : 'var(--grn2)';
+}
+
+async function changeExecPin(){
+  const p1=document.getElementById('exec-new-pin1')?.value, p2=document.getElementById('exec-new-pin2')?.value;
+  if(!p1||p1.length<6){alert('6桁のPINを入力してください');return;}
+  if(p1!==p2){alert('PINが一致しません');return;}
+  if(/^(\d)\1{5}$/.test(p1)){alert('同じ数字の繰り返しは使えません');return;}
+  if(['012345','123456','234567','345678','456789','987654','654321'].indexOf(p1)>=0){
+    alert('連続した数字は使えません');return;
+  }
+  try{
+    localStorage.setItem(EXEC_PIN_HASH_KEY, await _execPinHash(p1));
+  }catch(e){
+    console.error('[役員報酬PIN] 変更失敗', e);
+    alert('PINを保存できませんでした: '+e.message); return;
+  }
+  if(document.getElementById('exec-new-pin1')) document.getElementById('exec-new-pin1').value='';
+  if(document.getElementById('exec-new-pin2')) document.getElementById('exec-new-pin2').value='';
+  _execPinStateRender();
+  alert('役員報酬PINを変更しました');
+}
+
+try{ _execPinSeed(); }catch(e){}
+
 // TSセッション確認
 function isTSAuthenticated(){
   const sess = localStorage.getItem(TS_SESSION_KEY);
@@ -48451,7 +48532,7 @@ function requireTS(section, navEl){
     // 認証済みならそのまま遷移
     if(navEl) nav(navEl);
     else if(typeof navByS==='function') { navByS(section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, section); }
-    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}},100); // ★ 2026-10-14.70 / .103 日報アプリの版
+    if(section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}try{_execPinStateRender();}catch(e){}},100); // ★ 2026-10-14.70 / .103 日報アプリの版
     // ★ 2026-10-08.17: 郵便局請求書は開いた時点で当月の売上を出す
     if(section==='ts-inv') setTimeout(()=>{ try{ renderTSInv(); }catch(e){ console.error('[renderTSInv]', e); } },100);
     return;
@@ -48525,7 +48606,7 @@ function executeTSAction(){
   if(a.type==='nav'){
     if(a.navEl) nav(a.navEl);
     else if(typeof navByS==='function') { navByS(a.section); if(typeof renderSubNav==='function' && typeof _currentTopTab!=='undefined') renderSubNav(_currentTopTab, a.section); }
-    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}},100); // ★ 2026-10-14.70 / .104 日報アプリの版
+    if(a.section==='ts-settings') setTimeout(()=>{renderItemDefList();renderItemGroupList();loadSystemInfoToForm();loadRoundSettings();try{renderDeductDefs();}catch(e){}try{_verLoadState();}catch(e){}try{_maintLoad();}catch(e){}try{_purgeCheck();}catch(e){}try{_execPinStateRender();}catch(e){}},100); // ★ 2026-10-14.70 / .104 日報アプリの版
   } else if(a.type==='prices'){
     if($('of-del-price-lock'))$('of-del-price-lock').style.display='none';
     if($('of-del-price-content'))$('of-del-price-content').style.display='block';
